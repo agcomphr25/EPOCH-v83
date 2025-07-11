@@ -10,72 +10,28 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  console.log('DEBUG: generateP1OrderId called with:', { date, lastId, lastIdType: typeof lastId });
-  
-  // If no last ID is provided or invalid, start with AA001
-  if (!lastId || lastId.trim() === '') {
-    console.log('DEBUG: No lastId or empty string, returning AA001');
-    return 'AA001';
+  // compute how many 14-day periods since BASE_DATE
+  const delta = date.getTime() - BASE_DATE.getTime();
+  const periodIndex = Math.floor(delta / PERIOD_MS);
+
+  // determine two letters
+  const firstIdx = Math.floor(periodIndex / 26) % 26;
+  const secondIdx = periodIndex % 26;
+  const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
+  const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
+
+  // parse last numeric part if lastId matches pattern
+  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
+  let seq = 1;
+  if (match && lastId.slice(0, 2) === prefix) {
+    seq = parseInt(match[1], 10) + 1; // increment within same period-block
   }
-
-  // Parse the last order ID
-  const trimmedId = lastId.trim();
-  console.log('DEBUG: Trying to match trimmed ID:', trimmedId);
-  const match = /^([A-Z])([A-Z])(\d{3})$/.exec(trimmedId);
-  console.log('DEBUG: Regex match result:', match);
-  if (!match) {
-    console.log('DEBUG: Regex failed, returning AA001');
-    return 'AA001'; // Invalid format, start with AA001
-  }
-
-  const [, firstLetter, secondLetter, numStr] = match;
-  const lastSeq = parseInt(numStr, 10);
-
-  // Calculate when the last order period would have been (reverse calculation)
-  const lastFirstIdx = firstLetter.charCodeAt(0) - 65;
-  const lastSecondIdx = secondLetter.charCodeAt(0) - 65;
-  const lastPeriodIndex = lastFirstIdx * 26 + lastSecondIdx;
-  const lastPeriodDate = new Date(BASE_DATE.getTime() + lastPeriodIndex * PERIOD_MS);
-
-  // Check if we're still in the same 14-day period as the last order
-  const timeSinceLastPeriod = date.getTime() - lastPeriodDate.getTime();
-  const periodsElapsed = Math.floor(timeSinceLastPeriod / PERIOD_MS);
-
-  if (periodsElapsed === 0) {
-    // Same period: increment the sequence
-    const nextSeq = lastSeq + 1;
-    if (nextSeq > 999) {
-      // If sequence exceeds 999, advance to next period
-      return getNextPeriodPrefix(firstLetter, secondLetter) + '001';
-    }
-    return firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
-  } else {
-    // Different period: advance the letters based on periods elapsed
-    return getNextPeriodPrefix(firstLetter, secondLetter, periodsElapsed) + '001';
-  }
+  // reset to 1 when letters change or lastId invalid
+  const num = String(seq).padStart(3, '0');
+  return prefix + num;
 }
 
-function getNextPeriodPrefix(firstLetter: string, secondLetter: string, periodsToAdvance: number = 1): string {
-  let firstIdx = firstLetter.charCodeAt(0) - 65;
-  let secondIdx = secondLetter.charCodeAt(0) - 65;
-  
-  // Advance by the number of periods
-  secondIdx += periodsToAdvance;
-  
-  // Handle overflow: if second letter goes past Z, increment first letter
-  while (secondIdx > 25) {
-    secondIdx -= 26;
-    firstIdx++;
-  }
-  
-  // Handle first letter overflow
-  if (firstIdx > 25) {
-    firstIdx = firstIdx % 26;
-  }
-  
-  const letter = (i: number) => String.fromCharCode(65 + i);
-  return letter(firstIdx) + letter(secondIdx);
-}
+
 
 /**
  * Generate a P2 serial in the form XXXYY00001, 

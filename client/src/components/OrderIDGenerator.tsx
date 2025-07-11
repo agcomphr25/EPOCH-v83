@@ -17,21 +17,8 @@ export function OrderIDGenerator() {
   const [generatedP2Serial, setGeneratedP2Serial] = useState("");
 
   const handleGenerateP1 = () => {
-    console.log('DEBUG: handleGenerateP1 called');
-    console.log('DEBUG: p1Date =', p1Date);
-    console.log('DEBUG: lastP1Id =', lastP1Id);
-    console.log('DEBUG: lastP1Id length =', lastP1Id.length);
-    console.log('DEBUG: lastP1Id trimmed =', lastP1Id.trim());
-    
     const date = new Date(p1Date);
-    console.log('DEBUG: date object =', date);
-    
-    // Test with hardcoded values first
-    const testId = generateP1OrderId(new Date(), "AN001");
-    console.log('DEBUG: test with hardcoded AN001 =', testId);
-    
     const newId = generateP1OrderId(date, lastP1Id);
-    console.log('DEBUG: generated newId =', newId);
     setGeneratedP1Id(newId);
   };
 

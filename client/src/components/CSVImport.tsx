@@ -50,7 +50,6 @@ export function CSVImport() {
   };
 
   const handleProcessCSV = () => {
-    console.log('Process Data clicked', { fileName, hasHeaders });
     if (fileName) {
       // Process the raw data with current header settings
       processData(hasHeaders);

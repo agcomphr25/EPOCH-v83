@@ -61,9 +61,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveCSVData(data: InsertCSVData): Promise<CSVData> {
-    // Clear existing data first
-    await this.clearCSVData();
-    
     const [result] = await db
       .insert(csvData)
       .values(data)

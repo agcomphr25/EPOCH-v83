@@ -38,15 +38,18 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        const savedData = await apiRequest('GET', '/api/csv-data');
-        setState(prev => ({
-          ...prev,
-          data: Array.isArray(savedData.data) ? savedData.data : [],
-          fileName: savedData.fileName || null,
-          rowCount: Array.isArray(savedData.data) ? savedData.data.length : 0,
-        }));
+        const savedData = await apiRequest('/api/csv-data');
+        if (savedData && Array.isArray(savedData.data)) {
+          setState(prev => ({
+            ...prev,
+            data: savedData.data,
+            fileName: savedData.fileName || null,
+            rowCount: savedData.data.length,
+          }));
+        }
       } catch (error) {
         // No saved data available, which is fine
+        console.log('No saved CSV data found');
       }
     };
     
@@ -142,9 +145,12 @@ export function CSVProvider({ children }: { children: ReactNode }) {
 
       // Save to database
       try {
-        await apiRequest('POST', '/api/csv-data', {
-          fileName: state.fileName,
-          data: processedData,
+        await apiRequest('/api/csv-data', {
+          method: 'POST',
+          body: JSON.stringify({
+            fileName: state.fileName,
+            data: processedData,
+          }),
         });
       } catch (error) {
         console.error('Failed to save CSV data:', error);
@@ -171,7 +177,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
 
   const clearData = useCallback(async () => {
     try {
-      await apiRequest('DELETE', '/api/csv-data');
+      await apiRequest('/api/csv-data', { method: 'DELETE' });
     } catch (error) {
       console.error('Failed to clear CSV data:', error);
     }

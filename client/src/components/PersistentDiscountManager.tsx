@@ -19,6 +19,7 @@ import { z } from "zod";
 
 const persistentDiscountFormSchema = insertPersistentDiscountSchema.extend({
   customerTypeId: z.number().min(1, "Customer type is required"),
+  name: z.string().min(1, "Name is required"),
   percent: z.number().min(0).max(100, "Percent must be between 0 and 100"),
 });
 
@@ -88,7 +89,9 @@ export default function PersistentDiscountManager() {
     resolver: zodResolver(persistentDiscountFormSchema),
     defaultValues: {
       customerTypeId: 0,
+      name: "",
       percent: 0,
+      description: "",
       isActive: 1,
     },
   });
@@ -97,7 +100,9 @@ export default function PersistentDiscountManager() {
     resolver: zodResolver(persistentDiscountFormSchema),
     defaultValues: {
       customerTypeId: 0,
+      name: "",
       percent: 0,
+      description: "",
       isActive: 1,
     },
   });
@@ -116,7 +121,9 @@ export default function PersistentDiscountManager() {
     setEditingDiscount(discount);
     editForm.reset({
       customerTypeId: discount.customerTypeId,
+      name: discount.name,
       percent: discount.percent,
+      description: discount.description || "",
       isActive: discount.isActive,
     });
   };
@@ -179,6 +186,23 @@ export default function PersistentDiscountManager() {
                   />
                   <FormField
                     control={createForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Discount Name</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="e.g., GB-20, GB-25, GB-30" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createForm.control}
                     name="percent"
                     render={({ field }) => (
                       <FormItem>
@@ -189,6 +213,23 @@ export default function PersistentDiscountManager() {
                             {...field} 
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
                             placeholder="e.g., 10" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="e.g., 20% off for select gunbuilders" 
                           />
                         </FormControl>
                         <FormMessage />
@@ -233,7 +274,9 @@ export default function PersistentDiscountManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>Customer Type</TableHead>
+                <TableHead>Name</TableHead>
                 <TableHead>Discount %</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -242,7 +285,9 @@ export default function PersistentDiscountManager() {
               {persistentDiscounts.map((discount: PersistentDiscount) => (
                 <TableRow key={discount.id}>
                   <TableCell className="font-medium">{getCustomerTypeName(discount.customerTypeId)}</TableCell>
+                  <TableCell className="font-semibold">{discount.name}</TableCell>
                   <TableCell>{discount.percent}%</TableCell>
+                  <TableCell className="text-sm text-gray-600">{discount.description || "-"}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs ${
                       discount.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -309,6 +354,23 @@ export default function PersistentDiscountManager() {
               />
               <FormField
                 control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Discount Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="e.g., GB-20, GB-25, GB-30" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
                 name="percent"
                 render={({ field }) => (
                   <FormItem>
@@ -319,6 +381,23 @@ export default function PersistentDiscountManager() {
                         {...field} 
                         onChange={(e) => field.onChange(parseInt(e.target.value))}
                         placeholder="e.g., 10" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="e.g., 20% off for select gunbuilders" 
                       />
                     </FormControl>
                     <FormMessage />

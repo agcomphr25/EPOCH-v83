@@ -13,7 +13,7 @@ export default function OrderManagement() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
               <Factory className="h-6 w-6 text-primary mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">Manufacturing ERP</h1>
+              <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Order Management System</span>

@@ -1,8 +1,13 @@
-# Manufacturing ERP System
+# EPOCH v8 - Manufacturing ERP System
 
 ## Overview
 
 This is a full-stack manufacturing ERP system built with React, TypeScript, Express, and PostgreSQL. The application focuses on order management with features for generating order IDs, importing CSV data, and managing manufacturing orders. It uses modern web technologies including ShadCN UI components, Drizzle ORM, and TanStack Query for efficient data management.
+
+## Recent Changes
+
+- **January 11, 2025**: Updated application branding to "EPOCH v8" in the main header
+- **January 11, 2025**: Successfully implemented Order ID Generator & CSV Import module with P1/P2 ID generation algorithms and comprehensive CSV data import functionality
 
 ## User Preferences
 

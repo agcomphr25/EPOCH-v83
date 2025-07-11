@@ -1,6 +1,7 @@
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import Papa from "papaparse";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface CSVData {
   [key: string]: string | number;
@@ -33,6 +34,28 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     rawData: null,
   });
 
+  // Load saved CSV data on mount
+  useEffect(() => {
+    const loadSavedData = async () => {
+      try {
+        const response = await apiRequest('/api/csv-data');
+        if (response.ok) {
+          const savedData = await response.json();
+          setState(prev => ({
+            ...prev,
+            data: Array.isArray(savedData.data) ? savedData.data : [],
+            fileName: savedData.fileName || null,
+            rowCount: Array.isArray(savedData.data) ? savedData.data.length : 0,
+          }));
+        }
+      } catch (error) {
+        // No saved data available, which is fine
+      }
+    };
+    
+    loadSavedData();
+  }, []);
+
   const parseCSV = useCallback((file: File, hasHeaders: boolean = true) => {
     setState(prev => ({
       ...prev,
@@ -42,7 +65,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     }));
 
     Papa.parse(file, {
-      complete: (results) => {
+      complete: async (results) => {
         try {
           if (results.errors.length > 0) {
             const errorMessage = results.errors.map(err => err.message).join(", ");
@@ -74,7 +97,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           }));
 
           // Process the data with current header setting
-          processDataInternal(rawData, hasHeaders);
+          await processDataInternal(rawData, hasHeaders);
         } catch (error) {
           setState(prev => ({
             ...prev,
@@ -95,7 +118,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const processDataInternal = (rawData: string[][], hasHeaders: boolean) => {
+  const processDataInternal = async (rawData: string[][], hasHeaders: boolean) => {
     try {
       let processedData: CSVData[] = [];
       
@@ -120,6 +143,22 @@ export function CSVProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      // Save to database
+      try {
+        await apiRequest('/api/csv-data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: state.fileName,
+            data: processedData,
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to save CSV data:', error);
+      }
+
       setState(prev => ({
         ...prev,
         data: processedData,
@@ -133,13 +172,21 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const processData = useCallback((hasHeaders: boolean) => {
+  const processData = useCallback(async (hasHeaders: boolean) => {
     if (state.rawData) {
-      processDataInternal(state.rawData, hasHeaders);
+      await processDataInternal(state.rawData, hasHeaders);
     }
-  }, [state.rawData]);
+  }, [state.rawData, state.fileName]);
 
-  const clearData = useCallback(() => {
+  const clearData = useCallback(async () => {
+    try {
+      await apiRequest('/api/csv-data', {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Failed to clear CSV data:', error);
+    }
+    
     setState({
       data: [],
       isLoading: false,

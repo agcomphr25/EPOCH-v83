@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **January 11, 2025**: Fixed P1 Order ID Generator to properly integrate last order ID with 14-day period cycling system
 - **January 11, 2025**: Updated application branding to "EPOCH v8" in the main header
 - **January 11, 2025**: Successfully implemented Order ID Generator & CSV Import module with P1/P2 ID generation algorithms and comprehensive CSV data import functionality
 

@@ -10,51 +10,44 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  // If no last ID is provided or invalid, start with AA001
+  // Calculate current 14-day period from base date
+  const delta = date.getTime() - BASE_DATE.getTime();
+  const currentPeriodIndex = Math.floor(delta / PERIOD_MS);
+  
+  // Calculate current period prefix (letters)
+  const secondIdx = currentPeriodIndex % 26; // Second letter cycles A-Z every 14 days
+  const firstIdx = Math.floor(currentPeriodIndex / 26) % 26; // First letter advances every 26 periods
+  const letter = (i: number) => String.fromCharCode(65 + i);
+  const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
+
+  // If no last ID is provided or invalid, start with current period + 001
   if (!lastId || lastId.trim() === '') {
-    return 'AA001';
+    return currentPrefix + '001';
   }
 
   // Parse the last order ID
   const match = /^([A-Z])([A-Z])(\d{3})$/.exec(lastId.trim());
   if (!match) {
-    return 'AA001'; // Invalid format, start over
+    return currentPrefix + '001'; // Invalid format, start with current period
   }
 
   const [, firstLetter, secondLetter, numStr] = match;
   const lastSeq = parseInt(numStr, 10);
+  const lastPrefix = firstLetter + secondLetter;
 
-  // Simple increment: just increment the sequence number
-  const nextSeq = lastSeq + 1;
-
-  // If sequence exceeds 999, advance to next letter combination
-  if (nextSeq > 999) {
-    // Convert letters to indices (A=0, B=1, ..., Z=25)
-    const firstIdx = firstLetter.charCodeAt(0) - 65;
-    const secondIdx = secondLetter.charCodeAt(0) - 65;
-    
-    // Increment second letter first
-    let newSecondIdx = secondIdx + 1;
-    let newFirstIdx = firstIdx;
-    
-    // If second letter goes past Z, increment first letter and reset second to A
-    if (newSecondIdx > 25) {
-      newSecondIdx = 0;
-      newFirstIdx = firstIdx + 1;
-      
-      // If first letter goes past Z, reset to AA
-      if (newFirstIdx > 25) {
-        newFirstIdx = 0;
-      }
+  // Check if we're in the same 14-day period as the last order
+  if (lastPrefix === currentPrefix) {
+    // Same period: increment the sequence number
+    const nextSeq = lastSeq + 1;
+    if (nextSeq > 999) {
+      // If sequence exceeds 999, we need to wait for the next period
+      return currentPrefix + '001';
     }
-    
-    const newFirstLetter = String.fromCharCode(65 + newFirstIdx);
-    const newSecondLetter = String.fromCharCode(65 + newSecondIdx);
-    return newFirstLetter + newSecondLetter + '001';
+    return currentPrefix + String(nextSeq).padStart(3, '0');
+  } else {
+    // Different period: use current period prefix with sequence 001
+    return currentPrefix + '001';
   }
-
-  // Same letters, just increment sequence
-  return firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
 }
 
 /**

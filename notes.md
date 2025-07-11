@@ -44,3 +44,4 @@
 ---
 
 *Last Updated: July 11, 2025*
+There is a persisten discount option set up for Distributors in case they need to get an ad-hoc discount on something, just not being used yet.

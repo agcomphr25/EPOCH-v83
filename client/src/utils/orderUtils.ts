@@ -15,8 +15,10 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   const currentPeriodIndex = Math.floor(delta / PERIOD_MS);
   
   // Calculate current period prefix (letters)
-  const secondIdx = currentPeriodIndex % 26; // Second letter cycles A-Z every 14 days
-  const firstIdx = Math.floor(currentPeriodIndex / 26) % 26; // First letter advances every 26 periods
+  // Second letter cycles A-Z every 14 days (period 0=A, 1=B, 2=C, ..., 25=Z, 26=A again)
+  const secondIdx = currentPeriodIndex % 26;
+  // First letter advances only after second letter completes full A-Z cycle (every 26 periods)
+  const firstIdx = Math.floor(currentPeriodIndex / 26) % 26;
   const letter = (i: number) => String.fromCharCode(65 + i);
   const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 
@@ -40,12 +42,12 @@ export function generateP1OrderId(date: Date, lastId: string): string {
     // Same period: increment the sequence number
     const nextSeq = lastSeq + 1;
     if (nextSeq > 999) {
-      // If sequence exceeds 999, we need to wait for the next period
+      // If sequence exceeds 999 in same period, reset to 001
       return currentPrefix + '001';
     }
     return currentPrefix + String(nextSeq).padStart(3, '0');
   } else {
-    // Different period: use current period prefix with sequence 001
+    // Different period: new period always starts with 001
     return currentPrefix + '001';
   }
 }

@@ -50,6 +50,9 @@ export default function OrderEntry() {
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasCustomerPO, setHasCustomerPO] = useState(false);
+  const [customerPO, setCustomerPO] = useState('');
+  const [handedness, setHandedness] = useState('');
 
   // Load initial data on mount
   useEffect(() => {
@@ -252,6 +255,34 @@ export default function OrderEntry() {
                 {errors.customerId && <p className="text-red-500 text-sm">{errors.customerId}</p>}
               </div>
 
+              {/* Customer PO */}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="hasCustomerPO"
+                    checked={hasCustomerPO}
+                    onChange={(e) => {
+                      setHasCustomerPO(e.target.checked);
+                      if (!e.target.checked) {
+                        setCustomerPO('');
+                      }
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="hasCustomerPO">Customer PO</Label>
+                </div>
+                {hasCustomerPO && (
+                  <Input
+                    type="text"
+                    placeholder="Enter customer PO number..."
+                    value={customerPO}
+                    onChange={(e) => setCustomerPO(e.target.value)}
+                  />
+                )}
+                {errors.customerPO && <p className="text-red-500 text-sm">{errors.customerPO}</p>}
+              </div>
+
               {/* Model Selection */}
               <div className="space-y-2">
                 <Label htmlFor="model">Stock Model</Label>
@@ -268,6 +299,21 @@ export default function OrderEntry() {
                   </SelectContent>
                 </Select>
                 {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
+              </div>
+
+              {/* Handedness */}
+              <div className="space-y-2">
+                <Label htmlFor="handedness">Handedness</Label>
+                <Select value={handedness} onValueChange={setHandedness}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select handedness..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="right">Right</SelectItem>
+                    <SelectItem value="left">Left</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.handedness && <p className="text-red-500 text-sm">{errors.handedness}</p>}
               </div>
 
               {/* Dynamic Feature Inputs */}

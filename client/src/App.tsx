@@ -4,8 +4,10 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CSVProvider } from "./contexts/CSVContext";
+import Navigation from "./components/Navigation";
 import NotFound from "./pages/not-found";
 import OrderManagement from "./pages/OrderManagement";
+import DiscountManagement from "./pages/DiscountManagement";
 
 function App() {
   return (

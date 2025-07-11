@@ -1,13 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import DiscountAdmin from '@/components/DiscountAdmin';
 import DiscountCalculator from '@/components/DiscountCalculator';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calculator, TrendingDown } from "lucide-react";
 
+interface ShortTermSale {
+  id: number;
+  name: string;
+  percent: number;
+  startDate: string;
+  endDate: string;
+}
+
 export default function DiscountManagement() {
-  const handleSalesChange = (sales: any[]) => {
-    console.log('Sales updated:', sales);
-    // You can add additional logic here to handle sales changes
+  const [activeSales, setActiveSales] = useState<ShortTermSale[]>([]);
+
+  const handleSalesChange = (sales: ShortTermSale[]) => {
+    setActiveSales(sales);
   };
 
   return (
@@ -40,7 +49,7 @@ export default function DiscountManagement() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{activeSales.length}</div>
             <p className="text-xs text-muted-foreground">
               Running promotional sales
             </p>

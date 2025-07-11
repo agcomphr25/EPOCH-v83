@@ -14,9 +14,9 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   const delta = date.getTime() - BASE_DATE.getTime();
   const periodIndex = Math.floor(delta / PERIOD_MS);
 
-  // determine two letters
-  const firstIdx = Math.floor(periodIndex / 26) % 26;
-  const secondIdx = periodIndex % 26;
+  // determine two letters - second letter cycles every 14 days, first letter advances every 26 periods
+  const secondIdx = periodIndex % 26; // cycles A-Z every 14 days
+  const firstIdx = Math.floor(periodIndex / 26) % 26; // advances when second letter completes A-Z cycle
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 

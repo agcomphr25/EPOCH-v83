@@ -69,28 +69,16 @@ export default function OrderEntry() {
           { id: 'model3', name: 'AR-10 Standard', cost: 1500 },
         ]);
 
-        setFeatureDefs([
-          {
-            id: 'barrel',
-            name: 'Barrel Length',
-            type: 'dropdown',
-            options: [
-              { value: '16in', label: '16 inch' },
-              { value: '18in', label: '18 inch' },
-              { value: '20in', label: '20 inch' },
-            ],
-          },
-          {
-            id: 'finish',
-            name: 'Finish',
-            type: 'dropdown',
-            options: [
-              { value: 'black', label: 'Black Anodized' },
-              { value: 'fde', label: 'FDE' },
-              { value: 'odg', label: 'OD Green' },
-            ],
-          },
-        ]);
+        // Load features from API
+        const featuresResponse = await apiRequest('/api/features');
+        const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
+        
+        setFeatureDefs(activeFeatures.map((feature: any) => ({
+          id: feature.id,
+          name: feature.displayName || feature.name,
+          type: feature.type,
+          options: feature.options || []
+        })));
 
         setCustomerOptions([
           { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
@@ -338,6 +326,36 @@ export default function OrderEntry() {
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+                  {featureDef.type === 'textarea' && (
+                    <textarea
+                      className="w-full border rounded-md px-3 py-2 min-h-[80px] resize-vertical"
+                      placeholder={featureDef.placeholder || 'Enter details...'}
+                      value={features[featureDef.id] || ''}
+                      onChange={(e) =>
+                        setFeatures(prev => ({ ...prev, [featureDef.id]: e.target.value }))
+                      }
+                    />
+                  )}
+                  {featureDef.type === 'text' && (
+                    <Input
+                      type="text"
+                      placeholder={featureDef.placeholder || 'Enter text...'}
+                      value={features[featureDef.id] || ''}
+                      onChange={(e) =>
+                        setFeatures(prev => ({ ...prev, [featureDef.id]: e.target.value }))
+                      }
+                    />
+                  )}
+                  {featureDef.type === 'number' && (
+                    <Input
+                      type="number"
+                      placeholder={featureDef.placeholder || 'Enter number...'}
+                      value={features[featureDef.id] || ''}
+                      onChange={(e) =>
+                        setFeatures(prev => ({ ...prev, [featureDef.id]: e.target.value }))
+                      }
+                    />
                   )}
                   {errors[`features.${featureDef.id}`] && (
                     <p className="text-red-500 text-sm">{errors[`features.${featureDef.id}`]}</p>

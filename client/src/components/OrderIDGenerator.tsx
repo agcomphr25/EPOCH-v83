@@ -17,8 +17,13 @@ export function OrderIDGenerator() {
   const [generatedP2Serial, setGeneratedP2Serial] = useState("");
 
   const handleGenerateP1 = () => {
+    console.log('DEBUG: handleGenerateP1 called');
+    console.log('DEBUG: p1Date =', p1Date);
+    console.log('DEBUG: lastP1Id =', lastP1Id);
     const date = new Date(p1Date);
+    console.log('DEBUG: date object =', date);
     const newId = generateP1OrderId(date, lastP1Id);
+    console.log('DEBUG: generated newId =', newId);
     setGeneratedP1Id(newId);
   };
 

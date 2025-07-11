@@ -10,8 +10,11 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
+  console.log('DEBUG: generateP1OrderId called with:', { date, lastId, lastIdType: typeof lastId });
+  
   // If no last ID is provided or invalid, start with AA001
   if (!lastId || lastId.trim() === '') {
+    console.log('DEBUG: No lastId or empty string, returning AA001');
     return 'AA001';
   }
 

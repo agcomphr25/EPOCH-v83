@@ -83,9 +83,12 @@ export const insertPersistentDiscountSchema = createInsertSchema(persistentDisco
   fixedAmount: z.number().min(0).optional(),
 });
 
-export const insertShortTermSaleSchema = createInsertSchema(shortTermSales).omit({
-  id: true,
-  createdAt: true,
+export const insertShortTermSaleSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  percent: z.number().min(0).max(100),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  isActive: z.number().default(1),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

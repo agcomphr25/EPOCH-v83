@@ -5,7 +5,9 @@ import {
   insertCSVDataSchema, 
   insertCustomerTypeSchema, 
   insertPersistentDiscountSchema, 
-  insertShortTermSaleSchema 
+  insertShortTermSaleSchema,
+  insertFeatureCategorySchema,
+  insertFeatureSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -191,6 +193,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+
+  // Feature Categories API
+  app.get("/api/feature-categories", async (req, res) => {
+    try {
+      const categories = await storage.getAllFeatureCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve feature categories" });
+    }
+  });
+
+  app.post("/api/feature-categories", async (req, res) => {
+    try {
+      const result = insertFeatureCategorySchema.parse(req.body);
+      const category = await storage.createFeatureCategory(result);
+      res.json(category);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature category data" });
+    }
+  });
+
+  app.put("/api/feature-categories/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const result = insertFeatureCategorySchema.partial().parse(req.body);
+      const category = await storage.updateFeatureCategory(id, result);
+      res.json(category);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature category data" });
+    }
+  });
+
+  app.delete("/api/feature-categories/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await storage.deleteFeatureCategory(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete feature category" });
+    }
+  });
+
+  // Features API
+  app.get("/api/features", async (req, res) => {
+    try {
+      const features = await storage.getAllFeatures();
+      res.json(features);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve features" });
+    }
+  });
+
+  app.post("/api/features", async (req, res) => {
+    try {
+      const result = insertFeatureSchema.parse(req.body);
+      const feature = await storage.createFeature(result);
+      res.json(feature);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature data" });
+    }
+  });
+
+  app.put("/api/features/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const result = insertFeatureSchema.partial().parse(req.body);
+      const feature = await storage.updateFeature(id, result);
+      res.json(feature);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature data" });
+    }
+  });
+
+  app.delete("/api/features/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await storage.deleteFeature(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete feature" });
+    }
+  });
 
   const httpServer = createServer(app);
 

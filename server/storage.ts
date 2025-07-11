@@ -1,9 +1,11 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, features,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
-  type ShortTermSale, type InsertShortTermSale
+  type ShortTermSale, type InsertShortTermSale,
+  type FeatureCategory, type InsertFeatureCategory,
+  type Feature, type InsertFeature
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -39,6 +41,20 @@ export interface IStorage {
   createShortTermSale(data: InsertShortTermSale): Promise<ShortTermSale>;
   updateShortTermSale(id: number, data: Partial<InsertShortTermSale>): Promise<ShortTermSale>;
   deleteShortTermSale(id: number): Promise<void>;
+  
+  // Feature Categories CRUD
+  getAllFeatureCategories(): Promise<FeatureCategory[]>;
+  getFeatureCategory(id: string): Promise<FeatureCategory | undefined>;
+  createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory>;
+  updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory>;
+  deleteFeatureCategory(id: string): Promise<void>;
+  
+  // Features CRUD
+  getAllFeatures(): Promise<Feature[]>;
+  getFeature(id: string): Promise<Feature | undefined>;
+  createFeature(data: InsertFeature): Promise<Feature>;
+  updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature>;
+  deleteFeature(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -163,6 +179,60 @@ export class DatabaseStorage implements IStorage {
 
   async deleteShortTermSale(id: number): Promise<void> {
     await db.delete(shortTermSales).where(eq(shortTermSales.id, id));
+  }
+
+  // Feature Categories CRUD
+  async getAllFeatureCategories(): Promise<FeatureCategory[]> {
+    return await db.select().from(featureCategories).orderBy(featureCategories.sortOrder);
+  }
+
+  async getFeatureCategory(id: string): Promise<FeatureCategory | undefined> {
+    const [category] = await db.select().from(featureCategories).where(eq(featureCategories.id, id));
+    return category || undefined;
+  }
+
+  async createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory> {
+    const [category] = await db.insert(featureCategories).values(data).returning();
+    return category;
+  }
+
+  async updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory> {
+    const [category] = await db.update(featureCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(featureCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteFeatureCategory(id: string): Promise<void> {
+    await db.delete(featureCategories).where(eq(featureCategories.id, id));
+  }
+
+  // Features CRUD
+  async getAllFeatures(): Promise<Feature[]> {
+    return await db.select().from(features).orderBy(features.sortOrder);
+  }
+
+  async getFeature(id: string): Promise<Feature | undefined> {
+    const [feature] = await db.select().from(features).where(eq(features.id, id));
+    return feature || undefined;
+  }
+
+  async createFeature(data: InsertFeature): Promise<Feature> {
+    const [feature] = await db.insert(features).values(data).returning();
+    return feature;
+  }
+
+  async updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature> {
+    const [feature] = await db.update(features)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(features.id, id))
+      .returning();
+    return feature;
+  }
+
+  async deleteFeature(id: string): Promise<void> {
+    await db.delete(features).where(eq(features.id, id));
   }
 }
 

@@ -9,6 +9,7 @@ import NotFound from "./pages/not-found";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
+import FeatureManager from "./pages/FeatureManager";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
+                <Route path="/feature-manager" component={FeatureManager} />
                 <Route component={NotFound} />
               </Switch>
             </main>

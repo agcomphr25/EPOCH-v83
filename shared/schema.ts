@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -54,6 +54,32 @@ export const shortTermSales = pgTable("short_term_sales", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const featureCategories = pgTable("feature_categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const features = pgTable("features", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  type: text("type").notNull(), // 'dropdown', 'text', 'number', 'checkbox', 'textarea'
+  required: boolean("required").default(false),
+  placeholder: text("placeholder"),
+  options: json("options"), // JSON array for dropdown options
+  validation: json("validation"), // JSON object for validation rules
+  category: text("category").references(() => featureCategories.id),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -91,6 +117,16 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
+export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFeatureSchema = createInsertSchema(features).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -103,3 +139,7 @@ export type InsertPersistentDiscount = z.infer<typeof insertPersistentDiscountSc
 export type PersistentDiscount = typeof persistentDiscounts.$inferSelect;
 export type InsertShortTermSale = z.infer<typeof insertShortTermSaleSchema>;
 export type ShortTermSale = typeof shortTermSales.$inferSelect;
+export type InsertFeatureCategory = z.infer<typeof insertFeatureCategorySchema>;
+export type FeatureCategory = typeof featureCategories.$inferSelect;
+export type InsertFeature = z.infer<typeof insertFeatureSchema>;
+export type Feature = typeof features.$inferSelect;

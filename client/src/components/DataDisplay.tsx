@@ -7,6 +7,8 @@ import { useCSVContext } from "@/contexts/CSVContext";
 
 export function DataDisplay() {
   const { data, rowCount } = useCSVContext();
+  
+  console.log('DataDisplay render:', { dataLength: data.length, rowCount });
 
   const handleExport = () => {
     // Convert data to CSV and download

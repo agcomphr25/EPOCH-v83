@@ -18,8 +18,8 @@ export function OrderIDGenerator() {
 
   const handleGenerateP1 = () => {
     const date = new Date(p1Date);
-    const newId = generateP1OrderId(date, lastP1Id);
-    console.log('Setting generatedP1Id to:', newId);
+    const newId = generateP1OrderId(date, lastP1Id.trim());
+    console.log('Generated P1 ID:', newId);
     setGeneratedP1Id(newId);
   };
 
@@ -71,16 +71,13 @@ export function OrderIDGenerator() {
             </Button>
             
             {generatedP1Id && (
-              <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+              <div className="bg-green-50 border border-green-200 rounded-md p-4">
                 <div className="flex items-center">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
                   <span className="text-sm font-medium text-gray-700">Generated ID:</span>
                   <span className="ml-2 text-lg font-mono font-semibold text-primary">
                     {generatedP1Id}
                   </span>
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Debug: {JSON.stringify(generatedP1Id)}
                 </div>
               </div>
             )}

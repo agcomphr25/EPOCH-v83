@@ -20,10 +20,15 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 
+  // handle empty or invalid lastId
+  if (!lastId || lastId.trim() === '') {
+    return prefix + '001';
+  }
+
   // parse last numeric part if lastId matches pattern
-  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
+  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId.trim());
   let seq = 1;
-  if (match && lastId.slice(0, 2) === prefix) {
+  if (match && lastId.trim().slice(0, 2) === prefix) {
     seq = parseInt(match[1], 10) + 1; // increment within same period-block
   }
   // reset to 1 when letters change or lastId invalid

@@ -262,7 +262,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const feature = await storage.updateFeature(id, result);
       res.json(feature);
     } catch (error) {
-      res.status(400).json({ error: "Invalid feature data" });
+      console.error("Feature update error:", error);
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: "Invalid feature data" });
+      }
     }
   });
 

@@ -200,7 +200,19 @@ export default function FeatureManager() {
 
   const handleEditFeature = (feature: Feature) => {
     setSelectedFeature(feature);
-    setFeatureForm(feature);
+    // Only set editable fields, exclude read-only fields
+    setFeatureForm({
+      name: feature.name,
+      displayName: feature.displayName,
+      type: feature.type,
+      required: feature.required,
+      placeholder: feature.placeholder,
+      options: feature.options,
+      validation: feature.validation,
+      category: feature.category,
+      sortOrder: feature.sortOrder,
+      isActive: feature.isActive
+    });
     setIsEditing(true);
     setIsFeatureDialogOpen(true);
   };

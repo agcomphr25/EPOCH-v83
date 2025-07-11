@@ -1,6 +1,6 @@
-// Reference start date for bi-weekly cycles (calculated so July 1, 2025 = AP period)
-// AP = period 15 (A=0, P=15), so July 1, 2025 should be 15 periods from base date
-const BASE_DATE = new Date(2024, 11, 13); // Dec 13 2024 - calculated to align July 1, 2025 with AP period
+// Simple base date: July 1, 2025 = AP period (period 15)
+const BASE_DATE = new Date('2025-07-01'); // July 1, 2025 - AP001 starts here
+const BASE_PERIOD_INDEX = 15; // AP period index
 const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 /**
@@ -11,24 +11,26 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  // compute how many 14-day periods since BASE_DATE
+  // Calculate periods from base date (July 1, 2025 = AP period)
   const delta = date.getTime() - BASE_DATE.getTime();
-  const periodIndex = Math.floor(delta / PERIOD_MS);
+  const periodsFromBase = Math.floor(delta / PERIOD_MS);
+  const actualPeriodIndex = BASE_PERIOD_INDEX + periodsFromBase;
 
-  // determine two letters
-  const firstIdx = Math.floor(periodIndex / 26) % 26;
-  const secondIdx = periodIndex % 26;
+  // determine two letters based on actual period
+  const firstIdx = Math.floor(actualPeriodIndex / 26) % 26;
+  const secondIdx = actualPeriodIndex % 26;
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 
   console.log('P1 ID Generation:', {
     date: date.toISOString().split('T')[0],
     lastId: lastId,
-    periodIndex,
+    periodsFromBase,
+    actualPeriodIndex,
     prefix,
     firstIdx,
     secondIdx,
-    note: 'App started July 1, 2025 with AP001'
+    note: 'July 1, 2025 = AP001 period'
   });
 
   // handle empty or invalid lastId
@@ -38,15 +40,15 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   }
 
   // parse last numeric part if lastId matches pattern
-  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId.trim());
+  const match = /^[A-Z]{2}(\d{3})$/i.exec(lastId.trim());
   let seq = 1;
   
   console.log('Regex match result:', match);
-  console.log('LastId prefix:', lastId.trim().slice(0, 2));
+  console.log('LastId prefix:', lastId.trim().slice(0, 2).toUpperCase());
   console.log('Current prefix:', prefix);
-  console.log('Prefixes match:', lastId.trim().slice(0, 2) === prefix);
+  console.log('Prefixes match:', lastId.trim().slice(0, 2).toUpperCase() === prefix);
   
-  if (match && lastId.trim().slice(0, 2) === prefix) {
+  if (match && lastId.trim().slice(0, 2).toUpperCase() === prefix) {
     const currentSeq = parseInt(match[1], 10);
     seq = currentSeq + 1;
     console.log('Same period, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));

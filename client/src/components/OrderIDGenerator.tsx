@@ -7,8 +7,8 @@ import { Hash, Settings, BarChart3, CheckCircle } from "lucide-react";
 import { generateP1OrderId, generateP2Serial } from "@/utils/orderUtils";
 
 export function OrderIDGenerator() {
-  const [p1Date, setP1Date] = useState(() => new Date().toISOString().split('T')[0]);
-  const [lastP1Id, setLastP1Id] = useState("");
+  const [p1Date, setP1Date] = useState("2025-07-01");
+  const [lastP1Id, setLastP1Id] = useState("AP001");
   const [generatedP1Id, setGeneratedP1Id] = useState("");
 
   const [customerCode, setCustomerCode] = useState("");

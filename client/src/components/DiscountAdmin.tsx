@@ -5,12 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Edit3, Plus, Percent, Users, Calendar } from "lucide-react";
-
-export interface PersistentDiscount {
-  customerType: string;
-  percent: number;
-}
+import { Trash2, Edit3, Plus, Calendar } from "lucide-react";
 
 export interface ShortTermSale {
   id: number;
@@ -25,14 +20,6 @@ interface DiscountAdminProps {
 }
 
 export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
-  const initialPersistent: PersistentDiscount[] = [
-    { customerType: 'AGR–Individual', percent: 10 },
-    { customerType: 'AGR–Gunbuilder', percent: 20 },
-    { customerType: 'OEM', percent: 0 },
-    { customerType: 'Distributor', percent: 0 },
-  ];
-
-  const [persistent, setPersistent] = useState(initialPersistent);
   const [sales, setSales] = useState<ShortTermSale[]>([]);
 
   const [formSale, setFormSale] = useState<{
@@ -49,15 +36,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
     endDate: '',
   });
 
-  const handlePersistChange = (idx: number, field: keyof PersistentDiscount, value: string) => {
-    const arr = [...persistent];
-    if (field === 'percent') {
-      arr[idx] = { ...arr[idx], [field]: Number(value) };
-    } else {
-      arr[idx] = { ...arr[idx], [field]: value };
-    }
-    setPersistent(arr);
-  };
+
 
   const handleSaleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,48 +65,18 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
 
   const isFormValid = formSale.name && formSale.percent > 0 && formSale.startDate && formSale.endDate;
 
+  const getSaleStatus = (sale: ShortTermSale) => {
+    const now = new Date();
+    const start = new Date(sale.startDate);
+    const end = new Date(sale.endDate);
+    
+    if (now < start) return { status: 'upcoming', color: 'bg-blue-100 text-blue-800' };
+    if (now > end) return { status: 'expired', color: 'bg-gray-100 text-gray-800' };
+    return { status: 'active', color: 'bg-green-100 text-green-800' };
+  };
+
   return (
     <div className="space-y-6">
-      {/* Persistent Discounts Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Persistent Discounts
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer Type</TableHead>
-                <TableHead>Discount Percentage</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {persistent.map((row, idx) => (
-                <TableRow key={row.customerType}>
-                  <TableCell className="font-medium">{row.customerType}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={row.percent}
-                        onChange={e => handlePersistChange(idx, 'percent', e.target.value)}
-                        className="w-20"
-                        min="0"
-                        max="100"
-                      />
-                      <Percent className="h-4 w-4 text-gray-500" />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
       {/* Short-Term Sales Section */}
       <Card>
         <CardHeader>

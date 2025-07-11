@@ -31,7 +31,20 @@
 - Proper relationships between customer types and discounts
 - Database-backed storage with PostgreSQL
 
+### Quick Setup Tab Changes
+- **Date**: July 11, 2025
+- **Decision**: Transformed Quick Setup tab to focus on Short-Term Sales management only
+- **Changes Made**:
+  - Removed persistent discount functionality from Quick Setup
+  - Added sale status tracking (Active, Upcoming, Expired)
+  - Enhanced short-term sales interface with full CRUD operations
+- **Rationale**: Ad-hoc discounts will be implemented in future order creation form for better workflow integration
+
 ## Future Tasks & Ideas
+
+### Ad-Hoc Discount System
+- **Status**: To be implemented in order creation form
+- **Note**: Removed from Quick Setup, will be integrated into order workflow for practical application
 
 ### MIL/LEO Discount System
 - **Status**: To be implemented separately from persistent discounts

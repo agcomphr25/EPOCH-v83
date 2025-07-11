@@ -96,11 +96,13 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const processDataInternal = (rawData: string[][], hasHeaders: boolean) => {
+    console.log('processDataInternal called', { rawDataLength: rawData.length, hasHeaders });
     try {
       let processedData: CSVData[] = [];
       
       if (hasHeaders && rawData.length > 1) {
         const headers = rawData[0];
+        console.log('Processing with headers:', headers);
         processedData = rawData.slice(1).map(row => {
           const obj: CSVData = {};
           headers.forEach((header, index) => {
@@ -111,6 +113,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
           return obj;
         });
       } else {
+        console.log('Processing without headers');
         processedData = rawData.map(row => {
           const obj: CSVData = {};
           row.forEach((value, index) => {
@@ -120,12 +123,14 @@ export function CSVProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      console.log('Processed data:', processedData.length, 'rows');
       setState(prev => ({
         ...prev,
         data: processedData,
         rowCount: processedData.length,
       }));
     } catch (error) {
+      console.error('Error in processDataInternal:', error);
       setState(prev => ({
         ...prev,
         error: `Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -134,8 +139,11 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   };
 
   const processData = useCallback((hasHeaders: boolean) => {
+    console.log('processData called', { hasHeaders, rawDataLength: state.rawData?.length });
     if (state.rawData) {
       processDataInternal(state.rawData, hasHeaders);
+    } else {
+      console.log('No raw data available');
     }
   }, [state.rawData]);
 

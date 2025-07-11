@@ -1,5 +1,5 @@
-// Reference start date for bi-weekly cycles (you can adjust as needed)
-const BASE_DATE = new Date(2000, 0, 1); // Jan 1 2000
+// Reference start date for bi-weekly cycles (adjusted to align with current company period AN001)
+const BASE_DATE = new Date(2025, 0, 10); // Jan 10 2025 - aligned with current AN period
 const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 /**
@@ -10,46 +10,64 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  // Calculate current 14-day period from base date
-  const delta = date.getTime() - BASE_DATE.getTime();
-  const currentPeriodIndex = Math.floor(delta / PERIOD_MS);
-  
-  // Calculate current period prefix (letters)
-  // Second letter cycles A-Z every 14 days (period 0=A, 1=B, 2=C, ..., 25=Z, 26=A again)
-  const secondIdx = currentPeriodIndex % 26;
-  // First letter advances only after second letter completes full A-Z cycle (every 26 periods)
-  const firstIdx = Math.floor(currentPeriodIndex / 26) % 26;
-  const letter = (i: number) => String.fromCharCode(65 + i);
-  const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-
-  // If no last ID is provided or invalid, start with current period + 001
+  // If no last ID is provided or invalid, start with AA001
   if (!lastId || lastId.trim() === '') {
-    return currentPrefix + '001';
+    return 'AA001';
   }
 
   // Parse the last order ID
   const match = /^([A-Z])([A-Z])(\d{3})$/.exec(lastId.trim());
   if (!match) {
-    return currentPrefix + '001'; // Invalid format, start with current period
+    return 'AA001'; // Invalid format, start with AA001
   }
 
   const [, firstLetter, secondLetter, numStr] = match;
   const lastSeq = parseInt(numStr, 10);
-  const lastPrefix = firstLetter + secondLetter;
 
-  // Check if we're in the same 14-day period as the last order
-  if (lastPrefix === currentPrefix) {
-    // Same period: increment the sequence number
+  // Calculate when the last order period would have been (reverse calculation)
+  const lastFirstIdx = firstLetter.charCodeAt(0) - 65;
+  const lastSecondIdx = secondLetter.charCodeAt(0) - 65;
+  const lastPeriodIndex = lastFirstIdx * 26 + lastSecondIdx;
+  const lastPeriodDate = new Date(BASE_DATE.getTime() + lastPeriodIndex * PERIOD_MS);
+
+  // Check if we're still in the same 14-day period as the last order
+  const timeSinceLastPeriod = date.getTime() - lastPeriodDate.getTime();
+  const periodsElapsed = Math.floor(timeSinceLastPeriod / PERIOD_MS);
+
+  if (periodsElapsed === 0) {
+    // Same period: increment the sequence
     const nextSeq = lastSeq + 1;
     if (nextSeq > 999) {
-      // If sequence exceeds 999 in same period, reset to 001
-      return currentPrefix + '001';
+      // If sequence exceeds 999, advance to next period
+      return getNextPeriodPrefix(firstLetter, secondLetter) + '001';
     }
-    return currentPrefix + String(nextSeq).padStart(3, '0');
+    return firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
   } else {
-    // Different period: new period always starts with 001
-    return currentPrefix + '001';
+    // Different period: advance the letters based on periods elapsed
+    return getNextPeriodPrefix(firstLetter, secondLetter, periodsElapsed) + '001';
   }
+}
+
+function getNextPeriodPrefix(firstLetter: string, secondLetter: string, periodsToAdvance: number = 1): string {
+  let firstIdx = firstLetter.charCodeAt(0) - 65;
+  let secondIdx = secondLetter.charCodeAt(0) - 65;
+  
+  // Advance by the number of periods
+  secondIdx += periodsToAdvance;
+  
+  // Handle overflow: if second letter goes past Z, increment first letter
+  while (secondIdx > 25) {
+    secondIdx -= 26;
+    firstIdx++;
+  }
+  
+  // Handle first letter overflow
+  if (firstIdx > 25) {
+    firstIdx = firstIdx % 26;
+  }
+  
+  const letter = (i: number) => String.fromCharCode(65 + i);
+  return letter(firstIdx) + letter(secondIdx);
 }
 
 /**

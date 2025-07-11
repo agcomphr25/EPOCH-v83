@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 11, 2025**: Migrated from in-memory storage to PostgreSQL database using Neon - replaced MemStorage with DatabaseStorage implementation
 - **July 11, 2025**: Successfully fixed P1 Order ID Generator algorithm - now correctly generates AN001 → AN002 within same period and properly advances periods every 14 days
 - **July 11, 2025**: Replaced complex reverse-calculation logic with simpler forward-calculation approach for better reliability
 - **January 11, 2025**: Updated application branding to "EPOCH v8" in the main header

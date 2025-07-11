@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { FileText, Upload, FolderOpen, AlertCircle, CheckCircle, Info, Play } from "lucide-react";
-import { useCSVImport } from "@/hooks/useCSVImport";
+import { useCSVContext } from "@/contexts/CSVContext";
 
 export function CSVImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasHeaders, setHasHeaders] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
-  const { data, isLoading, error, fileName, rowCount, parseCSV } = useCSVImport();
+  const { data, isLoading, error, fileName, rowCount, parseCSV } = useCSVContext();
 
   const handleFileSelect = (file: File) => {
     if (file && file.type === 'text/csv') {

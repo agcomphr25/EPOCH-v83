@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableIcon, Download, Inbox, CheckCircle, Clock, Play } from "lucide-react";
-import { useCSVImport } from "@/hooks/useCSVImport";
+import { useCSVContext } from "@/contexts/CSVContext";
 
 export function DataDisplay() {
-  const { data, rowCount } = useCSVImport();
+  const { data, rowCount } = useCSVContext();
 
   const handleExport = () => {
     // Convert data to CSV and download
@@ -39,6 +39,19 @@ export function DataDisplay() {
         return <Play className="h-3 w-3 mr-1" />;
       default:
         return null;
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'default';
+      case 'in progress':
+        return 'secondary';
+      case 'queued':
+        return 'outline';
+      default:
+        return 'outline';
     }
   };
 

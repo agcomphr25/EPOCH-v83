@@ -10,40 +10,51 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  // compute how many 14-day periods since BASE_DATE
-  const delta = date.getTime() - BASE_DATE.getTime();
-  const periodIndex = Math.floor(delta / PERIOD_MS);
+  // If no last ID is provided or invalid, start with AA001
+  if (!lastId || lastId.trim() === '') {
+    return 'AA001';
+  }
 
-  // determine two letters - second letter cycles every 14 days, first letter advances every 26 periods
-  const secondIdx = periodIndex % 26; // cycles A-Z every 14 days
-  const firstIdx = Math.floor(periodIndex / 26) % 26; // advances when second letter completes A-Z cycle
-  const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
-  const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
+  // Parse the last order ID
+  const match = /^([A-Z])([A-Z])(\d{3})$/.exec(lastId.trim());
+  if (!match) {
+    return 'AA001'; // Invalid format, start over
+  }
 
-  // parse last order ID if provided and valid
-  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
-  let seq = 1;
-  
-  if (match && lastId.trim() !== '') {
-    const lastPrefix = lastId.slice(0, 2);
-    const lastSeq = parseInt(match[1], 10);
+  const [, firstLetter, secondLetter, numStr] = match;
+  const lastSeq = parseInt(numStr, 10);
+
+  // Simple increment: just increment the sequence number
+  const nextSeq = lastSeq + 1;
+
+  // If sequence exceeds 999, advance to next letter combination
+  if (nextSeq > 999) {
+    // Convert letters to indices (A=0, B=1, ..., Z=25)
+    const firstIdx = firstLetter.charCodeAt(0) - 65;
+    const secondIdx = secondLetter.charCodeAt(0) - 65;
     
-    if (lastPrefix === currentPrefix) {
-      // Same 14-day period, increment the sequence
-      seq = lastSeq + 1;
-    } else {
-      // Different period, reset to 1
-      seq = 1;
+    // Increment second letter first
+    let newSecondIdx = secondIdx + 1;
+    let newFirstIdx = firstIdx;
+    
+    // If second letter goes past Z, increment first letter and reset second to A
+    if (newSecondIdx > 25) {
+      newSecondIdx = 0;
+      newFirstIdx = firstIdx + 1;
+      
+      // If first letter goes past Z, reset to AA
+      if (newFirstIdx > 25) {
+        newFirstIdx = 0;
+      }
     }
+    
+    const newFirstLetter = String.fromCharCode(65 + newFirstIdx);
+    const newSecondLetter = String.fromCharCode(65 + newSecondIdx);
+    return newFirstLetter + newSecondLetter + '001';
   }
-  
-  // ensure sequence doesn't exceed 999
-  if (seq > 999) {
-    seq = 1;
-  }
-  
-  const num = String(seq).padStart(3, '0');
-  return currentPrefix + num;
+
+  // Same letters, just increment sequence
+  return firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
 }
 
 /**

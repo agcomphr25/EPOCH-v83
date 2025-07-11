@@ -19,8 +19,12 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   }
 
   // Parse the last order ID
-  const match = /^([A-Z])([A-Z])(\d{3})$/.exec(lastId.trim());
+  const trimmedId = lastId.trim();
+  console.log('DEBUG: Trying to match trimmed ID:', trimmedId);
+  const match = /^([A-Z])([A-Z])(\d{3})$/.exec(trimmedId);
+  console.log('DEBUG: Regex match result:', match);
   if (!match) {
+    console.log('DEBUG: Regex failed, returning AA001');
     return 'AA001'; // Invalid format, start with AA001
   }
 

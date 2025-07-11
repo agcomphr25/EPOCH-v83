@@ -36,7 +36,6 @@ export const persistentDiscounts = pgTable("persistent_discounts", {
   id: serial("id").primaryKey(),
   customerTypeId: integer("customer_type_id").references(() => customerTypes.id).notNull(),
   percent: integer("percent").notNull(),
-  milLeoBonus: integer("mil_leo_bonus").default(0).notNull(),
   isActive: integer("is_active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -89,7 +89,6 @@ export default function PersistentDiscountManager() {
     defaultValues: {
       customerTypeId: 0,
       percent: 0,
-      milLeoBonus: 0,
       isActive: 1,
     },
   });
@@ -99,7 +98,6 @@ export default function PersistentDiscountManager() {
     defaultValues: {
       customerTypeId: 0,
       percent: 0,
-      milLeoBonus: 0,
       isActive: 1,
     },
   });
@@ -119,7 +117,6 @@ export default function PersistentDiscountManager() {
     editForm.reset({
       customerTypeId: discount.customerTypeId,
       percent: discount.percent,
-      milLeoBonus: discount.milLeoBonus,
       isActive: discount.isActive,
     });
   };
@@ -198,24 +195,7 @@ export default function PersistentDiscountManager() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={createForm.control}
-                    name="milLeoBonus"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Military/LEO Bonus (%)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
-                            placeholder="e.g., 5" 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+
                   <FormField
                     control={createForm.control}
                     name="isActive"
@@ -254,7 +234,6 @@ export default function PersistentDiscountManager() {
               <TableRow>
                 <TableHead>Customer Type</TableHead>
                 <TableHead>Discount %</TableHead>
-                <TableHead>MIL/LEO Bonus %</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -264,7 +243,6 @@ export default function PersistentDiscountManager() {
                 <TableRow key={discount.id}>
                   <TableCell className="font-medium">{getCustomerTypeName(discount.customerTypeId)}</TableCell>
                   <TableCell>{discount.percent}%</TableCell>
-                  <TableCell>{discount.milLeoBonus}%</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs ${
                       discount.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -347,24 +325,7 @@ export default function PersistentDiscountManager() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={editForm.control}
-                name="milLeoBonus"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Military/LEO Bonus (%)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        {...field} 
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                        placeholder="e.g., 5" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
               <FormField
                 control={editForm.control}
                 name="isActive"

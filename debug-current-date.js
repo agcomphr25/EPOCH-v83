@@ -1,22 +1,26 @@
-// Debug current date calculation
-const BASE_DATE = new Date(2000, 0, 1);
-const PERIOD_MS = 14 * 24 * 60 * 60 * 1000;
+// Debug current date period calculation
+const BASE_DATE = new Date(2025, 0, 10); // Jan 10 2025
+const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 const today = new Date();
-console.log(`Today: ${today.toISOString().split('T')[0]}`);
-console.log(`Base Date: ${BASE_DATE.toISOString().split('T')[0]}`);
+console.log('Today:', today.toISOString().split('T')[0]);
+console.log('BASE_DATE:', BASE_DATE.toISOString().split('T')[0]);
 
 const delta = today.getTime() - BASE_DATE.getTime();
-const currentPeriodIndex = Math.floor(delta / PERIOD_MS);
+const periodIndex = Math.floor(delta / PERIOD_MS);
 
-console.log(`Delta (ms): ${delta}`);
-console.log(`Period MS: ${PERIOD_MS}`);
-console.log(`Current Period Index: ${currentPeriodIndex}`);
+console.log('Delta (ms):', delta);
+console.log('Period index:', periodIndex);
 
-const secondIdx = currentPeriodIndex % 26;
-const firstIdx = Math.floor(currentPeriodIndex / 26) % 26;
-const letter = (i) => String.fromCharCode(65 + i);
+const firstIdx = Math.floor(periodIndex / 26) % 26;
+const secondIdx = periodIndex % 26;
 
-console.log(`First Letter Index: ${firstIdx} (${letter(firstIdx)})`);
-console.log(`Second Letter Index: ${secondIdx} (${letter(secondIdx)})`);
-console.log(`Current Prefix: ${letter(firstIdx)}${letter(secondIdx)}`);
+console.log('First index:', firstIdx, '(letter: ' + String.fromCharCode(65 + firstIdx) + ')');
+console.log('Second index:', secondIdx, '(letter: ' + String.fromCharCode(65 + secondIdx) + ')');
+
+const prefix = String.fromCharCode(65 + firstIdx) + String.fromCharCode(65 + secondIdx);
+console.log('Current prefix:', prefix);
+
+// Check if AN001 is in the current period
+console.log('\nTesting AN001:');
+console.log('AN prefix matches current prefix:', 'AN' === prefix);

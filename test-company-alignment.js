@@ -1,84 +1,63 @@
-// Test with company-aligned base date
-const BASE_DATE = new Date(2025, 0, 10);
-const PERIOD_MS = 14 * 24 * 60 * 60 * 1000;
-
-function getNextPeriodPrefix(firstLetter, secondLetter, periodsToAdvance = 1) {
-  let firstIdx = firstLetter.charCodeAt(0) - 65;
-  let secondIdx = secondLetter.charCodeAt(0) - 65;
-  
-  secondIdx += periodsToAdvance;
-  
-  while (secondIdx > 25) {
-    secondIdx -= 26;
-    firstIdx++;
-  }
-  
-  if (firstIdx > 25) {
-    firstIdx = firstIdx % 26;
-  }
-  
-  const letter = (i) => String.fromCharCode(65 + i);
-  return letter(firstIdx) + letter(secondIdx);
-}
+// Test the 14 days out scenario
+const BASE_DATE = new Date(2025, 0, 10); // Jan 10 2025
+const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 function generateP1OrderId(date, lastId) {
-  if (!lastId || lastId.trim() === '') {
-    return 'AA001';
-  }
+  console.log('=== Function called ===');
+  console.log('date:', date.toISOString().split('T')[0]);
+  console.log('lastId:', lastId);
+  
+  // compute how many 14-day periods since BASE_DATE
+  const delta = date.getTime() - BASE_DATE.getTime();
+  const periodIndex = Math.floor(delta / PERIOD_MS);
+  console.log('delta:', delta, 'periodIndex:', periodIndex);
 
-  const match = /^([A-Z])([A-Z])(\d{3})$/.exec(lastId.trim());
-  if (!match) {
-    return 'AA001';
-  }
+  // determine two letters
+  const firstIdx = Math.floor(periodIndex / 26) % 26;
+  const secondIdx = periodIndex % 26;
+  console.log('firstIdx:', firstIdx, 'secondIdx:', secondIdx);
+  
+  const letter = (i) => String.fromCharCode(65 + i); // 0→A, 25→Z
+  const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
+  console.log('prefix:', prefix);
 
-  const [, firstLetter, secondLetter, numStr] = match;
-  const lastSeq = parseInt(numStr, 10);
-
-  const lastFirstIdx = firstLetter.charCodeAt(0) - 65;
-  const lastSecondIdx = secondLetter.charCodeAt(0) - 65;
-  const lastPeriodIndex = lastFirstIdx * 26 + lastSecondIdx;
-  const lastPeriodDate = new Date(BASE_DATE.getTime() + lastPeriodIndex * PERIOD_MS);
-
-  const timeSinceLastPeriod = date.getTime() - lastPeriodDate.getTime();
-  const periodsElapsed = Math.floor(timeSinceLastPeriod / PERIOD_MS);
-
-  console.log(`Date: ${date.toISOString().split('T')[0]}`);
-  console.log(`Last ID: ${lastId}`);
-  console.log(`Periods Elapsed: ${periodsElapsed}`);
-
-  if (periodsElapsed === 0) {
-    const nextSeq = lastSeq + 1;
-    if (nextSeq > 999) {
-      const nextPrefix = getNextPeriodPrefix(firstLetter, secondLetter);
-      console.log(`Result: ${nextPrefix}001`);
-      return nextPrefix + '001';
-    }
-    const result = firstLetter + secondLetter + String(nextSeq).padStart(3, '0');
-    console.log(`Result: ${result}`);
-    return result;
+  // parse last numeric part if lastId matches pattern
+  const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
+  console.log('regex match:', match);
+  
+  let seq = 1;
+  if (match && lastId.slice(0, 2) === prefix) {
+    seq = parseInt(match[1], 10) + 1; // increment within same period-block
+    console.log('same period, seq incremented to:', seq);
   } else {
-    const nextPrefix = getNextPeriodPrefix(firstLetter, secondLetter, periodsElapsed);
-    console.log(`Result: ${nextPrefix}001`);
-    return nextPrefix + '001';
+    console.log('different period or no match, seq remains 1');
   }
+  
+  // reset to 1 when letters change or lastId invalid
+  const num = String(seq).padStart(3, '0');
+  const result = prefix + num;
+  console.log('final result:', result);
+  return result;
 }
 
-// Test with current company status
-console.log('=== Test with current company period AN001 ===');
-generateP1OrderId(new Date(), 'AN001');
+// Test with July 11, 2025 (current AN period)
+const currentDate = new Date('2025-07-11');
+console.log('=== Current date (July 11, 2025) with AN001 ===');
+const result1 = generateP1OrderId(currentDate, 'AN001');
+console.log('Result:', result1);
 
-console.log('\n=== Test with AN005 (should increment) ===');
-generateP1OrderId(new Date(), 'AN005');
+// Test with July 25, 2025 (14 days later - should be AO period)  
+const futureDate = new Date('2025-07-25');
+console.log('\n=== 14 days later (July 25, 2025) with AN001 ===');
+const result2 = generateP1OrderId(futureDate, 'AN001');
+console.log('Result:', result2);
 
-console.log('\n=== Test with AN999 (should advance to AO001) ===');
-generateP1OrderId(new Date(), 'AN999');
-
-console.log('\n=== Current period verification ===');
-const today = new Date();
-const delta = today.getTime() - BASE_DATE.getTime();
-const periodIndex = Math.floor(delta / PERIOD_MS);
-const secondIdx = periodIndex % 26;
-const firstIdx = Math.floor(periodIndex / 26) % 26;
-const letter = (i) => String.fromCharCode(65 + i);
-const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-console.log(`Current period should be AN: ${currentPrefix}`);
+// Test what the next period after AN should be
+console.log('\n=== Period calculations ===');
+const currentPeriod = 13; // AN
+const nextPeriod = 14; // Should be AO
+const nextFirstIdx = Math.floor(nextPeriod / 26) % 26;
+const nextSecondIdx = nextPeriod % 26;
+const nextPrefix = String.fromCharCode(65 + nextFirstIdx) + String.fromCharCode(65 + nextSecondIdx);
+console.log('Current period (13):', 'AN');
+console.log('Next period (14):', nextPrefix);

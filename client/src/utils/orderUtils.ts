@@ -10,43 +10,25 @@ const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
  * @returns {string}         – next ID
  */
 export function generateP1OrderId(date: Date, lastId: string): string {
-  console.log('=== Utils Function Debug ===');
-  console.log('date:', date);
-  console.log('lastId:', lastId);
-  console.log('BASE_DATE:', BASE_DATE);
-  
   // compute how many 14-day periods since BASE_DATE
   const delta = date.getTime() - BASE_DATE.getTime();
   const periodIndex = Math.floor(delta / PERIOD_MS);
-  console.log('delta:', delta);
-  console.log('periodIndex:', periodIndex);
 
   // determine two letters
   const firstIdx = Math.floor(periodIndex / 26) % 26;
   const secondIdx = periodIndex % 26;
-  console.log('firstIdx:', firstIdx, 'secondIdx:', secondIdx);
-  
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-  console.log('prefix:', prefix);
 
   // parse last numeric part if lastId matches pattern
   const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
-  console.log('regex match:', match);
-  
   let seq = 1;
   if (match && lastId.slice(0, 2) === prefix) {
     seq = parseInt(match[1], 10) + 1; // increment within same period-block
-    console.log('same period, incrementing seq to:', seq);
-  } else {
-    console.log('different period or no match, using seq 1');
   }
-  
   // reset to 1 when letters change or lastId invalid
   const num = String(seq).padStart(3, '0');
-  const result = prefix + num;
-  console.log('final result:', result);
-  return result;
+  return prefix + num;
 }
 
 

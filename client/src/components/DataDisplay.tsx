@@ -55,19 +55,6 @@ export function DataDisplay() {
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return 'default';
-      case 'in progress':
-        return 'secondary';
-      case 'queued':
-        return 'outline';
-      default:
-        return 'outline';
-    }
-  };
-
   return (
     <Card>
       <CardHeader>

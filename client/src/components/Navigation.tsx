@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,12 @@ export default function Navigation() {
       label: 'Discount Management',
       icon: TrendingDown,
       description: 'Configure discounts and sales'
+    },
+    {
+      path: '/order-entry',
+      label: 'Order Entry',
+      icon: Plus,
+      description: 'Create new orders'
     }
   ];
 

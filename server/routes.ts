@@ -165,6 +165,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Order API endpoints for OrderEntry component
+  app.get("/api/orders/last-id", async (req, res) => {
+    try {
+      // Mock response for now - in real implementation, query the orders table
+      res.json({ lastOrderId: "AP001" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve last order ID" });
+    }
+  });
+
+  app.post("/api/orders", async (req, res) => {
+    try {
+      // Mock order creation - in real implementation, save to orders table
+      const orderData = req.body;
+      res.json({ 
+        id: Date.now(), 
+        ...orderData,
+        status: "created",
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(400).json({ error: "Invalid order data" });
+    }
+  });
+
+  app.post("/api/orders/bulk", async (req, res) => {
+    try {
+      // Mock bulk order creation
+      const orders = req.body;
+      res.json({ 
+        count: orders.length,
+        message: `Successfully created ${orders.length} orders`
+      });
+    } catch (error) {
+      res.status(400).json({ error: "Invalid bulk order data" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

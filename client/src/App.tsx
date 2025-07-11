@@ -8,6 +8,7 @@ import Navigation from "./components/Navigation";
 import NotFound from "./pages/not-found";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
+import OrderEntry from "./pages/OrderEntry";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
               <Switch>
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
+                <Route path="/order-entry" component={OrderEntry} />
                 <Route component={NotFound} />
               </Switch>
             </main>

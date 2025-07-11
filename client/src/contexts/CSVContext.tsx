@@ -38,8 +38,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        const response = await apiRequest('GET', '/api/csv-data');
-        const savedData = await response.json();
+        const savedData = await apiRequest('GET', '/api/csv-data');
         setState(prev => ({
           ...prev,
           data: Array.isArray(savedData.data) ? savedData.data : [],

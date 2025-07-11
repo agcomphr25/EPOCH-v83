@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import DiscountAdmin from '@/components/DiscountAdmin';
 import DiscountCalculator from '@/components/DiscountCalculator';
+import CustomerTypeManager from '@/components/CustomerTypeManager';
+import PersistentDiscountManager from '@/components/PersistentDiscountManager';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calculator, TrendingDown } from "lucide-react";
 
 interface ShortTermSale {
@@ -74,8 +77,26 @@ export default function DiscountManagement() {
         <DiscountCalculator activeSales={activeSales} />
       </div>
 
-      {/* Discount Admin Component */}
-      <DiscountAdmin onSalesChange={handleSalesChange} />
+      {/* Discount Management Tabs */}
+      <Tabs defaultValue="quick-setup" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="quick-setup">Quick Setup</TabsTrigger>
+          <TabsTrigger value="customer-types">Customer Types</TabsTrigger>
+          <TabsTrigger value="persistent-discounts">Persistent Discounts</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="quick-setup" className="space-y-4">
+          <DiscountAdmin onSalesChange={handleSalesChange} />
+        </TabsContent>
+        
+        <TabsContent value="customer-types" className="space-y-4">
+          <CustomerTypeManager />
+        </TabsContent>
+        
+        <TabsContent value="persistent-discounts" className="space-y-4">
+          <PersistentDiscountManager />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

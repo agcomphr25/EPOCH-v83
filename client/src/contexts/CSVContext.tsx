@@ -38,16 +38,14 @@ export function CSVProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        const response = await apiRequest('/api/csv-data');
-        if (response.ok) {
-          const savedData = await response.json();
-          setState(prev => ({
-            ...prev,
-            data: Array.isArray(savedData.data) ? savedData.data : [],
-            fileName: savedData.fileName || null,
-            rowCount: Array.isArray(savedData.data) ? savedData.data.length : 0,
-          }));
-        }
+        const response = await apiRequest('GET', '/api/csv-data');
+        const savedData = await response.json();
+        setState(prev => ({
+          ...prev,
+          data: Array.isArray(savedData.data) ? savedData.data : [],
+          fileName: savedData.fileName || null,
+          rowCount: Array.isArray(savedData.data) ? savedData.data.length : 0,
+        }));
       } catch (error) {
         // No saved data available, which is fine
       }
@@ -145,15 +143,9 @@ export function CSVProvider({ children }: { children: ReactNode }) {
 
       // Save to database
       try {
-        await apiRequest('/api/csv-data', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            fileName: state.fileName,
-            data: processedData,
-          }),
+        await apiRequest('POST', '/api/csv-data', {
+          fileName: state.fileName,
+          data: processedData,
         });
       } catch (error) {
         console.error('Failed to save CSV data:', error);
@@ -180,9 +172,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
 
   const clearData = useCallback(async () => {
     try {
-      await apiRequest('/api/csv-data', {
-        method: 'DELETE',
-      });
+      await apiRequest('DELETE', '/api/csv-data');
     } catch (error) {
       console.error('Failed to clear CSV data:', error);
     }

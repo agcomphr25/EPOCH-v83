@@ -14,10 +14,16 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <CSVProvider>
-          <Switch>
-            <Route path="/" component={OrderManagement} />
-            <Route component={NotFound} />
-          </Switch>
+          <div className="min-h-screen bg-background">
+            <Navigation />
+            <main>
+              <Switch>
+                <Route path="/" component={OrderManagement} />
+                <Route path="/discounts" component={DiscountManagement} />
+                <Route component={NotFound} />
+              </Switch>
+            </main>
+          </div>
           <Toaster />
         </CSVProvider>
       </TooltipProvider>

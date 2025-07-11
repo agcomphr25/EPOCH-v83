@@ -1,5 +1,6 @@
 import React from 'react';
 import DiscountAdmin from '@/components/DiscountAdmin';
+import DiscountCalculator from '@/components/DiscountCalculator';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calculator, TrendingDown } from "lucide-react";
 
@@ -57,6 +58,11 @@ export default function DiscountManagement() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Discount Calculator */}
+      <div className="mb-6">
+        <DiscountCalculator />
       </div>
 
       {/* Discount Admin Component */}

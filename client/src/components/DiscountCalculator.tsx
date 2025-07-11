@@ -7,18 +7,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Calculator, DollarSign, Info } from "lucide-react";
-import { calculateFinalPrice, getActiveShortTermDiscounts } from '@/utils/discountUtils';
+import { calculateFinalPrice, getActiveShortTermDiscounts, type ShortTermSale } from '@/utils/discountUtils';
 
-export default function DiscountCalculator() {
+interface DiscountCalculatorProps {
+  activeSales: ShortTermSale[];
+}
+
+export default function DiscountCalculator({ activeSales }: DiscountCalculatorProps) {
   const [basePrice, setBasePrice] = useState<number>(1000);
   const [customerType, setCustomerType] = useState<string>('AGR–Individual');
   const [isMilLeo, setIsMilLeo] = useState<boolean>(false);
   const [result, setResult] = useState<any>(null);
-
-  // Sample active sales for demonstration
-  const activeSales = [
-    { name: 'Winter Sale', percent: 15, startDate: '2025-01-01', endDate: '2025-12-31' }
-  ];
 
   const calculateDiscount = () => {
     const activeDiscounts = getActiveShortTermDiscounts(new Date(), activeSales);
@@ -90,6 +89,20 @@ export default function DiscountCalculator() {
             Military/Law Enforcement (MIL/LEO)
           </Label>
         </div>
+
+        {/* Active Sales Display */}
+        {activeSales.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Active Sales:</Label>
+            <div className="flex flex-wrap gap-2">
+              {activeSales.map((sale, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {sale.name} ({sale.percent}%)
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Button onClick={calculateDiscount} className="w-full">
           <Calculator className="h-4 w-4 mr-2" />

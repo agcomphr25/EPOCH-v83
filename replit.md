@@ -6,6 +6,9 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 11, 2025**: Integrated comprehensive discount management module with real-time discount calculator and admin interface
+- **July 11, 2025**: Added multi-page navigation system allowing users to switch between Order Management and Discount Management
+- **July 11, 2025**: Connected discount calculator to live sales data from admin interface (fixed hardcoded sample data issue)
 - **July 11, 2025**: Migrated from in-memory storage to PostgreSQL database using Neon - replaced MemStorage with DatabaseStorage implementation
 - **July 11, 2025**: Successfully fixed P1 Order ID Generator algorithm - now correctly generates AN001 → AN002 within same period and properly advances periods every 14 days
 - **July 11, 2025**: Replaced complex reverse-calculation logic with simpler forward-calculation approach for better reliability

@@ -62,7 +62,7 @@ export default function DiscountManagement() {
 
       {/* Discount Calculator */}
       <div className="mb-6">
-        <DiscountCalculator />
+        <DiscountCalculator activeSales={activeSales} />
       </div>
 
       {/* Discount Admin Component */}

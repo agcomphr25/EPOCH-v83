@@ -40,15 +40,31 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   // parse last numeric part if lastId matches pattern
   const match = /^[A-Z]{2}(\d{3})$/.exec(lastId.trim());
   let seq = 1;
+  
+  console.log('Regex match result:', match);
+  console.log('LastId prefix:', lastId.trim().slice(0, 2));
+  console.log('Current prefix:', prefix);
+  console.log('Prefixes match:', lastId.trim().slice(0, 2) === prefix);
+  
   if (match && lastId.trim().slice(0, 2) === prefix) {
-    seq = parseInt(match[1], 10) + 1; // increment within same period-block
+    const currentSeq = parseInt(match[1], 10);
+    seq = currentSeq + 1;
     console.log('Same period, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));
+    console.log('Current sequence:', currentSeq, 'Next sequence:', seq);
   } else {
     console.log('Different period or invalid format, resetting to:', prefix + '001');
   }
-  // reset to 1 when letters change or lastId invalid
+  
+  // Handle sequence overflow
+  if (seq > 999) {
+    seq = 1;
+    console.log('Sequence overflow, resetting to 001');
+  }
+  
   const num = String(seq).padStart(3, '0');
-  return prefix + num;
+  const result = prefix + num;
+  console.log('Final result:', result);
+  return result;
 }
 
 

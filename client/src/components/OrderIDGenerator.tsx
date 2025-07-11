@@ -19,6 +19,7 @@ export function OrderIDGenerator() {
   const handleGenerateP1 = () => {
     const date = new Date(p1Date);
     const newId = generateP1OrderId(date, lastP1Id);
+    console.log('Setting generatedP1Id to:', newId);
     setGeneratedP1Id(newId);
   };
 
@@ -77,6 +78,9 @@ export function OrderIDGenerator() {
                   <span className="ml-2 text-lg font-mono font-semibold text-primary">
                     {generatedP1Id}
                   </span>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Debug: {JSON.stringify(generatedP1Id)}
                 </div>
               </div>
             )}

@@ -1,5 +1,5 @@
-// Reference start date for bi-weekly cycles (adjusted to align with current company period AN001)
-const BASE_DATE = new Date(2025, 0, 10); // Jan 10 2025 - aligned with current AN period
+// Reference start date for bi-weekly cycles (calculated so July 11, 2025 = AN period)
+const BASE_DATE = new Date(2025, 0, 29); // Jan 29 2025 - calculated to align July 11, 2025 with AN period
 const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 /**

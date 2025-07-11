@@ -190,18 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/orders/bulk", async (req, res) => {
-    try {
-      // Mock bulk order creation
-      const orders = req.body;
-      res.json({ 
-        count: orders.length,
-        message: `Successfully created ${orders.length} orders`
-      });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid bulk order data" });
-    }
-  });
+
 
   const httpServer = createServer(app);
 

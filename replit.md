@@ -6,6 +6,8 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 11, 2025**: Simplified Order Entry module to single order creation only - removed bulk CSV import functionality to avoid confusion with historical data import
+- **July 11, 2025**: Clarified navigation descriptions: Order Management for viewing orders and importing historical data, Order Entry for creating single orders
 - **July 11, 2025**: Implemented full CRUD capabilities for Customer Types and Persistent Discounts with database persistence
 - **July 11, 2025**: Added comprehensive discount management system with tabbed interface for Quick Setup, Customer Types, and Persistent Discounts
 - **July 11, 2025**: Created database schema with proper relationships and seeded initial data for immediate functionality

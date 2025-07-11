@@ -12,7 +12,7 @@ export default function Navigation() {
       path: '/',
       label: 'Order Management',
       icon: FileText,
-      description: 'Manage orders and CSV imports'
+      description: 'View orders and import historical data'
     },
     {
       path: '/discounts',
@@ -24,7 +24,7 @@ export default function Navigation() {
       path: '/order-entry',
       label: 'Order Entry',
       icon: Plus,
-      description: 'Create new orders'
+      description: 'Create single orders'
     }
   ];
 

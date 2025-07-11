@@ -78,14 +78,14 @@ export default function DiscountManagement() {
       </div>
 
       {/* Discount Management Tabs */}
-      <Tabs defaultValue="quick-setup" className="w-full">
+      <Tabs defaultValue="short-term-sales" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="quick-setup">Quick Setup</TabsTrigger>
+          <TabsTrigger value="short-term-sales">Short-Term Sales</TabsTrigger>
           <TabsTrigger value="customer-types">Customer Types</TabsTrigger>
           <TabsTrigger value="persistent-discounts">Persistent Discounts</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="quick-setup" className="space-y-4">
+        <TabsContent value="short-term-sales" className="space-y-4">
           <DiscountAdmin onSalesChange={handleSalesChange} />
         </TabsContent>
         

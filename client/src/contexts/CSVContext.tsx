@@ -12,10 +12,12 @@ export interface CSVContextState {
   error: string | null;
   fileName: string | null;
   rowCount: number;
+  rawData: string[][] | null;
 }
 
 interface CSVContextType extends CSVContextState {
   parseCSV: (file: File, hasHeaders?: boolean) => void;
+  processData: (hasHeaders: boolean) => void;
   clearData: () => void;
 }
 
@@ -28,6 +30,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     error: null,
     fileName: null,
     rowCount: 0,
+    rawData: null,
   });
 
   const parseCSV = useCallback((file: File, hasHeaders: boolean = true) => {
@@ -51,9 +54,9 @@ export function CSVProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const data = results.data as string[][];
+          const rawData = results.data as string[][];
           
-          if (data.length === 0) {
+          if (rawData.length === 0) {
             setState(prev => ({
               ...prev,
               isLoading: false,
@@ -62,35 +65,16 @@ export function CSVProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          let processedData: CSVData[] = [];
-          
-          if (hasHeaders && data.length > 1) {
-            const headers = data[0];
-            processedData = data.slice(1).map(row => {
-              const obj: CSVData = {};
-              headers.forEach((header, index) => {
-                if (header) {
-                  obj[header] = row[index] || '';
-                }
-              });
-              return obj;
-            });
-          } else {
-            processedData = data.map(row => {
-              const obj: CSVData = {};
-              row.forEach((value, index) => {
-                obj[`Column ${index + 1}`] = value || '';
-              });
-              return obj;
-            });
-          }
-
+          // Store raw data and process it initially
           setState(prev => ({
             ...prev,
             isLoading: false,
-            data: processedData,
-            rowCount: processedData.length,
+            rawData: rawData,
+            rowCount: rawData.length - (hasHeaders ? 1 : 0),
           }));
+
+          // Process the data with current header setting
+          processDataInternal(rawData, hasHeaders);
         } catch (error) {
           setState(prev => ({
             ...prev,
@@ -111,6 +95,50 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const processDataInternal = (rawData: string[][], hasHeaders: boolean) => {
+    try {
+      let processedData: CSVData[] = [];
+      
+      if (hasHeaders && rawData.length > 1) {
+        const headers = rawData[0];
+        processedData = rawData.slice(1).map(row => {
+          const obj: CSVData = {};
+          headers.forEach((header, index) => {
+            if (header) {
+              obj[header] = row[index] || '';
+            }
+          });
+          return obj;
+        });
+      } else {
+        processedData = rawData.map(row => {
+          const obj: CSVData = {};
+          row.forEach((value, index) => {
+            obj[`Column ${index + 1}`] = value || '';
+          });
+          return obj;
+        });
+      }
+
+      setState(prev => ({
+        ...prev,
+        data: processedData,
+        rowCount: processedData.length,
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: `Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      }));
+    }
+  };
+
+  const processData = useCallback((hasHeaders: boolean) => {
+    if (state.rawData) {
+      processDataInternal(state.rawData, hasHeaders);
+    }
+  }, [state.rawData]);
+
   const clearData = useCallback(() => {
     setState({
       data: [],
@@ -118,6 +146,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
       error: null,
       fileName: null,
       rowCount: 0,
+      rawData: null,
     });
   }, []);
 
@@ -125,6 +154,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
     <CSVContext.Provider value={{
       ...state,
       parseCSV,
+      processData,
       clearData,
     }}>
       {children}

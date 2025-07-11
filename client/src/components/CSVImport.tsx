@@ -10,7 +10,7 @@ export function CSVImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasHeaders, setHasHeaders] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
-  const { data, isLoading, error, fileName, rowCount, parseCSV } = useCSVContext();
+  const { data, isLoading, error, fileName, rowCount, parseCSV, processData } = useCSVContext();
 
   const handleFileSelect = (file: File) => {
     if (file && file.type === 'text/csv') {
@@ -51,11 +51,8 @@ export function CSVImport() {
 
   const handleProcessCSV = () => {
     if (fileName) {
-      // Re-parse with current header settings
-      const fileInput = fileInputRef.current;
-      if (fileInput?.files?.[0]) {
-        parseCSV(fileInput.files[0], hasHeaders);
-      }
+      // Process the raw data with current header settings
+      processData(hasHeaders);
     }
   };
 

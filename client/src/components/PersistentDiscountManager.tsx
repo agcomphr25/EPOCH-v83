@@ -173,7 +173,7 @@ export default function PersistentDiscountManager() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {customerTypes.map((customerType: CustomerType) => (
+                            {customerTypes.filter((ct: CustomerType) => ct.name !== 'OEM').map((customerType: CustomerType) => (
                               <SelectItem key={customerType.id} value={customerType.id.toString()}>
                                 {customerType.name}
                               </SelectItem>
@@ -341,7 +341,7 @@ export default function PersistentDiscountManager() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {customerTypes.map((customerType: CustomerType) => (
+                        {customerTypes.filter((ct: CustomerType) => ct.name !== 'OEM').map((customerType: CustomerType) => (
                           <SelectItem key={customerType.id} value={customerType.id.toString()}>
                             {customerType.name}
                           </SelectItem>

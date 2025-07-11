@@ -178,14 +178,14 @@ export default function OrderEntry() {
           <Package className="h-8 w-8 text-primary" />
           Order Entry
         </h1>
-        <p className="text-gray-600 mt-2">Create new manufacturing orders</p>
+        <p className="text-gray-600 mt-2">Create new stock order</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Single Order Entry
+            Order Entry
           </CardTitle>
         </CardHeader>
         <CardContent>

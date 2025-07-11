@@ -192,7 +192,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory> {
-    const [category] = await db.insert(featureCategories).values(data).returning();
+    // Generate ID from name if not provided
+    const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const categoryData = { ...data, id };
+    const [category] = await db.insert(featureCategories).values(categoryData).returning();
     return category;
   }
 
@@ -219,7 +222,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFeature(data: InsertFeature): Promise<Feature> {
-    const [feature] = await db.insert(features).values(data).returning();
+    // Generate ID from name if not provided
+    const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const featureData = { ...data, id };
+    const [feature] = await db.insert(features).values(featureData).returning();
     return feature;
   }
 

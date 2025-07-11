@@ -67,6 +67,8 @@ export default function FeatureManager() {
   });
 
   const [categoryForm, setCategoryForm] = useState<Partial<FeatureCategory>>({
+    name: '',
+    displayName: '',
     sortOrder: 0,
     isActive: true
   });
@@ -187,6 +189,8 @@ export default function FeatureManager() {
 
   const resetCategoryForm = () => {
     setCategoryForm({
+      name: '',
+      displayName: '',
       sortOrder: 0,
       isActive: true
     });

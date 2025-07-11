@@ -120,11 +120,36 @@ export const insertShortTermSaleSchema = z.object({
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
   updatedAt: true,
+}).extend({
+  id: z.string().optional(), // Allow client to provide ID or we'll generate one
+  name: z.string().min(1, "Name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  sortOrder: z.number().min(0).default(0),
+  isActive: z.boolean().default(true),
 });
 
 export const insertFeatureSchema = createInsertSchema(features).omit({
   createdAt: true,
   updatedAt: true,
+}).extend({
+  id: z.string().optional(), // Allow client to provide ID or we'll generate one
+  name: z.string().min(1, "Name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  type: z.enum(['dropdown', 'text', 'number', 'checkbox', 'textarea']),
+  required: z.boolean().default(false),
+  category: z.string().min(1, "Category is required"),
+  sortOrder: z.number().min(0).default(0),
+  isActive: z.boolean().default(true),
+  options: z.array(z.object({
+    value: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+  })).optional(),
+  validation: z.object({
+    min: z.number().optional(),
+    max: z.number().optional(),
+    pattern: z.string().optional(),
+  }).optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

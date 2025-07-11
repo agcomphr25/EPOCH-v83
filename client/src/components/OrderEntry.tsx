@@ -45,6 +45,7 @@ export default function OrderEntry() {
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [rushLevel, setRushLevel] = useState('none');
   const [orderDate, setOrderDate] = useState(new Date());
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -189,129 +190,140 @@ export default function OrderEntry() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Customer Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="customer">Customer</Label>
-              <Combobox value={customer} onChange={setCustomer}>
-                <div className="relative">
-                  <Combobox.Input
-                    className="w-full border rounded-md px-3 py-2"
-                    placeholder="Search customer..."
-                    displayValue={(customer: Customer) => customer?.name || ''}
-                    onChange={(event) => setCustomerQuery(event.target.value)}
-                  />
-                  <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md mt-1 max-h-60 overflow-auto">
-                    {customerOptions.map((customer) => (
-                      <Combobox.Option
-                        key={customer.id}
-                        value={customer}
-                        className={({ active }) =>
-                          `relative cursor-default select-none py-2 pl-3 pr-9 ${
-                            active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                          }`
-                        }
-                      >
-                        {customer.name}
-                      </Combobox.Option>
-                    ))}
-                  </Combobox.Options>
-                </div>
-              </Combobox>
-              {errors.customerId && <p className="text-red-500 text-sm">{errors.customerId}</p>}
-            </div>
-
-            {/* Model Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="model">Stock Model</Label>
-              <Select value={modelId} onValueChange={setModelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select model..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {modelOptions.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
-            </div>
-
-            {/* Dynamic Feature Inputs */}
-            {featureDefs.map((featureDef) => (
-              <div key={featureDef.id} className="space-y-2">
-                <Label className="capitalize">{featureDef.name}</Label>
-                {featureDef.type === 'dropdown' && (
-                  <Select
-                    value={features[featureDef.id] || ''}
-                    onValueChange={(value) =>
-                      setFeatures(prev => ({ ...prev, [featureDef.id]: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {featureDef.options?.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                {errors[`features.${featureDef.id}`] && (
-                  <p className="text-red-500 text-sm">{errors[`features.${featureDef.id}`]}</p>
-                )}
+          <div className="space-y-6">
+            {/* Order Info Row - Order ID, Order Date, Due Date */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="orderId">Order ID</Label>
+                <Input
+                  value={orderId}
+                  readOnly
+                  className="bg-gray-50"
+                />
               </div>
-            ))}
-
-            {/* Rush Level */}
-            <div className="space-y-2">
-              <Label htmlFor="rush">Rush Option</Label>
-              <Select value={rushLevel} onValueChange={setRushLevel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="4wk">4 wk (+$200)</SelectItem>
-                  <SelectItem value="6wk">6 wk (+$250)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Label htmlFor="orderDate">Order Date</Label>
+                <Input
+                  type="date"
+                  value={orderDate.toISOString().substr(0, 10)}
+                  onChange={(e) => setOrderDate(new Date(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due Date</Label>
+                <Input
+                  type="date"
+                  value={dueDate.toISOString().substr(0, 10)}
+                  onChange={(e) => setDueDate(new Date(e.target.value))}
+                />
+              </div>
             </div>
 
-            {/* Order Date */}
-            <div className="space-y-2">
-              <Label htmlFor="date">Order Date</Label>
-              <Input
-                type="date"
-                value={orderDate.toISOString().substr(0, 10)}
-                onChange={(e) => setOrderDate(new Date(e.target.value))}
-              />
-            </div>
+            {/* Main Order Form */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Customer Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="customer">Customer</Label>
+                <Combobox value={customer} onChange={setCustomer}>
+                  <div className="relative">
+                    <Combobox.Input
+                      className="w-full border rounded-md px-3 py-2"
+                      placeholder="Search customer..."
+                      displayValue={(customer: Customer) => customer?.name || ''}
+                      onChange={(event) => setCustomerQuery(event.target.value)}
+                    />
+                    <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md mt-1 max-h-60 overflow-auto">
+                      {customerOptions.map((customer) => (
+                        <Combobox.Option
+                          key={customer.id}
+                          value={customer}
+                          className={({ active }) =>
+                            `relative cursor-default select-none py-2 pl-3 pr-9 ${
+                              active ? 'bg-blue-600 text-white' : 'text-gray-900'
+                            }`
+                          }
+                        >
+                          {customer.name}
+                        </Combobox.Option>
+                      ))}
+                    </Combobox.Options>
+                  </div>
+                </Combobox>
+                {errors.customerId && <p className="text-red-500 text-sm">{errors.customerId}</p>}
+              </div>
 
-            {/* Auto-generated Order ID */}
-            <div className="space-y-2">
-              <Label htmlFor="orderId">Order ID</Label>
-              <Input
-                value={orderId}
-                readOnly
-                className="bg-gray-50"
-              />
-            </div>
+              {/* Model Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="model">Stock Model</Label>
+                <Select value={modelId} onValueChange={setModelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelOptions.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
+              </div>
 
-            {/* Submit Button */}
-            <div className="md:col-span-2">
-              <Button
-                onClick={onSingleSubmit}
-                disabled={isSubmitting}
-                className="w-full md:w-auto"
-              >
-                {isSubmitting ? 'Creating...' : 'Submit Order'}
-              </Button>
+              {/* Dynamic Feature Inputs */}
+              {featureDefs.map((featureDef) => (
+                <div key={featureDef.id} className="space-y-2">
+                  <Label className="capitalize">{featureDef.name}</Label>
+                  {featureDef.type === 'dropdown' && (
+                    <Select
+                      value={features[featureDef.id] || ''}
+                      onValueChange={(value) =>
+                        setFeatures(prev => ({ ...prev, [featureDef.id]: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {featureDef.options?.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {errors[`features.${featureDef.id}`] && (
+                    <p className="text-red-500 text-sm">{errors[`features.${featureDef.id}`]}</p>
+                  )}
+                </div>
+              ))}
+
+              {/* Rush Level */}
+              <div className="space-y-2">
+                <Label htmlFor="rush">Rush Option</Label>
+                <Select value={rushLevel} onValueChange={setRushLevel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="4wk">4 wk (+$200)</SelectItem>
+                    <SelectItem value="6wk">6 wk (+$250)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Submit Button */}
+              <div className="md:col-span-2">
+                <Button
+                  onClick={onSingleSubmit}
+                  disabled={isSubmitting}
+                  className="w-full md:w-auto"
+                >
+                  {isSubmitting ? 'Creating...' : 'Submit Order'}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>

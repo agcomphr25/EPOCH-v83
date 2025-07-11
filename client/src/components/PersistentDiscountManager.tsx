@@ -91,6 +91,7 @@ export default function PersistentDiscountManager() {
       customerTypeId: 0,
       name: "",
       percent: 0,
+      fixedAmount: 0,
       description: "",
       isActive: 1,
     },
@@ -102,6 +103,7 @@ export default function PersistentDiscountManager() {
       customerTypeId: 0,
       name: "",
       percent: 0,
+      fixedAmount: 0,
       description: "",
       isActive: 1,
     },
@@ -122,7 +124,8 @@ export default function PersistentDiscountManager() {
     editForm.reset({
       customerTypeId: discount.customerTypeId,
       name: discount.name,
-      percent: discount.percent,
+      percent: discount.percent || 0,
+      fixedAmount: discount.fixedAmount || 0,
       description: discount.description || "",
       isActive: discount.isActive,
     });
@@ -275,7 +278,7 @@ export default function PersistentDiscountManager() {
               <TableRow>
                 <TableHead>Customer Type</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Discount %</TableHead>
+                <TableHead>Discount</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -286,7 +289,9 @@ export default function PersistentDiscountManager() {
                 <TableRow key={discount.id}>
                   <TableCell className="font-medium">{getCustomerTypeName(discount.customerTypeId)}</TableCell>
                   <TableCell className="font-semibold">{discount.name}</TableCell>
-                  <TableCell>{discount.percent}%</TableCell>
+                  <TableCell>
+                    {discount.fixedAmount ? `$${(discount.fixedAmount / 100).toFixed(2)}` : `${discount.percent}%`}
+                  </TableCell>
                   <TableCell className="text-sm text-gray-600">{discount.description || "-"}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs ${

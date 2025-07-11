@@ -35,8 +35,9 @@ export const customerTypes = pgTable("customer_types", {
 export const persistentDiscounts = pgTable("persistent_discounts", {
   id: serial("id").primaryKey(),
   customerTypeId: integer("customer_type_id").references(() => customerTypes.id).notNull(),
-  name: text("name").notNull(), // e.g., "GB-20", "GB-25", "GB-30"
-  percent: integer("percent").notNull(),
+  name: text("name").notNull(), // e.g., "GB-20", "GB-25", "GB-30", "MIL/LEO"
+  percent: integer("percent"), // null for fixed amount discounts
+  fixedAmount: integer("fixed_amount"), // amount in cents for fixed discounts like MIL/LEO
   description: text("description"), // Optional description for the discount tier
   isActive: integer("is_active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -78,7 +79,8 @@ export const insertPersistentDiscountSchema = createInsertSchema(persistentDisco
   updatedAt: true,
 }).extend({
   name: z.string().min(1, "Name is required"),
-  percent: z.number().min(0).max(100),
+  percent: z.number().min(0).max(100).optional(),
+  fixedAmount: z.number().min(0).optional(),
 });
 
 export const insertShortTermSaleSchema = createInsertSchema(shortTermSales).omit({

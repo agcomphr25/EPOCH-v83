@@ -20,6 +20,19 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
   const [result, setResult] = useState<any>(null);
 
   const calculateDiscount = () => {
+    // If MIL/LEO is checked, override all other discounts with $50 fixed discount
+    if (isMilLeo) {
+      const milLeoDiscount = 50; // Fixed $50 discount
+      const finalPrice = Math.max(0, basePrice - milLeoDiscount);
+      setResult({
+        finalPrice,
+        breakdown: [
+          { type: 'MIL/LEO Discount', amount: milLeoDiscount }
+        ]
+      });
+      return;
+    }
+    
     const activeDiscounts = getActiveShortTermDiscounts(new Date(), activeSales);
     const calculation = calculateFinalPrice(
       basePrice,

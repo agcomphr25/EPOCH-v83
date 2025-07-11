@@ -137,6 +137,7 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
   displayName: z.string().min(1, "Display name is required"),
   type: z.enum(['dropdown', 'text', 'number', 'checkbox', 'textarea']),
   required: z.boolean().default(false),
+  placeholder: z.string().optional().nullable(),
   category: z.string().min(1, "Category is required"),
   sortOrder: z.number().min(0).default(0),
   isActive: z.boolean().default(true),
@@ -144,12 +145,12 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
     value: z.string(),
     label: z.string(),
     description: z.string().optional(),
-  })).optional(),
+  })).optional().nullable(),
   validation: z.object({
     min: z.number().optional(),
     max: z.number().optional(),
     pattern: z.string().optional(),
-  }).optional(),
+  }).optional().nullable(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

@@ -18,17 +18,32 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   const secondIdx = periodIndex % 26; // cycles A-Z every 14 days
   const firstIdx = Math.floor(periodIndex / 26) % 26; // advances when second letter completes A-Z cycle
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
-  const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
+  const currentPrefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 
-  // parse last numeric part if lastId matches pattern
+  // parse last order ID if provided and valid
   const match = /^[A-Z]{2}(\d{3})$/.exec(lastId);
   let seq = 1;
-  if (match && lastId.slice(0, 2) === prefix) {
-    seq = parseInt(match[1], 10) + 1; // increment within same period-block
+  
+  if (match && lastId.trim() !== '') {
+    const lastPrefix = lastId.slice(0, 2);
+    const lastSeq = parseInt(match[1], 10);
+    
+    if (lastPrefix === currentPrefix) {
+      // Same 14-day period, increment the sequence
+      seq = lastSeq + 1;
+    } else {
+      // Different period, reset to 1
+      seq = 1;
+    }
   }
-  // reset to 1 when letters change or lastId invalid
+  
+  // ensure sequence doesn't exceed 999
+  if (seq > 999) {
+    seq = 1;
+  }
+  
   const num = String(seq).padStart(3, '0');
-  return prefix + num;
+  return currentPrefix + num;
 }
 
 /**

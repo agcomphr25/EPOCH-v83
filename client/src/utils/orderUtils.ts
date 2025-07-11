@@ -1,6 +1,6 @@
-// Reference start date for bi-weekly cycles (calculated so July 11, 2025 = AN period)
-// AN = period 13 (A=0, N=13), so July 11, 2025 should be 13 periods from base date
-const BASE_DATE = new Date(2025, 0, 11); // Jan 11 2025 - calculated to align July 11, 2025 with AN period
+// Reference start date for bi-weekly cycles (calculated so July 1, 2025 = AP period)
+// AP = period 15 (A=0, P=15), so July 1, 2025 should be 15 periods from base date
+const BASE_DATE = new Date(2024, 11, 13); // Dec 13 2024 - calculated to align July 1, 2025 with AP period
 const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 /**
@@ -27,7 +27,8 @@ export function generateP1OrderId(date: Date, lastId: string): string {
     periodIndex,
     prefix,
     firstIdx,
-    secondIdx
+    secondIdx,
+    note: 'App started July 1, 2025 with AP001'
   });
 
   // handle empty or invalid lastId

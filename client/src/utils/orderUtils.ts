@@ -1,5 +1,6 @@
 // Reference start date for bi-weekly cycles (calculated so July 11, 2025 = AN period)
-const BASE_DATE = new Date(2025, 0, 29); // Jan 29 2025 - calculated to align July 11, 2025 with AN period
+// AN = period 13 (A=0, N=13), so July 11, 2025 should be 13 periods from base date
+const BASE_DATE = new Date(2025, 0, 11); // Jan 11 2025 - calculated to align July 11, 2025 with AN period
 const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 /**
@@ -20,8 +21,18 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
   const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
 
+  console.log('P1 ID Generation:', {
+    date: date.toISOString().split('T')[0],
+    lastId: lastId,
+    periodIndex,
+    prefix,
+    firstIdx,
+    secondIdx
+  });
+
   // handle empty or invalid lastId
   if (!lastId || lastId.trim() === '') {
+    console.log('Empty lastId, returning:', prefix + '001');
     return prefix + '001';
   }
 
@@ -30,6 +41,9 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   let seq = 1;
   if (match && lastId.trim().slice(0, 2) === prefix) {
     seq = parseInt(match[1], 10) + 1; // increment within same period-block
+    console.log('Same period, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));
+  } else {
+    console.log('Different period or invalid format, resetting to:', prefix + '001');
   }
   // reset to 1 when letters change or lastId invalid
   const num = String(seq).padStart(3, '0');

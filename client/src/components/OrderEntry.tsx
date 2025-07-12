@@ -206,8 +206,17 @@ export default function OrderEntry() {
       
       // Find the feature definition to get its price
       const featureDefinition = allFeatures.find(f => f.id === featureId);
-      if (featureDefinition && featureDefinition.price) {
-        featureCost += featureDefinition.price;
+      if (featureDefinition) {
+        // If the feature has a sub-category and the value is "yes", use sub-category pricing
+        if (featureDefinition.subCategory && featureValue === 'yes') {
+          const subCategory = subCategories.find(sc => sc.id === featureDefinition.subCategory);
+          if (subCategory && subCategory.price) {
+            featureCost += subCategory.price;
+          }
+        } else if (featureDefinition.price) {
+          // Otherwise use the feature's own price
+          featureCost += featureDefinition.price;
+        }
       }
     });
     

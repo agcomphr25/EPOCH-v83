@@ -1223,7 +1223,7 @@ export default function OrderEntry() {
                       variant="default"
                       className="w-full bg-green-600 hover:bg-green-700"
                       onClick={handleFinalize}
-                      disabled={isSubmitting || isConfirming || isFinalizing || orderStatus !== 'CONFIRMED'}
+                      disabled={isSubmitting || isConfirming || isFinalizing}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
                       {isFinalizing ? 'Finalizing...' : 'Finalize Order'}

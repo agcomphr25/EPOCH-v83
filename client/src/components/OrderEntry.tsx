@@ -77,24 +77,27 @@ export default function OrderEntry() {
   const [shortTermSales, setShortTermSales] = useState<any[]>([]);
   const [persistentDiscounts, setPersistentDiscounts] = useState<any[]>([]);
   const [customerTypes, setCustomerTypes] = useState<any[]>([]);
+  const [subCategories, setSubCategories] = useState<any[]>([]);
 
   // Load initial data on mount
   useEffect(() => {
     const loadInitialData = async () => {
       try {
         // Load all data in parallel
-        const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse] = await Promise.all([
+        const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse, subCategoriesResponse] = await Promise.all([
           apiRequest('/api/orders/last-id'),
           apiRequest('/api/features'),
           apiRequest('/api/short-term-sales'),
           apiRequest('/api/persistent-discounts'),
-          apiRequest('/api/customer-types')
+          apiRequest('/api/customer-types'),
+          apiRequest('/api/feature-sub-categories')
         ]);
 
         setLastOrderId(lastIdResponse.lastOrderId);
         setShortTermSales(salesResponse);
         setPersistentDiscounts(discountsResponse);
         setCustomerTypes(typesResponse);
+        setSubCategories(subCategoriesResponse);
         
         // Debug logging to check percentage values
         console.log('Short-term sales:', salesResponse);
@@ -170,8 +173,25 @@ export default function OrderEntry() {
     const selectedModel = modelOptions.find(m => m.id === modelId);
     const basePrice = selectedModel?.cost || 0;
     
-    // Calculate feature costs (in real implementation, features would have prices)
-    const featureCost = 0; // Placeholder - would calculate based on selected features
+    // Calculate feature costs - specifically paint options pricing
+    let featureCost = 0;
+    
+    // Calculate paint options cost based on sub-category pricing
+    const paintOptionsValue = features['paint_options'];
+    if (paintOptionsValue) {
+      // Extract the feature ID from the paint options value (format: "featureId:optionValue")
+      const [featureId, optionValue] = paintOptionsValue.split(':');
+      
+      // Find the feature to get its sub-category
+      const paintFeature = featureDefs.find(f => f.id === featureId);
+      if (paintFeature && paintFeature.subCategory) {
+        // Find the sub-category and its price
+        const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);
+        if (subCategory && subCategory.price) {
+          featureCost += subCategory.price;
+        }
+      }
+    }
     
     // Calculate rush cost
     const rushCost = rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0;

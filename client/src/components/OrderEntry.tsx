@@ -55,9 +55,7 @@ export default function OrderEntry() {
   const [customerPO, setCustomerPO] = useState('');
   const [handedness, setHandedness] = useState('');
   
-  // Paint options modal state
-  const [isPaintOptionsModalOpen, setIsPaintOptionsModalOpen] = useState(false);
-  const [selectedPaintCategory, setSelectedPaintCategory] = useState<any>(null);
+  // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
 
   // Load initial data on mount
@@ -86,15 +84,20 @@ export default function OrderEntry() {
         // Store paint features for modal use
         setPaintFeatures(paintFeatures);
         
-        // Create a single Paint Options feature with all sub-categories as options
+        // Create a single Paint Options feature with all options from all sub-categories
+        const allPaintOptions = paintFeatures.flatMap((feature: any) => 
+          (feature.options || []).map((option: any) => ({
+            value: `${feature.id}:${option.value}`,
+            label: `${feature.displayName || feature.name} - ${option.label}`,
+            category: feature.displayName || feature.name
+          }))
+        );
+        
         const paintOptionsFeature = {
           id: 'paint_options_combined',
           name: 'Paint Options',
-          type: 'dropdown',
-          options: paintFeatures.map((feature: any) => ({
-            value: feature.id,
-            label: feature.displayName || feature.name
-          }))
+          type: 'combobox',
+          options: allPaintOptions
         };
         
         const finalFeatures = paintFeatures.length > 0 
@@ -339,18 +342,7 @@ export default function OrderEntry() {
                   {featureDef.type === 'dropdown' && (
                     <Select
                       value={features[featureDef.id] || ''}
-                      onValueChange={(value) => {
-                        if (featureDef.id === 'paint_options_combined') {
-                          // Find the selected paint category and open modal
-                          const selectedCategory = paintFeatures.find(p => p.id === value);
-                          if (selectedCategory) {
-                            setSelectedPaintCategory(selectedCategory);
-                            setIsPaintOptionsModalOpen(true);
-                          }
-                        } else {
-                          setFeatures(prev => ({ ...prev, [featureDef.id]: value }));
-                        }
-                      }}
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, [featureDef.id]: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
@@ -363,6 +355,38 @@ export default function OrderEntry() {
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+                  {featureDef.type === 'combobox' && (
+                    <Combobox
+                      value={features[featureDef.id] || ''}
+                      onChange={(value) => setFeatures(prev => ({ ...prev, [featureDef.id]: value }))}
+                    >
+                      <div className="relative">
+                        <Combobox.Input
+                          className="w-full border rounded-md px-3 py-2 bg-white"
+                          placeholder="Select or search..."
+                          displayValue={(value: string) => {
+                            const option = featureDef.options?.find(opt => opt.value === value);
+                            return option ? option.label : value;
+                          }}
+                        />
+                        <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                          {featureDef.options?.map((option) => (
+                            <Combobox.Option
+                              key={option.value}
+                              value={option.value}
+                              className={({ active }) =>
+                                `relative cursor-default select-none py-2 pl-3 pr-9 ${
+                                  active ? 'bg-blue-600 text-white' : 'text-gray-900'
+                                }`
+                              }
+                            >
+                              {option.label}
+                            </Combobox.Option>
+                          ))}
+                        </Combobox.Options>
+                      </div>
+                    </Combobox>
                   )}
                   {featureDef.type === 'textarea' && (
                     <textarea
@@ -430,63 +454,7 @@ export default function OrderEntry() {
         </CardContent>
       </Card>
 
-      {/* Paint Options Modal */}
-      <Dialog open={isPaintOptionsModalOpen} onOpenChange={setIsPaintOptionsModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {selectedPaintCategory?.displayName || selectedPaintCategory?.name || 'Paint Options'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Select Option</Label>
-              <Select
-                value={features[`paint_${selectedPaintCategory?.id}`] || ''}
-                onValueChange={(value) => {
-                  setFeatures(prev => ({ 
-                    ...prev, 
-                    [`paint_${selectedPaintCategory?.id}`]: value,
-                    'paint_options_combined': selectedPaintCategory?.id 
-                  }));
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select option..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {selectedPaintCategory?.options?.map((option: any) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setIsPaintOptionsModalOpen(false);
-                  setSelectedPaintCategory(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={() => {
-                  setIsPaintOptionsModalOpen(false);
-                  setSelectedPaintCategory(null);
-                }}
-                disabled={!features[`paint_${selectedPaintCategory?.id}`]}
-              >
-                Select
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }

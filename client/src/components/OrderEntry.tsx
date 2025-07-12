@@ -397,6 +397,48 @@ export default function OrderEntry() {
     }
   };
 
+  const saveDraft = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      const payload = {
+        orderId,
+        orderDate: orderDate.toISOString(),
+        dueDate: dueDate.toISOString(),
+        customerId: customer?.id,
+        customerPO: hasCustomerPO ? customerPO : null,
+        fbOrderNumber: fbOrderNumber || null,
+        agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
+        modelId,
+        handedness,
+        features,
+        featureQuantities,
+        discountCode,
+        shipping,
+        status: 'DRAFT'
+      };
+      
+      await apiRequest('/api/orders/draft', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      
+      toast({
+        title: "Draft Saved",
+        description: `Draft order ${orderId} saved successfully!`,
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to save draft",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -985,10 +1027,8 @@ export default function OrderEntry() {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => {
-                    // Save as draft logic
-                    console.log('Saving as draft...');
-                  }}
+                  onClick={saveDraft}
+                  disabled={isSubmitting}
                 >
                   Save as Draft
                 </Button>

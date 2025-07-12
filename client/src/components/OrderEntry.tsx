@@ -43,13 +43,14 @@ export default function OrderEntry() {
   const [location] = useLocation();
   
   // Extract draft ID from URL parameters
-  const urlParams = new URLSearchParams(location.split('?')[1] || '');
+  const urlParams = new URLSearchParams(window.location.search);
   const draftId = urlParams.get('draft');
   
   // Debug logging
   console.log('OrderEntry component - Location:', location);
+  console.log('OrderEntry component - Window URL:', window.location.href);
   console.log('OrderEntry component - Draft ID:', draftId);
-  console.log('OrderEntry component - URL search params:', location.split('?')[1] || 'none');
+  console.log('OrderEntry component - URL search params:', window.location.search || 'none');
   
   // Draft management state
   const [orderStatus, setOrderStatus] = useState('DRAFT');

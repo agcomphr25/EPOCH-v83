@@ -61,6 +61,7 @@ export default function OrderEntry() {
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
   const [paintQuery, setPaintQuery] = useState('');
+  const [allFeatures, setAllFeatures] = useState<any[]>([]);
   
   // Order summary data
   const [discountCode, setDiscountCode] = useState('');
@@ -112,6 +113,9 @@ export default function OrderEntry() {
 
         // Load features from API (group paint options under one feature)
         const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
+        
+        // Store all features for pricing calculations
+        setAllFeatures(activeFeatures);
         
         // Group paint options into a single feature
         const paintFeatures = activeFeatures.filter((feature: any) => feature.category === 'paint_options');
@@ -175,7 +179,7 @@ export default function OrderEntry() {
     const selectedModel = modelOptions.find(m => m.id === modelId);
     const basePrice = selectedModel?.cost || 0;
     
-    // Calculate feature costs - specifically paint options pricing
+    // Calculate feature costs - includes both individual feature prices and paint sub-category pricing
     let featureCost = 0;
     
     // Calculate paint options cost based on sub-category pricing
@@ -194,6 +198,18 @@ export default function OrderEntry() {
         }
       }
     }
+    
+    // Calculate individual feature prices for non-paint features
+    Object.entries(features).forEach(([featureId, featureValue]) => {
+      // Skip paint options as they're handled above
+      if (featureId === 'paint_options_combined' || !featureValue) return;
+      
+      // Find the feature definition to get its price
+      const featureDefinition = allFeatures.find(f => f.id === featureId);
+      if (featureDefinition && featureDefinition.price) {
+        featureCost += featureDefinition.price;
+      }
+    });
     
     let subtotal = basePrice + featureCost;
     

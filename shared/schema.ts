@@ -87,6 +87,7 @@ export const features = pgTable("features", {
   validation: json("validation"), // JSON object for validation rules
   category: text("category").references(() => featureCategories.id),
   subCategory: text("sub_category").references(() => featureSubCategories.id),
+  price: real("price").default(0),
   sortOrder: integer("sort_order").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -165,6 +166,7 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
   required: z.boolean().default(false),
   placeholder: z.string().optional().nullable(),
   category: z.string().min(1, "Category is required"),
+  price: z.number().min(0).default(0),
   sortOrder: z.number().min(0).default(0),
   isActive: z.boolean().default(true),
   options: z.array(z.object({

@@ -34,6 +34,7 @@ interface Feature {
     pattern?: string;
   };
   category: string;
+  price: number;
   sortOrder: number;
   isActive: boolean;
 }
@@ -71,6 +72,7 @@ export default function FeatureManager() {
     type: 'dropdown',
     required: false,
     category: '',
+    price: 0,
     sortOrder: 0,
     isActive: true,
     options: []
@@ -254,6 +256,7 @@ export default function FeatureManager() {
       type: 'dropdown',
       required: false,
       category: '',
+      price: 0,
       sortOrder: 0,
       isActive: true,
       options: []
@@ -297,6 +300,7 @@ export default function FeatureManager() {
       options: feature.options,
       validation: feature.validation,
       category: feature.category,
+      price: feature.price,
       sortOrder: feature.sortOrder,
       isActive: feature.isActive
     });
@@ -509,6 +513,7 @@ export default function FeatureManager() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Price</TableHead>
                       <TableHead>Required</TableHead>
                       <TableHead>Sort Order</TableHead>
                       <TableHead>Status</TableHead>
@@ -521,6 +526,9 @@ export default function FeatureManager() {
                         <TableCell>{feature.displayName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{feature.type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-sm">${(feature.price || 0).toFixed(2)}</span>
                         </TableCell>
                         <TableCell>
                           <Badge variant={feature.required ? "destructive" : "secondary"}>
@@ -634,7 +642,17 @@ export default function FeatureManager() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Price ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={featureForm.price || 0}
+                  onChange={(e) => setFeatureForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                />
+              </div>
               <div>
                 <Label>Sort Order</Label>
                 <Input

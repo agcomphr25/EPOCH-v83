@@ -527,11 +527,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/forms", async (req, res) => {
     try {
+      console.log("Raw request body:", req.body);
+      console.log("Body type:", typeof req.body);
       const result = insertFormSchema.parse(req.body);
       const form = await storage.createForm(result);
       res.json(form);
     } catch (error) {
-      res.status(400).json({ error: "Invalid form data" });
+      console.error("Form creation error:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid form data" });
     }
   });
 

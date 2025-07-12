@@ -49,6 +49,7 @@ export default function OrderEntry() {
   // Debug logging
   console.log('OrderEntry component - Location:', location);
   console.log('OrderEntry component - Draft ID:', draftId);
+  console.log('OrderEntry component - URL search params:', location.split('?')[1] || 'none');
   
   // Draft management state
   const [orderStatus, setOrderStatus] = useState('DRAFT');
@@ -137,6 +138,9 @@ export default function OrderEntry() {
             const draftResponse = await apiRequest(`/api/orders/draft/${draftId}`);
             console.log('Draft response:', draftResponse);
             
+            // Wait for all the data to be loaded first
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Populate form with draft data
             console.log('Setting form values from draft...');
             setOrderId(draftResponse.orderId);
@@ -153,7 +157,7 @@ export default function OrderEntry() {
             setShipping(draftResponse.shipping || 36.95);
             setOrderStatus(draftResponse.status || 'DRAFT');
             
-            // Set customer object properly
+            // Set customer object properly - use the customer options that were just loaded
             if (draftResponse.customerId) {
               console.log('Setting customer from draft:', draftResponse.customerId);
               const foundCustomer = [

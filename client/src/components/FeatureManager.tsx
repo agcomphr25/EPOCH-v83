@@ -51,6 +51,7 @@ interface FeatureSubCategory {
   name: string;
   displayName: string;
   categoryId: string;
+  price: number;
   sortOrder: number;
   isActive: boolean;
 }
@@ -86,6 +87,7 @@ export default function FeatureManager() {
     name: '',
     displayName: '',
     categoryId: '',
+    price: 0,
     sortOrder: 0,
     isActive: true
   });
@@ -320,6 +322,7 @@ export default function FeatureManager() {
       name: subCategory.name,
       displayName: subCategory.displayName,
       categoryId: subCategory.categoryId,
+      price: subCategory.price || 0,
       sortOrder: subCategory.sortOrder,
       isActive: subCategory.isActive
     });
@@ -791,6 +794,7 @@ export default function FeatureManager() {
                         name: '', 
                         displayName: '', 
                         categoryId: 'paint_options', 
+                        price: 0,
                         sortOrder: (subCategories.filter(sc => sc.categoryId === 'paint_options').length + 1), 
                         isActive: true 
                       });
@@ -879,13 +883,25 @@ export default function FeatureManager() {
               </div>
             </div>
 
-            <div>
-              <Label>Sort Order</Label>
-              <Input
-                type="number"
-                value={subCategoryForm.sortOrder || 0}
-                onChange={(e) => setSubCategoryForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={subCategoryForm.price || 0}
+                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <Label>Sort Order</Label>
+                <Input
+                  type="number"
+                  value={subCategoryForm.sortOrder || 0}
+                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
+                />
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">

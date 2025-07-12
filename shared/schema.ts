@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -69,6 +69,7 @@ export const featureSubCategories = pgTable("feature_sub_categories", {
   name: text("name").notNull(),
   displayName: text("display_name").notNull(),
   categoryId: text("category_id").references(() => featureCategories.id),
+  price: real("price").default(0),
   sortOrder: integer("sort_order").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -148,6 +149,7 @@ export const insertFeatureSubCategorySchema = createInsertSchema(featureSubCateg
   name: z.string().min(1, "Name is required"),
   displayName: z.string().min(1, "Display name is required"),
   categoryId: z.string().min(1, "Category is required"),
+  price: z.number().min(0).default(0),
   sortOrder: z.number().min(0).default(0),
   isActive: z.boolean().default(true),
 });

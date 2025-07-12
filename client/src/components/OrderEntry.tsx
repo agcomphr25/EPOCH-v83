@@ -253,6 +253,19 @@ export default function OrderEntry() {
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const balanceDue = total - totalPaid;
 
+  // Helper function to get display value for feature selections
+  const getFeatureDisplayValue = (featureId: string, value: any) => {
+    const feature = featureDefs.find(f => f.id === featureId);
+    if (!feature) return value || 'Not selected';
+    
+    if (feature.type === 'dropdown' || feature.type === 'combobox') {
+      const option = feature.options?.find(opt => opt.value === value);
+      return option ? option.label : (value || 'Not selected');
+    }
+    
+    return value || 'Not selected';
+  };
+
   // Debounced customer search
   const debouncedCustomerSearch = useCallback(
     debounce((query: string) => {
@@ -631,6 +644,44 @@ export default function OrderEntry() {
                 <div className="flex justify-between text-sm text-gray-600">
                   <span>Items</span>
                   <span>Current Stock</span>
+                </div>
+              </div>
+
+              {/* Feature Selections */}
+              <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold text-sm text-gray-700">Feature Selections</h4>
+                <div className="space-y-2">
+                  {/* Stock Model */}
+                  <div className="flex justify-between items-start text-sm">
+                    <span className="text-gray-600">Stock Model:</span>
+                    <span className="text-right ml-2 font-medium">
+                      {modelOptions.find(m => m.id === modelId)?.displayName || 'Not selected'}
+                    </span>
+                  </div>
+                  
+                  {/* Handedness */}
+                  <div className="flex justify-between items-start text-sm">
+                    <span className="text-gray-600">Handedness:</span>
+                    <span className="text-right ml-2 font-medium">
+                      {handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}
+                    </span>
+                  </div>
+                  
+                  {/* Dynamic Features */}
+                  {featureDefs.map((feature) => {
+                    const value = features[feature.id];
+                    const displayValue = getFeatureDisplayValue(feature.id, value);
+                    const hasValue = value && value !== '';
+                    
+                    return (
+                      <div key={feature.id} className="flex justify-between items-start text-sm">
+                        <span className="text-gray-600">{feature.name}:</span>
+                        <span className={`text-right ml-2 ${hasValue ? 'font-medium' : 'text-gray-400'}`}>
+                          {displayValue}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

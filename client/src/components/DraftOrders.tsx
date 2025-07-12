@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Edit, Trash2, Check, Send } from 'lucide-react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 
 interface OrderDraft {
   id: number;
@@ -29,6 +29,7 @@ interface OrderDraft {
 export default function DraftOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const { data: drafts = [], isLoading, error } = useQuery({
     queryKey: ['/api/orders/drafts'],
@@ -136,7 +137,8 @@ export default function DraftOrders() {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        window.location.href = `/order-entry?draft=${draft.orderId}`;
+                        console.log('Edit button clicked for draft:', draft.orderId);
+                        setLocation(`/order-entry?draft=${draft.orderId}`);
                       }}
                     >
                       <Edit className="h-4 w-4 mr-2" />

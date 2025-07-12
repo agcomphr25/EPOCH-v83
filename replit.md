@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 12, 2025 (Evening)**: Fixed Order ID Generator to properly utilize Last Order ID field - now extracts numeric sequences from any format (e.g., "fg965" → "AQ966")
 - **July 12, 2025 (Evening)**: Added price field to features database schema and Feature Manager interface - rail features now have pricing that flows to Order Summary calculations
 - **July 12, 2025 (Evening)**: Fixed SelectItem error by correcting empty values in QD accessory feature options database
 - **July 12, 2025 (Evening)**: Successfully removed Rush Option from Order Entry as requested - will be added separately as Personalization Option

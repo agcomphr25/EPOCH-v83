@@ -33,28 +33,35 @@ export function generateP1OrderId(date: Date, lastId: string): string {
     note: 'July 1, 2025 = AP001 period'
   });
 
-  // handle empty or invalid lastId
+  // handle empty lastId
   if (!lastId || lastId.trim() === '') {
     console.log('Empty lastId, returning:', prefix + '001');
     return prefix + '001';
   }
 
-  // parse last numeric part if lastId matches pattern
-  const match = /^[A-Z]{2}(\d{3})$/i.exec(lastId.trim());
+  // Check if lastId matches current period's P1 format exactly
+  const p1Match = /^[A-Z]{2}(\d{3})$/i.exec(lastId.trim());
   let seq = 1;
   
-  console.log('Regex match result:', match);
-  console.log('LastId prefix:', lastId.trim().slice(0, 2).toUpperCase());
-  console.log('Current prefix:', prefix);
-  console.log('Prefixes match:', lastId.trim().slice(0, 2).toUpperCase() === prefix);
+  console.log('P1 format match result:', p1Match);
   
-  if (match && lastId.trim().slice(0, 2).toUpperCase() === prefix) {
-    const currentSeq = parseInt(match[1], 10);
+  if (p1Match && lastId.trim().slice(0, 2).toUpperCase() === prefix) {
+    // This is a valid P1 ID for the current period
+    const currentSeq = parseInt(p1Match[1], 10);
     seq = currentSeq + 1;
-    console.log('Same period, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));
+    console.log('Same period P1 ID, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));
     console.log('Current sequence:', currentSeq, 'Next sequence:', seq);
   } else {
-    console.log('Different period or invalid format, resetting to:', prefix + '001');
+    // Either not P1 format or different period - extract numeric sequence
+    const numericMatch = /(\d+)/.exec(lastId.trim());
+    if (numericMatch) {
+      const extractedNum = parseInt(numericMatch[1], 10);
+      seq = extractedNum + 1;
+      console.log('Extracted sequence from lastId:', extractedNum, '→', seq);
+      console.log('LastId:', lastId.trim(), 'using extracted sequence for new period:', prefix + String(seq).padStart(3, '0'));
+    } else {
+      console.log('No numeric sequence found in lastId, starting at 001');
+    }
   }
   
   // Handle sequence overflow

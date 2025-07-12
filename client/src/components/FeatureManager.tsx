@@ -513,7 +513,6 @@ export default function FeatureManager() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Price</TableHead>
                       <TableHead>Required</TableHead>
                       <TableHead>Sort Order</TableHead>
                       <TableHead>Status</TableHead>
@@ -526,9 +525,6 @@ export default function FeatureManager() {
                         <TableCell>{feature.displayName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{feature.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono text-sm">${(feature.price || 0).toFixed(2)}</span>
                         </TableCell>
                         <TableCell>
                           <Badge variant={feature.required ? "destructive" : "secondary"}>

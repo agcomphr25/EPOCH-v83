@@ -238,7 +238,13 @@ export default function OrderEntry() {
         const discountId = parseInt(discountCode.replace('discount-', ''));
         const discount = persistentDiscounts.find(d => d.id === discountId);
         if (discount) {
-          discountAmount = (subtotal * discount.percent) / 100;
+          if (discount.percent) {
+            // Percentage discount
+            discountAmount = (subtotal * discount.percent) / 100;
+          } else if (discount.fixedAmount) {
+            // Fixed amount discount
+            discountAmount = discount.fixedAmount;
+          }
         }
       }
     }

@@ -6,6 +6,12 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 11, 2025 (Evening)**: Fixed feature update validation errors by adding proper null handling for validation and placeholder fields in schema
+- **July 11, 2025 (Evening)**: Connected Order Entry form to live Feature Manager data - features now load from database instead of hardcoded mock data
+- **July 11, 2025 (Evening)**: Added support for all field types in Order Entry (dropdown, textarea, text, number) with proper form controls
+- **July 11, 2025 (Evening)**: Enhanced Order Entry layout with Customer PO checkbox field (conditional text input) and Handedness dropdown (Right/Left)
+- **July 11, 2025 (Evening)**: Reorganized Order Entry form flow: Order ID/Date/Due Date header row, then Customer → Customer PO → Stock Model → Handedness → Dynamic Features
+- **July 11, 2025 (Evening)**: Improved Feature Manager error handling and form data sanitization to prevent read-only field conflicts
 - **July 11, 2025**: Simplified Order Entry module to single order creation only - removed bulk CSV import functionality to avoid confusion with historical data import
 - **July 11, 2025**: Clarified navigation descriptions: Order Management for viewing orders and importing historical data, Order Entry for creating single orders
 - **July 11, 2025**: Implemented full CRUD capabilities for Customer Types and Persistent Discounts with database persistence
@@ -37,6 +43,26 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Frontend build tool and development server
 - **ESBuild**: Backend bundling for production
 - **TypeScript**: Type safety across the entire codebase
+
+## Current Data State (Session Preserved)
+
+### Feature Manager Data
+- **Categories**: Custom Features, Finish Options, Personal Features, Test Category
+- **Features**: Action Length (dropdown), Barrel Length (dropdown), Finish Type (dropdown), Special Instructions (textarea)
+- **Database**: All features stored in PostgreSQL with proper validation and options
+
+### Order Entry Integration
+- **Dynamic Features**: Loading from database (no longer hardcoded)
+- **Form Layout**: Order ID/Date/Due Date header + Customer/CustomerPO/StockModel/Handedness + Dynamic Features
+- **Field Types**: Supports dropdown, textarea, text, number inputs
+- **Customer PO**: Checkbox with conditional text input
+- **Handedness**: Right/Left dropdown selection
+
+### P1 Order ID System
+- **Current Period**: AP (July 1-14, 2025)
+- **Last Order**: AP001
+- **Next Order**: AP002
+- **Algorithm**: Bi-weekly cycling with proper period advancement
 
 ## Key Components
 

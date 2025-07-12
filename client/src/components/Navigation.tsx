@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,12 @@ export default function Navigation() {
       label: 'Feature Manager',
       icon: Settings,
       description: 'Configure order features'
+    },
+    {
+      path: '/stock-models',
+      label: 'Stock Models',
+      icon: Package,
+      description: 'Manage stock models and pricing'
     }
   ];
 

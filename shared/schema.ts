@@ -94,6 +94,18 @@ export const features = pgTable("features", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const stockModels = pgTable("stock_models", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  price: real("price").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -182,6 +194,19 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
   }).optional().nullable(),
 });
 
+export const insertStockModelSchema = createInsertSchema(stockModels).omit({
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  id: z.string().optional(), // Allow client to provide ID or we'll generate one
+  name: z.string().min(1, "Name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  price: z.number().min(0, "Price must be positive"),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().min(0).default(0),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -200,3 +225,5 @@ export type InsertFeatureSubCategory = z.infer<typeof insertFeatureSubCategorySc
 export type FeatureSubCategory = typeof featureSubCategories.$inferSelect;
 export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;
+export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
+export type StockModel = typeof stockModels.$inferSelect;

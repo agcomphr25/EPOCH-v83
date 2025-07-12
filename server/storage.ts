@@ -1,12 +1,13 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
   type ShortTermSale, type InsertShortTermSale,
   type FeatureCategory, type InsertFeatureCategory,
   type FeatureSubCategory, type InsertFeatureSubCategory,
-  type Feature, type InsertFeature
+  type Feature, type InsertFeature,
+  type StockModel, type InsertStockModel
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -63,6 +64,13 @@ export interface IStorage {
   createFeature(data: InsertFeature): Promise<Feature>;
   updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature>;
   deleteFeature(id: string): Promise<void>;
+  
+  // Stock Models CRUD
+  getAllStockModels(): Promise<StockModel[]>;
+  getStockModel(id: string): Promise<StockModel | undefined>;
+  createStockModel(data: InsertStockModel): Promise<StockModel>;
+  updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel>;
+  deleteStockModel(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -277,6 +285,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFeature(id: string): Promise<void> {
     await db.delete(features).where(eq(features.id, id));
+  }
+  
+  // Stock Models CRUD
+  async getAllStockModels(): Promise<StockModel[]> {
+    return await db.select().from(stockModels).orderBy(stockModels.sortOrder);
+  }
+
+  async getStockModel(id: string): Promise<StockModel | undefined> {
+    const [stockModel] = await db.select().from(stockModels).where(eq(stockModels.id, id));
+    return stockModel || undefined;
+  }
+
+  async createStockModel(data: InsertStockModel): Promise<StockModel> {
+    // Generate ID from name if not provided
+    const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const stockModelData = { ...data, id };
+    const [stockModel] = await db.insert(stockModels).values(stockModelData).returning();
+    return stockModel;
+  }
+
+  async updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel> {
+    const [stockModel] = await db.update(stockModels)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(stockModels.id, id))
+      .returning();
+    return stockModel;
+  }
+
+  async deleteStockModel(id: string): Promise<void> {
+    await db.delete(stockModels).where(eq(stockModels.id, id));
   }
 }
 

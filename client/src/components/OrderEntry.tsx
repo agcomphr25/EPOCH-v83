@@ -22,7 +22,11 @@ interface Customer {
 interface StockModel {
   id: string;
   name: string;
-  cost: number;
+  displayName: string;
+  price: number;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
 }
 
 interface FeatureDefinition {
@@ -104,12 +108,9 @@ export default function OrderEntry() {
         console.log('Short-term sales:', salesResponse);
         console.log('Persistent discounts:', discountsResponse);
 
-        // Mock data for now - in real implementation, load from API
-        setModelOptions([
-          { id: 'model1', name: 'AR-15 Basic', cost: 800 },
-          { id: 'model2', name: 'AR-15 Enhanced', cost: 1200 },
-          { id: 'model3', name: 'AR-10 Standard', cost: 1500 },
-        ]);
+        // Load stock models from API
+        const stockModelsResponse = await apiRequest('/api/stock-models');
+        setModelOptions(stockModelsResponse.filter((model: any) => model.isActive));
 
         // Load features from API (group paint options under one feature)
         const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
@@ -177,7 +178,7 @@ export default function OrderEntry() {
   // Calculate order totals
   const calculateTotals = () => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
-    const basePrice = selectedModel?.cost || 0;
+    const basePrice = selectedModel?.price || 0;
     
     // Calculate feature costs - includes both individual feature prices and paint sub-category pricing
     let featureCost = 0;
@@ -473,7 +474,7 @@ export default function OrderEntry() {
                   <SelectContent>
                     {modelOptions.map((model) => (
                       <SelectItem key={model.id} value={model.id}>
-                        {model.name}
+                        {model.displayName}
                       </SelectItem>
                     ))}
                   </SelectContent>

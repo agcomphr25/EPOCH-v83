@@ -10,6 +10,7 @@ import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
 import FeatureManager from "./pages/FeatureManager";
+import StockModels from "./pages/StockModels";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
                 <Route path="/feature-manager" component={FeatureManager} />
+                <Route path="/stock-models" component={StockModels} />
                 <Route component={NotFound} />
               </Switch>
             </main>

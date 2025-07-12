@@ -8,7 +8,8 @@ import {
   insertShortTermSaleSchema,
   insertFeatureCategorySchema,
   insertFeatureSubCategorySchema,
-  insertFeatureSchema
+  insertFeatureSchema,
+  insertStockModelSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -320,6 +321,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete feature" });
+    }
+  });
+
+  // Stock Models API
+  app.get("/api/stock-models", async (req, res) => {
+    try {
+      const stockModels = await storage.getAllStockModels();
+      res.json(stockModels);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve stock models" });
+    }
+  });
+
+  app.post("/api/stock-models", async (req, res) => {
+    try {
+      const result = insertStockModelSchema.parse(req.body);
+      const stockModel = await storage.createStockModel(result);
+      res.json(stockModel);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid stock model data" });
+    }
+  });
+
+  app.put("/api/stock-models/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const result = insertStockModelSchema.partial().parse(req.body);
+      const stockModel = await storage.updateStockModel(id, result);
+      res.json(stockModel);
+    } catch (error) {
+      console.error("Stock model update error:", error);
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: "Invalid stock model data" });
+      }
+    }
+  });
+
+  app.delete("/api/stock-models/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await storage.deleteStockModel(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete stock model" });
     }
   });
 

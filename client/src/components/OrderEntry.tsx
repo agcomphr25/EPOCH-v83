@@ -173,7 +173,7 @@ export default function OrderEntry() {
     
     // Apply discount if selected
     let discountAmount = 0;
-    if (discountCode) {
+    if (discountCode && discountCode !== 'none') {
       if (discountCode.startsWith('sale-')) {
         const saleId = parseInt(discountCode.replace('sale-', ''));
         const sale = shortTermSales.find(s => s.id === saleId);
@@ -558,7 +558,7 @@ export default function OrderEntry() {
                     <SelectValue placeholder="Select discount code" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     
                     {/* Short-Term Sales */}
                     {shortTermSales.map((sale: any) => {

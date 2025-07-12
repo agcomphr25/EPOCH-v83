@@ -180,28 +180,17 @@ export default function OrderEntry() {
     
     // Calculate paint options cost based on sub-category pricing
     const paintOptionsValue = features['paint_options_combined'];
-    console.log('Paint options value:', paintOptionsValue);
-    console.log('All features:', features);
-    console.log('Paint features:', paintFeatures);
-    console.log('Sub-categories:', subCategories);
-    
     if (paintOptionsValue) {
       // Extract the feature ID from the paint options value (format: "featureId:optionValue")
       const [featureId, optionValue] = paintOptionsValue.split(':');
-      console.log('Feature ID:', featureId, 'Option value:', optionValue);
       
       // Find the original paint feature from the loaded features to get its sub-category
       const paintFeature = paintFeatures.find(f => f.id === featureId);
-      console.log('Found paint feature:', paintFeature);
-      
       if (paintFeature && paintFeature.subCategory) {
         // Find the sub-category and its price
         const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);
-        console.log('Found sub-category:', subCategory);
-        
         if (subCategory && subCategory.price) {
           featureCost += subCategory.price;
-          console.log('Added feature cost:', subCategory.price, 'Total feature cost:', featureCost);
         }
       }
     }

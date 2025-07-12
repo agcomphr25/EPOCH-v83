@@ -44,7 +44,7 @@ export default function OrderEntry() {
   const [modelId, setModelId] = useState('');
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
-  const [rushLevel, setRushLevel] = useState('none');
+
   const [orderDate, setOrderDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
@@ -195,10 +195,7 @@ export default function OrderEntry() {
       }
     }
     
-    // Calculate rush cost
-    const rushCost = rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0;
-    
-    let subtotal = basePrice + featureCost + rushCost;
+    let subtotal = basePrice + featureCost;
     
     // Apply discount if selected
     let discountAmount = 0;
@@ -221,10 +218,10 @@ export default function OrderEntry() {
     const subtotalAfterDiscount = subtotal - discountAmount;
     const total = subtotalAfterDiscount + shipping;
     
-    return { basePrice, featureCost, rushCost, subtotal: subtotalAfterDiscount, total, discountAmount };
+    return { basePrice, featureCost, subtotal: subtotalAfterDiscount, total, discountAmount };
   };
 
-  const { basePrice, featureCost, rushCost, subtotal, total, discountAmount } = calculateTotals();
+  const { basePrice, featureCost, subtotal, total, discountAmount } = calculateTotals();
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const balanceDue = total - totalPaid;
 
@@ -574,20 +571,7 @@ export default function OrderEntry() {
                 </div>
               ))}
 
-              {/* Rush Level */}
-              <div className="space-y-2">
-                <Label htmlFor="rush">Rush Option</Label>
-                <Select value={rushLevel} onValueChange={setRushLevel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="4wk">4 wk (+$200)</SelectItem>
-                    <SelectItem value="6wk">6 wk (+$250)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
 
               {/* Special Instructions */}
               <div className="md:col-span-2 space-y-2">
@@ -685,7 +669,7 @@ export default function OrderEntry() {
               <div className="space-y-2 pt-4 border-t">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>${(basePrice + featureCost + (rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0)).toFixed(2)}</span>
+                  <span>${(basePrice + featureCost).toFixed(2)}</span>
                 </div>
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">

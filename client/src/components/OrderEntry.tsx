@@ -561,51 +561,37 @@ export default function OrderEntry() {
                     <SelectItem value="">None</SelectItem>
                     
                     {/* Short-Term Sales */}
-                    {shortTermSales.length > 0 && (
-                      <>
-                        <SelectItem value="header-sales" disabled>
-                          <span className="font-medium text-gray-600">Short-Term Sales</span>
+                    {shortTermSales.map((sale: any) => {
+                      const now = new Date();
+                      const startDate = new Date(sale.startDate);
+                      const endDate = new Date(sale.endDate);
+                      const isActive = now >= startDate && now <= endDate;
+                      
+                      return (
+                        <SelectItem 
+                          key={sale.id} 
+                          value={`sale-${sale.id}`}
+                          disabled={!isActive}
+                        >
+                          {sale.name} - {sale.percentage}% Off
+                          {!isActive && " (Expired)"}
                         </SelectItem>
-                        {shortTermSales.map((sale: any) => {
-                          const now = new Date();
-                          const startDate = new Date(sale.startDate);
-                          const endDate = new Date(sale.endDate);
-                          const isActive = now >= startDate && now <= endDate;
-                          
-                          return (
-                            <SelectItem 
-                              key={sale.id} 
-                              value={`sale-${sale.id}`}
-                              disabled={!isActive}
-                            >
-                              {sale.name} - {sale.percentage}% Off
-                              {!isActive && " (Expired)"}
-                            </SelectItem>
-                          );
-                        })}
-                      </>
-                    )}
+                      );
+                    })}
                     
                     {/* Persistent Discounts */}
-                    {persistentDiscounts.length > 0 && (
-                      <>
-                        <SelectItem value="header-persistent" disabled>
-                          <span className="font-medium text-gray-600">Persistent Discounts</span>
+                    {persistentDiscounts.map((discount: any) => {
+                      const customerType = customerTypes.find((ct: any) => ct.id === discount.customerTypeId);
+                      
+                      return (
+                        <SelectItem 
+                          key={discount.id} 
+                          value={`discount-${discount.id}`}
+                        >
+                          {customerType?.name || 'Unknown'} - {discount.percentage}% Off
                         </SelectItem>
-                        {persistentDiscounts.map((discount: any) => {
-                          const customerType = customerTypes.find((ct: any) => ct.id === discount.customerTypeId);
-                          
-                          return (
-                            <SelectItem 
-                              key={discount.id} 
-                              value={`discount-${discount.id}`}
-                            >
-                              {customerType?.name || 'Unknown'} - {discount.percentage}% Off
-                            </SelectItem>
-                          );
-                        })}
-                      </>
-                    )}
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Package, Users } from 'lucide-react';
+import { Package, Users, ChevronDown } from 'lucide-react';
 import debounce from 'lodash.debounce';
 
 interface Customer {
@@ -438,16 +438,21 @@ export default function OrderEntry() {
                       }}
                     >
                       <div className="relative">
-                        <Combobox.Input
-                          className="w-full border rounded-md px-3 py-2 bg-white"
-                          placeholder="Select or search..."
-                          displayValue={(value: string) => {
-                            const option = featureDef.options?.find(opt => opt.value === value);
-                            return option ? option.label : '';
-                          }}
-                          onChange={(event) => setPaintQuery(event.target.value)}
-                        />
-                        <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                        <div className="flex">
+                          <Combobox.Input
+                            className="w-full border rounded-l-md px-3 py-2 bg-white border-r-0"
+                            placeholder="Select or search..."
+                            displayValue={(value: string) => {
+                              const option = featureDef.options?.find(opt => opt.value === value);
+                              return option ? option.label : '';
+                            }}
+                            onChange={(event) => setPaintQuery(event.target.value)}
+                          />
+                          <Combobox.Button className="border border-l-0 rounded-r-md px-2 py-2 bg-white hover:bg-gray-50">
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          </Combobox.Button>
+                        </div>
+                        <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto mt-1">
                           {featureDef.options?.filter((option) => 
                             paintQuery === '' || option.label.toLowerCase().includes(paintQuery.toLowerCase())
                           ).map((option) => (

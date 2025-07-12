@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 12, 2025 (Evening)**: Updated pricing formula to include personalization feature option prices - QD accessories and other dropdown options now add their specific prices to order totals
 - **July 12, 2025 (Evening)**: Fixed QD feature options prices not saving - updated schema validation to include price field in options array
 - **July 12, 2025 (Evening)**: Fixed Order ID Generator to properly utilize Last Order ID field - now extracts numeric sequences from any format (e.g., "fg965" → "AQ966")
 - **July 12, 2025 (Evening)**: Added price field to features database schema and Feature Manager interface - rail features now have pricing that flows to Order Summary calculations

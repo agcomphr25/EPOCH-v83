@@ -206,8 +206,19 @@ export default function OrderEntry() {
       
       // Find the feature definition to get its price
       const featureDefinition = allFeatures.find(f => f.id === featureId);
-      if (featureDefinition && featureDefinition.price) {
-        featureCost += featureDefinition.price;
+      if (featureDefinition) {
+        // Add the base feature price
+        if (featureDefinition.price) {
+          featureCost += featureDefinition.price;
+        }
+        
+        // Add the specific option price if this is a dropdown with options
+        if (featureDefinition.type === 'dropdown' && featureDefinition.options) {
+          const selectedOption = featureDefinition.options.find(opt => opt.value === featureValue);
+          if (selectedOption && selectedOption.price) {
+            featureCost += selectedOption.price;
+          }
+        }
       }
     });
     

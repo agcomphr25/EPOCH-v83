@@ -125,7 +125,9 @@ export default function OrderEntry() {
           (feature.options || []).map((option: any) => ({
             value: `${feature.id}:${option.value}`,
             label: `${feature.displayName || feature.name} - ${option.label}`,
-            category: feature.displayName || feature.name
+            category: feature.displayName || feature.name,
+            subCategory: feature.subCategory, // Include sub-category info
+            featureId: feature.id // Include feature ID for lookup
           }))
         );
         
@@ -177,13 +179,13 @@ export default function OrderEntry() {
     let featureCost = 0;
     
     // Calculate paint options cost based on sub-category pricing
-    const paintOptionsValue = features['paint_options'];
+    const paintOptionsValue = features['paint_options_combined'];
     if (paintOptionsValue) {
       // Extract the feature ID from the paint options value (format: "featureId:optionValue")
       const [featureId, optionValue] = paintOptionsValue.split(':');
       
-      // Find the feature to get its sub-category
-      const paintFeature = featureDefs.find(f => f.id === featureId);
+      // Find the original paint feature from the loaded features to get its sub-category
+      const paintFeature = paintFeatures.find(f => f.id === featureId);
       if (paintFeature && paintFeature.subCategory) {
         // Find the sub-category and its price
         const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);

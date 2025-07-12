@@ -53,6 +53,9 @@ export default function OrderEntry() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
   const [customerPO, setCustomerPO] = useState('');
+  const [fbOrderNumber, setFbOrderNumber] = useState('');
+  const [hasAgrOrder, setHasAgrOrder] = useState(false);
+  const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
   
   // Paint options data
@@ -373,6 +376,47 @@ export default function OrderEntry() {
                   />
                 )}
                 {errors.customerPO && <p className="text-red-500 text-sm">{errors.customerPO}</p>}
+              </div>
+
+              {/* FB Order # Field */}
+              <div className="space-y-2">
+                <Label htmlFor="fbOrderNumber">FB Order #</Label>
+                <Input
+                  type="text"
+                  id="fbOrderNumber"
+                  placeholder="Enter FB Order #..."
+                  value={fbOrderNumber}
+                  onChange={(e) => setFbOrderNumber(e.target.value)}
+                />
+                {errors.fbOrderNumber && <p className="text-red-500 text-sm">{errors.fbOrderNumber}</p>}
+              </div>
+
+              {/* AGR Order Field */}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="hasAgrOrder"
+                    checked={hasAgrOrder}
+                    onChange={(e) => {
+                      setHasAgrOrder(e.target.checked);
+                      if (!e.target.checked) {
+                        setAgrOrderDetails('');
+                      }
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="hasAgrOrder">AGR Order?</Label>
+                </div>
+                {hasAgrOrder && (
+                  <Input
+                    type="text"
+                    placeholder="Enter Order Details (e.g., AGR-11865 (00586B))..."
+                    value={agrOrderDetails}
+                    onChange={(e) => setAgrOrderDetails(e.target.value)}
+                  />
+                )}
+                {errors.agrOrderDetails && <p className="text-red-500 text-sm">{errors.agrOrderDetails}</p>}
               </div>
 
               {/* Model Selection */}

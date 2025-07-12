@@ -68,6 +68,7 @@ export default function OrderEntry() {
   const [paymentType, setPaymentType] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const [payments, setPayments] = useState<{type: string, date: Date, amount: number}[]>([]);
 
   // Load initial data on mount
   useEffect(() => {
@@ -161,6 +162,8 @@ export default function OrderEntry() {
   };
 
   const { basePrice, featureCost, rushCost, subtotal, total } = calculateTotals();
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const balanceDue = total - totalPaid;
 
   // Debounced customer search
   const debouncedCustomerSearch = useCallback(
@@ -552,6 +555,20 @@ export default function OrderEntry() {
                   <span>Total:</span>
                   <span className="text-blue-600">${total.toFixed(2)}</span>
                 </div>
+                {totalPaid > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Paid:</span>
+                    <span>-${totalPaid.toFixed(2)}</span>
+                  </div>
+                )}
+                {balanceDue !== total && (
+                  <div className="flex justify-between font-bold text-lg pt-1 border-t">
+                    <span>Balance Due:</span>
+                    <span className={balanceDue > 0 ? "text-red-600" : "text-green-600"}>
+                      ${balanceDue.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Mark as Paid */}
@@ -657,8 +674,23 @@ export default function OrderEntry() {
               </Button>
               <Button
                 onClick={() => {
-                  setMarkAsPaid(true);
+                  // Add payment to payments array
+                  setPayments(prev => [...prev, {
+                    type: paymentType,
+                    date: paymentDate,
+                    amount: paymentAmount
+                  }]);
+                  
+                  // Check if fully paid
+                  const newTotalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0) + paymentAmount;
+                  setMarkAsPaid(newTotalPaid >= total);
+                  
+                  // Reset modal state
                   setShowPaymentModal(false);
+                  setPaymentType('');
+                  setPaymentDate(new Date());
+                  setPaymentAmount(0);
+                  
                   toast({
                     title: "Payment Recorded",
                     description: `Payment of $${paymentAmount.toFixed(2)} recorded for ${paymentDate.toLocaleDateString()}`,

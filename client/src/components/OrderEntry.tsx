@@ -92,6 +92,10 @@ export default function OrderEntry() {
         setShortTermSales(salesResponse);
         setPersistentDiscounts(discountsResponse);
         setCustomerTypes(typesResponse);
+        
+        // Debug logging to check percentage values
+        console.log('Short-term sales:', salesResponse);
+        console.log('Persistent discounts:', discountsResponse);
 
         // Mock data for now - in real implementation, load from API
         setModelOptions([
@@ -178,13 +182,13 @@ export default function OrderEntry() {
         const saleId = parseInt(discountCode.replace('sale-', ''));
         const sale = shortTermSales.find(s => s.id === saleId);
         if (sale) {
-          discountAmount = (subtotal * sale.percentage) / 100;
+          discountAmount = (subtotal * sale.percent) / 100;
         }
       } else if (discountCode.startsWith('discount-')) {
         const discountId = parseInt(discountCode.replace('discount-', ''));
         const discount = persistentDiscounts.find(d => d.id === discountId);
         if (discount) {
-          discountAmount = (subtotal * discount.percentage) / 100;
+          discountAmount = (subtotal * discount.percent) / 100;
         }
       }
     }
@@ -573,7 +577,7 @@ export default function OrderEntry() {
                           value={`sale-${sale.id}`}
                           disabled={!isActive}
                         >
-                          {sale.name} - {sale.percentage}% Off
+                          {sale.name} - {sale.percent}% Off
                           {!isActive && " (Expired)"}
                         </SelectItem>
                       );
@@ -588,7 +592,7 @@ export default function OrderEntry() {
                           key={discount.id} 
                           value={`discount-${discount.id}`}
                         >
-                          {customerType?.name || 'Unknown'} - {discount.percentage}% Off
+                          {customerType?.name || 'Unknown'} - {discount.percent}% Off
                         </SelectItem>
                       );
                     })}

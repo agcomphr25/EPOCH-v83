@@ -46,11 +46,11 @@ export default function OrderEntry() {
   const urlParams = new URLSearchParams(window.location.search);
   const draftId = urlParams.get('draft');
   
-  // Debug logging
-  console.log('OrderEntry component - Location:', location);
-  console.log('OrderEntry component - Window URL:', window.location.href);
-  console.log('OrderEntry component - Draft ID:', draftId);
-  console.log('OrderEntry component - URL search params:', window.location.search || 'none');
+  // Debug logging (can be removed after testing)
+  // console.log('OrderEntry component - Location:', location);
+  // console.log('OrderEntry component - Window URL:', window.location.href);
+  // console.log('OrderEntry component - Draft ID:', draftId);
+  // console.log('OrderEntry component - URL search params:', window.location.search || 'none');
   
   // Draft management state
   const [orderStatus, setOrderStatus] = useState('DRAFT');
@@ -134,16 +134,13 @@ export default function OrderEntry() {
 
         // If there's a draft ID, load the draft
         if (draftId) {
-          console.log('Loading draft:', draftId);
           try {
             const draftResponse = await apiRequest(`/api/orders/draft/${draftId}`);
-            console.log('Draft response:', draftResponse);
             
             // Wait for all the data to be loaded first
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Populate form with draft data
-            console.log('Setting form values from draft...');
             setOrderId(draftResponse.orderId);
             setOrderDate(new Date(draftResponse.orderDate));
             setDueDate(new Date(draftResponse.dueDate));
@@ -160,17 +157,13 @@ export default function OrderEntry() {
             
             // Set customer object properly - use the customer options that were just loaded
             if (draftResponse.customerId) {
-              console.log('Setting customer from draft:', draftResponse.customerId);
               const foundCustomer = [
                 { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
                 { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
                 { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
               ].find(c => c.id === draftResponse.customerId);
               if (foundCustomer) {
-                console.log('Found customer:', foundCustomer);
                 setCustomer(foundCustomer);
-              } else {
-                console.log('Customer not found for ID:', draftResponse.customerId);
               }
             }
             
@@ -178,7 +171,6 @@ export default function OrderEntry() {
             setHasCustomerPO(!!draftResponse.customerPO);
             setHasAgrOrder(!!draftResponse.agrOrderDetails);
             
-            console.log('Draft loaded successfully');
             toast({
               title: "Draft Loaded",
               description: `Loaded draft order ${draftResponse.orderId}`,

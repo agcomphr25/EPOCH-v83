@@ -137,7 +137,6 @@ export default function DraftOrders() {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        console.log('Edit button clicked for draft:', draft.orderId);
                         setLocation(`/order-entry?draft=${draft.orderId}`);
                       }}
                     >

@@ -64,6 +64,17 @@ export const featureCategories = pgTable("feature_categories", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const featureSubCategories = pgTable("feature_sub_categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  categoryId: text("category_id").references(() => featureCategories.id),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const features = pgTable("features", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -74,6 +85,7 @@ export const features = pgTable("features", {
   options: json("options"), // JSON array for dropdown options
   validation: json("validation"), // JSON object for validation rules
   category: text("category").references(() => featureCategories.id),
+  subCategory: text("sub_category").references(() => featureSubCategories.id),
   sortOrder: integer("sort_order").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -128,6 +140,18 @@ export const insertFeatureCategorySchema = createInsertSchema(featureCategories)
   isActive: z.boolean().default(true),
 });
 
+export const insertFeatureSubCategorySchema = createInsertSchema(featureSubCategories).omit({
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  id: z.string().optional(), // Allow client to provide ID or we'll generate one
+  name: z.string().min(1, "Name is required"),
+  displayName: z.string().min(1, "Display name is required"),
+  categoryId: z.string().min(1, "Category is required"),
+  sortOrder: z.number().min(0).default(0),
+  isActive: z.boolean().default(true),
+});
+
 export const insertFeatureSchema = createInsertSchema(features).omit({
   createdAt: true,
   updatedAt: true,
@@ -167,5 +191,7 @@ export type InsertShortTermSale = z.infer<typeof insertShortTermSaleSchema>;
 export type ShortTermSale = typeof shortTermSales.$inferSelect;
 export type InsertFeatureCategory = z.infer<typeof insertFeatureCategorySchema>;
 export type FeatureCategory = typeof featureCategories.$inferSelect;
+export type InsertFeatureSubCategory = z.infer<typeof insertFeatureSubCategorySchema>;
+export type FeatureSubCategory = typeof featureSubCategories.$inferSelect;
 export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;

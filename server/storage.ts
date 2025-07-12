@@ -1,10 +1,11 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, features,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
   type ShortTermSale, type InsertShortTermSale,
   type FeatureCategory, type InsertFeatureCategory,
+  type FeatureSubCategory, type InsertFeatureSubCategory,
   type Feature, type InsertFeature
 } from "@shared/schema";
 import { db } from "./db";
@@ -48,6 +49,13 @@ export interface IStorage {
   createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory>;
   updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory>;
   deleteFeatureCategory(id: string): Promise<void>;
+  
+  // Feature Sub-Categories CRUD
+  getAllFeatureSubCategories(): Promise<FeatureSubCategory[]>;
+  getFeatureSubCategory(id: string): Promise<FeatureSubCategory | undefined>;
+  createFeatureSubCategory(data: InsertFeatureSubCategory): Promise<FeatureSubCategory>;
+  updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory>;
+  deleteFeatureSubCategory(id: string): Promise<void>;
   
   // Features CRUD
   getAllFeatures(): Promise<Feature[]>;
@@ -209,6 +217,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFeatureCategory(id: string): Promise<void> {
     await db.delete(featureCategories).where(eq(featureCategories.id, id));
+  }
+
+  // Feature Sub-Categories CRUD
+  async getAllFeatureSubCategories(): Promise<FeatureSubCategory[]> {
+    return await db.select().from(featureSubCategories).orderBy(featureSubCategories.sortOrder);
+  }
+
+  async getFeatureSubCategory(id: string): Promise<FeatureSubCategory | undefined> {
+    const [subCategory] = await db.select().from(featureSubCategories).where(eq(featureSubCategories.id, id));
+    return subCategory || undefined;
+  }
+
+  async createFeatureSubCategory(data: InsertFeatureSubCategory): Promise<FeatureSubCategory> {
+    // Generate ID from name if not provided
+    const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const subCategoryData = { ...data, id };
+    const [subCategory] = await db.insert(featureSubCategories).values(subCategoryData).returning();
+    return subCategory;
+  }
+
+  async updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory> {
+    const [subCategory] = await db.update(featureSubCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(featureSubCategories.id, id))
+      .returning();
+    return subCategory;
+  }
+
+  async deleteFeatureSubCategory(id: string): Promise<void> {
+    await db.delete(featureSubCategories).where(eq(featureSubCategories.id, id));
   }
 
   // Features CRUD

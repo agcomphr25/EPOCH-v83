@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 12, 2025 (Early Morning)**: Successfully implemented sub-category system for paint_options category with complete database schema, API routes, and 6 sub-categories (Base Colors, Metallic Finishes, Special Effects, Camo Patterns, Custom Graphics, Protective Coatings)
 - **July 11, 2025 (Evening)**: Fixed feature update validation errors by adding proper null handling for validation and placeholder fields in schema
 - **July 11, 2025 (Evening)**: Connected Order Entry form to live Feature Manager data - features now load from database instead of hardcoded mock data
 - **July 11, 2025 (Evening)**: Added support for all field types in Order Entry (dropdown, textarea, text, number) with proper form controls

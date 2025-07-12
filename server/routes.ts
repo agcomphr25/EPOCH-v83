@@ -7,6 +7,7 @@ import {
   insertPersistentDiscountSchema, 
   insertShortTermSaleSchema,
   insertFeatureCategorySchema,
+  insertFeatureSubCategorySchema,
   insertFeatureSchema
 } from "@shared/schema";
 
@@ -232,6 +233,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete feature category" });
+    }
+  });
+
+  // Feature Sub-Categories API
+  app.get("/api/feature-sub-categories", async (req, res) => {
+    try {
+      const subCategories = await storage.getAllFeatureSubCategories();
+      res.json(subCategories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve feature sub-categories" });
+    }
+  });
+
+  app.post("/api/feature-sub-categories", async (req, res) => {
+    try {
+      const result = insertFeatureSubCategorySchema.parse(req.body);
+      const subCategory = await storage.createFeatureSubCategory(result);
+      res.json(subCategory);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature sub-category data" });
+    }
+  });
+
+  app.put("/api/feature-sub-categories/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const result = insertFeatureSubCategorySchema.partial().parse(req.body);
+      const subCategory = await storage.updateFeatureSubCategory(id, result);
+      res.json(subCategory);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid feature sub-category data" });
+    }
+  });
+
+  app.delete("/api/feature-sub-categories/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await storage.deleteFeatureSubCategory(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete feature sub-category" });
     }
   });
 

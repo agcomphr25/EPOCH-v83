@@ -404,6 +404,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/orders/draft/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const result = insertOrderDraftSchema.partial().parse(req.body);
+      const updatedDraft = await storage.updateOrderDraft(orderId, result);
+      res.json(updatedDraft);
+    } catch (error) {
+      console.error("Order draft update error:", error);
+      res.status(400).json({ error: "Invalid order draft data" });
+    }
+  });
+
   app.get("/api/orders/drafts", async (req, res) => {
     try {
       const drafts = await storage.getAllOrderDrafts();
@@ -434,6 +446,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete order draft" });
+    }
+  });
+
+  // Draft workflow endpoints
+  app.post("/api/orders/draft/:orderId/send-confirmation", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const draft = await storage.getOrderDraft(orderId);
+      
+      if (!draft) {
+        return res.status(404).json({ error: "Order draft not found" });
+      }
+      
+      if (draft.status !== 'DRAFT') {
+        return res.status(400).json({ error: "Order must be in DRAFT status" });
+      }
+      
+      await storage.updateOrderDraft(orderId, { status: 'CONFIRMED' });
+      res.json({ success: true, message: "Order sent for confirmation" });
+    } catch (error) {
+      console.error("Send confirmation error:", error);
+      res.status(500).json({ error: "Failed to send order for confirmation" });
+    }
+  });
+
+  app.post("/api/orders/draft/:orderId/finalize", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const draft = await storage.getOrderDraft(orderId);
+      
+      if (!draft) {
+        return res.status(404).json({ error: "Order draft not found" });
+      }
+      
+      if (draft.status !== 'CONFIRMED') {
+        return res.status(400).json({ error: "Order must be in CONFIRMED status" });
+      }
+      
+      await storage.updateOrderDraft(orderId, { status: 'FINALIZED' });
+      res.json({ success: true, message: "Order finalized successfully" });
+    } catch (error) {
+      console.error("Finalize order error:", error);
+      res.status(500).json({ error: "Failed to finalize order" });
     }
   });
 

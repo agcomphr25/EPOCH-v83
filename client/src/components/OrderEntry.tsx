@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Package, Users, ChevronDown } from 'lucide-react';
+import { Package, Users, ChevronDown, Send, CheckCircle } from 'lucide-react';
 import debounce from 'lodash.debounce';
+import { useLocation, useRoute } from 'wouter';
 
 interface Customer {
   id: string;
@@ -38,6 +40,17 @@ interface FeatureDefinition {
 
 export default function OrderEntry() {
   const { toast } = useToast();
+  const [location] = useLocation();
+  
+  // Extract draft ID from URL parameters
+  const urlParams = new URLSearchParams(location.split('?')[1] || '');
+  const draftId = urlParams.get('draft');
+  
+  // Draft management state
+  const [orderStatus, setOrderStatus] = useState('DRAFT');
+  const [isLoadingDraft, setIsLoadingDraft] = useState(!!draftId);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -100,6 +113,44 @@ export default function OrderEntry() {
           apiRequest('/api/customer-types'),
           apiRequest('/api/feature-sub-categories')
         ]);
+
+        // If there's a draft ID, load the draft
+        if (draftId) {
+          try {
+            const draftResponse = await apiRequest(`/api/orders/draft/${draftId}`);
+            
+            // Populate form with draft data
+            setOrderId(draftResponse.orderId);
+            setOrderDate(new Date(draftResponse.orderDate));
+            setDueDate(new Date(draftResponse.dueDate));
+            setCustomerPO(draftResponse.customerPO || '');
+            setFbOrderNumber(draftResponse.fbOrderNumber || '');
+            setAgrOrderDetails(draftResponse.agrOrderDetails || '');
+            setModelId(draftResponse.modelId || '');
+            setHandedness(draftResponse.handedness || '');
+            setFeatures(draftResponse.features || {});
+            setFeatureQuantities(draftResponse.featureQuantities || {});
+            setDiscountCode(draftResponse.discountCode || '');
+            setShipping(draftResponse.shipping || 36.95);
+            setOrderStatus(draftResponse.status || 'DRAFT');
+            
+            // Set checkbox states
+            setHasCustomerPO(!!draftResponse.customerPO);
+            setHasAgrOrder(!!draftResponse.agrOrderDetails);
+            
+            toast({
+              title: "Draft Loaded",
+              description: `Loaded draft order ${draftResponse.orderId}`,
+            });
+          } catch (error) {
+            console.error('Failed to load draft:', error);
+            toast({
+              title: "Error",
+              description: "Failed to load draft order",
+              variant: "destructive",
+            });
+          }
+        }
 
         setLastOrderId(lastIdResponse.lastOrderId);
         setShortTermSales(salesResponse);
@@ -164,6 +215,8 @@ export default function OrderEntry() {
         ]);
       } catch (error) {
         console.error('Failed to load initial data:', error);
+      } finally {
+        setIsLoadingDraft(false);
       }
     };
 
@@ -397,6 +450,76 @@ export default function OrderEntry() {
     }
   };
 
+  // Handle sending draft for confirmation
+  const handleSendForConfirmation = async () => {
+    if (!draftId) {
+      toast({
+        title: "Error",
+        description: "Please save as draft first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsConfirming(true);
+    
+    try {
+      await apiRequest(`/api/orders/draft/${draftId}/send-confirmation`, {
+        method: 'POST',
+      });
+      
+      setOrderStatus('CONFIRMED');
+      toast({
+        title: "Sent for Confirmation",
+        description: "Order has been sent for confirmation",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to send for confirmation",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  // Handle finalizing order
+  const handleFinalize = async () => {
+    if (!draftId) {
+      toast({
+        title: "Error",
+        description: "Please save as draft first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsFinalizing(true);
+    
+    try {
+      await apiRequest(`/api/orders/draft/${draftId}/finalize`, {
+        method: 'POST',
+      });
+      
+      setOrderStatus('FINALIZED');
+      toast({
+        title: "Order Finalized",
+        description: "Order has been finalized successfully",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to finalize order",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   const saveDraft = async () => {
     setIsSubmitting(true);
     
@@ -418,8 +541,11 @@ export default function OrderEntry() {
         status: 'DRAFT'
       };
       
-      await apiRequest('/api/orders/draft', {
-        method: 'POST',
+      const method = draftId ? 'PUT' : 'POST';
+      const url = draftId ? `/api/orders/draft/${draftId}` : '/api/orders/draft';
+      
+      await apiRequest(url, {
+        method,
         body: JSON.stringify(payload),
       });
       
@@ -438,6 +564,17 @@ export default function OrderEntry() {
       setIsSubmitting(false);
     }
   };
+
+  // Show loading spinner when loading draft
+  if (isLoadingDraft) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1022,23 +1159,60 @@ export default function OrderEntry() {
                 <Label htmlFor="markAsPaid">Mark as Paid</Label>
               </div>
 
+              {/* Order Status */}
+              {draftId && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium">Status:</span>
+                  <Badge variant={orderStatus === 'DRAFT' ? 'secondary' : orderStatus === 'CONFIRMED' ? 'default' : 'outline'}>
+                    {orderStatus}
+                  </Badge>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="space-y-3">
                 <Button
                   variant="outline"
                   className="w-full"
                   onClick={saveDraft}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isConfirming || isFinalizing}
                 >
-                  Save as Draft
+                  {isSubmitting ? 'Saving...' : draftId ? 'Update Draft' : 'Save as Draft'}
                 </Button>
-                <Button
-                  className="w-full"
-                  onClick={onSingleSubmit}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Creating...' : 'Create Order'}
-                </Button>
+                
+                {draftId && (
+                  <>
+                    <Button
+                      variant="default"
+                      className="w-full bg-yellow-600 hover:bg-yellow-700"
+                      onClick={handleSendForConfirmation}
+                      disabled={isSubmitting || isConfirming || isFinalizing || orderStatus !== 'DRAFT'}
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      {isConfirming ? 'Sending...' : 'Send for Confirmation'}
+                    </Button>
+                    
+                    <Button
+                      variant="default"
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      onClick={handleFinalize}
+                      disabled={isSubmitting || isConfirming || isFinalizing || orderStatus !== 'CONFIRMED'}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      {isFinalizing ? 'Finalizing...' : 'Finalize Order'}
+                    </Button>
+                  </>
+                )}
+                
+                {!draftId && (
+                  <Button
+                    className="w-full"
+                    onClick={onSingleSubmit}
+                    disabled={isSubmitting || isConfirming || isFinalizing}
+                  >
+                    {isSubmitting ? 'Creating...' : 'Create Order'}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

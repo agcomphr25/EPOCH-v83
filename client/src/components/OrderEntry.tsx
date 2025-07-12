@@ -69,16 +69,30 @@ export default function OrderEntry() {
           { id: 'model3', name: 'AR-10 Standard', cost: 1500 },
         ]);
 
-        // Load features from API (exclude sub-categories)
+        // Load features from API (group paint options under one feature)
         const featuresResponse = await apiRequest('/api/features');
-        const activeFeatures = featuresResponse.filter((feature: any) => 
-          feature.isActive && 
-          // Only include main features (those with a category, not sub-categories)
-          feature.category && 
-          !feature.categoryId // Sub-categories have categoryId, main features don't
-        );
+        const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
         
-        setFeatureDefs(activeFeatures.map((feature: any) => ({
+        // Group paint options into a single feature
+        const paintFeatures = activeFeatures.filter((feature: any) => feature.category === 'paint_options');
+        const nonPaintFeatures = activeFeatures.filter((feature: any) => feature.category !== 'paint_options');
+        
+        // Create a single Paint Options feature with all sub-categories as options
+        const paintOptionsFeature = {
+          id: 'paint_options_combined',
+          name: 'Paint Options',
+          type: 'dropdown',
+          options: paintFeatures.map((feature: any) => ({
+            value: feature.id,
+            label: feature.displayName || feature.name
+          }))
+        };
+        
+        const finalFeatures = paintFeatures.length > 0 
+          ? [...nonPaintFeatures, paintOptionsFeature]
+          : nonPaintFeatures;
+        
+        setFeatureDefs(finalFeatures.map((feature: any) => ({
           id: feature.id,
           name: feature.displayName || feature.name,
           type: feature.type,

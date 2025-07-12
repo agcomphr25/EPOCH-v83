@@ -912,7 +912,7 @@ export default function FeatureManager() {
 
       {/* Paint Options Sub-Category Selection Modal */}
       <Dialog open={isPaintOptionsModalOpen} onOpenChange={setIsPaintOptionsModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Paint Options - Select Sub-Category</DialogTitle>
           </DialogHeader>
@@ -939,25 +939,91 @@ export default function FeatureManager() {
               </Select>
             </div>
 
+            {/* Add Options section - shows when sub-category is selected */}
+            {selectedPaintSubCategory && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex justify-between items-center">
+                  <Label>Options</Label>
+                  <Button variant="outline" size="sm" onClick={addOption}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Option
+                  </Button>
+                </div>
+                
+                {featureForm.options && featureForm.options.length > 0 && (
+                  <div className="space-y-2">
+                    {featureForm.options.map((option, index) => (
+                      <div key={index} className="flex gap-2 items-center">
+                        <Input
+                          placeholder="Value"
+                          value={option.value}
+                          onChange={(e) => updateOption(index, 'value', e.target.value)}
+                        />
+                        <Input
+                          placeholder="Label"
+                          value={option.label}
+                          onChange={(e) => updateOption(index, 'label', e.target.value)}
+                        />
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => moveOptionUp(index)}
+                            disabled={index === 0}
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => moveOptionDown(index)}
+                            disabled={!featureForm.options || index === featureForm.options.length - 1}
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeOption(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button 
                 variant="outline" 
                 onClick={() => {
                   setIsPaintOptionsModalOpen(false);
                   setSelectedPaintSubCategory('');
+                  setFeatureForm(prev => ({ ...prev, options: [] }));
                 }}
               >
                 Cancel
               </Button>
               <Button 
                 onClick={() => {
-                  setFeatureForm(prev => ({ ...prev, category: 'paint_options' }));
+                  // Set the feature form with paint options category and create the feature
+                  const featureData = {
+                    ...featureForm,
+                    category: 'paint_options',
+                    type: 'dropdown' as const,
+                    name: featureForm.name || selectedPaintSubCategory,
+                    displayName: featureForm.displayName || subCategories.find(sc => sc.id === selectedPaintSubCategory)?.displayName || selectedPaintSubCategory
+                  };
+                  createFeatureMutation.mutate(featureData);
                   setIsPaintOptionsModalOpen(false);
                   setSelectedPaintSubCategory('');
                 }}
                 disabled={!selectedPaintSubCategory}
               >
-                Add Options
+                Create
               </Button>
             </div>
           </div>

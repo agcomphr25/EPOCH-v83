@@ -48,7 +48,7 @@ export default function OrderEntry() {
   
   // Draft management state
   const [orderStatus, setOrderStatus] = useState('DRAFT');
-  const [isLoadingDraft, setIsLoadingDraft] = useState(!!draftId);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
@@ -104,6 +104,11 @@ export default function OrderEntry() {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        // Set loading state if there's a draft ID
+        if (draftId) {
+          setIsLoadingDraft(true);
+        }
+        
         // Load all data in parallel
         const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse, subCategoriesResponse] = await Promise.all([
           apiRequest('/api/orders/last-id'),
@@ -234,7 +239,7 @@ export default function OrderEntry() {
     };
 
     loadInitialData();
-  }, []);
+  }, [draftId, location]);
 
   // Generate order ID when order date changes
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -8,7 +8,9 @@ import {
   type FeatureSubCategory, type InsertFeatureSubCategory,
   type Feature, type InsertFeature,
   type StockModel, type InsertStockModel,
-  type OrderDraft, type InsertOrderDraft
+  type OrderDraft, type InsertOrderDraft,
+  type Form, type InsertForm,
+  type FormSubmission, type InsertFormSubmission
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -79,6 +81,19 @@ export interface IStorage {
   updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft>;
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
+  
+  // Forms CRUD
+  getAllForms(): Promise<Form[]>;
+  getForm(id: string): Promise<Form | undefined>;
+  createForm(data: InsertForm): Promise<Form>;
+  updateForm(id: string, data: Partial<InsertForm>): Promise<Form>;
+  deleteForm(id: string): Promise<void>;
+  
+  // Form Submissions CRUD
+  getAllFormSubmissions(formId?: string): Promise<FormSubmission[]>;
+  getFormSubmission(id: number): Promise<FormSubmission | undefined>;
+  createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
+  deleteFormSubmission(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -362,6 +377,58 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
     return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+  }
+
+  // Forms CRUD
+  async getAllForms(): Promise<Form[]> {
+    return await db.select().from(forms).orderBy(desc(forms.updatedAt));
+  }
+
+  async getForm(id: string): Promise<Form | undefined> {
+    const [form] = await db.select().from(forms).where(eq(forms.id, id));
+    return form || undefined;
+  }
+
+  async createForm(data: InsertForm): Promise<Form> {
+    const formId = data.id || `form_${Date.now()}`;
+    const [form] = await db.insert(forms).values({ ...data, id: formId }).returning();
+    return form;
+  }
+
+  async updateForm(id: string, data: Partial<InsertForm>): Promise<Form> {
+    const [form] = await db.update(forms)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(forms.id, id))
+      .returning();
+    return form;
+  }
+
+  async deleteForm(id: string): Promise<void> {
+    await db.delete(forms).where(eq(forms.id, id));
+  }
+
+  // Form Submissions CRUD
+  async getAllFormSubmissions(formId?: string): Promise<FormSubmission[]> {
+    if (formId) {
+      return await db.select().from(formSubmissions)
+        .where(eq(formSubmissions.formId, formId))
+        .orderBy(desc(formSubmissions.createdAt));
+    }
+    return await db.select().from(formSubmissions).orderBy(desc(formSubmissions.createdAt));
+  }
+
+  async getFormSubmission(id: number): Promise<FormSubmission | undefined> {
+    const [submission] = await db.select().from(formSubmissions).where(eq(formSubmissions.id, id));
+    return submission || undefined;
+  }
+
+  async createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission> {
+    const [submission] = await db.insert(formSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async deleteFormSubmission(id: number): Promise<void> {
+    await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
   }
 }
 

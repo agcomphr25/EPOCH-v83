@@ -1,0 +1,45 @@
+**Module 4: Generic FormBuilder & ReportBuilder**
+
+Create a React + Tailwind + plain-JS solution for defining arbitrary forms, rendering them for data entry, and reporting on submitted entries.
+
+---
+
+### 1. FormBuilderAdmin (src/components/FormBuilderAdmin.jsx)
+
+- **Fetch definitions** on mount:  
+  `GET /api/forms` → `[ { id, name, description, fields: [...] }, … ]`
+- **List forms** in a Tailwind-styled table with columns: Name, Description, Actions (Edit, Delete)
+- **“Add Form”** button opens an inline form:
+  - Inputs: **Name**, **Description**  
+  - “Save” → `POST /api/forms` with `{ name, description }`
+- **Edit Form**:
+  - When clicking Edit, display that form’s **fields** below:
+    - Table of fields with columns: Label, Key, Type, Required, Roles, Actions (Up, Down, Edit, Delete)
+    - **Add Field** row at bottom with inputs:
+      - **Label** (text), **Key** (text), **Type** (select: text, number, date, dropdown, autocomplete, textarea, checkbox), **Required** (checkbox), **Roles** (multi-select from static `['Admin','CSR','Production','Owner']`)
+      - If **Type=dropdown**, show a textarea to enter comma-separated options
+    - **Save Field** adds to `form.fields` in state; after editing fields, **Save Form** → `PUT /api/forms/{id}` with full updated definition
+- **Delete** buttons remove forms or fields via `DELETE /api/forms/{id}` or `DELETE /api/forms/{formId}/fields/{fieldId}`
+
+---
+
+### 2. FormRenderer (src/components/FormRenderer.jsx)
+
+- **Props**: `formId: string`, `userRole: string`
+- **Fetch** definition on mount:  
+  `GET /api/forms/{formId}` → `{ id, name, fields: [ { key, label, type, options?, required, roles } ] }`
+- **Render** only fields where `roles.includes(userRole)`:
+  - **text** → `<input type="text">`
+  - **number** → `<input type="number">`
+  - **date** → `<input type="date">`
+  - **textarea** → `<textarea>`
+  - **checkbox** → `<input type="checkbox">`
+  - **dropdown** → `<select>` using `options`
+  - **autocomplete** → `<input list="…">` + `<datalist>`  
+- **State**: one hook per field (`useState`), or a single `formData` object
+- **On Submit**:  
+  ```js
+  axios.post('/api/form-submissions', {
+    formId,
+    data: formData
+  })

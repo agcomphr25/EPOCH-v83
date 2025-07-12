@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,18 @@ export default function Navigation() {
       label: 'Stock Models',
       icon: Package,
       description: 'Manage stock models and pricing'
+    },
+    {
+      path: '/admin/forms',
+      label: 'Form Builder',
+      icon: ClipboardList,
+      description: 'Create and manage forms'
+    },
+    {
+      path: '/admin/reports',
+      label: 'Reports',
+      icon: BarChart,
+      description: 'View form submissions and generate reports'
     }
   ];
 

@@ -69,9 +69,14 @@ export default function OrderEntry() {
           { id: 'model3', name: 'AR-10 Standard', cost: 1500 },
         ]);
 
-        // Load features from API
+        // Load features from API (exclude sub-categories)
         const featuresResponse = await apiRequest('/api/features');
-        const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
+        const activeFeatures = featuresResponse.filter((feature: any) => 
+          feature.isActive && 
+          // Only include main features (those with a category, not sub-categories)
+          feature.category && 
+          !feature.categoryId // Sub-categories have categoryId, main features don't
+        );
         
         setFeatureDefs(activeFeatures.map((feature: any) => ({
           id: feature.id,

@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Settings, Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Settings, Plus, Edit, Trash2, Save, X, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface FeatureOption {
   value: string;
@@ -260,6 +260,30 @@ export default function FeatureManager() {
     setFeatureForm(prev => ({
       ...prev,
       options: prev.options?.filter((_, i) => i !== index)
+    }));
+  };
+
+  const moveOptionUp = (index: number) => {
+    if (index === 0) return;
+    setFeatureForm(prev => ({
+      ...prev,
+      options: prev.options?.map((option, i) => {
+        if (i === index) return prev.options![i - 1];
+        if (i === index - 1) return prev.options![i + 1];
+        return option;
+      })
+    }));
+  };
+
+  const moveOptionDown = (index: number) => {
+    if (!featureForm.options || index === featureForm.options.length - 1) return;
+    setFeatureForm(prev => ({
+      ...prev,
+      options: prev.options?.map((option, i) => {
+        if (i === index) return prev.options![i + 1];
+        if (i === index + 1) return prev.options![i - 1];
+        return option;
+      })
     }));
   };
 
@@ -549,12 +573,23 @@ export default function FeatureManager() {
                       value={option.label}
                       onChange={(e) => updateOption(index, 'label', e.target.value)}
                     />
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Description"
-                        value={option.description || ''}
-                        onChange={(e) => updateOption(index, 'description', e.target.value)}
-                      />
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveOptionUp(index)}
+                        disabled={index === 0}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveOptionDown(index)}
+                        disabled={!featureForm.options || index === featureForm.options.length - 1}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

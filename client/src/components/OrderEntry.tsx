@@ -64,6 +64,10 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const [additionalItems, setAdditionalItems] = useState<any[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentType, setPaymentType] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date());
+  const [paymentAmount, setPaymentAmount] = useState(0);
 
   // Load initial data on mount
   useEffect(() => {
@@ -556,7 +560,14 @@ export default function OrderEntry() {
                   type="checkbox"
                   id="markAsPaid"
                   checked={markAsPaid}
-                  onChange={(e) => setMarkAsPaid(e.target.checked)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setPaymentAmount(total);
+                      setShowPaymentModal(true);
+                    } else {
+                      setMarkAsPaid(false);
+                    }
+                  }}
                   className="rounded border-gray-300"
                 />
                 <Label htmlFor="markAsPaid">Mark as Paid</Label>
@@ -568,11 +579,11 @@ export default function OrderEntry() {
                   variant="outline"
                   className="w-full"
                   onClick={() => {
-                    // Save to pending logic
-                    console.log('Saving to pending...');
+                    // Save as draft logic
+                    console.log('Saving as draft...');
                   }}
                 >
-                  Save to Pending
+                  Save as Draft
                 </Button>
                 <Button
                   className="w-full"
@@ -586,6 +597,82 @@ export default function OrderEntry() {
           </Card>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Payment Type */}
+            <div className="space-y-2">
+              <Label>Payment Type</Label>
+              <Select value={paymentType} onValueChange={setPaymentType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="credit_card">Credit Card</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="paypal">PayPal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Date */}
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Input
+                type="date"
+                value={paymentDate.toISOString().split('T')[0]}
+                onChange={(e) => setPaymentDate(new Date(e.target.value))}
+              />
+            </div>
+
+            {/* Payment Amount */}
+            <div className="space-y-2">
+              <Label>Payment Amount</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setMarkAsPaid(false);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setMarkAsPaid(true);
+                  setShowPaymentModal(false);
+                  toast({
+                    title: "Payment Recorded",
+                    description: `Payment of $${paymentAmount.toFixed(2)} recorded for ${paymentDate.toLocaleDateString()}`,
+                  });
+                }}
+                disabled={!paymentType || paymentAmount <= 0}
+                className="flex-1"
+              >
+                Save Payment
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

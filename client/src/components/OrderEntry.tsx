@@ -57,6 +57,7 @@ export default function OrderEntry() {
   
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
+  const [paintQuery, setPaintQuery] = useState('');
 
   // Load initial data on mount
   useEffect(() => {
@@ -359,7 +360,10 @@ export default function OrderEntry() {
                   {featureDef.type === 'combobox' && (
                     <Combobox
                       value={features[featureDef.id] || ''}
-                      onChange={(value) => setFeatures(prev => ({ ...prev, [featureDef.id]: value }))}
+                      onChange={(value) => {
+                        setFeatures(prev => ({ ...prev, [featureDef.id]: value }));
+                        setPaintQuery('');
+                      }}
                     >
                       <div className="relative">
                         <Combobox.Input
@@ -367,11 +371,14 @@ export default function OrderEntry() {
                           placeholder="Select or search..."
                           displayValue={(value: string) => {
                             const option = featureDef.options?.find(opt => opt.value === value);
-                            return option ? option.label : value;
+                            return option ? option.label : '';
                           }}
+                          onChange={(event) => setPaintQuery(event.target.value)}
                         />
                         <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                          {featureDef.options?.map((option) => (
+                          {featureDef.options?.filter((option) => 
+                            option.label.toLowerCase().includes(paintQuery.toLowerCase())
+                          ).map((option) => (
                             <Combobox.Option
                               key={option.value}
                               value={option.value}

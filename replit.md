@@ -6,6 +6,9 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 12, 2025 (Evening)**: Added price field to features database schema and Feature Manager interface - rail features now have pricing that flows to Order Summary calculations
+- **July 12, 2025 (Evening)**: Fixed SelectItem error by correcting empty values in QD accessory feature options database
+- **July 12, 2025 (Evening)**: Successfully removed Rush Option from Order Entry as requested - will be added separately as Personalization Option
 - **July 12, 2025 (Early Morning)**: Successfully implemented sub-category system for paint_options category with complete database schema, API routes, and 6 sub-categories (Base Colors, Metallic Finishes, Special Effects, Camo Patterns, Custom Graphics, Protective Coatings)
 - **July 11, 2025 (Evening)**: Fixed feature update validation errors by adding proper null handling for validation and placeholder fields in schema
 - **July 11, 2025 (Evening)**: Connected Order Entry form to live Feature Manager data - features now load from database instead of hardcoded mock data

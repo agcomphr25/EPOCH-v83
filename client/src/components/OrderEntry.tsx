@@ -69,14 +69,29 @@ export default function OrderEntry() {
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [payments, setPayments] = useState<{type: string, date: Date, amount: number}[]>([]);
+  
+  // Discount data
+  const [shortTermSales, setShortTermSales] = useState<any[]>([]);
+  const [persistentDiscounts, setPersistentDiscounts] = useState<any[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<any[]>([]);
 
   // Load initial data on mount
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // Load last order ID
-        const lastIdResponse = await apiRequest('/api/orders/last-id');
+        // Load all data in parallel
+        const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse] = await Promise.all([
+          apiRequest('/api/orders/last-id'),
+          apiRequest('/api/features'),
+          apiRequest('/api/short-term-sales'),
+          apiRequest('/api/persistent-discounts'),
+          apiRequest('/api/customer-types')
+        ]);
+
         setLastOrderId(lastIdResponse.lastOrderId);
+        setShortTermSales(salesResponse);
+        setPersistentDiscounts(discountsResponse);
+        setCustomerTypes(typesResponse);
 
         // Mock data for now - in real implementation, load from API
         setModelOptions([
@@ -86,7 +101,6 @@ export default function OrderEntry() {
         ]);
 
         // Load features from API (group paint options under one feature)
-        const featuresResponse = await apiRequest('/api/features');
         const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
         
         // Group paint options into a single feature
@@ -155,13 +169,33 @@ export default function OrderEntry() {
     // Calculate rush cost
     const rushCost = rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0;
     
-    const subtotal = basePrice + featureCost + rushCost;
-    const total = subtotal + shipping;
+    let subtotal = basePrice + featureCost + rushCost;
     
-    return { basePrice, featureCost, rushCost, subtotal, total };
+    // Apply discount if selected
+    let discountAmount = 0;
+    if (discountCode) {
+      if (discountCode.startsWith('sale-')) {
+        const saleId = parseInt(discountCode.replace('sale-', ''));
+        const sale = shortTermSales.find(s => s.id === saleId);
+        if (sale) {
+          discountAmount = (subtotal * sale.percentage) / 100;
+        }
+      } else if (discountCode.startsWith('discount-')) {
+        const discountId = parseInt(discountCode.replace('discount-', ''));
+        const discount = persistentDiscounts.find(d => d.id === discountId);
+        if (discount) {
+          discountAmount = (subtotal * discount.percentage) / 100;
+        }
+      }
+    }
+    
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    const total = subtotalAfterDiscount + shipping;
+    
+    return { basePrice, featureCost, rushCost, subtotal: subtotalAfterDiscount, total, discountAmount };
   };
 
-  const { basePrice, featureCost, rushCost, subtotal, total } = calculateTotals();
+  const { basePrice, featureCost, rushCost, subtotal, total, discountAmount } = calculateTotals();
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const balanceDue = total - totalPaid;
 
@@ -524,8 +558,54 @@ export default function OrderEntry() {
                     <SelectValue placeholder="Select discount code" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="SAVE10">SAVE10 - 10% Off</SelectItem>
-                    <SelectItem value="SAVE20">SAVE20 - 20% Off</SelectItem>
+                    <SelectItem value="">None</SelectItem>
+                    
+                    {/* Short-Term Sales */}
+                    {shortTermSales.length > 0 && (
+                      <>
+                        <SelectItem value="header-sales" disabled>
+                          <span className="font-medium text-gray-600">Short-Term Sales</span>
+                        </SelectItem>
+                        {shortTermSales.map((sale: any) => {
+                          const now = new Date();
+                          const startDate = new Date(sale.startDate);
+                          const endDate = new Date(sale.endDate);
+                          const isActive = now >= startDate && now <= endDate;
+                          
+                          return (
+                            <SelectItem 
+                              key={sale.id} 
+                              value={`sale-${sale.id}`}
+                              disabled={!isActive}
+                            >
+                              {sale.name} - {sale.percentage}% Off
+                              {!isActive && " (Expired)"}
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
+                    
+                    {/* Persistent Discounts */}
+                    {persistentDiscounts.length > 0 && (
+                      <>
+                        <SelectItem value="header-persistent" disabled>
+                          <span className="font-medium text-gray-600">Persistent Discounts</span>
+                        </SelectItem>
+                        {persistentDiscounts.map((discount: any) => {
+                          const customerType = customerTypes.find((ct: any) => ct.id === discount.customerTypeId);
+                          
+                          return (
+                            <SelectItem 
+                              key={discount.id} 
+                              value={`discount-${discount.id}`}
+                            >
+                              {customerType?.name || 'Unknown'} - {discount.percentage}% Off
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -545,8 +625,14 @@ export default function OrderEntry() {
               <div className="space-y-2 pt-4 border-t">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>${(basePrice + (rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0)).toFixed(2)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount:</span>
+                    <span>-${discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Shipping & Handling:</span>
                   <span>${shipping.toFixed(2)}</span>

@@ -767,12 +767,17 @@ export default function OrderEntry() {
                     {persistentDiscounts.map((discount: any) => {
                       const customerType = customerTypes.find((ct: any) => ct.id === discount.customerTypeId);
                       
+                      // Display logic for percentage vs fixed amount
+                      const discountText = discount.percent 
+                        ? `${discount.percent}% Off`
+                        : `$${discount.fixedAmount} Off`;
+                      
                       return (
                         <SelectItem 
                           key={discount.id} 
                           value={`discount-${discount.id}`}
                         >
-                          {customerType?.name || 'Unknown'} - {discount.percent}% Off
+                          {customerType?.name || 'Unknown'} - {discountText}
                         </SelectItem>
                       );
                     })}

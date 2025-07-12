@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users } from 'lucide-react';
 import debounce from 'lodash.debounce';
@@ -53,6 +54,11 @@ export default function OrderEntry() {
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
   const [customerPO, setCustomerPO] = useState('');
   const [handedness, setHandedness] = useState('');
+  
+  // Paint options modal state
+  const [isPaintOptionsModalOpen, setIsPaintOptionsModalOpen] = useState(false);
+  const [selectedPaintCategory, setSelectedPaintCategory] = useState<any>(null);
+  const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
 
   // Load initial data on mount
   useEffect(() => {
@@ -76,6 +82,9 @@ export default function OrderEntry() {
         // Group paint options into a single feature
         const paintFeatures = activeFeatures.filter((feature: any) => feature.category === 'paint_options');
         const nonPaintFeatures = activeFeatures.filter((feature: any) => feature.category !== 'paint_options');
+        
+        // Store paint features for modal use
+        setPaintFeatures(paintFeatures);
         
         // Create a single Paint Options feature with all sub-categories as options
         const paintOptionsFeature = {
@@ -330,9 +339,18 @@ export default function OrderEntry() {
                   {featureDef.type === 'dropdown' && (
                     <Select
                       value={features[featureDef.id] || ''}
-                      onValueChange={(value) =>
-                        setFeatures(prev => ({ ...prev, [featureDef.id]: value }))
-                      }
+                      onValueChange={(value) => {
+                        if (featureDef.id === 'paint_options_combined') {
+                          // Find the selected paint category and open modal
+                          const selectedCategory = paintFeatures.find(p => p.id === value);
+                          if (selectedCategory) {
+                            setSelectedPaintCategory(selectedCategory);
+                            setIsPaintOptionsModalOpen(true);
+                          }
+                        } else {
+                          setFeatures(prev => ({ ...prev, [featureDef.id]: value }));
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
@@ -411,6 +429,64 @@ export default function OrderEntry() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Paint Options Modal */}
+      <Dialog open={isPaintOptionsModalOpen} onOpenChange={setIsPaintOptionsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedPaintCategory?.displayName || selectedPaintCategory?.name || 'Paint Options'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Select Option</Label>
+              <Select
+                value={features[`paint_${selectedPaintCategory?.id}`] || ''}
+                onValueChange={(value) => {
+                  setFeatures(prev => ({ 
+                    ...prev, 
+                    [`paint_${selectedPaintCategory?.id}`]: value,
+                    'paint_options_combined': selectedPaintCategory?.id 
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select option..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedPaintCategory?.options?.map((option: any) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsPaintOptionsModalOpen(false);
+                  setSelectedPaintCategory(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  setIsPaintOptionsModalOpen(false);
+                  setSelectedPaintCategory(null);
+                }}
+                disabled={!features[`paint_${selectedPaintCategory?.id}`]}
+              >
+                Select
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

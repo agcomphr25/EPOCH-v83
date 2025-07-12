@@ -449,7 +449,7 @@ export default function OrderEntry() {
                         />
                         <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
                           {featureDef.options?.filter((option) => 
-                            option.label.toLowerCase().includes(paintQuery.toLowerCase())
+                            paintQuery === '' || option.label.toLowerCase().includes(paintQuery.toLowerCase())
                           ).map((option) => (
                             <Combobox.Option
                               key={option.value}

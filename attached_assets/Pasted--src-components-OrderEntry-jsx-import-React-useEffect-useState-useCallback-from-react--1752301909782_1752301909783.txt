@@ -1,0 +1,308 @@
+// src/components/OrderEntry.jsx
+import React, { useEffect, useState, useCallback } from 'react';
+import { Tab } from '@headlessui/react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import { generateP1OrderId } from '../utils/orderUtils';
+import useOrderTotals from '../hooks/useOrderTotals';
+import CsvDataImporter from './CsvDataImporter';
+
+function classNames(...classes) {
+  return classes.filter(Boolean).join(' ');
+}
+
+export default function OrderEntry() {
+  // === Shared state ===
+  const [lastOrderId, setLastOrderId] = useState('');
+  const [orderDate, setOrderDate] = useState(new Date());
+  const [customer, setCustomer] = useState('');
+  const [model, setModel] = useState('');
+  const [features, setFeatures] = useState({});
+  const [rushLevel, setRushLevel] = useState('none');
+  const [discountCode, setDiscountCode] = useState('');
+  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [shippingInput, setShippingInput] = useState('0');
+  const [status, setStatus] = useState('DRAFT');
+  const [tabsIndex, setTabsIndex] = useState(0);
+
+  // For Bulk mode
+  const [bulkRows, setBulkRows] = useState([]);
+
+  // === Compute orderId for Single Entry ===
+  const orderId = React.useMemo(
+    () => lastOrderId && generateP1OrderId(orderDate, lastOrderId),
+    [orderDate, lastOrderId]
+  );
+
+  // === Totals hook ===
+  const { items, subtotal, shipping, total } = useOrderTotals({
+    items: [{ model, features, rushLevel }],
+    shipping: parseFloat(shippingInput) || 0,
+    discountCode,
+  });
+
+  // === Effects ===
+  useEffect(() => {
+    // Fetch the last P1 order ID once on mount
+    axios.get('/api/orders/last-id?p1=true')
+      .then(res => setLastOrderId(res.data.lastId))
+      .catch(err => {
+        console.error(err);
+        toast.error('Failed to fetch last order ID');
+      });
+  }, []);
+
+  // === Handlers for Single Entry ===
+  const saveDraft = useCallback(() => {
+    axios.put(`/api/orders/${orderId}`, {
+      orderId, orderDate, customer, model, features, rushLevel,
+      discountCode, specialInstructions, status: 'DRAFT'
+    })
+      .then(() => toast.success('Draft saved'))
+      .catch(() => toast.error('Error saving draft'));
+  }, [orderId, orderDate, customer, model, features, rushLevel, discountCode, specialInstructions]);
+
+  const sendForConfirmation = useCallback(() => {
+    axios.post(`/api/orders/${orderId}/send-confirmation`, {
+      orderId, orderDate, customer, model, features, rushLevel,
+      discountCode, specialInstructions
+    })
+      .then(() => {
+        setStatus('AWAITING_CUSTOMER_CONFIRMATION');
+        toast.success('Confirmation email sent');
+      })
+      .catch(() => toast.error('Error sending confirmation'));
+  }, [orderId, orderDate, customer, model, features, rushLevel, discountCode, specialInstructions]);
+
+  const finalizeOrder = useCallback(() => {
+    axios.post(`/api/orders/${orderId}/finalize`)
+      .then(() => {
+        setStatus('FINALIZED');
+        toast.success('Order finalized');
+      })
+      .catch(() => toast.error('Error finalizing order'));
+  }, [orderId]);
+
+  // === Handler for Bulk Upload rows parsed ===
+  const handleBulkRows = useCallback((rows) => {
+    let nextId = parseInt(lastOrderId, 10) || 0;
+    const enriched = rows.map(row => {
+      nextId += 1;
+      return {
+        ...row,
+        orderId: generateP1OrderId(new Date(row.orderDate || orderDate), String(nextId)),
+        status: 'DRAFT',
+      };
+    });
+    setBulkRows(enriched);
+  }, [lastOrderId, orderDate]);
+
+  // === Bulk Upload all ===
+  const uploadBulk = () => {
+    axios.post('/api/orders/bulk', bulkRows)
+      .then(() => toast.success('Bulk upload successful'))
+      .catch(() => toast.error('Bulk upload failed'));
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-8">
+      {/* Main content */}
+      <div className="flex-1">
+        <Tab.Group selectedIndex={tabsIndex} onChange={setTabsIndex}>
+          <Tab.List className="flex space-x-4 border-b">
+            {['Single Entry', 'Bulk Upload'].map((tab) => (
+              <Tab
+                key={tab}
+                className={({ selected }) =>
+                  classNames(
+                    'px-4 py-2 -mb-px font-medium',
+                    selected ? 'border-b-2 border-blue-600' : 'text-gray-500'
+                  )
+                }
+              >
+                {tab}
+              </Tab>
+            ))}
+          </Tab.List>
+
+          <Tab.Panels className="mt-6">
+            {/* === Single Entry === */}
+            <Tab.Panel>
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  {/* Order metadata */}
+                  <label className="block">
+                    <span>Order Date</span>
+                    <input
+                      type="date"
+                      className="mt-1 block w-full"
+                      value={orderDate.toISOString().slice(0, 10)}
+                      onChange={e => setOrderDate(new Date(e.target.value))}
+                      disabled={status !== 'DRAFT'}
+                    />
+                  </label>
+                  <label className="block mt-4">
+                    <span>Customer</span>
+                    <input
+                      type="text"
+                      className="mt-1 block w-full"
+                      value={customer}
+                      onChange={e => setCustomer(e.target.value)}
+                      disabled={status !== 'DRAFT'}
+                    />
+                  </label>
+
+                  {/* Model, Features, Rush */}
+                  {/* ... you’d add selects/checkboxes here similarly ... */}
+
+                  <label className="block mt-4">
+                    <span>Rush Level</span>
+                    <select
+                      className="mt-1 block w-full"
+                      value={rushLevel}
+                      onChange={e => setRushLevel(e.target.value)}
+                      disabled={status !== 'DRAFT'}
+                    >
+                      <option value="none">None</option>
+                      <option value="1-day">1-Day</option>
+                      <option value="2-day">2-Day</option>
+                    </select>
+                  </label>
+
+                  <label className="block mt-4">
+                    <span>Special Instructions</span>
+                    <textarea
+                      className="mt-1 block w-full"
+                      rows={3}
+                      value={specialInstructions}
+                      onChange={e => setSpecialInstructions(e.target.value)}
+                      disabled={status !== 'DRAFT'}
+                    />
+                  </label>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-4 mt-6">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={status === 'PAID'}
+                        onChange={e => setStatus(e.target.checked ? 'PAID' : 'DRAFT')}
+                        disabled={status !== 'DRAFT'}
+                        className="form-checkbox"
+                      />
+                      <span className="ml-2">Mark as Paid</span>
+                    </label>
+
+                    <button
+                      onClick={saveDraft}
+                      disabled={status !== 'DRAFT'}
+                      className="px-4 py-2 bg-gray-600 text-white rounded disabled:opacity-50"
+                    >
+                      Save as Draft
+                    </button>
+
+                    <button
+                      onClick={sendForConfirmation}
+                      disabled={status !== 'DRAFT'}
+                      className="px-4 py-2 bg-yellow-600 text-white rounded disabled:opacity-50"
+                    >
+                      Send for Confirmation
+                    </button>
+
+                    <button
+                      onClick={finalizeOrder}
+                      disabled={status !== 'AWAITING_CUSTOMER_CONFIRMATION'}
+                      className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+                    >
+                      Finalize Order
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Tab.Panel>
+
+            {/* === Bulk Upload === */}
+            <Tab.Panel>
+              <CsvDataImporter onDataParsed={handleBulkRows} />
+
+              {bulkRows.length > 0 && (
+                <div className="mt-6">
+                  <table className="w-full table-auto border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="border px-2 py-1">Order ID</th>
+                        <th className="border px-2 py-1">Customer</th>
+                        <th className="border px-2 py-1">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkRows.map((row, i) => (
+                        <tr key={i}>
+                          <td className="border px-2 py-1">{row.orderId}</td>
+                          <td className="border px-2 py-1">{row.customer}</td>
+                          <td className="border px-2 py-1">
+                            <select
+                              className="w-full"
+                              value={row.status}
+                              onChange={e => {
+                                const copy = [...bulkRows];
+                                copy[i].status = e.target.value;
+                                setBulkRows(copy);
+                              }}
+                            >
+                              <option value="DRAFT">Draft</option>
+                              <option value="AWAITING_CUSTOMER_CONFIRMATION">
+                                Awaiting Confirmation
+                              </option>
+                              <option value="FINALIZED">Finalized</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    onClick={uploadBulk}
+                    className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
+                  >
+                    Upload All
+                  </button>
+                </div>
+              )}
+            </Tab.Panel>
+          </Tab.Panels>
+        </Tab.Group>
+      </div>
+
+      {/* Sidebar Summary */}
+      <aside className="w-full lg:w-1/3 sticky top-6 space-y-6 p-4 bg-gray-50 rounded">
+        <h2 className="text-lg font-semibold">Summary</h2>
+        <div>Items: {items.length}</div>
+        <div>Subtotal: ${subtotal.toFixed(2)}</div>
+        <div>
+          <label className="flex items-center">
+            <span className="mr-2">Shipping:</span>
+            <input
+              type="number"
+              className="w-24 border p-1"
+              value={shippingInput}
+              onChange={e => setShippingInput(e.target.value)}
+            />
+          </label>
+        </div>
+        <div>
+          <label className="flex items-center">
+            <span className="mr-2">Discount Code:</span>
+            <input
+              type="text"
+              className="w-32 border p-1"
+              value={discountCode}
+              onChange={e => setDiscountCode(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="text-xl font-bold">Total: ${total.toFixed(2)}</div>
+      </aside>
+    </div>
+  );
+}

@@ -58,6 +58,12 @@ export default function OrderEntry() {
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
   const [paintQuery, setPaintQuery] = useState('');
+  
+  // Order summary data
+  const [discountCode, setDiscountCode] = useState('');
+  const [shipping, setShipping] = useState(36.95);
+  const [markAsPaid, setMarkAsPaid] = useState(false);
+  const [additionalItems, setAdditionalItems] = useState<any[]>([]);
 
   // Load initial data on mount
   useEffect(() => {
@@ -133,6 +139,25 @@ export default function OrderEntry() {
     }
   }, [orderDate, lastOrderId]);
 
+  // Calculate order totals
+  const calculateTotals = () => {
+    const selectedModel = modelOptions.find(m => m.id === modelId);
+    const basePrice = selectedModel?.cost || 0;
+    
+    // Calculate feature costs (in real implementation, features would have prices)
+    const featureCost = 0; // Placeholder - would calculate based on selected features
+    
+    // Calculate rush cost
+    const rushCost = rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0;
+    
+    const subtotal = basePrice + featureCost + rushCost;
+    const total = subtotal + shipping;
+    
+    return { basePrice, featureCost, rushCost, subtotal, total };
+  };
+
+  const { basePrice, featureCost, rushCost, subtotal, total } = calculateTotals();
+
   // Debounced customer search
   const debouncedCustomerSearch = useCallback(
     debounce((query: string) => {
@@ -205,14 +230,17 @@ export default function OrderEntry() {
         <p className="text-gray-600 mt-2">Create new stock order</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Order Entry
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main Form */}
+        <div className="flex-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Order Entry
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
           <div className="space-y-6">
             {/* Order Info Row - Order ID, Order Date, Due Date */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -446,22 +474,118 @@ export default function OrderEntry() {
                 </Select>
               </div>
 
-              {/* Submit Button */}
-              <div className="md:col-span-2">
-                <Button
-                  onClick={onSingleSubmit}
-                  disabled={isSubmitting}
-                  className="w-full md:w-auto"
-                >
-                  {isSubmitting ? 'Creating...' : 'Submit Order'}
-                </Button>
+              {/* Special Instructions */}
+              <div className="md:col-span-2 space-y-2">
+                <Label>Special Instructions</Label>
+                <textarea
+                  className="w-full border rounded-md px-3 py-2 min-h-[100px] resize-vertical"
+                  placeholder="Any special requirements or notes..."
+                  value={features.specialInstructions || ''}
+                  onChange={(e) => setFeatures(prev => ({ ...prev, specialInstructions: e.target.value }))}
+                />
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
 
+        {/* Order Summary Sidebar */}
+        <div className="w-full lg:w-96">
+          <Card className="sticky top-4">
+            <CardHeader>
+              <CardTitle>Order Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Current Pricing */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-2xl font-bold">1</span>
+                  <span className="text-2xl font-bold text-blue-600">${basePrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Items</span>
+                  <span>Current Stock</span>
+                </div>
+              </div>
 
+              {/* Discount Code */}
+              <div className="space-y-2">
+                <Label>Discount Code</Label>
+                <Select value={discountCode} onValueChange={setDiscountCode}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select discount code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SAVE10">SAVE10 - 10% Off</SelectItem>
+                    <SelectItem value="SAVE20">SAVE20 - 20% Off</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Shipping */}
+              <div className="space-y-2">
+                <Label>Shipping & Handling</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={shipping}
+                  onChange={(e) => setShipping(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+
+              {/* Totals */}
+              <div className="space-y-2 pt-4 border-t">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Shipping & Handling:</span>
+                  <span>${shipping.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total:</span>
+                  <span className="text-blue-600">${total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Mark as Paid */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="markAsPaid"
+                  checked={markAsPaid}
+                  onChange={(e) => setMarkAsPaid(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="markAsPaid">Mark as Paid</Label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    // Save to pending logic
+                    console.log('Saving to pending...');
+                  }}
+                >
+                  Save to Pending
+                </Button>
+                <Button
+                  className="w-full"
+                  onClick={onSingleSubmit}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Creating...' : 'Create Order'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

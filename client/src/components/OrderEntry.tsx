@@ -195,17 +195,6 @@ export default function OrderEntry() {
       }
     }
     
-    // Debug logging - remove after testing
-    if (paintOptionsValue) {
-      console.log('=== PAINT PRICING DEBUG ===');
-      console.log('Paint option selected:', paintOptionsValue);
-      console.log('Feature ID extracted:', paintOptionsValue.split(':')[0]);
-      console.log('Paint features available:', paintFeatures.map(f => ({ id: f.id, subCategory: f.subCategory })));
-      console.log('Sub-categories available:', subCategories.map(s => ({ id: s.id, price: s.price })));
-      console.log('Final feature cost:', featureCost);
-      console.log('========================');
-    }
-    
     // Calculate rush cost
     const rushCost = rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0;
     
@@ -696,7 +685,7 @@ export default function OrderEntry() {
               <div className="space-y-2 pt-4 border-t">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>${(basePrice + (rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0)).toFixed(2)}</span>
+                  <span>${(basePrice + featureCost + (rushLevel === '4wk' ? 200 : rushLevel === '6wk' ? 250 : 0)).toFixed(2)}</span>
                 </div>
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">

@@ -1,5 +1,5 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -7,7 +7,8 @@ import {
   type FeatureCategory, type InsertFeatureCategory,
   type FeatureSubCategory, type InsertFeatureSubCategory,
   type Feature, type InsertFeature,
-  type StockModel, type InsertStockModel
+  type StockModel, type InsertStockModel,
+  type OrderDraft, type InsertOrderDraft
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -71,6 +72,13 @@ export interface IStorage {
   createStockModel(data: InsertStockModel): Promise<StockModel>;
   updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel>;
   deleteStockModel(id: string): Promise<void>;
+  
+  // Order Drafts CRUD
+  createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft>;
+  getOrderDraft(orderId: string): Promise<OrderDraft | undefined>;
+  updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft>;
+  deleteOrderDraft(orderId: string): Promise<void>;
+  getAllOrderDrafts(): Promise<OrderDraft[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -327,6 +335,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStockModel(id: string): Promise<void> {
     await db.delete(stockModels).where(eq(stockModels.id, id));
+  }
+
+  // Order Drafts CRUD
+  async createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft> {
+    const [draft] = await db.insert(orderDrafts).values(data).returning();
+    return draft;
+  }
+
+  async getOrderDraft(orderId: string): Promise<OrderDraft | undefined> {
+    const [draft] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+    return draft || undefined;
+  }
+
+  async updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft> {
+    const [draft] = await db.update(orderDrafts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(orderDrafts.orderId, orderId))
+      .returning();
+    return draft;
+  }
+
+  async deleteOrderDraft(orderId: string): Promise<void> {
+    await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+  }
+
+  async getAllOrderDrafts(): Promise<OrderDraft[]> {
+    return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
   }
 }
 

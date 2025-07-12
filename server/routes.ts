@@ -9,7 +9,8 @@ import {
   insertFeatureCategorySchema,
   insertFeatureSubCategorySchema,
   insertFeatureSchema,
-  insertStockModelSchema
+  insertStockModelSchema,
+  insertOrderDraftSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -367,6 +368,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete stock model" });
+    }
+  });
+
+  // Order Drafts API
+  app.post("/api/orders/draft", async (req, res) => {
+    try {
+      const result = insertOrderDraftSchema.parse(req.body);
+      const draft = await storage.createOrderDraft(result);
+      res.json(draft);
+    } catch (error) {
+      console.error("Order draft creation error:", error);
+      res.status(400).json({ error: "Invalid order draft data" });
+    }
+  });
+
+  app.put("/api/orders/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const result = insertOrderDraftSchema.partial().parse(req.body);
+      
+      // Check if draft exists, if not create it
+      const existingDraft = await storage.getOrderDraft(orderId);
+      if (existingDraft) {
+        const updatedDraft = await storage.updateOrderDraft(orderId, result);
+        res.json(updatedDraft);
+      } else {
+        // Create new draft if it doesn't exist
+        const newDraft = await storage.createOrderDraft({ ...result, orderId } as any);
+        res.json(newDraft);
+      }
+    } catch (error) {
+      console.error("Order draft update error:", error);
+      res.status(400).json({ error: "Invalid order draft data" });
+    }
+  });
+
+  app.get("/api/orders/drafts", async (req, res) => {
+    try {
+      const drafts = await storage.getAllOrderDrafts();
+      res.json(drafts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve order drafts" });
+    }
+  });
+
+  app.get("/api/orders/draft/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const draft = await storage.getOrderDraft(orderId);
+      if (draft) {
+        res.json(draft);
+      } else {
+        res.status(404).json({ error: "Order draft not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve order draft" });
+    }
+  });
+
+  app.delete("/api/orders/draft/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      await storage.deleteOrderDraft(orderId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete order draft" });
     }
   });
 

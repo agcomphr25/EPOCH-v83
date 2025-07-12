@@ -106,6 +106,26 @@ export const stockModels = pgTable("stock_models", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const orderDrafts = pgTable("order_drafts", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  customerId: text("customer_id"),
+  customerPO: text("customer_po"),
+  fbOrderNumber: text("fb_order_number"),
+  agrOrderDetails: text("agr_order_details"),
+  modelId: text("model_id"),
+  handedness: text("handedness"),
+  features: jsonb("features"),
+  featureQuantities: jsonb("feature_quantities"),
+  discountCode: text("discount_code"),
+  shipping: real("shipping").default(0),
+  status: text("status").default("DRAFT"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -207,6 +227,27 @@ export const insertStockModelSchema = createInsertSchema(stockModels).omit({
   sortOrder: z.number().min(0).default(0),
 });
 
+export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  customerId: z.string().optional().nullable(),
+  customerPO: z.string().optional().nullable(),
+  fbOrderNumber: z.string().optional().nullable(),
+  agrOrderDetails: z.string().optional().nullable(),
+  modelId: z.string().optional().nullable(),
+  handedness: z.string().optional().nullable(),
+  features: z.record(z.any()).optional().nullable(),
+  featureQuantities: z.record(z.any()).optional().nullable(),
+  discountCode: z.string().optional().nullable(),
+  shipping: z.number().min(0).default(0),
+  status: z.string().default("DRAFT"),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -227,3 +268,5 @@ export type InsertFeature = z.infer<typeof insertFeatureSchema>;
 export type Feature = typeof features.$inferSelect;
 export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
+export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
+export type OrderDraft = typeof orderDrafts.$inferSelect;

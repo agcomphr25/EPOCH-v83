@@ -173,6 +173,7 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
     value: z.string(),
     label: z.string(),
     description: z.string().optional(),
+    price: z.number().optional(),
   })).optional().nullable(),
   validation: z.object({
     min: z.number().optional(),

@@ -232,8 +232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = req.params.id;
       await storage.deleteFeatureCategory(id);
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete feature category" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to delete feature category" });
     }
   });
 

@@ -224,6 +224,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteFeatureCategory(id: string): Promise<void> {
+    // Check if any features are using this category
+    const relatedFeatures = await db.select().from(features).where(eq(features.category, id));
+    if (relatedFeatures.length > 0) {
+      throw new Error(`Cannot delete category. ${relatedFeatures.length} features are still using this category. Please delete or reassign those features first.`);
+    }
+    
+    // Check if any sub-categories are using this category
+    const relatedSubCategories = await db.select().from(featureSubCategories).where(eq(featureSubCategories.categoryId, id));
+    if (relatedSubCategories.length > 0) {
+      throw new Error(`Cannot delete category. ${relatedSubCategories.length} sub-categories are still using this category. Please delete or reassign those sub-categories first.`);
+    }
+    
     await db.delete(featureCategories).where(eq(featureCategories.id, id));
   }
 

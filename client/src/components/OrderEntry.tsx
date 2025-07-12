@@ -266,6 +266,35 @@ export default function OrderEntry() {
     return value || 'Not selected';
   };
 
+  // Helper function to get price for feature selections
+  const getFeaturePrice = (featureId: string, value: any) => {
+    if (!value) return 0;
+    
+    const feature = featureDefs.find(f => f.id === featureId);
+    if (!feature) return 0;
+    
+    // Handle paint options combined feature
+    if (featureId === 'paint_options_combined') {
+      const [originalFeatureId, optionValue] = value.split(':');
+      const paintFeature = paintFeatures.find(f => f.id === originalFeatureId);
+      if (paintFeature && paintFeature.subCategory) {
+        const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);
+        return subCategory?.price || 0;
+      }
+      return 0;
+    }
+    
+    // Handle regular features with options
+    if (feature.type === 'dropdown' || feature.type === 'combobox') {
+      const option = feature.options?.find(opt => opt.value === value);
+      return option?.price || 0;
+    }
+    
+    // Handle features with base price
+    const originalFeature = allFeatures.find(f => f.id === featureId);
+    return originalFeature?.price || 0;
+  };
+
   // Debounced customer search
   const debouncedCustomerSearch = useCallback(
     debounce((query: string) => {
@@ -653,32 +682,52 @@ export default function OrderEntry() {
                 <div className="space-y-2">
                   {/* Stock Model */}
                   <div className="flex justify-between items-start text-sm">
-                    <span className="text-gray-600">Stock Model:</span>
-                    <span className="text-right ml-2 font-medium">
-                      {modelOptions.find(m => m.id === modelId)?.displayName || 'Not selected'}
-                    </span>
+                    <span className="text-gray-600 flex-1">Stock Model:</span>
+                    <div className="flex-1 text-right">
+                      <span className="font-medium">
+                        {modelOptions.find(m => m.id === modelId)?.displayName || 'Not selected'}
+                      </span>
+                    </div>
+                    <div className="w-16 text-right ml-2">
+                      <span className="font-medium text-blue-600">
+                        {modelId ? `$${(modelOptions.find(m => m.id === modelId)?.price || 0).toFixed(2)}` : '$0.00'}
+                      </span>
+                    </div>
                   </div>
                   
                   {/* Handedness */}
                   <div className="flex justify-between items-start text-sm">
-                    <span className="text-gray-600">Handedness:</span>
-                    <span className="text-right ml-2 font-medium">
-                      {handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}
-                    </span>
+                    <span className="text-gray-600 flex-1">Handedness:</span>
+                    <div className="flex-1 text-right">
+                      <span className="font-medium">
+                        {handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}
+                      </span>
+                    </div>
+                    <div className="w-16 text-right ml-2">
+                      <span className="font-medium text-blue-600">$0.00</span>
+                    </div>
                   </div>
                   
                   {/* Dynamic Features */}
                   {featureDefs.map((feature) => {
                     const value = features[feature.id];
                     const displayValue = getFeatureDisplayValue(feature.id, value);
+                    const price = getFeaturePrice(feature.id, value);
                     const hasValue = value && value !== '';
                     
                     return (
                       <div key={feature.id} className="flex justify-between items-start text-sm">
-                        <span className="text-gray-600">{feature.name}:</span>
-                        <span className={`text-right ml-2 ${hasValue ? 'font-medium' : 'text-gray-400'}`}>
-                          {displayValue}
-                        </span>
+                        <span className="text-gray-600 flex-1">{feature.name}:</span>
+                        <div className="flex-1 text-right">
+                          <span className={`${hasValue ? 'font-medium' : 'text-gray-400'}`}>
+                            {displayValue}
+                          </span>
+                        </div>
+                        <div className="w-16 text-right ml-2">
+                          <span className="font-medium text-blue-600">
+                            ${price.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}

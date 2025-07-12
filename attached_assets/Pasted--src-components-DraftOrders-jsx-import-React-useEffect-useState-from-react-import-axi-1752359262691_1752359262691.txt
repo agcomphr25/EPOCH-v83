@@ -1,0 +1,132 @@
+// src/components/DraftOrders.jsx
+
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+
+export default function DraftOrders() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState({}); // { [orderId]: boolean }
+
+  useEffect(() => {
+    fetchDrafts();
+  }, []);
+
+  const fetchDrafts = async () => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get('/api/orders?status=DRAFT');
+      // data: [{ orderId, orderDate, customerName, modelName, total, status }]
+      setOrders(data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load draft orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAction = async (orderId, type) => {
+    setActionLoading(a => ({ ...a, [orderId]: true }));
+    try {
+      if (type === 'confirm') {
+        await axios.post(`/api/orders/${orderId}/send-confirmation`);
+        toast.success(`Order ${orderId} sent for confirmation`);
+      } else if (type === 'finalize') {
+        await axios.post(`/api/orders/${orderId}/finalize`);
+        toast.success(`Order ${orderId} finalized`);
+      }
+      await fetchDrafts();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Failed to ${type === 'confirm' ? 'send confirmation' : 'finalize'} for ${orderId}`);
+    } finally {
+      setActionLoading(a => ({ ...a, [orderId]: false }));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <svg className="animate-spin h-10 w-10 text-blue-600" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <h2 className="text-2xl font-semibold mb-4">Draft Orders</h2>
+
+      {orders.length === 0 ? (
+        <p className="text-gray-600">No draft orders found.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white shadow rounded">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-4 py-2 text-left">Order ID</th>
+                <th className="px-4 py-2 text-left">Date</th>
+                <th className="px-4 py-2 text-left">Customer</th>
+                <th className="px-4 py-2 text-left">Model</th>
+                <th className="px-4 py-2 text-right">Total ($)</th>
+                <th className="px-4 py-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map(o => {
+                const busy = actionLoading[o.orderId] || false;
+                const confirmed = o.status === 'CONFIRMED';
+                return (
+                  <tr key={o.orderId} className="border-t">
+                    <td className="px-4 py-2 text-blue-600 hover:underline">
+                      <Link to={`/orders/edit/${o.orderId}`}>{o.orderId}</Link>
+                    </td>
+                    <td className="px-4 py-2">{new Date(o.orderDate).toLocaleDateString()}</td>
+                    <td className="px-4 py-2">{o.customerName}</td>
+                    <td className="px-4 py-2">{o.modelName}</td>
+                    <td className="px-4 py-2 text-right">{o.total.toFixed(2)}</td>
+                    <td className="px-4 py-2 flex items-center justify-center space-x-2">
+                      <Link
+                        to={`/orders/edit/${o.orderId}`}
+                        className="px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                      >Edit</Link>
+
+                      <button
+                        onClick={() => handleAction(o.orderId, 'confirm')}
+                        disabled={busy}
+                        className={`px-2 py-1 rounded text-white ${
+                          busy 
+                            ? 'bg-yellow-300' 
+                            : 'bg-yellow-500 hover:bg-yellow-600'
+                        } disabled:opacity-50`}
+                      >
+                        {busy && !confirmed ? 'Sending…' : 'Send for Confirmation'}
+                      </button>
+
+                      <button
+                        onClick={() => handleAction(o.orderId, 'finalize')}
+                        disabled={busy || !confirmed}
+                        className={`px-2 py-1 rounded text-white ${
+                          confirmed
+                            ? 'bg-blue-500 hover:bg-blue-600'
+                            : 'bg-blue-200 cursor-not-allowed'
+                        } disabled:opacity-50`}
+                      >
+                        {busy && confirmed ? 'Finalizing…' : 'Finalize'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

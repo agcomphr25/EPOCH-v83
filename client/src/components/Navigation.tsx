@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,12 @@ export default function Navigation() {
       label: 'Order Entry',
       icon: Plus,
       description: 'Create single orders'
+    },
+    {
+      path: '/draft-orders',
+      label: 'Draft Orders',
+      icon: FilePenLine,
+      description: 'Manage saved draft orders'
     },
     {
       path: '/feature-manager',

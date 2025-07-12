@@ -11,6 +11,7 @@ import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
 import FeatureManager from "./pages/FeatureManager";
 import StockModels from "./pages/StockModels";
+import DraftOrders from "./components/DraftOrders";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
+                <Route path="/draft-orders" component={DraftOrders} />
                 <Route path="/feature-manager" component={FeatureManager} />
                 <Route path="/stock-models" component={StockModels} />
                 <Route component={NotFound} />

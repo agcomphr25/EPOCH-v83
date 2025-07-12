@@ -18,6 +18,7 @@ interface FeatureOption {
   value: string;
   label: string;
   description?: string;
+  price?: number;
 }
 
 interface Feature {
@@ -361,11 +362,11 @@ export default function FeatureManager() {
   const addOption = () => {
     setFeatureForm(prev => ({
       ...prev,
-      options: [...(prev.options || []), { value: '', label: '' }]
+      options: [...(prev.options || []), { value: '', label: '', price: 0 }]
     }));
   };
 
-  const updateOption = (index: number, field: 'value' | 'label' | 'description', value: string) => {
+  const updateOption = (index: number, field: 'value' | 'label' | 'description' | 'price', value: string | number) => {
     setFeatureForm(prev => ({
       ...prev,
       options: prev.options?.map((option, i) => 
@@ -638,17 +639,7 @@ export default function FeatureManager() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>Price ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={featureForm.price || 0}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00"
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Sort Order</Label>
                 <Input
@@ -696,7 +687,7 @@ export default function FeatureManager() {
                   </Button>
                 </div>
                 {featureForm.options?.map((option, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2 mb-2">
+                  <div key={index} className="grid grid-cols-4 gap-2 mb-2">
                     <Input
                       placeholder="Value"
                       value={option.value}
@@ -706,6 +697,13 @@ export default function FeatureManager() {
                       placeholder="Label"
                       value={option.label}
                       onChange={(e) => updateOption(index, 'label', e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Price"
+                      value={option.price || 0}
+                      onChange={(e) => updateOption(index, 'price', parseFloat(e.target.value) || 0)}
                     />
                     <div className="flex gap-1">
                       <Button

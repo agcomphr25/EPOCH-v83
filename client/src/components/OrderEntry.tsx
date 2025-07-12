@@ -274,7 +274,6 @@ export default function OrderEntry() {
         </h1>
         <p className="text-gray-600 mt-2">Create new stock order</p>
       </div>
-
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main Form */}
         <div className="flex-1">
@@ -521,7 +520,7 @@ export default function OrderEntry() {
 
               {/* Special Instructions */}
               <div className="md:col-span-2 space-y-2">
-                <Label>Special Instructions</Label>
+                <Label>Special Notes</Label>
                 <textarea
                   className="w-full border rounded-md px-3 py-2 min-h-[100px] resize-vertical"
                   placeholder="Any special requirements or notes..."
@@ -690,7 +689,6 @@ export default function OrderEntry() {
           </Card>
         </div>
       </div>
-
       {/* Payment Modal */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
         <DialogContent className="sm:max-w-[425px]">

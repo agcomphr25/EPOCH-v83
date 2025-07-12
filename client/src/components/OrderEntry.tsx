@@ -253,7 +253,6 @@ export default function OrderEntry() {
           customerId: customer?.id,
           modelId,
           features,
-          rushLevel,
         }),
       });
 
@@ -270,7 +269,6 @@ export default function OrderEntry() {
       setCustomerQuery('');
       setModelId('');
       setFeatures({});
-      setRushLevel('none');
       
     } catch (error: any) {
       if (error.response?.data?.errors) {

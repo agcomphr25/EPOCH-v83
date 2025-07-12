@@ -114,6 +114,13 @@ export default function OrderEntry() {
           apiRequest('/api/feature-sub-categories')
         ]);
 
+        // Load customer options first
+        setCustomerOptions([
+          { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
+          { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
+          { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
+        ]);
+
         // If there's a draft ID, load the draft
         if (draftId) {
           try {
@@ -133,6 +140,18 @@ export default function OrderEntry() {
             setDiscountCode(draftResponse.discountCode || '');
             setShipping(draftResponse.shipping || 36.95);
             setOrderStatus(draftResponse.status || 'DRAFT');
+            
+            // Set customer object properly
+            if (draftResponse.customerId) {
+              const foundCustomer = [
+                { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
+                { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
+                { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
+              ].find(c => c.id === draftResponse.customerId);
+              if (foundCustomer) {
+                setCustomer(foundCustomer);
+              }
+            }
             
             // Set checkbox states
             setHasCustomerPO(!!draftResponse.customerPO);
@@ -207,12 +226,6 @@ export default function OrderEntry() {
           type: feature.type,
           options: feature.options || []
         })));
-
-        setCustomerOptions([
-          { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
-          { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
-          { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
-        ]);
       } catch (error) {
         console.error('Failed to load initial data:', error);
       } finally {

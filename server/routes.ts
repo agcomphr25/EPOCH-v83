@@ -375,8 +375,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders/draft", async (req, res) => {
     try {
       const result = insertOrderDraftSchema.parse(req.body);
-      const draft = await storage.createOrderDraft(result);
-      res.json(draft);
+      
+      // Check if draft already exists with this orderId
+      const existingDraft = await storage.getOrderDraft(result.orderId);
+      if (existingDraft) {
+        // Update existing draft instead of creating new one
+        const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
+        res.json(updatedDraft);
+      } else {
+        const draft = await storage.createOrderDraft(result);
+        res.json(draft);
+      }
     } catch (error) {
       console.error("Order draft creation error:", error);
       res.status(400).json({ error: "Invalid order draft data" });

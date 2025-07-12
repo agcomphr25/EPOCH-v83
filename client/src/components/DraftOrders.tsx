@@ -132,12 +132,16 @@ export default function DraftOrders() {
                     <Badge variant="secondary">{draft.status}</Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/order-entry?draft=${draft.orderId}`}>
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        window.location.href = `/order-entry?draft=${draft.orderId}`;
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

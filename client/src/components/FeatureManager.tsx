@@ -93,6 +93,8 @@ export default function FeatureManager() {
   const [isSubCategoryDialogOpen, setIsSubCategoryDialogOpen] = useState(false);
   const [selectedSubCategory, setSelectedSubCategory] = useState<FeatureSubCategory | null>(null);
   const [isEditingSubCategory, setIsEditingSubCategory] = useState(false);
+  const [isPaintOptionsModalOpen, setIsPaintOptionsModalOpen] = useState(false);
+  const [selectedPaintSubCategory, setSelectedPaintSubCategory] = useState<string>('');
 
   // Fetch features and categories
   const { data: features = [], isLoading: featuresLoading } = useQuery({
@@ -607,7 +609,13 @@ export default function FeatureManager() {
                 <Label>Category</Label>
                 <Select
                   value={featureForm.category || ''}
-                  onValueChange={(value) => setFeatureForm(prev => ({ ...prev, category: value }))}
+                  onValueChange={(value) => {
+                    if (value === 'paint_options') {
+                      setIsPaintOptionsModalOpen(true);
+                    } else {
+                      setFeatureForm(prev => ({ ...prev, category: value }));
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
@@ -896,6 +904,60 @@ export default function FeatureManager() {
               <Button onClick={handleSubCategorySubmit}>
                 <Save className="h-4 w-4 mr-2" />
                 {isEditingSubCategory ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Paint Options Sub-Category Selection Modal */}
+      <Dialog open={isPaintOptionsModalOpen} onOpenChange={setIsPaintOptionsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Paint Options - Select Sub-Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Sub-Category</Label>
+              <Select
+                value={selectedPaintSubCategory}
+                onValueChange={setSelectedPaintSubCategory}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select sub-category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subCategories
+                    .filter(sc => sc.categoryId === 'paint_options')
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((subCategory) => (
+                      <SelectItem key={subCategory.id} value={subCategory.id}>
+                        {subCategory.displayName}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsPaintOptionsModalOpen(false);
+                  setSelectedPaintSubCategory('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  setFeatureForm(prev => ({ ...prev, category: 'paint_options' }));
+                  setIsPaintOptionsModalOpen(false);
+                  setSelectedPaintSubCategory('');
+                }}
+                disabled={!selectedPaintSubCategory}
+              >
+                Add Options
               </Button>
             </div>
           </div>

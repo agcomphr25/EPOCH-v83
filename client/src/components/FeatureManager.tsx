@@ -202,8 +202,13 @@ export default function FeatureManager() {
       queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
       toast({ title: "Category deleted successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to delete category", variant: "destructive" });
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.error || "Failed to delete category";
+      toast({ 
+        title: "Cannot delete category", 
+        description: errorMessage,
+        variant: "destructive" 
+      });
     }
   });
 

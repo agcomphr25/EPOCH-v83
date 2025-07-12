@@ -220,6 +220,16 @@ export default function OrderEntry() {
             featureCost += selectedOption.price;
           }
         }
+        
+        // Handle checkbox arrays - add prices for each selected option
+        if (featureDefinition.type === 'checkbox' && Array.isArray(featureValue) && featureDefinition.options) {
+          featureValue.forEach(selectedValue => {
+            const selectedOption = featureDefinition.options.find(opt => opt.value === selectedValue);
+            if (selectedOption && selectedOption.price) {
+              featureCost += selectedOption.price;
+            }
+          });
+        }
       }
     });
     
@@ -269,6 +279,17 @@ export default function OrderEntry() {
       return option ? option.label : (value || 'Not selected');
     }
     
+    if (feature.type === 'checkbox' && Array.isArray(value)) {
+      if (value.length === 0) return 'None selected';
+      
+      const selectedLabels = value.map(val => {
+        const option = feature.options?.find(opt => opt.value === val);
+        return option ? option.label : val;
+      });
+      
+      return selectedLabels.join(', ');
+    }
+    
     return value || 'Not selected';
   };
 
@@ -288,6 +309,14 @@ export default function OrderEntry() {
         return subCategory?.price || 0;
       }
       return 0;
+    }
+    
+    // Handle checkbox arrays
+    if (feature.type === 'checkbox' && Array.isArray(value)) {
+      return value.reduce((total, val) => {
+        const option = feature.options?.find(opt => opt.value === val);
+        return total + (option?.price || 0);
+      }, 0);
     }
     
     // Handle regular features with options
@@ -638,6 +667,48 @@ export default function OrderEntry() {
                         setFeatures(prev => ({ ...prev, [featureDef.id]: e.target.value }))
                       }
                     />
+                  )}
+                  {featureDef.type === 'checkbox' && (
+                    <div className="space-y-2">
+                      {featureDef.options?.map((option) => {
+                        const selectedOptions = features[featureDef.id] || [];
+                        const isChecked = selectedOptions.includes(option.value);
+                        
+                        return (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`${featureDef.id}-${option.value}`}
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const currentSelection = features[featureDef.id] || [];
+                                let newSelection;
+                                
+                                if (e.target.checked) {
+                                  newSelection = [...currentSelection, option.value];
+                                } else {
+                                  newSelection = currentSelection.filter((val: string) => val !== option.value);
+                                }
+                                
+                                setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                            <label 
+                              htmlFor={`${featureDef.id}-${option.value}`}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              {option.label}
+                              {option.price && option.price > 0 && (
+                                <span className="ml-2 text-blue-600 font-medium">
+                                  (+${option.price})
+                                </span>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                   {errors[`features.${featureDef.id}`] && (
                     <p className="text-red-500 text-sm">{errors[`features.${featureDef.id}`]}</p>

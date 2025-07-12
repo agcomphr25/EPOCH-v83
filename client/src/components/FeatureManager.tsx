@@ -46,6 +46,15 @@ interface FeatureCategory {
   isActive: boolean;
 }
 
+interface FeatureSubCategory {
+  id: string;
+  name: string;
+  displayName: string;
+  categoryId: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export default function FeatureManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -73,6 +82,18 @@ export default function FeatureManager() {
     isActive: true
   });
 
+  const [subCategoryForm, setSubCategoryForm] = useState<Partial<FeatureSubCategory>>({
+    name: '',
+    displayName: '',
+    categoryId: '',
+    sortOrder: 0,
+    isActive: true
+  });
+
+  const [isSubCategoryDialogOpen, setIsSubCategoryDialogOpen] = useState(false);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<FeatureSubCategory | null>(null);
+  const [isEditingSubCategory, setIsEditingSubCategory] = useState(false);
+
   // Fetch features and categories
   const { data: features = [], isLoading: featuresLoading } = useQuery({
     queryKey: ['/api/features'],
@@ -82,6 +103,11 @@ export default function FeatureManager() {
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['/api/feature-categories'],
     queryFn: () => apiRequest('/api/feature-categories')
+  });
+
+  const { data: subCategories = [], isLoading: subCategoriesLoading } = useQuery({
+    queryKey: ['/api/feature-sub-categories'],
+    queryFn: () => apiRequest('/api/feature-sub-categories')
   });
 
   // Feature mutations
@@ -174,6 +200,51 @@ export default function FeatureManager() {
     }
   });
 
+  // Sub-Category mutations
+  const createSubCategoryMutation = useMutation({
+    mutationFn: (data: Partial<FeatureSubCategory>) => apiRequest('/api/feature-sub-categories', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
+      setIsSubCategoryDialogOpen(false);
+      resetSubCategoryForm();
+      toast({ title: "Sub-category created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create sub-category", variant: "destructive" });
+    }
+  });
+
+  const updateSubCategoryMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<FeatureSubCategory> }) => 
+      apiRequest(`/api/feature-sub-categories/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
+      setIsSubCategoryDialogOpen(false);
+      resetSubCategoryForm();
+      toast({ title: "Sub-category updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update sub-category", variant: "destructive" });
+    }
+  });
+
+  const deleteSubCategoryMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/feature-sub-categories/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feature-sub-categories'] });
+      toast({ title: "Sub-category deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete sub-category", variant: "destructive" });
+    }
+  });
+
   const resetFeatureForm = () => {
     setFeatureForm({
       type: 'dropdown',
@@ -198,6 +269,18 @@ export default function FeatureManager() {
     setIsEditing(false);
   };
 
+  const resetSubCategoryForm = () => {
+    setSubCategoryForm({
+      name: '',
+      displayName: '',
+      categoryId: '',
+      sortOrder: 0,
+      isActive: true
+    });
+    setSelectedSubCategory(null);
+    setIsEditingSubCategory(false);
+  };
+
   const handleEditFeature = (feature: Feature) => {
     setSelectedFeature(feature);
     // Only set editable fields, exclude read-only fields
@@ -219,9 +302,27 @@ export default function FeatureManager() {
 
   const handleEditCategory = (category: FeatureCategory) => {
     setSelectedCategory(category);
-    setCategoryForm(category);
+    setCategoryForm({
+      name: category.name,
+      displayName: category.displayName,
+      sortOrder: category.sortOrder,
+      isActive: category.isActive
+    });
     setIsEditing(true);
     setIsCategoryDialogOpen(true);
+  };
+
+  const handleEditSubCategory = (subCategory: FeatureSubCategory) => {
+    setSelectedSubCategory(subCategory);
+    setSubCategoryForm({
+      name: subCategory.name,
+      displayName: subCategory.displayName,
+      categoryId: subCategory.categoryId,
+      sortOrder: subCategory.sortOrder,
+      isActive: subCategory.isActive
+    });
+    setIsEditingSubCategory(true);
+    setIsSubCategoryDialogOpen(true);
   };
 
   const handleFeatureSubmit = () => {
@@ -237,6 +338,14 @@ export default function FeatureManager() {
       updateCategoryMutation.mutate({ id: selectedCategory.id, data: categoryForm });
     } else {
       createCategoryMutation.mutate(categoryForm);
+    }
+  };
+
+  const handleSubCategorySubmit = () => {
+    if (isEditingSubCategory && selectedSubCategory) {
+      updateSubCategoryMutation.mutate({ id: selectedSubCategory.id, data: subCategoryForm });
+    } else {
+      createSubCategoryMutation.mutate(subCategoryForm);
     }
   };
 
@@ -662,6 +771,65 @@ export default function FeatureManager() {
               <Label htmlFor="category-active">Active</Label>
             </div>
 
+            {/* Sub-Categories Management - Only show for paint_options category */}
+            {selectedCategory && selectedCategory.id === 'paint_options' && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Sub-Categories</h3>
+                  <Button 
+                    size="sm"
+                    onClick={() => {
+                      setSubCategoryForm({ 
+                        name: '', 
+                        displayName: '', 
+                        categoryId: 'paint_options', 
+                        sortOrder: (subCategories.filter(sc => sc.categoryId === 'paint_options').length + 1), 
+                        isActive: true 
+                      });
+                      setIsEditingSubCategory(false);
+                      setIsSubCategoryDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Sub-Category
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {subCategories
+                    .filter(sc => sc.categoryId === 'paint_options')
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((subCategory) => (
+                      <div key={subCategory.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium">{subCategory.displayName}</span>
+                          <span className="text-xs text-gray-500">({subCategory.name})</span>
+                          {!subCategory.isActive && (
+                            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditSubCategory(subCategory)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteSubCategoryMutation.mutate(subCategory.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
                 Cancel
@@ -669,6 +837,65 @@ export default function FeatureManager() {
               <Button onClick={handleCategorySubmit}>
                 <Save className="h-4 w-4 mr-2" />
                 {isEditing ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sub-Category Dialog */}
+      <Dialog open={isSubCategoryDialogOpen} onOpenChange={setIsSubCategoryDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isEditingSubCategory ? 'Edit Sub-Category' : 'Add New Sub-Category'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Name (ID)</Label>
+                <Input
+                  value={subCategoryForm.name || ''}
+                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="base_colors"
+                />
+              </div>
+              <div>
+                <Label>Display Name</Label>
+                <Input
+                  value={subCategoryForm.displayName || ''}
+                  onChange={(e) => setSubCategoryForm(prev => ({ ...prev, displayName: e.target.value }))}
+                  placeholder="Base Colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Sort Order</Label>
+              <Input
+                type="number"
+                value={subCategoryForm.sortOrder || 0}
+                onChange={(e) => setSubCategoryForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="sub-category-active"
+                checked={subCategoryForm.isActive !== false}
+                onCheckedChange={(checked) => setSubCategoryForm(prev => ({ ...prev, isActive: checked as boolean }))}
+              />
+              <Label htmlFor="sub-category-active">Active</Label>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsSubCategoryDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubCategorySubmit}>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditingSubCategory ? 'Update' : 'Create'}
               </Button>
             </div>
           </div>

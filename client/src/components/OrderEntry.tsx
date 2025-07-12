@@ -67,6 +67,9 @@ export default function OrderEntry() {
   const [paintQuery, setPaintQuery] = useState('');
   const [allFeatures, setAllFeatures] = useState<any[]>([]);
   
+  // Quantities for checkbox options (feature_id -> { option_value: quantity })
+  const [featureQuantities, setFeatureQuantities] = useState<Record<string, Record<string, number>>>({});
+  
   // Order summary data
   const [discountCode, setDiscountCode] = useState('');
   const [shipping, setShipping] = useState(36.95);
@@ -221,12 +224,13 @@ export default function OrderEntry() {
           }
         }
         
-        // Handle checkbox arrays - add prices for each selected option
+        // Handle checkbox arrays - add prices for each selected option with quantities
         if (featureDefinition.type === 'checkbox' && Array.isArray(featureValue) && featureDefinition.options) {
           featureValue.forEach(selectedValue => {
             const selectedOption = featureDefinition.options.find(opt => opt.value === selectedValue);
+            const quantity = featureQuantities[featureId]?.[selectedValue] || 1;
             if (selectedOption && selectedOption.price) {
-              featureCost += selectedOption.price;
+              featureCost += selectedOption.price * quantity;
             }
           });
         }
@@ -284,7 +288,9 @@ export default function OrderEntry() {
       
       const selectedLabels = value.map(val => {
         const option = feature.options?.find(opt => opt.value === val);
-        return option ? option.label : val;
+        const quantity = featureQuantities[featureId]?.[val] || 1;
+        const label = option ? option.label : val;
+        return quantity > 1 ? `${label} (${quantity})` : label;
       });
       
       return selectedLabels.join(', ');
@@ -311,11 +317,12 @@ export default function OrderEntry() {
       return 0;
     }
     
-    // Handle checkbox arrays
+    // Handle checkbox arrays with quantities
     if (feature.type === 'checkbox' && Array.isArray(value)) {
       return value.reduce((total, val) => {
         const option = feature.options?.find(opt => opt.value === val);
-        return total + (option?.price || 0);
+        const quantity = featureQuantities[featureId]?.[val] || 1;
+        return total + (option?.price || 0) * quantity;
       }, 0);
     }
     
@@ -673,38 +680,83 @@ export default function OrderEntry() {
                       {featureDef.options?.map((option) => {
                         const selectedOptions = features[featureDef.id] || [];
                         const isChecked = selectedOptions.includes(option.value);
+                        const quantity = featureQuantities[featureDef.id]?.[option.value] || 1;
                         
                         return (
-                          <div key={option.value} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`${featureDef.id}-${option.value}`}
-                              checked={isChecked}
-                              onChange={(e) => {
-                                const currentSelection = features[featureDef.id] || [];
-                                let newSelection;
-                                
-                                if (e.target.checked) {
-                                  newSelection = [...currentSelection, option.value];
-                                } else {
-                                  newSelection = currentSelection.filter((val: string) => val !== option.value);
-                                }
-                                
-                                setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
-                              }}
-                              className="rounded border-gray-300"
-                            />
-                            <label 
-                              htmlFor={`${featureDef.id}-${option.value}`}
-                              className="text-sm cursor-pointer flex-1"
-                            >
-                              {option.label}
-                              {option.price && option.price > 0 && (
-                                <span className="ml-2 text-blue-600 font-medium">
-                                  (+${option.price})
-                                </span>
-                              )}
-                            </label>
+                          <div key={option.value} className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`${featureDef.id}-${option.value}`}
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const currentSelection = features[featureDef.id] || [];
+                                  let newSelection;
+                                  
+                                  if (e.target.checked) {
+                                    newSelection = [...currentSelection, option.value];
+                                    // Initialize quantity to 1 when first selected
+                                    setFeatureQuantities(prev => ({
+                                      ...prev,
+                                      [featureDef.id]: {
+                                        ...prev[featureDef.id],
+                                        [option.value]: 1
+                                      }
+                                    }));
+                                  } else {
+                                    newSelection = currentSelection.filter((val: string) => val !== option.value);
+                                    // Remove quantity when deselected
+                                    setFeatureQuantities(prev => {
+                                      const newQuantities = { ...prev };
+                                      if (newQuantities[featureDef.id]) {
+                                        delete newQuantities[featureDef.id][option.value];
+                                      }
+                                      return newQuantities;
+                                    });
+                                  }
+                                  
+                                  setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <label 
+                                htmlFor={`${featureDef.id}-${option.value}`}
+                                className="text-sm cursor-pointer flex-1"
+                              >
+                                {option.label}
+                                {option.price && option.price > 0 && (
+                                  <span className="ml-2 text-blue-600 font-medium">
+                                    (+${option.price})
+                                  </span>
+                                )}
+                              </label>
+                            </div>
+                            
+                            {/* Quantity input - only shown when checkbox is selected */}
+                            {isChecked && (
+                              <div className="ml-6 flex items-center space-x-2">
+                                <Label htmlFor={`${featureDef.id}-${option.value}-qty`} className="text-xs text-gray-600">
+                                  Quantity:
+                                </Label>
+                                <Input
+                                  type="number"
+                                  id={`${featureDef.id}-${option.value}-qty`}
+                                  min="1"
+                                  value={quantity}
+                                  onChange={(e) => {
+                                    const newQuantity = parseInt(e.target.value) || 1;
+                                    setFeatureQuantities(prev => ({
+                                      ...prev,
+                                      [featureDef.id]: {
+                                        ...prev[featureDef.id],
+                                        [option.value]: newQuantity
+                                      }
+                                    }));
+                                  }}
+                                  className="w-20 text-sm"
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}

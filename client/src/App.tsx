@@ -23,6 +23,10 @@ import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
 import TimeClockAdminPage from "./pages/TimeClockAdminPage";
 import Module8TestPage from "./pages/Module8TestPage";
+import APJournalPage from "./pages/APJournalPage";
+import ARJournalPage from "./pages/ARJournalPage";
+import COGSReportPage from "./pages/COGSReportPage";
+import FinanceDashboardPage from "./pages/FinanceDashboardPage";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -52,6 +56,10 @@ function App() {
                 <Route path="/employee-portal" component={EmployeePortalPage} />
                 <Route path="/time-clock-admin" component={TimeClockAdminPage} />
                 <Route path="/module8-test" component={Module8TestPage} />
+                <Route path="/finance/ap" component={APJournalPage} />
+                <Route path="/finance/ar" component={ARJournalPage} />
+                <Route path="/finance/cogs" component={COGSReportPage} />
+                <Route path="/finance/dashboard" component={FinanceDashboardPage} />
 
                 <Route component={NotFound} />
               </Switch>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ export default function Navigation() {
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
+  const [financeExpanded, setFinanceExpanded] = useState(false);
 
   const navItems = [
     {
@@ -102,6 +103,33 @@ export default function Navigation() {
     }
   ];
 
+  const financeItems = [
+    {
+      path: '/finance/dashboard',
+      label: 'Finance Dashboard',
+      icon: BarChart,
+      description: 'Financial overview and KPIs'
+    },
+    {
+      path: '/finance/ap',
+      label: 'AP Journal',
+      icon: Receipt,
+      description: 'Accounts Payable transactions'
+    },
+    {
+      path: '/finance/ar',
+      label: 'AR Journal',
+      icon: DollarSign,
+      description: 'Accounts Receivable transactions'
+    },
+    {
+      path: '/finance/cogs',
+      label: 'COGS Report',
+      icon: TrendingUp,
+      description: 'Cost of Goods Sold reporting'
+    }
+  ];
+
   const verifiedModulesItems = [
     {
       path: '/',
@@ -134,6 +162,7 @@ export default function Navigation() {
   const isInventoryActive = inventoryItems.some(item => location === item.path);
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
+  const isFinanceActive = financeItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -152,7 +181,10 @@ export default function Navigation() {
     if (isEmployeesActive) {
       setEmployeesExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive]);
+    if (isFinanceActive) {
+      setFinanceExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -350,6 +382,50 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setEmployeesExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Finance Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isFinanceActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isFinanceActive && "bg-primary text-white"
+                )}
+                onClick={() => setFinanceExpanded(!financeExpanded)}
+              >
+                <DollarSign className="h-4 w-4" />
+                Finance
+                {financeExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {financeExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {financeItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setFinanceExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

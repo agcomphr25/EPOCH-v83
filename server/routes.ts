@@ -1236,6 +1236,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Module 9: Finance & Reporting routes
+  app.get("/api/finance/ap", async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.query;
+      
+      // Mock AP transactions data
+      const mockAPTransactions = [
+        {
+          id: 1,
+          poNumber: "PO-2025-001",
+          vendorName: "Steel Supply Co",
+          amount: 15750.00,
+          date: "2025-01-15",
+          status: "paid"
+        },
+        {
+          id: 2,
+          poNumber: "PO-2025-002",
+          vendorName: "Machine Parts Inc",
+          amount: 8920.50,
+          date: "2025-01-18",
+          status: "pending"
+        },
+        {
+          id: 3,
+          poNumber: "PO-2025-003",
+          vendorName: "Tool & Die Works",
+          amount: 12300.75,
+          date: "2025-01-20",
+          status: "overdue"
+        },
+        {
+          id: 4,
+          poNumber: "PO-2025-004",
+          vendorName: "Precision Manufacturing",
+          amount: 22150.00,
+          date: "2025-01-22",
+          status: "paid"
+        },
+        {
+          id: 5,
+          poNumber: "PO-2025-005",
+          vendorName: "Industrial Supplies LLC",
+          amount: 5690.25,
+          date: "2025-01-25",
+          status: "pending"
+        }
+      ];
+
+      // Filter by date range if provided
+      let filteredTransactions = mockAPTransactions;
+      if (dateFrom && dateTo) {
+        filteredTransactions = mockAPTransactions.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= new Date(dateFrom) && txDate <= new Date(dateTo);
+        });
+      }
+
+      res.json(filteredTransactions);
+    } catch (error) {
+      console.error("AP transactions error:", error);
+      res.status(500).json({ error: "Failed to fetch AP transactions" });
+    }
+  });
+
+  app.get("/api/finance/ar", async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.query;
+      
+      // Mock AR transactions data
+      const mockARTransactions = [
+        {
+          id: 1,
+          orderId: "AG001",
+          customerName: "Acme Manufacturing",
+          amount: 18500.00,
+          date: "2025-01-10",
+          terms: "Net 30",
+          status: "paid"
+        },
+        {
+          id: 2,
+          orderId: "AG002",
+          customerName: "Beta Industries",
+          amount: 12750.50,
+          date: "2025-01-12",
+          terms: "prepaid",
+          status: "paid"
+        },
+        {
+          id: 3,
+          orderId: "AG003",
+          customerName: "Gamma Corporation",
+          amount: 24800.25,
+          date: "2025-01-15",
+          terms: "Net 30",
+          status: "pending"
+        },
+        {
+          id: 4,
+          orderId: "AG004",
+          customerName: "Delta Systems",
+          amount: 9320.75,
+          date: "2025-01-18",
+          terms: "Net 60",
+          status: "overdue"
+        },
+        {
+          id: 5,
+          orderId: "AG005",
+          customerName: "Echo Technologies",
+          amount: 16450.00,
+          date: "2025-01-20",
+          terms: "prepaid",
+          status: "paid"
+        }
+      ];
+
+      // Filter by date range if provided
+      let filteredTransactions = mockARTransactions;
+      if (dateFrom && dateTo) {
+        filteredTransactions = mockARTransactions.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= new Date(dateFrom) && txDate <= new Date(dateTo);
+        });
+      }
+
+      res.json(filteredTransactions);
+    } catch (error) {
+      console.error("AR transactions error:", error);
+      res.status(500).json({ error: "Failed to fetch AR transactions" });
+    }
+  });
+
+  app.get("/api/finance/cogs", async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.query;
+      
+      // Mock COGS data
+      const mockCOGSData = {
+        standardCost: 125000.00,
+        actualCost: 132500.00,
+        breakdown: [
+          {
+            category: "Raw Materials",
+            standard: 45000.00,
+            actual: 47500.00
+          },
+          {
+            category: "Direct Labor",
+            standard: 35000.00,
+            actual: 38200.00
+          },
+          {
+            category: "Manufacturing Overhead",
+            standard: 25000.00,
+            actual: 26800.00
+          },
+          {
+            category: "Quality Control",
+            standard: 8000.00,
+            actual: 8500.00
+          },
+          {
+            category: "Packaging & Shipping",
+            standard: 7000.00,
+            actual: 6800.00
+          },
+          {
+            category: "Utilities",
+            standard: 5000.00,
+            actual: 4700.00
+          }
+        ]
+      };
+
+      res.json(mockCOGSData);
+    } catch (error) {
+      console.error("COGS data error:", error);
+      res.status(500).json({ error: "Failed to fetch COGS data" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

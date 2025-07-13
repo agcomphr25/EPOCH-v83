@@ -507,8 +507,8 @@ export class DatabaseStorage implements IStorage {
     // Update inventory item quantity when scan is recorded
     const item = await this.getInventoryItemByCode(data.itemCode);
     if (item) {
-      // Increase on-hand quantity by 1 for each scan
-      const newOnHand = item.onHand + 1;
+      // Increase on-hand quantity by the scanned quantity
+      const newOnHand = item.onHand + data.quantity;
       const newAvailable = newOnHand - item.committed;
       
       await db.update(inventoryItems)

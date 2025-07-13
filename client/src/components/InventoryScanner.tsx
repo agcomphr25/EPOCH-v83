@@ -16,6 +16,7 @@ export default function InventoryScanner() {
   
   const [formData, setFormData] = useState({
     itemCode: '',
+    quantity: '1',
     expirationDate: '',
     manufactureDate: '',
     lotNumber: '',
@@ -46,6 +47,7 @@ export default function InventoryScanner() {
       toast.success('Scan recorded ✔️');
       setFormData({
         itemCode: '',
+        quantity: '1',
         expirationDate: '',
         manufactureDate: '',
         lotNumber: '',
@@ -53,6 +55,7 @@ export default function InventoryScanner() {
         technicianId: '',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/scans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
     },
     onError: () => toast.error('Error recording scan ❗'),
   });
@@ -68,7 +71,13 @@ export default function InventoryScanner() {
       toast.error('Item code is required');
       return;
     }
-    scanMutation.mutate(formData);
+    
+    const submitData = {
+      ...formData,
+      quantity: parseInt(formData.quantity) || 1
+    };
+    
+    scanMutation.mutate(submitData);
   }
 
   return (
@@ -81,16 +90,30 @@ export default function InventoryScanner() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="itemCode">Scanned Code</Label>
-            <Input
-              id="itemCode"
-              name="itemCode"
-              value={formData.itemCode}
-              onChange={handleChange}
-              className="bg-gray-50"
-              placeholder="Scan or enter item code"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="itemCode">Scanned Code</Label>
+              <Input
+                id="itemCode"
+                name="itemCode"
+                value={formData.itemCode}
+                onChange={handleChange}
+                className="bg-gray-50"
+                placeholder="Scan or enter item code"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quantity">Quantity</Label>
+              <Input
+                id="quantity"
+                name="quantity"
+                type="number"
+                min="1"
+                value={formData.quantity}
+                onChange={handleChange}
+                placeholder="Enter quantity"
+              />
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

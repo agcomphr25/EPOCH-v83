@@ -160,6 +160,7 @@ export const inventoryItems = pgTable("inventory_items", {
 export const inventoryScans = pgTable("inventory_scans", {
   id: serial("id").primaryKey(),
   itemCode: text("item_code").notNull(),
+  quantity: integer("quantity").default(1).notNull(),
   expirationDate: date("expiration_date"),
   manufactureDate: date("manufacture_date"),
   lotNumber: text("lot_number"),
@@ -347,6 +348,7 @@ export const insertInventoryScanSchema = createInsertSchema(inventoryScans).omit
   scannedAt: true,
 }).extend({
   itemCode: z.string().min(1, "Item code is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1").default(1),
   expirationDate: z.coerce.date().optional().nullable(),
   manufactureDate: z.coerce.date().optional().nullable(),
   lotNumber: z.string().optional().nullable(),

@@ -837,8 +837,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry> {
+    // Normalize the date to YYYY-MM-DD format if provided
+    const normalizedData = data.date ? {
+      ...data,
+      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
+    } : data;
+    
     const [entry] = await db.update(timeClockEntries)
-      .set(data)
+      .set(normalizedData)
       .where(eq(timeClockEntries.id, id))
       .returning();
     return entry;

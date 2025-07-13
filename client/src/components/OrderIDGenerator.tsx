@@ -18,7 +18,10 @@ export function OrderIDGenerator() {
   const [generatedP2Serial, setGeneratedP2Serial] = useState("");
 
   const handleGenerateP1 = () => {
-    const date = new Date(p1Date);
+    // Parse date string directly to avoid timezone issues
+    const [year, month, day] = p1Date.split('-').map(Number);
+    const date = new Date(year, month - 1, day); // month is 0-indexed
+    console.log('Date parsing:', { p1Date, year, month, day, parsedDate: date });
     const newId = generateP1OrderId(date, lastP1Id.trim());
     console.log('Generated P1 ID:', newId);
     setGeneratedP1Id(newId);

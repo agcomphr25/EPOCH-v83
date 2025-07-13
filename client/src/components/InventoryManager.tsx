@@ -171,172 +171,128 @@ export default function InventoryManager() {
     return { status: 'In Stock', color: 'success' };
   };
 
-  const FormContent = () => {
-    const [localFormData, setLocalFormData] = useState(formData);
-
-    React.useEffect(() => {
-      setLocalFormData(formData);
-    }, [formData]);
-
-    const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const { name, value } = e.target;
-      setLocalFormData(prev => ({ ...prev, [name]: value }));
-      setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleLocalSelectChange = (name: string, value: string) => {
-      setLocalFormData(prev => ({ ...prev, [name]: value }));
-      setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleLocalSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      
-      if (!localFormData.code || !localFormData.name || !localFormData.category) {
-        toast.error('Please fill in all required fields');
-        return;
-      }
-
-      const submitData = {
-        code: localFormData.code,
-        name: localFormData.name,
-        description: localFormData.description,
-        category: localFormData.category,
-        onHand: parseInt(localFormData.onHand) || 0,
-        committed: parseInt(localFormData.committed) || 0,
-        reorderPoint: parseInt(localFormData.reorderPoint) || 0,
-      };
-
-      if (editingItem) {
-        updateMutation.mutate({ id: editingItem.id, data: submitData });
-      } else {
-        createMutation.mutate(submitData);
-      }
-    };
-
-    return (
-      <form onSubmit={handleLocalSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="code">Item Code *</Label>
-            <Input
-              id="code"
-              name="code"
-              value={localFormData.code}
-              onChange={handleLocalChange}
-              placeholder="Enter item code"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="name">Item Name *</Label>
-            <Input
-              id="name"
-              name="name"
-              value={localFormData.name}
-              onChange={handleLocalChange}
-              placeholder="Enter item name"
-              required
-            />
-          </div>
-        </div>
-
+  const FormContent = React.memo(() => (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="description">Description</Label>
-          <Textarea
-            id="description"
-            name="description"
-            value={localFormData.description}
-            onChange={handleLocalChange}
-            placeholder="Enter item description"
-            rows={3}
+          <Label htmlFor="code">Item Code *</Label>
+          <Input
+            id="code"
+            name="code"
+            value={formData.code}
+            onChange={handleChange}
+            placeholder="Enter item code"
+            required
           />
         </div>
-
         <div>
-          <Label htmlFor="category">Category *</Label>
-          <Select 
-            value={localFormData.category} 
-            onValueChange={(value) => handleLocalSelectChange('category', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label htmlFor="name">Item Name *</Label>
+          <Input
+            id="name"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="Enter item name"
+            required
+          />
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label htmlFor="onHand">On Hand</Label>
-            <Input
-              id="onHand"
-              name="onHand"
-              type="number"
-              min="0"
-              value={localFormData.onHand}
-              onChange={handleLocalChange}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <Label htmlFor="committed">Committed</Label>
-            <Input
-              id="committed"
-              name="committed"
-              type="number"
-              min="0"
-              value={localFormData.committed}
-              onChange={handleLocalChange}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <Label htmlFor="reorderPoint">Reorder Point</Label>
-            <Input
-              id="reorderPoint"
-              name="reorderPoint"
-              type="number"
-              min="0"
-              value={localFormData.reorderPoint}
-              onChange={handleLocalChange}
-              placeholder="0"
-            />
-          </div>
-        </div>
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          placeholder="Enter item description"
+          rows={3}
+        />
+      </div>
 
-        <div className="flex justify-end space-x-2">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={() => {
-              if (editingItem) {
-                setIsEditOpen(false);
-                setEditingItem(null);
-              } else {
-                setIsCreateOpen(false);
-              }
-              resetForm();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {editingItem ? 'Update' : 'Create'} Item
-          </Button>
+      <div>
+        <Label htmlFor="category">Category *</Label>
+        <Select 
+          value={formData.category} 
+          onValueChange={(value) => handleSelectChange('category', value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((category) => (
+              <SelectItem key={category} value={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label htmlFor="onHand">On Hand</Label>
+          <Input
+            id="onHand"
+            name="onHand"
+            type="number"
+            min="0"
+            value={formData.onHand}
+            onChange={handleChange}
+            placeholder="0"
+          />
         </div>
-      </form>
-    );
-  };
+        <div>
+          <Label htmlFor="committed">Committed</Label>
+          <Input
+            id="committed"
+            name="committed"
+            type="number"
+            min="0"
+            value={formData.committed}
+            onChange={handleChange}
+            placeholder="0"
+          />
+        </div>
+        <div>
+          <Label htmlFor="reorderPoint">Reorder Point</Label>
+          <Input
+            id="reorderPoint"
+            name="reorderPoint"
+            type="number"
+            min="0"
+            value={formData.reorderPoint}
+            onChange={handleChange}
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end space-x-2">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => {
+            if (editingItem) {
+              setIsEditOpen(false);
+              setEditingItem(null);
+            } else {
+              setIsCreateOpen(false);
+            }
+            resetForm();
+          }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={createMutation.isPending || updateMutation.isPending}
+        >
+          {editingItem ? 'Update' : 'Create'} Item
+        </Button>
+      </div>
+    </form>
+  ));
 
   return (
     <div className="space-y-6">

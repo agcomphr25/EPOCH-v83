@@ -46,7 +46,7 @@ export default function FormBuilderAdmin() {
 
   // Mutations
   const createFormMutation = useMutation({
-    mutationFn: (data: { name: string; description: string }) => 
+    mutationFn: (data: { name: string; description: string; fields: FormField[] }) => 
       apiRequest('/api/forms', { method: 'POST', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/forms'] });
@@ -80,7 +80,11 @@ export default function FormBuilderAdmin() {
   // Form handlers
   const saveNewForm = () => {
     if (!newForm.name) return toast.error('Name required');
-    createFormMutation.mutate(newForm);
+    createFormMutation.mutate({
+      name: newForm.name,
+      description: newForm.description,
+      fields: []
+    });
   };
 
   const deleteForm = (id: number) => {

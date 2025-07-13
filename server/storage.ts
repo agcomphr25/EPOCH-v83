@@ -755,6 +755,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(timeClockEntries)
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
       .limit(1);
     
     if (!entry) {
@@ -777,6 +778,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(timeClockEntries)
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
       .limit(1);
     
     if (existing) {
@@ -803,6 +805,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(timeClockEntries)
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .orderBy(desc(timeClockEntries.id))
       .limit(1);
     
     if (existing) {

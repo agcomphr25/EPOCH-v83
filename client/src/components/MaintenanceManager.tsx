@@ -4,14 +4,60 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Calendar, Clock, Settings, Plus, Wrench, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { insertMaintenanceScheduleSchema } from '@shared/schema';
+import { z } from 'zod';
 import type { MaintenanceSchedule, MaintenanceLog } from '@shared/schema';
 
 export default function MaintenanceManager() {
   const [activeTab, setActiveTab] = useState("schedules");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const form = useForm<z.infer<typeof insertMaintenanceScheduleSchema>>({
+    resolver: zodResolver(insertMaintenanceScheduleSchema),
+    defaultValues: {
+      equipment: '',
+      frequency: 'QUARTERLY',
+      startDate: new Date(),
+      description: '',
+      isActive: true,
+    },
+  });
+
+  const createScheduleMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertMaintenanceScheduleSchema>) => {
+      const response = await fetch('/api/maintenance-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create maintenance schedule');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/maintenance-schedules'] });
+      toast({ title: 'Maintenance schedule created successfully' });
+      setIsModalOpen(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({ title: 'Error creating maintenance schedule', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const onSubmit = (data: z.infer<typeof insertMaintenanceScheduleSchema>) => {
+    createScheduleMutation.mutate(data);
+  };
 
   // Fetch maintenance schedules
   const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
@@ -99,10 +145,101 @@ export default function MaintenanceManager() {
           <h1 className="text-3xl font-bold text-gray-900">Preventive Maintenance</h1>
           <p className="text-gray-600 mt-2">Manage equipment maintenance schedules and logs</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Schedule
-        </Button>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Schedule
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create New Maintenance Schedule</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="equipment"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Equipment</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter equipment name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="frequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frequency</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="ANNUAL">Annual</SelectItem>
+                          <SelectItem value="SEMIANNUAL">Semi-Annual</SelectItem>
+                          <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                          <SelectItem value="BIWEEKLY">Bi-Weekly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value}
+                          onChange={(e) => field.onChange(new Date(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Enter maintenance description" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createScheduleMutation.isPending}>
+                    {createScheduleMutation.isPending ? 'Creating...' : 'Create'}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Alert for overdue maintenance */}

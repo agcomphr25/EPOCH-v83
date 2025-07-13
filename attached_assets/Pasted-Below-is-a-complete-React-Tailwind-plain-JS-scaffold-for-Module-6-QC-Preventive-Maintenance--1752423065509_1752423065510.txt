@@ -1,0 +1,407 @@
+Below is a complete React + Tailwind + plain-JS scaffold for Module 6: QC & Preventive Maintenance. Each file is fully implemented, with inline comments explaining fetch calls, state management, and date calculations. You can copy each snippet into your src/ folder as indicated.
+
+js
+Copy
+Edit
+// src/utils/qcDefinitions.js
+import axios from 'axios';
+
+/**
+ * Fetch QC field definitions for a given line, department, and final-step flag.
+ * @param {'P1'|'P2'} line
+ * @param {string} department
+ * @param {boolean} final
+ * @returns {Promise<Array<{ key: string, label: string, type: 'checkbox'|'number'|'text', required: boolean }>>}
+ */
+export async function fetchQCFields(line, department, final) {
+  const response = await axios.get('/api/qc-definitions', {
+    params: { line, department, final },
+  });
+  // Assume the API returns an array of { key, label, type, required }
+  return response.data;
+}
+jsx
+Copy
+Edit
+// src/components/QCInspectionForm.jsx
+import React, { useEffect, useState, useRef } from 'react';
+import { fetchQCFields } from '../utils/qcDefinitions';
+import SignatureCanvas from 'react-signature-canvas';
+import toast from 'react-hot-toast';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
+export default function QCInspectionForm({ line, department, sku, final }) {
+  const [fields, setFields] = useState([]);
+  const [values, setValues] = useState({});
+  const sigCanvas = useRef(null);
+  const navigate = useNavigate();
+
+  // Load field definitions on mount
+  useEffect(() => {
+    fetchQCFields(line, department, final)
+      .then(defs => {
+        setFields(defs);
+        // Initialize values state
+        const initial = {};
+        defs.forEach(f => {
+          initial[f.key] = f.type === 'checkbox' ? false : '';
+        });
+        setValues(initial);
+      })
+      .catch(err => {
+        console.error(err);
+        toast.error('Failed to load QC fields');
+      });
+  }, [line, department, final]);
+
+  const handleChange = (key, val) => {
+    setValues(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    const payload = {
+      line,
+      department,
+      sku,
+      final,
+      data: values,
+      signature: final && sigCanvas.current
+        ? sigCanvas.current.getTrimmedCanvas().toDataURL()
+        : undefined,
+    };
+    try {
+      await axios.post('/api/qc-submissions', payload);
+      toast.success('QC submission successful');
+      navigate('/qc-dashboard');
+    } catch (err) {
+      console.error(err);
+      toast.error('QC submission failed');
+    }
+  };
+
+  return (
+    <form className="p-4 grid gap-4" onSubmit={handleSubmit}>
+      {fields.map(f => (
+        <div key={f.key} className="flex items-center space-x-2">
+          <label className="font-medium">
+            {f.label}{f.required && <span className="text-red-500">*</span>}
+          </label>
+          {f.type === 'checkbox' && (
+            <input
+              type="checkbox"
+              checked={values[f.key]}
+              onChange={e => handleChange(f.key, e.target.checked)}
+            />
+          )}
+          {f.type === 'number' && (
+            <input
+              type="number"
+              required={f.required}
+              value={values[f.key]}
+              onChange={e => handleChange(f.key, e.target.value)}
+              className="border rounded p-1"
+            />
+          )}
+          {f.type === 'text' && (
+            <input
+              type="text"
+              required={f.required}
+              value={values[f.key]}
+              onChange={e => handleChange(f.key, e.target.value)}
+              className="border rounded p-1"
+            />
+          )}
+        </div>
+      ))}
+
+      {final && (
+        <>
+          {/* Digital signature canvas */}
+          <div className="border rounded">
+            <SignatureCanvas
+              ref={sigCanvas}
+              canvasProps={{ className: 'w-full h-40' }}
+            />
+          </div>
+          {/* Pass/Fail summary */}
+          <div className="flex space-x-4">
+            <button
+              type="button"
+              onClick={() => handleChange('summary', 'PASS')}
+              className="bg-green-500 text-white px-4 py-2 rounded"
+            >
+              Pass
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChange('summary', 'FAIL')}
+              className="bg-red-500 text-white px-4 py-2 rounded"
+            >
+              Fail
+            </button>
+          </div>
+        </>
+      )}
+
+      <button
+        type="submit"
+        className="bg-blue-600 text-white py-2 rounded mt-4"
+      >
+        Submit QC
+      </button>
+    </form>
+  );
+}
+jsx
+Copy
+Edit
+// src/components/QCDashboard.jsx
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { isBefore, parseISO } from 'date-fns';
+
+export default function QCDashboard() {
+  const [tasks, setTasks] = useState([]);
+  const navigate = useNavigate();
+
+  // Fetch pending QC submissions on mount
+  useEffect(() => {
+    axios
+      .get('/api/qc-submissions', { params: { status: 'pending' } })
+      .then(res => setTasks(res.data))
+      .catch(err => {
+        console.error(err);
+        toast.error('Failed to load pending QC items');
+      });
+  }, []);
+
+  const today = new Date();
+
+  return (
+    <div className="p-4">
+      <table className="table-auto w-full border-collapse">
+        <thead>
+          <tr>
+            {['Order ID', 'Line', 'Dept', 'SKU', 'Due Date', 'Actions'].map(h => (
+              <th key={h} className="border p-2 text-left">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map(item => {
+            const overdue = isBefore(parseISO(item.dueDate), today);
+            return (
+              <tr key={item.id} className={overdue ? 'bg-red-100' : ''}>
+                <td className="border p-2">{item.orderId}</td>
+                <td className="border p-2">{item.line}</td>
+                <td className="border p-2">{item.department}</td>
+                <td className="border p-2">{item.sku}</td>
+                <td className="border p-2">{item.dueDate}</td>
+                <td className="border p-2">
+                  <button
+                    onClick={() => navigate(`/qc/${item.id}`, { state: item })}
+                    className="bg-blue-500 text-white px-3 py-1 rounded"
+                  >
+                    Inspect
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+js
+Copy
+Edit
+// src/utils/maintenanceUtils.js
+import { addYears, addMonths, addWeeks } from 'date-fns';
+
+/**
+ * Calculate the next due date given the last completed date and frequency.
+ * @param {string} lastCompleted ISO date string
+ * @param {'ANNUAL'|'SEMIANNUAL'|'QUARTERLY'|'BIWEEKLY'} frequency
+ * @returns {string} ISO date string of next due
+ */
+export function calculateNextDueDate(lastCompleted, frequency) {
+  const date = new Date(lastCompleted);
+  let next;
+  switch (frequency) {
+    case 'ANNUAL':
+      next = addYears(date, 1);
+      break;
+    case 'SEMIANNUAL':
+      next = addMonths(date, 6);
+      break;
+    case 'QUARTERLY':
+      next = addMonths(date, 3);
+      break;
+    case 'BIWEEKLY':
+      next = addWeeks(date, 2);
+      break;
+    default:
+      next = date;
+  }
+  return next.toISOString();
+}
+js
+Copy
+Edit
+// src/hooks/useMaintenanceSchedules.js
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { calculateNextDueDate } from '../utils/maintenanceUtils';
+
+export function useMaintenanceSchedules() {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [schedulesRes, logsRes] = await Promise.all([
+        axios.get('/api/maintenance-schedules'),
+        axios.get('/api/maintenance-logs'),
+      ]);
+      const schedules = schedulesRes.data;
+      const logs = logsRes.data;
+      // Merge schedules + logs
+      const merged = schedules.map(sch => {
+        const lastLog = logs
+          .filter(log => log.scheduleId === sch.id)
+          .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0];
+        const lastCompleted = lastLog ? lastLog.completedAt : sch.startDate;
+        return {
+          id: sch.id,
+          equipment: sch.equipment,
+          frequency: sch.frequency,
+          lastCompleted,
+          nextDue: calculateNextDueDate(lastCompleted, sch.frequency),
+        };
+      });
+      setTasks(merged);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return {
+    tasks,
+    loading,
+    refresh: fetchData,
+  };
+}
+jsx
+Copy
+Edit
+// src/components/PMScheduler.jsx
+import React from 'react';
+import { useMaintenanceSchedules } from '../hooks/useMaintenanceSchedules';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import { format } from 'date-fns';
+
+export default function PMScheduler() {
+  const { tasks, loading, refresh } = useMaintenanceSchedules();
+
+  const handleMarkCompleted = async scheduleId => {
+    try {
+      await axios.post('/api/maintenance-logs', {
+        scheduleId,
+        completedAt: new Date().toISOString(),
+      });
+      toast.success('Maintenance logged');
+      refresh();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to mark completed');
+    }
+  };
+
+  if (loading) {
+    return <div className="p-4">Loading maintenance tasks...</div>;
+  }
+
+  return (
+    <div className="p-4">
+      <table className="table-auto w-full border-collapse">
+        <thead>
+          <tr>
+            {['Equipment', 'Frequency', 'Last Completed', 'Next Due', 'Actions'].map(h => (
+              <th key={h} className="border p-2 text-left">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map(t => (
+            <tr key={t.id}>
+              <td className="border p-2">{t.equipment}</td>
+              <td className="border p-2">{t.frequency}</td>
+              <td className="border p-2">
+                {format(new Date(t.lastCompleted), 'yyyy-MM-dd')}
+              </td>
+              <td className="border p-2">
+                {format(new Date(t.nextDue), 'yyyy-MM-dd')}
+              </td>
+              <td className="border p-2">
+                <button
+                  onClick={() => handleMarkCompleted(t.id)}
+                  className="bg-green-600 text-white px-3 py-1 rounded"
+                >
+                  Mark Completed
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+Dependencies (install once):
+
+bash
+Copy
+Edit
+npm install axios react-hot-toast react-signature-canvas date-fns
+Usage in your Routes (e.g. in App.jsx):
+
+jsx
+Copy
+Edit
+import { Toaster } from 'react-hot-toast';
+import QCInspectionForm from './components/QCInspectionForm';
+import QCDashboard from './components/QCDashboard';
+import PMScheduler from './components/PMScheduler';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Toaster /> {/* for toast notifications */}
+      <Routes>
+        <Route path="/qc-dashboard" element={<QCDashboard />} />
+        <Route
+          path="/qc/:id"
+          element={<QCInspectionForm line="P1" department="Layup" sku="AN214" final={false} />}
+        />
+        <Route path="/maintenance" element={<PMScheduler />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;

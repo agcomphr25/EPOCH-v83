@@ -15,7 +15,11 @@ import {
   insertFormSubmissionSchema,
   insertInventoryItemSchema,
   insertInventoryScanSchema,
-  insertEmployeeSchema
+  insertEmployeeSchema,
+  insertQcDefinitionSchema,
+  insertQcSubmissionSchema,
+  insertMaintenanceScheduleSchema,
+  insertMaintenanceLogSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -697,6 +701,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create employee error:", error);
       res.status(400).json({ error: "Invalid employee data" });
+    }
+  });
+
+  // QC Definition routes
+  app.get("/api/qc-definitions", async (req, res) => {
+    try {
+      const { line, department, final } = req.query;
+      const definitions = await storage.getQCDefinitions(
+        line as string, 
+        department as string, 
+        final === 'true'
+      );
+      res.json(definitions);
+    } catch (error) {
+      console.error("Get QC definitions error:", error);
+      res.status(500).json({ error: "Failed to get QC definitions" });
+    }
+  });
+
+  app.post("/api/qc-definitions", async (req, res) => {
+    try {
+      const validatedData = insertQcDefinitionSchema.parse(req.body);
+      const definition = await storage.createQCDefinition(validatedData);
+      res.status(201).json(definition);
+    } catch (error) {
+      console.error("Create QC definition error:", error);
+      res.status(400).json({ error: "Invalid QC definition data" });
+    }
+  });
+
+  // QC Submission routes
+  app.get("/api/qc-submissions", async (req, res) => {
+    try {
+      const { status } = req.query;
+      const submissions = await storage.getQCSubmissions(status as string);
+      res.json(submissions);
+    } catch (error) {
+      console.error("Get QC submissions error:", error);
+      res.status(500).json({ error: "Failed to get QC submissions" });
+    }
+  });
+
+  app.post("/api/qc-submissions", async (req, res) => {
+    try {
+      const validatedData = insertQcSubmissionSchema.parse(req.body);
+      const submission = await storage.createQCSubmission(validatedData);
+      res.status(201).json(submission);
+    } catch (error) {
+      console.error("Create QC submission error:", error);
+      res.status(400).json({ error: "Invalid QC submission data" });
+    }
+  });
+
+  app.get("/api/qc-submissions/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const submission = await storage.getQCSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ error: "QC submission not found" });
+      }
+      res.json(submission);
+    } catch (error) {
+      console.error("Get QC submission error:", error);
+      res.status(500).json({ error: "Failed to get QC submission" });
+    }
+  });
+
+  // Maintenance Schedule routes
+  app.get("/api/maintenance-schedules", async (req, res) => {
+    try {
+      const schedules = await storage.getAllMaintenanceSchedules();
+      res.json(schedules);
+    } catch (error) {
+      console.error("Get maintenance schedules error:", error);
+      res.status(500).json({ error: "Failed to get maintenance schedules" });
+    }
+  });
+
+  app.post("/api/maintenance-schedules", async (req, res) => {
+    try {
+      const validatedData = insertMaintenanceScheduleSchema.parse(req.body);
+      const schedule = await storage.createMaintenanceSchedule(validatedData);
+      res.status(201).json(schedule);
+    } catch (error) {
+      console.error("Create maintenance schedule error:", error);
+      res.status(400).json({ error: "Invalid maintenance schedule data" });
+    }
+  });
+
+  // Maintenance Log routes
+  app.get("/api/maintenance-logs", async (req, res) => {
+    try {
+      const logs = await storage.getAllMaintenanceLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error("Get maintenance logs error:", error);
+      res.status(500).json({ error: "Failed to get maintenance logs" });
+    }
+  });
+
+  app.post("/api/maintenance-logs", async (req, res) => {
+    try {
+      const validatedData = insertMaintenanceLogSchema.parse(req.body);
+      const log = await storage.createMaintenanceLog(validatedData);
+      res.status(201).json(log);
+    } catch (error) {
+      console.error("Create maintenance log error:", error);
+      res.status(400).json({ error: "Invalid maintenance log data" });
     }
   });
 

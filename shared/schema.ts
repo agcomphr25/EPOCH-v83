@@ -178,7 +178,56 @@ export const employees = pgTable("employees", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// QC and Preventive Maintenance Tables
+export const qcDefinitions = pgTable("qc_definitions", {
+  id: serial("id").primaryKey(),
+  line: text("line").notNull(), // P1, P2
+  department: text("department").notNull(),
+  final: boolean("final").default(false),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(), // checkbox, number, text
+  required: boolean("required").default(false),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
+export const qcSubmissions = pgTable("qc_submissions", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  line: text("line").notNull(),
+  department: text("department").notNull(),
+  sku: text("sku").notNull(),
+  final: boolean("final").default(false),
+  data: jsonb("data").notNull(),
+  signature: text("signature"), // base64 encoded signature
+  summary: text("summary"), // PASS, FAIL
+  status: text("status").default("pending"), // pending, completed
+  dueDate: timestamp("due_date"),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+  submittedBy: text("submitted_by"),
+});
+
+export const maintenanceSchedules = pgTable("maintenance_schedules", {
+  id: serial("id").primaryKey(),
+  equipment: text("equipment").notNull(),
+  frequency: text("frequency").notNull(), // ANNUAL, SEMIANNUAL, QUARTERLY, BIWEEKLY
+  startDate: timestamp("start_date").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const maintenanceLogs = pgTable("maintenance_logs", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").references(() => maintenanceSchedules.id).notNull(),
+  completedAt: timestamp("completed_at").notNull(),
+  completedBy: text("completed_by"),
+  notes: text("notes"),
+  nextDueDate: timestamp("next_due_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -366,7 +415,59 @@ export const insertEmployeeSchema = createInsertSchema(employees).omit({
   isActive: z.boolean().default(true),
 });
 
+export const insertQcDefinitionSchema = createInsertSchema(qcDefinitions).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  line: z.enum(['P1', 'P2']),
+  department: z.string().min(1, "Department is required"),
+  final: z.boolean().default(false),
+  key: z.string().min(1, "Key is required"),
+  label: z.string().min(1, "Label is required"),
+  type: z.enum(['checkbox', 'number', 'text']),
+  required: z.boolean().default(false),
+  sortOrder: z.number().default(0),
+  isActive: z.boolean().default(true),
+});
 
+export const insertQcSubmissionSchema = createInsertSchema(qcSubmissions).omit({
+  id: true,
+  submittedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  line: z.enum(['P1', 'P2']),
+  department: z.string().min(1, "Department is required"),
+  sku: z.string().min(1, "SKU is required"),
+  final: z.boolean().default(false),
+  data: z.record(z.any()),
+  signature: z.string().optional().nullable(),
+  summary: z.enum(['PASS', 'FAIL']).optional().nullable(),
+  status: z.string().default("pending"),
+  dueDate: z.coerce.date().optional().nullable(),
+  submittedBy: z.string().optional().nullable(),
+});
+
+export const insertMaintenanceScheduleSchema = createInsertSchema(maintenanceSchedules).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  equipment: z.string().min(1, "Equipment is required"),
+  frequency: z.enum(['ANNUAL', 'SEMIANNUAL', 'QUARTERLY', 'BIWEEKLY']),
+  startDate: z.coerce.date(),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertMaintenanceLogSchema = createInsertSchema(maintenanceLogs).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  scheduleId: z.number().positive("Schedule ID is required"),
+  completedAt: z.coerce.date(),
+  completedBy: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  nextDueDate: z.coerce.date().optional().nullable(),
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -400,3 +501,11 @@ export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
+export type InsertQcDefinition = z.infer<typeof insertQcDefinitionSchema>;
+export type QcDefinition = typeof qcDefinitions.$inferSelect;
+export type InsertQcSubmission = z.infer<typeof insertQcSubmissionSchema>;
+export type QcSubmission = typeof qcSubmissions.$inferSelect;
+export type InsertMaintenanceSchedule = z.infer<typeof insertMaintenanceScheduleSchema>;
+export type MaintenanceSchedule = typeof maintenanceSchedules.$inferSelect;
+export type InsertMaintenanceLog = z.infer<typeof insertMaintenanceLogSchema>;
+export type MaintenanceLog = typeof maintenanceLogs.$inferSelect;

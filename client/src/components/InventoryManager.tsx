@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
@@ -326,68 +325,70 @@ export default function InventoryManager() {
           {isLoading ? (
             <div className="text-center py-8">Loading inventory items...</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>On Hand</TableHead>
-                  <TableHead>Committed</TableHead>
-                  <TableHead>Available</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => {
-                  const available = item.onHand - item.committed;
-                  const stockStatus = getStockStatus(item);
-                  
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.code}</TableCell>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell>{item.onHand}</TableCell>
-                      <TableCell>{item.committed}</TableCell>
-                      <TableCell>{available}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={stockStatus.color as 'default' | 'destructive' | 'secondary'}
-                          className={
-                            stockStatus.color === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                            stockStatus.color === 'success' ? 'bg-green-100 text-green-800' : ''
-                          }
-                        >
-                          {stockStatus.status === 'Low Stock' && <AlertTriangle className="h-3 w-3 mr-1" />}
-                          {stockStatus.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(item)}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-gray-200">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-200 px-4 py-2 text-left">Code</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Category</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">On Hand</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Committed</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Available</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const available = item.onHand - item.committed;
+                    const stockStatus = getStockStatus(item);
+                    
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="border border-gray-200 px-4 py-2 font-medium">{item.code}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.name}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.category}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.onHand}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.committed}</td>
+                        <td className="border border-gray-200 px-4 py-2">{available}</td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          <Badge 
+                            variant={stockStatus.color as 'default' | 'destructive' | 'secondary'}
+                            className={
+                              stockStatus.color === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                              stockStatus.color === 'success' ? 'bg-green-100 text-green-800' : ''
+                            }
                           >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                            {stockStatus.status === 'Low Stock' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                            {stockStatus.status}
+                          </Badge>
+                        </td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(item)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(item.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

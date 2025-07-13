@@ -35,6 +35,12 @@ export default function Navigation() {
       label: 'Inventory Dashboard',
       icon: Warehouse,
       description: 'View inventory overview'
+    },
+    {
+      path: '/inventory/manager',
+      label: 'Inventory Manager',
+      icon: Package,
+      description: 'Manage inventory items'
     }
   ];
 

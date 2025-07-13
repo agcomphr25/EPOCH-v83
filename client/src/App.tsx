@@ -18,6 +18,8 @@ import ReportPage from "./pages/ReportPage";
 import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
+import QCPage from "./pages/QCPage";
+import MaintenancePage from "./pages/MaintenancePage";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -42,6 +44,8 @@ function App() {
                 <Route path="/inventory/scanner" component={InventoryScannerPage} />
                 <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                 <Route path="/inventory/manager" component={InventoryManagerPage} />
+                <Route path="/qc" component={QCPage} />
+                <Route path="/maintenance" component={MaintenancePage} />
 
                 <Route component={NotFound} />
               </Switch>

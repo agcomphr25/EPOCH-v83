@@ -1,0 +1,102 @@
+You haven’t missed any of the React components themselves — everything you need for the QC and PM modules lives in:
+
+src/utils/qcDefinitions.js
+
+src/components/QCInspectionForm.jsx
+
+src/components/QCDashboard.jsx
+
+src/utils/maintenanceUtils.js
+
+src/hooks/useMaintenanceSchedules.js
+
+src/components/PMScheduler.jsx
+
+What you’ll also need on the “glue” (the usual boilerplate that Replit might not have generated for you) is:
+
+Your entry point (e.g. src/index.js), to render your <App />.
+
+An App.jsx (or App.js) that pulls in React-Router, the <Toaster /> and your routes.
+
+Tailwind setup (the tailwind.config.js, postcss.config.js and src/index.css import).
+
+1) src/index.js
+js
+Copy
+Edit
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css';                   // ← your Tailwind build
+import App from './App';
+
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
+);
+2) src/App.jsx
+jsx
+Copy
+Edit
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+
+import QCInspectionForm from './components/QCInspectionForm';
+import QCDashboard       from './components/QCDashboard';
+import PMScheduler       from './components/PMScheduler';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Toaster position="top-right" />
+      <Routes>
+        <Route path="/qc-dashboard" element={<QCDashboard />} />
+        <Route
+          path="/qc/:id"
+          element={
+            // you’ll probably grab line/department/sku/final
+            // from either state or an API before rendering,
+            // but for a static example:
+            <QCInspectionForm
+              line="P1"
+              department="Layup"
+              sku="AN214"
+              final={false}
+            />
+          }
+        />
+        <Route path="/maintenance" element={<PMScheduler />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+3) Tailwind setup
+tailwind.config.js
+js
+Copy
+Edit
+module.exports = {
+  content: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
+postcss.config.js
+js
+Copy
+Edit
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+src/index.css
+css
+Copy
+Edit
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

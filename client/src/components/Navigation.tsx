@@ -11,6 +11,7 @@ export default function Navigation() {
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
+  const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
 
   const navItems = [
     {
@@ -25,18 +26,7 @@ export default function Navigation() {
       icon: FilePenLine,
       description: 'Manage saved draft orders'
     },
-    {
-      path: '/qc',
-      label: 'Quality Control',
-      icon: Shield,
-      description: 'QC inspections and definitions'
-    },
-    {
-      path: '/maintenance',
-      label: 'Maintenance',
-      icon: Wrench,
-      description: 'Preventive maintenance schedules'
-    },
+
 
   ];
 
@@ -73,6 +63,21 @@ export default function Navigation() {
       label: 'Reports',
       icon: PieChart,
       description: 'View form submissions and reports'
+    }
+  ];
+
+  const qcMaintenanceItems = [
+    {
+      path: '/qc',
+      label: 'Quality Control',
+      icon: Shield,
+      description: 'QC inspections and definitions'
+    },
+    {
+      path: '/maintenance',
+      label: 'Maintenance',
+      icon: Wrench,
+      description: 'Preventive maintenance schedules'
     }
   ];
 
@@ -121,6 +126,7 @@ export default function Navigation() {
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
+  const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
@@ -134,10 +140,13 @@ export default function Navigation() {
     if (isInventoryActive) {
       setInventoryExpanded(true);
     }
+    if (isQcMaintenanceActive) {
+      setQcMaintenanceExpanded(true);
+    }
     if (isEmployeesActive) {
       setEmployeesExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isEmployeesActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -247,6 +256,50 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setInventoryExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* QC & Maintenance Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isQcMaintenanceActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isQcMaintenanceActive && "bg-primary text-white"
+                )}
+                onClick={() => setQcMaintenanceExpanded(!qcMaintenanceExpanded)}
+              >
+                <Shield className="h-4 w-4" />
+                QC & Maintenance
+                {qcMaintenanceExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {qcMaintenanceExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {qcMaintenanceItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setQcMaintenanceExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

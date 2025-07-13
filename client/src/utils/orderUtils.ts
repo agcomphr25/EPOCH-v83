@@ -79,19 +79,25 @@ export function generateP1OrderId(orderDate: Date, lastId: string): string {
 function getYearLetter(year: number): string {
   const yearsSince2025 = year - 2025;
   
+  console.log('Year calculation:', { year, yearsSince2025 });
+  
   if (yearsSince2025 < 0) {
     throw new Error('Year must be 2025 or later');
   }
   
   if (yearsSince2025 <= 21) {
     // 2025-2046: Single letters E-Z (2025=E, 2026=F, ..., 2046=Z)
-    return String.fromCharCode(69 + yearsSince2025); // 69 = 'E'
+    const letter = String.fromCharCode(69 + yearsSince2025); // 69 = 'E'
+    console.log('Single letter year:', letter);
+    return letter;
   } else {
     // 2047+: Double letters AA, AB, AC...
     const doubleLetterIndex = yearsSince2025 - 22; // 2047 = 0, 2048 = 1...
     const firstLetter = 'A';
     const secondLetter = String.fromCharCode(65 + doubleLetterIndex);
-    return firstLetter + secondLetter;
+    const result = firstLetter + secondLetter;
+    console.log('Double letter year:', result, 'doubleLetterIndex:', doubleLetterIndex);
+    return result;
   }
 }
 

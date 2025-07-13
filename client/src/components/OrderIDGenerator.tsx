@@ -8,7 +8,7 @@ import { generateP1OrderId, generateP2Serial } from "@/utils/orderUtils";
 
 export function OrderIDGenerator() {
   const [p1Date, setP1Date] = useState("2025-07-13");
-  const [lastP1Id, setLastP1Id] = useState("AG001");
+  const [lastP1Id, setLastP1Id] = useState("EG001");
   const [generatedP1Id, setGeneratedP1Id] = useState("");
   const [testResults, setTestResults] = useState<Array<{test: string, input: string, expected: string, actual: string, pass: boolean}>>([]);
 
@@ -32,27 +32,27 @@ export function OrderIDGenerator() {
   const runP1Tests = () => {
     const tests = [
       // Same month tests
-      { test: "Same month increment", date: "2025-07-15", lastId: "AG005", expected: "AG006" },
-      { test: "Same month from 999 to 1000", date: "2025-07-15", lastId: "AG999", expected: "AG1000" },
-      { test: "Same month high number", date: "2025-07-15", lastId: "AG1500", expected: "AG1501" },
+      { test: "Same month increment", date: "2025-07-15", lastId: "EG005", expected: "EG006" },
+      { test: "Same month from 999 to 1000", date: "2025-07-15", lastId: "EG999", expected: "EG1000" },
+      { test: "Same month high number", date: "2025-07-15", lastId: "EG1500", expected: "EG1501" },
       
       // Monthly reset tests
-      { test: "Month change reset", date: "2025-08-01", lastId: "AG999", expected: "AH001" },
-      { test: "Year change", date: "2026-01-01", lastId: "AL500", expected: "BA001" },
-      { test: "Different month reset", date: "2025-12-01", lastId: "AG100", expected: "AL001" },
+      { test: "Month change reset", date: "2025-08-01", lastId: "EG999", expected: "EH001" },
+      { test: "Year change", date: "2026-01-01", lastId: "EL500", expected: "FA001" },
+      { test: "Different month reset", date: "2025-12-01", lastId: "EG100", expected: "EL001" },
       
       // Year progression tests
-      { test: "2025 January", date: "2025-01-01", lastId: "", expected: "AA001" },
-      { test: "2026 January", date: "2026-01-01", lastId: "", expected: "BA001" },
-      { test: "2027 January", date: "2027-01-01", lastId: "", expected: "CA001" },
-      { test: "2047 January", date: "2047-01-01", lastId: "", expected: "WA001" },
-      { test: "2048 January", date: "2048-01-01", lastId: "", expected: "AAA001" },
-      { test: "2049 January", date: "2049-01-01", lastId: "", expected: "ABA001" },
+      { test: "2025 January", date: "2025-01-01", lastId: "", expected: "EA001" },
+      { test: "2026 January", date: "2026-01-01", lastId: "", expected: "FA001" },
+      { test: "2027 January", date: "2027-01-01", lastId: "", expected: "GA001" },
+      { test: "2046 January", date: "2046-01-01", lastId: "", expected: "ZA001" },
+      { test: "2047 January", date: "2047-01-01", lastId: "", expected: "AAA001" },
+      { test: "2048 January", date: "2048-01-01", lastId: "", expected: "ABA001" },
       
       // Edge cases
-      { test: "Empty lastId", date: "2025-07-15", lastId: "", expected: "AG001" },
-      { test: "Invalid lastId format", date: "2025-07-15", lastId: "INVALID", expected: "AG001" },
-      { test: "Old format lastId", date: "2025-07-15", lastId: "AP001", expected: "AG001" },
+      { test: "Empty lastId", date: "2025-07-15", lastId: "", expected: "EG001" },
+      { test: "Invalid lastId format", date: "2025-07-15", lastId: "INVALID", expected: "EG001" },
+      { test: "Old format lastId", date: "2025-07-15", lastId: "AP001", expected: "EG001" },
     ];
 
     const results = tests.map(({ test, date, lastId, expected }) => {

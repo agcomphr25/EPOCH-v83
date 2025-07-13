@@ -74,7 +74,7 @@ export function generateP1OrderId(orderDate: Date, lastId: string): string {
 }
 
 /**
- * Convert year to letter(s): 2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...
+ * Convert year to letter(s): 2025=E, 2026=F, ..., 2047=Z, 2048=AA, 2049=AB...
  */
 function getYearLetter(year: number): string {
   const yearsSince2025 = year - 2025;
@@ -83,12 +83,12 @@ function getYearLetter(year: number): string {
     throw new Error('Year must be 2025 or later');
   }
   
-  if (yearsSince2025 <= 22) {
-    // 2025-2047: Single letters A-W (skipping X, Y, Z for now)
-    return String.fromCharCode(65 + yearsSince2025);
+  if (yearsSince2025 <= 21) {
+    // 2025-2046: Single letters E-Z (2025=E, 2026=F, ..., 2046=Z)
+    return String.fromCharCode(69 + yearsSince2025); // 69 = 'E'
   } else {
-    // 2048+: Double letters AA, AB, AC...
-    const doubleLetterIndex = yearsSince2025 - 23; // 2048 = 0, 2049 = 1...
+    // 2047+: Double letters AA, AB, AC...
+    const doubleLetterIndex = yearsSince2025 - 22; // 2047 = 0, 2048 = 1...
     const firstLetter = 'A';
     const secondLetter = String.fromCharCode(65 + doubleLetterIndex);
     return firstLetter + secondLetter;

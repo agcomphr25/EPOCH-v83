@@ -22,6 +22,9 @@ export default function TimeClock({ employeeId, disableClockOut = false }: TimeC
   
   const { toast } = useToast();
 
+  // Debug logging
+  console.log('TimeClock component state:', { clockedIn, clockInTime, clockOutTime, loading });
+
   const handleClockIn = async () => {
     try {
       await clockIn();

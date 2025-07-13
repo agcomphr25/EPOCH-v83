@@ -39,7 +39,7 @@ export default function InventoryScanner() {
   }, [scannedCode]);
 
   const scanMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest('/api/inventory/scan', {
+    mutationFn: (data: any) => apiRequest('/api/inventory/scan', {
       method: 'POST',
       body: data
     }),

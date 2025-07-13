@@ -7,20 +7,9 @@ import { cn } from "@/lib/utils";
 export default function Navigation() {
   const [location] = useLocation();
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
+  const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
 
   const navItems = [
-    {
-      path: '/',
-      label: 'Order Management',
-      icon: FileText,
-      description: 'View orders and import historical data'
-    },
-    {
-      path: '/discounts',
-      label: 'Discount Management',
-      icon: TrendingDown,
-      description: 'Configure discounts and sales'
-    },
     {
       path: '/order-entry',
       label: 'Order Entry',
@@ -32,6 +21,21 @@ export default function Navigation() {
       label: 'Draft Orders',
       icon: FilePenLine,
       description: 'Manage saved draft orders'
+    }
+  ];
+
+  const verifiedModulesItems = [
+    {
+      path: '/',
+      label: 'Order Management',
+      icon: FileText,
+      description: 'View orders and import historical data'
+    },
+    {
+      path: '/discounts',
+      label: 'Discount Management',
+      icon: TrendingDown,
+      description: 'Configure discounts and sales'
     },
     {
       path: '/feature-manager',
@@ -63,6 +67,7 @@ export default function Navigation() {
   ];
 
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
+  const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
 
   // Auto-expand Forms & Reports when on those pages
   useEffect(() => {
@@ -70,6 +75,13 @@ export default function Navigation() {
       setFormsReportsExpanded(true);
     }
   }, [isFormsReportsActive]);
+
+  // Auto-expand Verified Modules when on those pages
+  useEffect(() => {
+    if (isVerifiedModulesActive) {
+      setVerifiedModulesExpanded(true);
+    }
+  }, [isVerifiedModulesActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -101,6 +113,50 @@ export default function Navigation() {
                 </Link>
               );
             })}
+            
+            {/* Verified Modules Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isVerifiedModulesActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isVerifiedModulesActive && "bg-primary text-white"
+                )}
+                onClick={() => setVerifiedModulesExpanded(!verifiedModulesExpanded)}
+              >
+                <Settings className="h-4 w-4" />
+                Verified Modules
+                {verifiedModulesExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {verifiedModulesExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {verifiedModulesItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setVerifiedModulesExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             
             {/* Forms & Reports Dropdown */}
             <div className="relative">
@@ -134,7 +190,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setFormsReportsExpanded(false)}
+                          onClick={() => setVerifiedModulesExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -180,6 +236,51 @@ export default function Navigation() {
                 </Link>
               );
             })}
+            
+            {/* Verified Modules in Mobile */}
+            <div className="relative">
+              <Button
+                variant={isVerifiedModulesActive ? "default" : "ghost"}
+                size="sm"
+                className={cn(
+                  "flex items-center gap-2 text-xs",
+                  isVerifiedModulesActive && "bg-primary text-white"
+                )}
+                onClick={() => setVerifiedModulesExpanded(!verifiedModulesExpanded)}
+              >
+                <Settings className="h-3 w-3" />
+                Verified Modules
+                {verifiedModulesExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+              </Button>
+              
+              {verifiedModulesExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
+                  {verifiedModulesItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setVerifiedModulesExpanded(false)}
+                        >
+                          <Icon className="h-3 w-3" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             
             {/* Forms & Reports in Mobile */}
             <div className="relative">

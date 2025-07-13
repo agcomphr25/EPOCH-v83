@@ -1,0 +1,186 @@
+3. Components
+src/components/InventoryScanner.jsx
+jsx
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import useScanner from '../hooks/useScanner';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+export default function InventoryScanner() {
+  const scannedCode = useScanner();
+  const [formData, setFormData] = useState({
+    code: '',
+    expirationDate: '',
+    manufactureDate: '',
+    lotNumber: '',
+    batchNumber: '',
+    technicianId: '',
+  });
+  const [technicians, setTechnicians] = useState([]);
+
+  // Load technicians
+  useEffect(() => {
+    axios.get('/api/employees?role=Receiving')
+      .then(r => setTechnicians(r.data))
+      .catch(err => console.error('Failed loading tech list:', err));
+  }, []);
+
+  // Auto-fill code on scan
+  useEffect(() => {
+    if (scannedCode) {
+      setFormData(fd => ({ ...fd, code: scannedCode }));
+    }
+  }, [scannedCode]);
+
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setFormData(fd => ({ ...fd, [name]: value }));
+  }
+
+  function handleSubmit() {
+    axios.post('/api/inventory/scan', formData)
+      .then(() => {
+        toast.success('Scan recorded ✔️');
+        setFormData({
+          code: '',
+          expirationDate: '',
+          manufactureDate: '',
+          lotNumber: '',
+          batchNumber: '',
+          technicianId: '',
+        });
+      })
+      .catch(() => toast.error('Error recording scan ❗'));
+  }
+
+  return (
+    <div className="p-6 space-y-4 border rounded-lg shadow-sm">
+      <h2 className="text-xl font-semibold">Inventory Scanner</h2>
+      <div>
+        <label className="block mb-1">Scanned Code</label>
+        <input
+          name="code"
+          value={formData.code}
+          readOnly
+          className="w-full border rounded px-2 py-1 bg-gray-50"
+        />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[
+          ['expirationDate','Expiration Date'],
+          ['manufactureDate','Manufacture Date'],
+          ['lotNumber','Lot Number'],
+          ['batchNumber','Batch Number'],
+        ].map(([field,label]) => (
+          <div key={field}>
+            <label className="block mb-1">{label}</label>
+            <input
+              type={field.includes('Date') ? 'date' : 'text'}
+              name={field}
+              value={formData[field]}
+              onChange={handleChange}
+              className="w-full border rounded px-2 py-1"
+            />
+          </div>
+        ))}
+        <div className="md:col-span-2">
+          <label className="block mb-1">Technician</label>
+          <select
+            name="technicianId"
+            value={formData.technicianId}
+            onChange={handleChange}
+            className="w-full border rounded px-2 py-1"
+          >
+            <option value="">Select Technician</option>
+            {technicians.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <button
+        onClick={handleSubmit}
+        className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded"
+      >
+        Record Scan
+      </button>
+    </div>
+  );
+}
+src/components/InventoryDashboard.jsx
+jsx
+Copy
+Edit
+import React from 'react';
+import { useInventory } from '../hooks/useInventory';
+
+export default function InventoryDashboard() {
+  const { inventory, loading, refresh } = useInventory();
+
+  if (loading) return <div>Loading inventory… 🤖</div>;
+
+  return (
+    <div className="p-6 space-y-4">
+      <h2 className="text-xl font-semibold">Inventory Overview</h2>
+      <button
+        onClick={refresh}
+        className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded"
+      >
+        Refresh
+      </button>
+      <table className="w-full table-auto border-collapse">
+        <thead>
+          <tr className="bg-gray-100">
+            {['Item Code','On Hand','Committed','Available'].map(h => (
+              <th key={h} className="border px-2 py-1">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {inventory.map(item => {
+            const available = item.onHand - item.committed;
+            return (
+              <tr key={item.code} className={available < 0 ? 'bg-red-100' : ''}>
+                <td className="border px-2 py-1">{item.code}</td>
+                <td className="border px-2 py-1">{item.onHand}</td>
+                <td className="border px-2 py-1">{item.committed}</td>
+                <td className="border px-2 py-1">{available}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+src/components/Navigation.jsx
+jsx
+Copy
+Edit
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+
+export default function Navigation() {
+  return (
+    <nav className="bg-blue-600 text-white p-4 space-x-4">
+      <NavLink
+        to="/inventory/scanner"
+        className={({ isActive }) =>
+          isActive ? 'underline font-bold' : 'opacity-75 hover:opacity-100'
+        }
+      >
+        Scanner
+      </NavLink>
+      <NavLink
+        to="/inventory/dashboard"
+        className={({ isActive }) =>
+          isActive ? 'underline font-bold' : 'opacity-75 hover:opacity-100'
+        }
+      >
+        Dashboard
+      </NavLink>
+    </nav>
+  );
+}

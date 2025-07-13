@@ -226,7 +226,6 @@ export default function InventoryManager() {
               onChange={handleLocalChange}
               placeholder="Enter item code"
               required
-              autoFocus
             />
           </div>
           <div>

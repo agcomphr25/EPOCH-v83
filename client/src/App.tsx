@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CSVProvider } from "./contexts/CSVContext";
 import Navigation from "./components/Navigation";
+import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
@@ -37,6 +38,7 @@ function App() {
         <CSVProvider>
           <div className="min-h-screen bg-background">
             <Navigation />
+            <OfflineIndicator />
             <main>
               <Switch>
                 <Route path="/" component={OrderManagement} />

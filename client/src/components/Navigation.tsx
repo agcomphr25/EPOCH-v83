@@ -3,6 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import InstallPWAButton from "./InstallPWAButton";
 
 export default function Navigation() {
   const [location] = useLocation();
@@ -485,6 +486,7 @@ export default function Navigation() {
           </nav>
 
           <div className="flex items-center space-x-4">
+            <InstallPWAButton />
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <User className="h-4 w-4 text-white" />

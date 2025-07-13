@@ -827,7 +827,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
-    const [entry] = await db.insert(timeClockEntries).values(data).returning();
+    // Normalize the date to YYYY-MM-DD format
+    const normalizedData = {
+      ...data,
+      date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
+    };
+    const [entry] = await db.insert(timeClockEntries).values(normalizedData).returning();
     return entry;
   }
 

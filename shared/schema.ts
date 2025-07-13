@@ -126,6 +126,22 @@ export const orderDrafts = pgTable("order_drafts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const forms = pgTable("forms", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  fields: jsonb("fields").notNull().default('[]'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const formSubmissions = pgTable("form_submissions", {
+  id: serial("id").primaryKey(),
+  formId: integer("form_id").references(() => forms.id).notNull(),
+  data: jsonb("data").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -250,6 +266,32 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   status: z.string().default("DRAFT"),
 });
 
+export const insertFormSchema = createInsertSchema(forms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional().nullable(),
+  fields: z.array(z.object({
+    id: z.string().optional(),
+    label: z.string().min(1, "Label is required"),
+    key: z.string().min(1, "Key is required"),
+    type: z.enum(['text', 'number', 'date', 'dropdown', 'autocomplete', 'textarea', 'checkbox']),
+    required: z.boolean().default(false),
+    roles: z.array(z.string()).default([]),
+    options: z.array(z.string()).optional(),
+  })).default([]),
+});
+
+export const insertFormSubmissionSchema = createInsertSchema(formSubmissions).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  formId: z.number().min(1, "Form ID is required"),
+  data: z.record(z.any()),
+});
+
 
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -274,3 +316,7 @@ export type InsertStockModel = z.infer<typeof insertStockModelSchema>;
 export type StockModel = typeof stockModels.$inferSelect;
 export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
+export type InsertForm = z.infer<typeof insertFormSchema>;
+export type Form = typeof forms.$inferSelect;
+export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
+export type FormSubmission = typeof formSubmissions.$inferSelect;

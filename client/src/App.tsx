@@ -12,6 +12,10 @@ import OrderEntry from "./pages/OrderEntry";
 import FeatureManager from "./pages/FeatureManager";
 import StockModels from "./pages/StockModels";
 import DraftOrders from "./components/DraftOrders";
+import AdminFormsPage from "./pages/AdminFormsPage";
+import FormPage from "./pages/FormPage";
+import ReportPage from "./pages/ReportPage";
+import { Toaster as HotToaster } from 'react-hot-toast';
 
 
 function App() {
@@ -29,12 +33,16 @@ function App() {
                 <Route path="/draft-orders" component={DraftOrders} />
                 <Route path="/feature-manager" component={FeatureManager} />
                 <Route path="/stock-models" component={StockModels} />
+                <Route path="/admin/forms" component={AdminFormsPage} />
+                <Route path="/forms/:formId" component={FormPage} />
+                <Route path="/admin/reports" component={ReportPage} />
 
                 <Route component={NotFound} />
               </Switch>
             </main>
           </div>
           <Toaster />
+          <HotToaster position="top-right" />
         </CSVProvider>
       </TooltipProvider>
     </QueryClientProvider>

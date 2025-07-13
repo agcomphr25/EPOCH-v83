@@ -65,6 +65,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/timeclock/entries'] });
+      refetch(); // Force refetch the current query
       setIsAddDialogOpen(false);
       toast({ title: 'Time entry created successfully' });
     },
@@ -86,6 +87,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/timeclock/entries'] });
+      refetch(); // Force refetch the current query
       setIsEditDialogOpen(false);
       setEditingEntry(null);
       toast({ title: 'Time entry updated successfully' });
@@ -106,6 +108,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/timeclock/entries'] });
+      refetch(); // Force refetch the current query
       toast({ title: 'Time entry deleted successfully' });
     },
     onError: () => {

@@ -236,7 +236,6 @@ export default function InventoryManager() {
             id="onHand"
             name="onHand"
             type="number"
-            min="0"
             value={formData.onHand}
             onChange={handleChange}
             placeholder="0"
@@ -248,7 +247,6 @@ export default function InventoryManager() {
             id="committed"
             name="committed"
             type="number"
-            min="0"
             value={formData.committed}
             onChange={handleChange}
             placeholder="0"
@@ -260,7 +258,6 @@ export default function InventoryManager() {
             id="reorderPoint"
             name="reorderPoint"
             type="number"
-            min="0"
             value={formData.reorderPoint}
             onChange={handleChange}
             placeholder="0"

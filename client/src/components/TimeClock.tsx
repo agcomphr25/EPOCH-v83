@@ -31,8 +31,38 @@ export default function TimeClock({ employeeId, disableClockOut = false }: TimeC
     }
   };
 
+  const checkChecklistCompletion = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
+      if (!response.ok) throw new Error('Failed to fetch checklist');
+      const checklist = await response.json();
+      
+      // Check if all required items are completed
+      const allRequiredComplete = checklist.every((item: any) => 
+        item.required ? Boolean(item.value) : true
+      );
+      
+      return allRequiredComplete;
+    } catch (error) {
+      console.error('Error checking checklist:', error);
+      return false;
+    }
+  };
+
   const handleClockOut = async () => {
     try {
+      // Check if checklist is complete before allowing clock out
+      const checklistComplete = await checkChecklistCompletion();
+      
+      if (!checklistComplete) {
+        toast({ 
+          title: 'Cannot clock out until the Daily Checklist has been completed',
+          variant: 'destructive' 
+        });
+        return;
+      }
+      
       await clockOut();
       toast({ title: 'Clocked out successfully!' });
     } catch (error) {
@@ -82,8 +112,7 @@ export default function TimeClock({ employeeId, disableClockOut = false }: TimeC
         ) : (
           <Button
             onClick={handleClockOut}
-            disabled={disableClockOut}
-            className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-400"
+            className="w-full bg-red-500 hover:bg-red-600"
             size="lg"
           >
             <LogOut className="h-4 w-4 mr-2" />

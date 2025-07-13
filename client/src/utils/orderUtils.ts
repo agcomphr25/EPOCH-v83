@@ -1,79 +1,98 @@
-// Simple base date: July 1, 2025 = AP period (period 15)
-const BASE_DATE = new Date('2025-07-01'); // July 1, 2025 - AP001 starts here
-const BASE_PERIOD_INDEX = 15; // AP period index
-const PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
-
 /**
- * Generate a P1 order ID in the form AA001 → ZZ999, cycling bi-weekly.
+ * Generate a P1 order ID with year-month format: XY### 
+ * First letter = year (2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...)
+ * Second letter = month (Jan=A, Feb=B, ..., Dec=L)
+ * Numbers = sequential within month, reset monthly, continue after 999
  *
- * @param {Date} date        – the current date
- * @param {string} lastId    – previous ID (e.g. "AN213")
+ * @param {Date} orderDate   – the order date
+ * @param {string} lastId    – previous ID (e.g. "AG045")
  * @returns {string}         – next ID
  */
-export function generateP1OrderId(date: Date, lastId: string): string {
-  // Calculate periods from base date (July 1, 2025 = AP period)
-  const delta = date.getTime() - BASE_DATE.getTime();
-  const periodsFromBase = Math.floor(delta / PERIOD_MS);
-  const actualPeriodIndex = BASE_PERIOD_INDEX + periodsFromBase;
-
-  // determine two letters based on actual period
-  const firstIdx = Math.floor(actualPeriodIndex / 26) % 26;
-  const secondIdx = actualPeriodIndex % 26;
-  const letter = (i: number) => String.fromCharCode(65 + i); // 0→A, 25→Z
-  const prefix = `${letter(firstIdx)}${letter(secondIdx)}`;
-
+export function generateP1OrderId(orderDate: Date, lastId: string): string {
+  const year = orderDate.getFullYear();
+  const month = orderDate.getMonth(); // 0-11
+  
+  // Year letter: 2025=A, 2026=B, etc.
+  const yearLetter = getYearLetter(year);
+  
+  // Month letter: Jan=A, Feb=B, etc.
+  const monthLetter = String.fromCharCode(65 + month);
+  
+  const currentPrefix = yearLetter + monthLetter;
+  
   console.log('P1 ID Generation:', {
-    date: date.toISOString().split('T')[0],
-    lastId: lastId,
-    periodsFromBase,
-    actualPeriodIndex,
-    prefix,
-    firstIdx,
-    secondIdx,
-    note: 'July 1, 2025 = AP001 period'
+    date: orderDate.toISOString().split('T')[0],
+    year,
+    month: month + 1,
+    yearLetter,
+    monthLetter,
+    currentPrefix,
+    lastId
   });
-
-  // handle empty lastId
+  
+  // Handle empty lastId
   if (!lastId || lastId.trim() === '') {
-    console.log('Empty lastId, returning:', prefix + '001');
-    return prefix + '001';
+    console.log('Empty lastId, starting with 001');
+    return currentPrefix + '001';
   }
-
-  // Check if lastId matches current period's P1 format exactly
-  const p1Match = /^[A-Z]{2}(\d{3})$/i.exec(lastId.trim());
-  let seq = 1;
   
-  console.log('P1 format match result:', p1Match);
+  // Extract from new format only: 2 letters + digits
+  const newFormatMatch = /^([A-Z]{1,2})([A-Z])(\d+)$/i.exec(lastId.trim());
+  if (!newFormatMatch) {
+    console.log('LastId not in new format, starting with 001');
+    return currentPrefix + '001';
+  }
   
-  if (p1Match && lastId.trim().slice(0, 2).toUpperCase() === prefix) {
-    // This is a valid P1 ID for the current period
-    const currentSeq = parseInt(p1Match[1], 10);
-    seq = currentSeq + 1;
-    console.log('Same period P1 ID, incrementing:', lastId.trim(), '→', prefix + String(seq).padStart(3, '0'));
-    console.log('Current sequence:', currentSeq, 'Next sequence:', seq);
+  const [, lastYearLetter, lastMonthLetter, lastSeqStr] = newFormatMatch;
+  const lastPrefix = lastYearLetter + lastMonthLetter;
+  const lastSeq = parseInt(lastSeqStr, 10);
+  
+  console.log('Parsed lastId:', {
+    lastPrefix,
+    lastSeq,
+    currentPrefix,
+    sameMonth: lastPrefix === currentPrefix
+  });
+  
+  let nextSeq;
+  if (lastPrefix === currentPrefix) {
+    // Same month: increment sequence
+    nextSeq = lastSeq + 1;
+    console.log('Same month, incrementing sequence:', lastSeq, '→', nextSeq);
   } else {
-    // Either not P1 format or different period - extract numeric sequence
-    const numericMatch = /(\d+)/.exec(lastId.trim());
-    if (numericMatch) {
-      const extractedNum = parseInt(numericMatch[1], 10);
-      seq = extractedNum + 1;
-      console.log('Extracted sequence from lastId:', extractedNum, '→', seq);
-      console.log('LastId:', lastId.trim(), 'using extracted sequence for new period:', prefix + String(seq).padStart(3, '0'));
-    } else {
-      console.log('No numeric sequence found in lastId, starting at 001');
-    }
+    // Different month: reset to 001
+    nextSeq = 1;
+    console.log('Different month, resetting to 001');
   }
   
-  // Handle sequence overflow
-  if (seq > 999) {
-    seq = 1;
-    console.log('Sequence overflow, resetting to 001');
-  }
+  // Format sequence (pad with zeros for numbers < 1000, no padding for 1000+)
+  const seqStr = nextSeq < 1000 ? String(nextSeq).padStart(3, '0') : String(nextSeq);
+  const result = currentPrefix + seqStr;
   
-  const num = String(seq).padStart(3, '0');
-  const result = prefix + num;
   console.log('Final result:', result);
   return result;
+}
+
+/**
+ * Convert year to letter(s): 2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...
+ */
+function getYearLetter(year: number): string {
+  const yearsSince2025 = year - 2025;
+  
+  if (yearsSince2025 < 0) {
+    throw new Error('Year must be 2025 or later');
+  }
+  
+  if (yearsSince2025 <= 22) {
+    // 2025-2047: Single letters A-W (skipping X, Y, Z for now)
+    return String.fromCharCode(65 + yearsSince2025);
+  } else {
+    // 2048+: Double letters AA, AB, AC...
+    const doubleLetterIndex = yearsSince2025 - 23; // 2048 = 0, 2049 = 1...
+    const firstLetter = 'A';
+    const secondLetter = String.fromCharCode(65 + doubleLetterIndex);
+    return firstLetter + secondLetter;
+  }
 }
 
 

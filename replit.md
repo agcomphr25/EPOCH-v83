@@ -6,6 +6,8 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 13, 2025 (Afternoon)**: Completely redesigned P1 Order ID algorithm with year-month format - year-based first letter (2025=A, 2026=B, etc.), month-based second letter (Jan=A, Feb=B, etc.), sequential numbering within month, reset monthly to 001, continues after 999 to 1000+
+- **July 13, 2025 (Afternoon)**: Updated Module 1 Order ID Generator with comprehensive testing suite - includes 16 test cases covering same month increment, monthly reset, year progression, edge cases, and algorithm validation
 - **July 13, 2025 (Early Morning)**: Successfully implemented complete Inventory Manager CRUD system with create, read, update, and delete capabilities for inventory items
 - **July 13, 2025 (Early Morning)**: Fixed modal form input issues with stable state management and React.memo optimization - all form fields now work properly
 - **July 13, 2025 (Early Morning)**: Added comprehensive hardcoded category system with 19 inventory categories (Barrels, Stocks, Triggers, Scopes, Accessories, Hardware, Springs, Screws, Bolts, Nuts, Washers, Pins, Tools, Lubricants, Cleaning Supplies, Safety Equipment, Raw Materials, Finished Goods, Other)
@@ -78,10 +80,12 @@ Preferred communication style: Simple, everyday language.
 - **Handedness**: Right/Left dropdown selection
 
 ### P1 Order ID System
-- **Current Period**: AP (July 1-14, 2025)
-- **Last Order**: AP001
-- **Next Order**: AP002
-- **Algorithm**: Bi-weekly cycling with proper period advancement
+- **Current Date**: July 13, 2025 (AG period)
+- **Format**: Year-Month-Sequence (AG001, AG002, etc.)
+- **Year Letters**: 2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...
+- **Month Letters**: Jan=A, Feb=B, ..., Dec=L
+- **Sequence**: Monthly reset to 001, continues after 999 to 1000+
+- **Algorithm**: Simplified year-month format with monthly sequence reset
 
 ## Key Components
 

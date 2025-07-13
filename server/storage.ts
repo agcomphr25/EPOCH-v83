@@ -1,5 +1,6 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
+  inventoryItems, inventoryScans, employees,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -10,7 +11,10 @@ import {
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
   type Form, type InsertForm,
-  type FormSubmission, type InsertFormSubmission
+  type FormSubmission, type InsertFormSubmission,
+  type InventoryItem, type InsertInventoryItem,
+  type InventoryScan, type InsertInventoryScan,
+  type Employee, type InsertEmployee
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -94,6 +98,28 @@ export interface IStorage {
   getFormSubmission(id: number): Promise<FormSubmission | undefined>;
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
+  
+  // Inventory Items CRUD
+  getAllInventoryItems(): Promise<InventoryItem[]>;
+  getInventoryItem(id: number): Promise<InventoryItem | undefined>;
+  getInventoryItemByCode(code: string): Promise<InventoryItem | undefined>;
+  createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem>;
+  updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem>;
+  deleteInventoryItem(id: number): Promise<void>;
+  
+  // Inventory Scans CRUD
+  getAllInventoryScans(): Promise<InventoryScan[]>;
+  getInventoryScan(id: number): Promise<InventoryScan | undefined>;
+  createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan>;
+  deleteInventoryScan(id: number): Promise<void>;
+  
+  // Employees CRUD
+  getAllEmployees(): Promise<Employee[]>;
+  getEmployee(id: number): Promise<Employee | undefined>;
+  getEmployeesByRole(role: string): Promise<Employee[]>;
+  createEmployee(data: InsertEmployee): Promise<Employee>;
+  updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
+  deleteEmployee(id: number): Promise<void>;
 
 }
 
@@ -429,6 +455,94 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFormSubmission(id: number): Promise<void> {
     await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
+  }
+
+  // Inventory Items CRUD
+  async getAllInventoryItems(): Promise<InventoryItem[]> {
+    return await db.select().from(inventoryItems).where(eq(inventoryItems.isActive, true)).orderBy(inventoryItems.name);
+  }
+
+  async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id));
+    return item || undefined;
+  }
+
+  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.code, code));
+    return item || undefined;
+  }
+
+  async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
+    const [item] = await db.insert(inventoryItems).values(data).returning();
+    return item;
+  }
+
+  async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
+    const [item] = await db.update(inventoryItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(inventoryItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteInventoryItem(id: number): Promise<void> {
+    await db.update(inventoryItems)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(inventoryItems.id, id));
+  }
+
+  // Inventory Scans CRUD
+  async getAllInventoryScans(): Promise<InventoryScan[]> {
+    return await db.select().from(inventoryScans).orderBy(desc(inventoryScans.scannedAt));
+  }
+
+  async getInventoryScan(id: number): Promise<InventoryScan | undefined> {
+    const [scan] = await db.select().from(inventoryScans).where(eq(inventoryScans.id, id));
+    return scan || undefined;
+  }
+
+  async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
+    const [scan] = await db.insert(inventoryScans).values(data).returning();
+    return scan;
+  }
+
+  async deleteInventoryScan(id: number): Promise<void> {
+    await db.delete(inventoryScans).where(eq(inventoryScans.id, id));
+  }
+
+  // Employees CRUD
+  async getAllEmployees(): Promise<Employee[]> {
+    return await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.name);
+  }
+
+  async getEmployee(id: number): Promise<Employee | undefined> {
+    const [employee] = await db.select().from(employees).where(eq(employees.id, id));
+    return employee || undefined;
+  }
+
+  async getEmployeesByRole(role: string): Promise<Employee[]> {
+    return await db.select().from(employees)
+      .where(eq(employees.role, role))
+      .orderBy(employees.name);
+  }
+
+  async createEmployee(data: InsertEmployee): Promise<Employee> {
+    const [employee] = await db.insert(employees).values(data).returning();
+    return employee;
+  }
+
+  async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
+    const [employee] = await db.update(employees)
+      .set(data)
+      .where(eq(employees.id, id))
+      .returning();
+    return employee;
+  }
+
+  async deleteEmployee(id: number): Promise<void> {
+    await db.update(employees)
+      .set({ isActive: false })
+      .where(eq(employees.id, id));
   }
 
 }

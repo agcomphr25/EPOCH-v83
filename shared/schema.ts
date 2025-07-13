@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -139,6 +139,41 @@ export const formSubmissions = pgTable("form_submissions", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").references(() => forms.id).notNull(),
   data: jsonb("data").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Inventory Management Tables
+export const inventoryItems = pgTable("inventory_items", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),
+  onHand: integer("on_hand").default(0),
+  committed: integer("committed").default(0),
+  reorderPoint: integer("reorder_point").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const inventoryScans = pgTable("inventory_scans", {
+  id: serial("id").primaryKey(),
+  itemCode: text("item_code").notNull(),
+  expirationDate: date("expiration_date"),
+  manufactureDate: date("manufacture_date"),
+  lotNumber: text("lot_number"),
+  batchNumber: text("batch_number"),
+  technicianId: text("technician_id"),
+  scannedAt: timestamp("scanned_at").defaultNow(),
+});
+
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  department: text("department"),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -292,6 +327,43 @@ export const insertFormSubmissionSchema = createInsertSchema(formSubmissions).om
   data: z.record(z.any()),
 });
 
+export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  code: z.string().min(1, "Item code is required"),
+  name: z.string().min(1, "Item name is required"),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  onHand: z.number().min(0).default(0),
+  committed: z.number().min(0).default(0),
+  reorderPoint: z.number().min(0).default(0),
+  isActive: z.boolean().default(true),
+});
+
+export const insertInventoryScanSchema = createInsertSchema(inventoryScans).omit({
+  id: true,
+  scannedAt: true,
+}).extend({
+  itemCode: z.string().min(1, "Item code is required"),
+  expirationDate: z.coerce.date().optional().nullable(),
+  manufactureDate: z.coerce.date().optional().nullable(),
+  lotNumber: z.string().optional().nullable(),
+  batchNumber: z.string().optional().nullable(),
+  technicianId: z.string().optional().nullable(),
+});
+
+export const insertEmployeeSchema = createInsertSchema(employees).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  name: z.string().min(1, "Employee name is required"),
+  role: z.string().min(1, "Employee role is required"),
+  department: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
 
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -320,3 +392,9 @@ export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
+export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
+export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
+export type InventoryScan = typeof inventoryScans.$inferSelect;
+export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+export type Employee = typeof employees.$inferSelect;

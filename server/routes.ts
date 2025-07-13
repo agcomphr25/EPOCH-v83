@@ -12,7 +12,10 @@ import {
   insertStockModelSchema,
   insertOrderDraftSchema,
   insertFormSchema,
-  insertFormSubmissionSchema
+  insertFormSubmissionSchema,
+  insertInventoryItemSchema,
+  insertInventoryScanSchema,
+  insertEmployeeSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -588,6 +591,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete submission" });
+    }
+  });
+
+  // Inventory item routes
+  app.get("/api/inventory", async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      res.json(items);
+    } catch (error) {
+      console.error("Get inventory items error:", error);
+      res.status(500).json({ error: "Failed to get inventory items" });
+    }
+  });
+
+  app.get("/api/inventory/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const item = await storage.getInventoryItem(id);
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Get inventory item error:", error);
+      res.status(500).json({ error: "Failed to get inventory item" });
+    }
+  });
+
+  app.post("/api/inventory", async (req, res) => {
+    try {
+      const validatedData = insertInventoryItemSchema.parse(req.body);
+      const item = await storage.createInventoryItem(validatedData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create inventory item error:", error);
+      res.status(400).json({ error: "Invalid inventory item data" });
+    }
+  });
+
+  app.put("/api/inventory/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertInventoryItemSchema.partial().parse(req.body);
+      const item = await storage.updateInventoryItem(id, validatedData);
+      res.json(item);
+    } catch (error) {
+      console.error("Update inventory item error:", error);
+      res.status(400).json({ error: "Invalid inventory item data" });
+    }
+  });
+
+  app.delete("/api/inventory/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteInventoryItem(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete inventory item error:", error);
+      res.status(500).json({ error: "Failed to delete inventory item" });
+    }
+  });
+
+  // Inventory scan routes
+  app.post("/api/inventory/scan", async (req, res) => {
+    try {
+      const validatedData = insertInventoryScanSchema.parse(req.body);
+      const scan = await storage.createInventoryScan(validatedData);
+      res.status(201).json(scan);
+    } catch (error) {
+      console.error("Create inventory scan error:", error);
+      res.status(400).json({ error: "Invalid scan data" });
+    }
+  });
+
+  app.get("/api/inventory/scans", async (req, res) => {
+    try {
+      const scans = await storage.getAllInventoryScans();
+      res.json(scans);
+    } catch (error) {
+      console.error("Get inventory scans error:", error);
+      res.status(500).json({ error: "Failed to get inventory scans" });
+    }
+  });
+
+  // Employee routes
+  app.get("/api/employees", async (req, res) => {
+    try {
+      const role = req.query.role as string;
+      const employees = role 
+        ? await storage.getEmployeesByRole(role)
+        : await storage.getAllEmployees();
+      res.json(employees);
+    } catch (error) {
+      console.error("Get employees error:", error);
+      res.status(500).json({ error: "Failed to get employees" });
+    }
+  });
+
+  app.post("/api/employees", async (req, res) => {
+    try {
+      const validatedData = insertEmployeeSchema.parse(req.body);
+      const employee = await storage.createEmployee(validatedData);
+      res.status(201).json(employee);
+    } catch (error) {
+      console.error("Create employee error:", error);
+      res.status(400).json({ error: "Invalid employee data" });
     }
   });
 

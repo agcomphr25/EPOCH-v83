@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,18 @@ export default function Navigation() {
       label: 'Reports',
       icon: PieChart,
       description: 'View form submissions and reports'
+    },
+    {
+      path: '/inventory/scanner',
+      label: 'Inventory Scanner',
+      icon: Scan,
+      description: 'Scan inventory items'
+    },
+    {
+      path: '/inventory/dashboard',
+      label: 'Inventory Dashboard',
+      icon: Warehouse,
+      description: 'View inventory overview'
     }
   ];
 

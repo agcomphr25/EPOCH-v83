@@ -1,7 +1,7 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
   inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
-  timeClockEntries, checklistItems, onboardingDocs,
+  timeClockEntries, checklistItems, onboardingDocs, customerAddresses, communicationLogs, pdfDocuments,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -22,7 +22,10 @@ import {
   type MaintenanceLog, type InsertMaintenanceLog,
   type TimeClockEntry, type InsertTimeClockEntry,
   type ChecklistItem, type InsertChecklistItem,
-  type OnboardingDoc, type InsertOnboardingDoc
+  type OnboardingDoc, type InsertOnboardingDoc,
+  type CustomerAddress, type InsertCustomerAddress,
+  type CommunicationLog, type InsertCommunicationLog,
+  type PdfDocument, type InsertPdfDocument
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -177,6 +180,22 @@ export interface IStorage {
   createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc>;
   signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc>;
   updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc>;
+
+  // Module 8: Customer Addresses CRUD
+  getCustomerAddresses(customerId: string): Promise<CustomerAddress[]>;
+  createCustomerAddress(data: InsertCustomerAddress): Promise<CustomerAddress>;
+  updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress>;
+  deleteCustomerAddress(id: number): Promise<void>;
+
+  // Module 8: Communication Logs CRUD
+  getCommunicationLogs(orderId: string): Promise<CommunicationLog[]>;
+  createCommunicationLog(data: InsertCommunicationLog): Promise<CommunicationLog>;
+  updateCommunicationLog(id: number, data: Partial<InsertCommunicationLog>): Promise<CommunicationLog>;
+
+  // Module 8: PDF Documents CRUD
+  getPdfDocuments(orderId: string): Promise<PdfDocument[]>;
+  createPdfDocument(data: InsertPdfDocument): Promise<PdfDocument>;
+  updatePdfDocument(id: number, data: Partial<InsertPdfDocument>): Promise<PdfDocument>;
 
 }
 
@@ -956,6 +975,76 @@ export class DatabaseStorage implements IStorage {
     const [doc] = await db.update(onboardingDocs)
       .set(data)
       .where(eq(onboardingDocs.id, id))
+      .returning();
+    return doc;
+  }
+
+  // Module 8: Customer Addresses CRUD
+  async getCustomerAddresses(customerId: string): Promise<CustomerAddress[]> {
+    return await db
+      .select()
+      .from(customerAddresses)
+      .where(eq(customerAddresses.customerId, customerId))
+      .orderBy(customerAddresses.isDefault, customerAddresses.id);
+  }
+
+  async createCustomerAddress(data: InsertCustomerAddress): Promise<CustomerAddress> {
+    const [address] = await db.insert(customerAddresses).values(data).returning();
+    return address;
+  }
+
+  async updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress> {
+    const [address] = await db.update(customerAddresses)
+      .set(data)
+      .where(eq(customerAddresses.id, id))
+      .returning();
+    return address;
+  }
+
+  async deleteCustomerAddress(id: number): Promise<void> {
+    await db.delete(customerAddresses).where(eq(customerAddresses.id, id));
+  }
+
+  // Module 8: Communication Logs CRUD
+  async getCommunicationLogs(orderId: string): Promise<CommunicationLog[]> {
+    return await db
+      .select()
+      .from(communicationLogs)
+      .where(eq(communicationLogs.orderId, orderId))
+      .orderBy(desc(communicationLogs.createdAt));
+  }
+
+  async createCommunicationLog(data: InsertCommunicationLog): Promise<CommunicationLog> {
+    const [log] = await db.insert(communicationLogs).values(data).returning();
+    return log;
+  }
+
+  async updateCommunicationLog(id: number, data: Partial<InsertCommunicationLog>): Promise<CommunicationLog> {
+    const [log] = await db.update(communicationLogs)
+      .set(data)
+      .where(eq(communicationLogs.id, id))
+      .returning();
+    return log;
+  }
+
+  // Module 8: PDF Documents CRUD
+  async getPdfDocuments(orderId: string): Promise<PdfDocument[]> {
+    return await db
+      .select()
+      .from(pdfDocuments)
+      .where(eq(pdfDocuments.orderId, orderId))
+      .orderBy(desc(pdfDocuments.createdAt));
+  }
+
+  async createPdfDocument(data: InsertPdfDocument): Promise<PdfDocument> {
+    const [doc] = await db.insert(pdfDocuments).values(data).returning();
+    return doc;
+  }
+
+  async updatePdfDocument(id: number, data: Partial<InsertPdfDocument>): Promise<PdfDocument> {
+    const [doc] = await db.update(pdfDocuments)
+      .set(data)
+      .where(eq(pdfDocuments.id, id))
       .returning();
     return doc;
   }

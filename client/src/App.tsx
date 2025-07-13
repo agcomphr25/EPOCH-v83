@@ -22,6 +22,7 @@ import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
 import TimeClockAdminPage from "./pages/TimeClockAdminPage";
+import Module8TestPage from "./pages/Module8TestPage";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -50,6 +51,7 @@ function App() {
                 <Route path="/maintenance" component={MaintenancePage} />
                 <Route path="/employee-portal" component={EmployeePortalPage} />
                 <Route path="/time-clock-admin" component={TimeClockAdminPage} />
+                <Route path="/module8-test" component={Module8TestPage} />
 
                 <Route component={NotFound} />
               </Switch>

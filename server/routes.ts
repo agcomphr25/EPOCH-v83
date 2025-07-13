@@ -22,7 +22,10 @@ import {
   insertMaintenanceLogSchema,
   insertTimeClockEntrySchema,
   insertChecklistItemSchema,
-  insertOnboardingDocSchema
+  insertOnboardingDocSchema,
+  insertCustomerAddressSchema,
+  insertCommunicationLogSchema,
+  insertPdfDocumentSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -978,6 +981,258 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Sign onboarding doc error:", error);
       res.status(500).json({ error: "Failed to sign onboarding document" });
+    }
+  });
+
+  // Module 8: Address Management routes
+  app.get("/api/address/autocomplete", async (req, res) => {
+    try {
+      const { query } = req.query;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+      
+      // Mock address autocomplete - in production, integrate with Google Places API or similar
+      const mockSuggestions = [
+        `${query} Main St, New York, NY 10001`,
+        `${query} Oak Avenue, Los Angeles, CA 90210`,
+        `${query} Pine Street, Chicago, IL 60601`,
+        `${query} Cedar Drive, Houston, TX 77001`,
+        `${query} Elm Boulevard, Phoenix, AZ 85001`
+      ].filter(suggestion => suggestion.toLowerCase().includes(query.toLowerCase()));
+      
+      res.json(mockSuggestions);
+    } catch (error) {
+      console.error("Address autocomplete error:", error);
+      res.status(500).json({ error: "Failed to fetch address suggestions" });
+    }
+  });
+
+  app.post("/api/address/validate", async (req, res) => {
+    try {
+      const { address } = req.body;
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+      
+      // Mock address validation - in production, integrate with USPS API or similar
+      const validated = {
+        ...address,
+        // Normalize some common fields
+        state: address.state?.toUpperCase(),
+        zipCode: address.zipCode?.replace(/\D/g, '').slice(0, 5),
+        country: address.country || "United States"
+      };
+      
+      res.json(validated);
+    } catch (error) {
+      console.error("Address validation error:", error);
+      res.status(500).json({ error: "Failed to validate address" });
+    }
+  });
+
+  app.get("/api/addresses", async (req, res) => {
+    try {
+      const { customerId } = req.query;
+      if (!customerId) {
+        return res.status(400).json({ error: "Customer ID is required" });
+      }
+      const addresses = await storage.getCustomerAddresses(customerId as string);
+      res.json(addresses);
+    } catch (error) {
+      console.error("Get customer addresses error:", error);
+      res.status(500).json({ error: "Failed to get customer addresses" });
+    }
+  });
+
+  app.post("/api/addresses", async (req, res) => {
+    try {
+      const validatedData = insertCustomerAddressSchema.parse(req.body);
+      const address = await storage.createCustomerAddress(validatedData);
+      res.status(201).json(address);
+    } catch (error) {
+      console.error("Create customer address error:", error);
+      res.status(400).json({ error: "Invalid customer address data" });
+    }
+  });
+
+  // Module 8: PDF Generation routes
+  app.get("/api/pdfs/order-confirmation", async (req, res) => {
+    try {
+      const { orderId } = req.query;
+      if (!orderId) {
+        return res.status(400).json({ error: "Order ID is required" });
+      }
+      
+      // Mock PDF generation - in production, use a PDF library like jsPDF or Puppeteer
+      const mockPdfBuffer = Buffer.from(`Mock Order Confirmation PDF for Order: ${orderId}`);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="order-confirmation-${orderId}.pdf"`);
+      res.send(mockPdfBuffer);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  app.get("/api/pdfs/packing-slip", async (req, res) => {
+    try {
+      const { orderId } = req.query;
+      if (!orderId) {
+        return res.status(400).json({ error: "Order ID is required" });
+      }
+      
+      // Mock PDF generation
+      const mockPdfBuffer = Buffer.from(`Mock Packing Slip PDF for Order: ${orderId}`);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="packing-slip-${orderId}.pdf"`);
+      res.send(mockPdfBuffer);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  app.get("/api/pdfs/invoice", async (req, res) => {
+    try {
+      const { orderId } = req.query;
+      if (!orderId) {
+        return res.status(400).json({ error: "Order ID is required" });
+      }
+      
+      // Mock PDF generation
+      const mockPdfBuffer = Buffer.from(`Mock Invoice PDF for Order: ${orderId}`);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="invoice-${orderId}.pdf"`);
+      res.send(mockPdfBuffer);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      res.status(500).json({ error: "Failed to generate PDF" });
+    }
+  });
+
+  // Module 8: Communication routes
+  app.post("/api/communications/order-confirmation", async (req, res) => {
+    try {
+      const { orderId, via } = req.body;
+      if (!orderId || !via) {
+        return res.status(400).json({ error: "Order ID and communication method are required" });
+      }
+      
+      // Mock communication sending - in production, integrate with SendGrid, Twilio, etc.
+      const mockLog = {
+        id: Date.now(),
+        orderId,
+        customerId: `CUST-${orderId}`, // Mock customer ID
+        type: 'order-confirmation' as const,
+        method: via as 'email' | 'sms',
+        recipient: via === 'email' ? 'customer@example.com' : '+1234567890',
+        subject: via === 'email' ? 'Order Confirmation' : undefined,
+        message: `Your order ${orderId} has been confirmed`,
+        status: 'sent' as const,
+        sentAt: new Date(),
+        createdAt: new Date(),
+      };
+      
+      // TODO: Replace with actual database call when schema is pushed
+      // const log = await storage.createCommunicationLog(logData);
+      res.json({ success: true, log: mockLog });
+    } catch (error) {
+      console.error("Communication error:", error);
+      res.status(500).json({ error: "Failed to send communication" });
+    }
+  });
+
+  app.post("/api/communications/shipping-notification", async (req, res) => {
+    try {
+      const { orderId, via } = req.body;
+      if (!orderId || !via) {
+        return res.status(400).json({ error: "Order ID and communication method are required" });
+      }
+      
+      const mockLog = {
+        id: Date.now(),
+        orderId,
+        customerId: `CUST-${orderId}`,
+        type: 'shipping-notification' as const,
+        method: via as 'email' | 'sms',
+        recipient: via === 'email' ? 'customer@example.com' : '+1234567890',
+        subject: via === 'email' ? 'Shipping Notification' : undefined,
+        message: `Your order ${orderId} has been shipped`,
+        status: 'sent' as const,
+        sentAt: new Date(),
+        createdAt: new Date(),
+      };
+      
+      // TODO: Replace with actual database call when schema is pushed
+      // const log = await storage.createCommunicationLog(logData);
+      res.json({ success: true, log: mockLog });
+    } catch (error) {
+      console.error("Communication error:", error);
+      res.status(500).json({ error: "Failed to send communication" });
+    }
+  });
+
+  app.post("/api/communications/quality-alert", async (req, res) => {
+    try {
+      const { orderId, via, message } = req.body;
+      if (!orderId || !via || !message) {
+        return res.status(400).json({ error: "Order ID, communication method, and message are required" });
+      }
+      
+      const mockLog = {
+        id: Date.now(),
+        orderId,
+        customerId: `CUST-${orderId}`,
+        type: 'quality-alert' as const,
+        method: via as 'email' | 'sms',
+        recipient: via === 'email' ? 'customer@example.com' : '+1234567890',
+        subject: via === 'email' ? 'Quality Control Alert' : undefined,
+        message,
+        status: 'sent' as const,
+        sentAt: new Date(),
+        createdAt: new Date(),
+      };
+      
+      // TODO: Replace with actual database call when schema is pushed
+      // const log = await storage.createCommunicationLog(logData);
+      res.json({ success: true, log: mockLog });
+    } catch (error) {
+      console.error("Communication error:", error);
+      res.status(500).json({ error: "Failed to send communication" });
+    }
+  });
+
+  app.get("/api/communications", async (req, res) => {
+    try {
+      const { orderId } = req.query;
+      if (!orderId) {
+        return res.status(400).json({ error: "Order ID is required" });
+      }
+      // TODO: Replace with actual database call when schema is pushed
+      // const logs = await storage.getCommunicationLogs(orderId as string);
+      const mockLogs = [
+        {
+          id: 1,
+          orderId: orderId as string,
+          customerId: `CUST-${orderId}`,
+          type: 'order-confirmation',
+          method: 'email',
+          recipient: 'customer@example.com',
+          subject: 'Order Confirmation',
+          message: `Your order ${orderId} has been confirmed`,
+          status: 'sent',
+          sentAt: new Date(),
+          createdAt: new Date(),
+        }
+      ];
+      res.json(mockLogs);
+    } catch (error) {
+      console.error("Get communication logs error:", error);
+      res.status(500).json({ error: "Failed to get communication logs" });
     }
   });
 

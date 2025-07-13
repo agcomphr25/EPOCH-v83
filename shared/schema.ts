@@ -584,3 +584,97 @@ export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
+
+// Module 8: API Integrations & Communications
+export const customerAddresses = pgTable("customer_addresses", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
+  street: text("street").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  country: text("country").notNull().default("United States"),
+  type: text("type").notNull().default("shipping"), // shipping, billing, both
+  isDefault: boolean("is_default").default(false),
+  isValidated: boolean("is_validated").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const communicationLogs = pgTable("communication_logs", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  customerId: text("customer_id").notNull(),
+  type: text("type").notNull(), // order-confirmation, shipping-notification, quality-alert
+  method: text("method").notNull(), // email, sms
+  recipient: text("recipient").notNull(), // email address or phone number
+  subject: text("subject"),
+  message: text("message"),
+  status: text("status").notNull().default("pending"), // pending, sent, failed
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const pdfDocuments = pgTable("pdf_documents", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  type: text("type").notNull(), // order-confirmation, packing-slip, invoice
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull().default("application/pdf"),
+  size: integer("size").notNull(),
+  path: text("path").notNull(), // file storage path
+  isGenerated: boolean("is_generated").default(false),
+  generatedAt: timestamp("generated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Insert schemas for Module 8
+export const insertCustomerAddressSchema = createInsertSchema(customerAddresses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().min(1, "Customer ID is required"),
+  street: z.string().min(1, "Street address is required"),
+  city: z.string().min(1, "City is required"),
+  state: z.string().min(1, "State is required"),
+  zipCode: z.string().min(1, "ZIP code is required"),
+  country: z.string().min(1, "Country is required"),
+  type: z.enum(['shipping', 'billing', 'both']).default('shipping'),
+  isDefault: z.boolean().default(false),
+});
+
+export const insertCommunicationLogSchema = createInsertSchema(communicationLogs).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  type: z.enum(['order-confirmation', 'shipping-notification', 'quality-alert']),
+  method: z.enum(['email', 'sms']),
+  recipient: z.string().min(1, "Recipient is required"),
+  subject: z.string().optional(),
+  message: z.string().optional(),
+  status: z.enum(['pending', 'sent', 'failed']).default('pending'),
+});
+
+export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  type: z.enum(['order-confirmation', 'packing-slip', 'invoice']),
+  filename: z.string().min(1, "Filename is required"),
+  contentType: z.string().default("application/pdf"),
+  size: z.number().min(0),
+  path: z.string().min(1, "Path is required"),
+});
+
+// Types for Module 8
+export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
+export type CustomerAddress = typeof customerAddresses.$inferSelect;
+export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema>;
+export type CommunicationLog = typeof communicationLogs.$inferSelect;
+export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
+export type PdfDocument = typeof pdfDocuments.$inferSelect;

@@ -9,6 +9,7 @@ export default function Navigation() {
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
+  const [inventoryExpanded, setInventoryExpanded] = useState(false);
 
   const navItems = [
     {
@@ -22,8 +23,10 @@ export default function Navigation() {
       label: 'Draft Orders',
       icon: FilePenLine,
       description: 'Manage saved draft orders'
-    },
+    }
+  ];
 
+  const inventoryItems = [
     {
       path: '/inventory/scanner',
       label: 'Inventory Scanner',
@@ -88,6 +91,7 @@ export default function Navigation() {
 
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
+  const isInventoryActive = inventoryItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -97,7 +101,10 @@ export default function Navigation() {
     if (isFormsReportsActive) {
       setFormsReportsExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive]);
+    if (isInventoryActive) {
+      setInventoryExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -163,6 +170,50 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setFormsReportsExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            {/* Inventory Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isInventoryActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isInventoryActive && "bg-primary text-white"
+                )}
+                onClick={() => setInventoryExpanded(!inventoryExpanded)}
+              >
+                <Package className="h-4 w-4" />
+                Inventory
+                {inventoryExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {inventoryExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {inventoryItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setInventoryExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

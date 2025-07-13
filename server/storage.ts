@@ -1,6 +1,6 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
-  inventoryItems, inventoryScans, employees,
+  inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -14,10 +14,14 @@ import {
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
   type InventoryScan, type InsertInventoryScan,
-  type Employee, type InsertEmployee
+  type Employee, type InsertEmployee,
+  type QcDefinition, type InsertQcDefinition,
+  type QcSubmission, type InsertQcSubmission,
+  type MaintenanceSchedule, type InsertMaintenanceSchedule,
+  type MaintenanceLog, type InsertMaintenanceLog
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -120,6 +124,34 @@ export interface IStorage {
   createEmployee(data: InsertEmployee): Promise<Employee>;
   updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
+  
+  // QC Definitions CRUD
+  getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]>;
+  getQCDefinition(id: number): Promise<QcDefinition | undefined>;
+  createQCDefinition(data: InsertQcDefinition): Promise<QcDefinition>;
+  updateQCDefinition(id: number, data: Partial<InsertQcDefinition>): Promise<QcDefinition>;
+  deleteQCDefinition(id: number): Promise<void>;
+  
+  // QC Submissions CRUD
+  getQCSubmissions(status?: string): Promise<QcSubmission[]>;
+  getQCSubmission(id: number): Promise<QcSubmission | undefined>;
+  createQCSubmission(data: InsertQcSubmission): Promise<QcSubmission>;
+  updateQCSubmission(id: number, data: Partial<InsertQcSubmission>): Promise<QcSubmission>;
+  deleteQCSubmission(id: number): Promise<void>;
+  
+  // Maintenance Schedules CRUD
+  getAllMaintenanceSchedules(): Promise<MaintenanceSchedule[]>;
+  getMaintenanceSchedule(id: number): Promise<MaintenanceSchedule | undefined>;
+  createMaintenanceSchedule(data: InsertMaintenanceSchedule): Promise<MaintenanceSchedule>;
+  updateMaintenanceSchedule(id: number, data: Partial<InsertMaintenanceSchedule>): Promise<MaintenanceSchedule>;
+  deleteMaintenanceSchedule(id: number): Promise<void>;
+  
+  // Maintenance Logs CRUD
+  getAllMaintenanceLogs(): Promise<MaintenanceLog[]>;
+  getMaintenanceLog(id: number): Promise<MaintenanceLog | undefined>;
+  createMaintenanceLog(data: InsertMaintenanceLog): Promise<MaintenanceLog>;
+  updateMaintenanceLog(id: number, data: Partial<InsertMaintenanceLog>): Promise<MaintenanceLog>;
+  deleteMaintenanceLog(id: number): Promise<void>;
 
 }
 
@@ -560,6 +592,135 @@ export class DatabaseStorage implements IStorage {
     await db.update(employees)
       .set({ isActive: false })
       .where(eq(employees.id, id));
+  }
+
+  // QC Definitions CRUD
+  async getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]> {
+    let query = db.select().from(qcDefinitions);
+    
+    const conditions = [];
+    if (line) conditions.push(eq(qcDefinitions.line, line));
+    if (department) conditions.push(eq(qcDefinitions.department, department));
+    if (final !== undefined) conditions.push(eq(qcDefinitions.final, final));
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    return await query.orderBy(qcDefinitions.sortOrder);
+  }
+
+  async getQCDefinition(id: number): Promise<QcDefinition | undefined> {
+    const [definition] = await db.select().from(qcDefinitions).where(eq(qcDefinitions.id, id));
+    return definition || undefined;
+  }
+
+  async createQCDefinition(data: InsertQcDefinition): Promise<QcDefinition> {
+    const [definition] = await db.insert(qcDefinitions).values(data).returning();
+    return definition;
+  }
+
+  async updateQCDefinition(id: number, data: Partial<InsertQcDefinition>): Promise<QcDefinition> {
+    const [definition] = await db.update(qcDefinitions)
+      .set(data)
+      .where(eq(qcDefinitions.id, id))
+      .returning();
+    return definition;
+  }
+
+  async deleteQCDefinition(id: number): Promise<void> {
+    await db.delete(qcDefinitions).where(eq(qcDefinitions.id, id));
+  }
+
+  // QC Submissions CRUD
+  async getQCSubmissions(status?: string): Promise<QcSubmission[]> {
+    let query = db.select().from(qcSubmissions);
+    
+    if (status) {
+      query = query.where(eq(qcSubmissions.status, status));
+    }
+    
+    return await query.orderBy(desc(qcSubmissions.submittedAt));
+  }
+
+  async getQCSubmission(id: number): Promise<QcSubmission | undefined> {
+    const [submission] = await db.select().from(qcSubmissions).where(eq(qcSubmissions.id, id));
+    return submission || undefined;
+  }
+
+  async createQCSubmission(data: InsertQcSubmission): Promise<QcSubmission> {
+    const [submission] = await db.insert(qcSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async updateQCSubmission(id: number, data: Partial<InsertQcSubmission>): Promise<QcSubmission> {
+    const [submission] = await db.update(qcSubmissions)
+      .set(data)
+      .where(eq(qcSubmissions.id, id))
+      .returning();
+    return submission;
+  }
+
+  async deleteQCSubmission(id: number): Promise<void> {
+    await db.delete(qcSubmissions).where(eq(qcSubmissions.id, id));
+  }
+
+  // Maintenance Schedules CRUD
+  async getAllMaintenanceSchedules(): Promise<MaintenanceSchedule[]> {
+    return await db.select().from(maintenanceSchedules)
+      .where(eq(maintenanceSchedules.isActive, true))
+      .orderBy(maintenanceSchedules.startDate);
+  }
+
+  async getMaintenanceSchedule(id: number): Promise<MaintenanceSchedule | undefined> {
+    const [schedule] = await db.select().from(maintenanceSchedules).where(eq(maintenanceSchedules.id, id));
+    return schedule || undefined;
+  }
+
+  async createMaintenanceSchedule(data: InsertMaintenanceSchedule): Promise<MaintenanceSchedule> {
+    const [schedule] = await db.insert(maintenanceSchedules).values(data).returning();
+    return schedule;
+  }
+
+  async updateMaintenanceSchedule(id: number, data: Partial<InsertMaintenanceSchedule>): Promise<MaintenanceSchedule> {
+    const [schedule] = await db.update(maintenanceSchedules)
+      .set(data)
+      .where(eq(maintenanceSchedules.id, id))
+      .returning();
+    return schedule;
+  }
+
+  async deleteMaintenanceSchedule(id: number): Promise<void> {
+    await db.update(maintenanceSchedules)
+      .set({ isActive: false })
+      .where(eq(maintenanceSchedules.id, id));
+  }
+
+  // Maintenance Logs CRUD
+  async getAllMaintenanceLogs(): Promise<MaintenanceLog[]> {
+    return await db.select().from(maintenanceLogs).orderBy(desc(maintenanceLogs.completedAt));
+  }
+
+  async getMaintenanceLog(id: number): Promise<MaintenanceLog | undefined> {
+    const [log] = await db.select().from(maintenanceLogs).where(eq(maintenanceLogs.id, id));
+    return log || undefined;
+  }
+
+  async createMaintenanceLog(data: InsertMaintenanceLog): Promise<MaintenanceLog> {
+    const [log] = await db.insert(maintenanceLogs).values(data).returning();
+    return log;
+  }
+
+  async updateMaintenanceLog(id: number, data: Partial<InsertMaintenanceLog>): Promise<MaintenanceLog> {
+    const [log] = await db.update(maintenanceLogs)
+      .set(data)
+      .where(eq(maintenanceLogs.id, id))
+      .returning();
+    return log;
+  }
+
+  async deleteMaintenanceLog(id: number): Promise<void> {
+    await db.delete(maintenanceLogs).where(eq(maintenanceLogs.id, id));
   }
 
 }

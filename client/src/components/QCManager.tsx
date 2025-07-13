@@ -4,14 +4,66 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle, XCircle, Clock, Plus, FileText, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { insertQcSubmissionSchema } from '@shared/schema';
+import { z } from 'zod';
 import type { QcDefinition, QcSubmission } from '@shared/schema';
 
 export default function QCManager() {
   const [activeTab, setActiveTab] = useState("submissions");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const form = useForm<z.infer<typeof insertQcSubmissionSchema>>({
+    resolver: zodResolver(insertQcSubmissionSchema),
+    defaultValues: {
+      orderId: '',
+      line: 'P1',
+      department: '',
+      sku: '',
+      final: false,
+      data: {},
+      status: 'pending',
+      summary: null,
+      signature: null,
+      dueDate: null,
+      submittedBy: null,
+    },
+  });
+
+  const createSubmissionMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertQcSubmissionSchema>) => {
+      const response = await fetch('/api/qc-submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create QC submission');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/qc-submissions'] });
+      toast({ title: 'QC submission created successfully' });
+      setIsModalOpen(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({ title: 'Error creating QC submission', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const onSubmit = (data: z.infer<typeof insertQcSubmissionSchema>) => {
+    createSubmissionMutation.mutate(data);
+  };
 
   // Fetch QC submissions
   const { data: submissions = [], isLoading: submissionsLoading } = useQuery({
@@ -61,10 +113,109 @@ export default function QCManager() {
           <h1 className="text-3xl font-bold text-gray-900">Quality Control Manager</h1>
           <p className="text-gray-600 mt-2">Manage QC processes and submissions</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New QC Check
-        </Button>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New QC Check
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create New QC Submission</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="orderId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Order ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter order ID" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Line</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select line" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="P1">P1</SelectItem>
+                          <SelectItem value="P2">P2</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter department" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="sku"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SKU</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter SKU" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="submittedBy"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Submitted By</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter name" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createSubmissionMutation.isPending}>
+                    {createSubmissionMutation.isPending ? 'Creating...' : 'Create'}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

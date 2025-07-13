@@ -164,6 +164,7 @@ export interface IStorage {
   getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
+  deleteTimeClockEntry(id: number): Promise<void>;
 
   // Checklist CRUD
   getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]>;
@@ -836,6 +837,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(timeClockEntries.id, id))
       .returning();
     return entry;
+  }
+
+  async deleteTimeClockEntry(id: number): Promise<void> {
+    await db.delete(timeClockEntries).where(eq(timeClockEntries.id, id));
   }
 
   // Checklist CRUD

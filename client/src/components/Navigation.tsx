@@ -41,6 +41,12 @@ export default function Navigation() {
       label: 'Employee Portal',
       icon: Users,
       description: 'Employee time tracking and onboarding'
+    },
+    {
+      path: '/time-clock-admin',
+      label: 'Time Clock Admin',
+      icon: Settings,
+      description: 'Manage time clock entries and punches'
     }
   ];
 

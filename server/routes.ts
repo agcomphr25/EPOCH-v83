@@ -866,6 +866,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/timeclock/entries", async (req, res) => {
+    try {
+      const validatedData = insertTimeClockEntrySchema.parse(req.body);
+      const entry = await storage.createTimeClockEntry(validatedData);
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error("Create time clock entry error:", error);
+      res.status(400).json({ error: "Invalid time clock entry data" });
+    }
+  });
+
+  app.put("/api/timeclock/entries/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertTimeClockEntrySchema.partial().parse(req.body);
+      const entry = await storage.updateTimeClockEntry(id, validatedData);
+      res.json(entry);
+    } catch (error) {
+      console.error("Update time clock entry error:", error);
+      res.status(400).json({ error: "Failed to update time clock entry" });
+    }
+  });
+
+  app.delete("/api/timeclock/entries/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteTimeClockEntry(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete time clock entry error:", error);
+      res.status(500).json({ error: "Failed to delete time clock entry" });
+    }
+  });
+
   // Employee Portal - Checklist routes
   app.get("/api/checklist", async (req, res) => {
     try {

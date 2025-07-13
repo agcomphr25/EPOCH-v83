@@ -83,7 +83,7 @@ export default function InventoryScanner() {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Inventory Scanner</CardTitle>
+        <CardTitle>Inventory In Scanner</CardTitle>
         <p className="text-sm text-gray-600">
           Press Ctrl+S to simulate scanning a barcode
         </p>

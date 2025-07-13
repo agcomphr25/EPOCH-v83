@@ -10,6 +10,7 @@ export default function Navigation() {
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
+  const [employeesExpanded, setEmployeesExpanded] = useState(false);
 
   const navItems = [
     {
@@ -36,18 +37,7 @@ export default function Navigation() {
       icon: Wrench,
       description: 'Preventive maintenance schedules'
     },
-    {
-      path: '/employee-portal',
-      label: 'Employee Portal',
-      icon: Users,
-      description: 'Employee time tracking and onboarding'
-    },
-    {
-      path: '/time-clock-admin',
-      label: 'Time Clock Admin',
-      icon: Settings,
-      description: 'Manage time clock entries and punches'
-    }
+
   ];
 
   const inventoryItems = [
@@ -86,6 +76,21 @@ export default function Navigation() {
     }
   ];
 
+  const employeesItems = [
+    {
+      path: '/employee-portal',
+      label: 'Employee Portal',
+      icon: Users,
+      description: 'Employee time tracking and onboarding'
+    },
+    {
+      path: '/time-clock-admin',
+      label: 'Time Clock Admin',
+      icon: Settings,
+      description: 'Manage time clock entries and punches'
+    }
+  ];
+
   const verifiedModulesItems = [
     {
       path: '/',
@@ -116,6 +121,7 @@ export default function Navigation() {
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
+  const isEmployeesActive = employeesItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -128,7 +134,10 @@ export default function Navigation() {
     if (isInventoryActive) {
       setInventoryExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive]);
+    if (isEmployeesActive) {
+      setEmployeesExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isEmployeesActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -238,6 +247,50 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setInventoryExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Employees Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isEmployeesActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isEmployeesActive && "bg-primary text-white"
+                )}
+                onClick={() => setEmployeesExpanded(!employeesExpanded)}
+              >
+                <Users className="h-4 w-4" />
+                Employees
+                {employeesExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {employeesExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {employeesItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setEmployeesExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

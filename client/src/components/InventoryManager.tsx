@@ -112,7 +112,12 @@ export default function InventoryManager() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // For number inputs, allow empty string and any valid number input
+    if (e.target.type === 'number') {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSelectChange = (name: string, value: string) => {
@@ -236,6 +241,7 @@ export default function InventoryManager() {
             id="onHand"
             name="onHand"
             type="number"
+            step="1"
             value={formData.onHand}
             onChange={handleChange}
             placeholder="0"
@@ -247,6 +253,7 @@ export default function InventoryManager() {
             id="committed"
             name="committed"
             type="number"
+            step="1"
             value={formData.committed}
             onChange={handleChange}
             placeholder="0"
@@ -258,6 +265,7 @@ export default function InventoryManager() {
             id="reorderPoint"
             name="reorderPoint"
             type="number"
+            step="1"
             value={formData.reorderPoint}
             onChange={handleChange}
             placeholder="0"

@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, XCircle, Clock, Plus, FileText, Settings } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Plus, FileText, Settings, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,6 +20,7 @@ import type { QcDefinition, QcSubmission } from '@shared/schema';
 export default function QCManager() {
   const [activeTab, setActiveTab] = useState("submissions");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSubmission, setEditingSubmission] = useState<QcSubmission | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -40,29 +41,105 @@ export default function QCManager() {
     },
   });
 
+  // Reset form when editing submission changes
+  React.useEffect(() => {
+    if (editingSubmission) {
+      form.reset({
+        orderId: editingSubmission.orderId,
+        line: editingSubmission.line,
+        department: editingSubmission.department,
+        sku: editingSubmission.sku,
+        final: editingSubmission.final,
+        data: editingSubmission.data,
+        status: editingSubmission.status,
+        summary: editingSubmission.summary,
+        signature: editingSubmission.signature,
+        dueDate: editingSubmission.dueDate,
+        submittedBy: editingSubmission.submittedBy,
+      });
+    } else {
+      form.reset({
+        orderId: '',
+        line: 'P1',
+        department: '',
+        sku: '',
+        final: false,
+        data: {},
+        status: 'pending',
+        summary: null,
+        signature: null,
+        dueDate: null,
+        submittedBy: null,
+      });
+    }
+  }, [editingSubmission, form]);
+
   const createSubmissionMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertQcSubmissionSchema>) => {
-      const response = await fetch('/api/qc-submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error('Failed to create QC submission');
-      return response.json();
+      if (editingSubmission) {
+        const response = await fetch(`/api/qc-submissions/${editingSubmission.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error('Failed to update QC submission');
+        return response.json();
+      } else {
+        const response = await fetch('/api/qc-submissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error('Failed to create QC submission');
+        return response.json();
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/qc-submissions'] });
-      toast({ title: 'QC submission created successfully' });
+      toast({ title: editingSubmission ? 'QC submission updated successfully' : 'QC submission created successfully' });
       setIsModalOpen(false);
+      setEditingSubmission(null);
       form.reset();
     },
     onError: (error) => {
-      toast({ title: 'Error creating QC submission', description: error.message, variant: 'destructive' });
+      toast({ title: editingSubmission ? 'Error updating QC submission' : 'Error creating QC submission', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteSubmissionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/qc-submissions/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete QC submission');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/qc-submissions'] });
+      toast({ title: 'QC submission deleted successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Error deleting QC submission', description: error.message, variant: 'destructive' });
     },
   });
 
   const onSubmit = (data: z.infer<typeof insertQcSubmissionSchema>) => {
     createSubmissionMutation.mutate(data);
+  };
+
+  const handleEdit = (submission: QcSubmission) => {
+    setEditingSubmission(submission);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to delete this QC submission?')) {
+      deleteSubmissionMutation.mutate(id);
+    }
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditingSubmission(null);
   };
 
   // Fetch QC submissions
@@ -113,7 +190,7 @@ export default function QCManager() {
           <h1 className="text-3xl font-bold text-gray-900">Quality Control Manager</h1>
           <p className="text-gray-600 mt-2">Manage QC processes and submissions</p>
         </div>
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -122,7 +199,7 @@ export default function QCManager() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Create New QC Submission</DialogTitle>
+              <DialogTitle>{editingSubmission ? 'Edit QC Submission' : 'Create New QC Submission'}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -205,11 +282,14 @@ export default function QCManager() {
                 />
 
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                  <Button type="button" variant="outline" onClick={handleModalClose}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={createSubmissionMutation.isPending}>
-                    {createSubmissionMutation.isPending ? 'Creating...' : 'Create'}
+                    {createSubmissionMutation.isPending 
+                      ? (editingSubmission ? 'Updating...' : 'Creating...') 
+                      : (editingSubmission ? 'Update' : 'Create')
+                    }
                   </Button>
                 </div>
               </form>
@@ -257,7 +337,24 @@ export default function QCManager() {
                             {submission.line} • {submission.department} • SKU: {submission.sku}
                           </p>
                         </div>
-                        {getStatusBadge(submission.summary || 'pending')}
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(submission.summary || 'pending')}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(submission)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(submission.id)}
+                            disabled={deleteSubmissionMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4 text-sm">

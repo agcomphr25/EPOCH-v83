@@ -346,11 +346,20 @@ interface TimeEntryFormProps {
 }
 
 function TimeEntryForm({ employees, initialData, onSubmit, isLoading }: TimeEntryFormProps) {
+  // Convert UTC timestamp to local datetime-local format
+  const toLocalDateTimeString = (timestamp: string | Date | null) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    // Get local timezone offset and adjust
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
   const [formData, setFormData] = useState({
     employeeId: initialData?.employeeId || '',
     date: initialData?.date || new Date().toISOString().split('T')[0],
-    clockIn: initialData?.clockIn ? new Date(initialData.clockIn).toISOString().slice(0, 16) : '',
-    clockOut: initialData?.clockOut ? new Date(initialData.clockOut).toISOString().slice(0, 16) : ''
+    clockIn: toLocalDateTimeString(initialData?.clockIn),
+    clockOut: toLocalDateTimeString(initialData?.clockOut)
   });
 
   const handleSubmit = (e: React.FormEvent) => {

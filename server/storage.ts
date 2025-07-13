@@ -503,6 +503,23 @@ export class DatabaseStorage implements IStorage {
 
   async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
     const [scan] = await db.insert(inventoryScans).values(data).returning();
+    
+    // Update inventory item quantity when scan is recorded
+    const item = await this.getInventoryItemByCode(data.itemCode);
+    if (item) {
+      // Increase on-hand quantity by 1 for each scan
+      const newOnHand = item.onHand + 1;
+      const newAvailable = newOnHand - item.committed;
+      
+      await db.update(inventoryItems)
+        .set({ 
+          onHand: newOnHand,
+          available: newAvailable,
+          updatedAt: new Date() 
+        })
+        .where(eq(inventoryItems.id, item.id));
+    }
+    
     return scan;
   }
 

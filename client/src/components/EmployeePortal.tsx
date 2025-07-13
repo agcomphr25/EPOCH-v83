@@ -96,7 +96,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           <h1 className="text-3xl font-bold text-gray-900">Employee Portal</h1>
           <p className="text-gray-600 mt-2">Employee ID: {employeeId}</p>
         </div>
-        <TimeClock employeeId={employeeId} disableClockOut={!allComplete} />
+        <TimeClock employeeId={employeeId} />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

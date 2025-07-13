@@ -1,0 +1,306 @@
+// src/components/FormBuilderAdmin.jsx
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+const ROLE_OPTIONS = ['Admin','CSR','Production','Owner'];
+const FIELD_TYPES = ['text','number','date','dropdown','autocomplete','textarea','checkbox'];
+
+export default function FormBuilderAdmin() {
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newForm, setNewForm] = useState({ name: '', description: '' });
+  const [editingFormId, setEditingFormId] = useState(null);
+  const [editFields, setEditFields] = useState([]); // fields for currently editing form
+
+  // 1️⃣ Fetch forms on mount
+  useEffect(() => {
+    axios.get('/api/forms')
+      .then(res => setForms(res.data))
+      .catch(err => toast.error('Error loading forms'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Add Form handlers
+  const saveNewForm = () => {
+    if (!newForm.name) return toast.error('Name required');
+    axios.post('/api/forms', newForm)
+      .then(res => {
+        setForms([...forms, res.data]);
+        setAdding(false);
+        setNewForm({ name:'', description:'' });
+        toast.success('Form created');
+      })
+      .catch(() => toast.error('Create failed'));
+  };
+
+  // Delete Form
+  const deleteForm = (id) => {
+    if (!window.confirm('Delete this form?')) return;
+    axios.delete(`/api/forms/${id}`)
+      .then(() => setForms(forms.filter(f=>f.id!==id)) && toast.success('Deleted'))
+      .catch(()=>toast.error('Delete failed'));
+  };
+
+  // Start Editing: load fields into state
+  const startEdit = (form) => {
+    setEditingFormId(form.id);
+    // clone fields so we don’t mutate original until save
+    setEditFields(form.fields.map(f=>({ ...f })));
+  };
+
+  // Field actions: add, update, delete, reorder
+  const addField = () => {
+    setEditFields([...editFields, {
+      id: `new-${Date.now()}`, label:'', key:'', type:'text',
+      required:false, roles:[], optionsText:''
+    }]);
+  };
+  const updateFieldAt = (idx, key, value) => {
+    const updated = [...editFields];
+    updated[idx][key] = value;
+    setEditFields(updated);
+  };
+  const removeFieldAt = (idx) => {
+    const fld = editFields[idx];
+    if (fld.id && !String(fld.id).startsWith('new-')) {
+      // existing field: call DELETE API
+      axios.delete(`/api/forms/${editingFormId}/fields/${fld.id}`)
+        .then(()=> {
+          updated.splice(idx,1);
+          setEditFields(updated);
+          toast.success('Field removed');
+        })
+        .catch(()=>toast.error('Remove failed'));
+    } else {
+      // just remove from local
+      setEditFields(editFields.filter((_,i)=>i!==idx));
+    }
+  };
+  const moveField = (idx, dir) => {
+    const newIdx = idx + dir;
+    if (newIdx<0||newIdx>=editFields.length) return;
+    const arr = [...editFields];
+    [arr[idx],arr[newIdx]] = [arr[newIdx],arr[idx]];
+    setEditFields(arr);
+  };
+
+  // Save edited form (all fields)
+  const saveForm = () => {
+    // prepare fields payload: strip local-only props
+    const payload = {
+      fields: editFields.map(f=>({
+        id: String(f.id).startsWith('new-') ? undefined : f.id,
+        label: f.label, key: f.key, type: f.type,
+        required: f.required, roles: f.roles,
+        options: f.type==='dropdown'
+          ? f.optionsText.split(',').map(o=>o.trim())
+          : undefined
+      }))
+    };
+    axios.put(`/api/forms/${editingFormId}`, payload)
+      .then(res => {
+        // update forms list
+        setForms(forms.map(f => f.id===editingFormId ? res.data : f));
+        setEditingFormId(null);
+        toast.success('Form saved');
+      })
+      .catch(()=>toast.error('Save failed'));
+  };
+
+  if (loading) return <div>Loading…</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Forms Table */}
+      <table className="table-auto w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border p-2">Name</th>
+            <th className="border p-2">Description</th>
+            <th className="border p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {forms.map(f => (
+            <tr key={f.id}>
+              <td className="border p-2">{f.name}</td>
+              <td className="border p-2">{f.description}</td>
+              <td className="border p-2 space-x-2">
+                <button
+                  className="text-blue-600"
+                  onClick={()=> startEdit(f)}
+                >Edit</button>
+                <button
+                  className="text-red-600"
+                  onClick={()=> deleteForm(f.id)}
+                >Delete</button>
+              </td>
+            </tr>
+          ))}
+
+          {/* Add Form Row */}
+          {adding ? (
+            <tr>
+              <td className="border p-2">
+                <input
+                  type="text"
+                  className="border p-1 w-full"
+                  placeholder="Name"
+                  value={newForm.name}
+                  onChange={e=>setNewForm({...newForm,name:e.target.value})}
+                />
+              </td>
+              <td className="border p-2">
+                <input
+                  type="text"
+                  className="border p-1 w-full"
+                  placeholder="Description"
+                  value={newForm.description}
+                  onChange={e=>setNewForm({...newForm,description:e.target.value})}
+                />
+              </td>
+              <td className="border p-2 space-x-2">
+                <button
+                  className="text-green-600"
+                  onClick={saveNewForm}
+                >Save</button>
+                <button
+                  className="text-gray-600"
+                  onClick={()=>setAdding(false)}
+                >Cancel</button>
+              </td>
+            </tr>
+          ) : (
+            <tr>
+              <td colSpan="3" className="border p-2 text-center">
+                <button
+                  className="text-green-600"
+                  onClick={()=>setAdding(true)}
+                >+ Add Form</button>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Editing Fields Section */}
+      {editingFormId && (
+        <div className="p-4 border rounded bg-gray-50">
+          <h2 className="text-xl font-semibold mb-2">Edit Fields</h2>
+          <table className="table-auto w-full border-collapse mb-4">
+            <thead>
+              <tr className="bg-gray-100">
+                {['Label','Key','Type','Required','Roles','Actions'].map(h=>(
+                  <th key={h} className="border p-2">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {editFields.map((fld, idx) => (
+                <tr key={fld.id}>
+                  {/* Label */}
+                  <td className="border p-2">
+                    <input
+                      className="border p-1 w-full"
+                      value={fld.label}
+                      onChange={e=>updateFieldAt(idx, 'label', e.target.value)}
+                    />
+                  </td>
+                  {/* Key */}
+                  <td className="border p-2">
+                    <input
+                      className="border p-1 w-full"
+                      value={fld.key}
+                      onChange={e=>updateFieldAt(idx, 'key', e.target.value)}
+                    />
+                  </td>
+                  {/* Type */}
+                  <td className="border p-2">
+                    <select
+                      className="border p-1 w-full"
+                      value={fld.type}
+                      onChange={e=>updateFieldAt(idx,'type',e.target.value)}
+                    >
+                      {FIELD_TYPES.map(t=>(
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </td>
+                  {/* Required */}
+                  <td className="border p-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={fld.required}
+                      onChange={e=>updateFieldAt(idx,'required',e.target.checked)}
+                    />
+                  </td>
+                  {/* Roles */}
+                  <td className="border p-2">
+                    <select
+                      multiple
+                      className="border p-1 w-full h-20"
+                      value={fld.roles}
+                      onChange={e=>{
+                        const opts = Array.from(e.target.selectedOptions).map(o=>o.value);
+                        updateFieldAt(idx,'roles',opts);
+                      }}
+                    >
+                      {ROLE_OPTIONS.map(r=>(
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </td>
+                  {/* Actions */}
+                  <td className="border p-2 space-x-1 flex justify-center">
+                    <button onClick={()=>moveField(idx,-1)}>↑</button>
+                    <button onClick={()=>moveField(idx,1)}>↓</button>
+                    <button onClick={()=>removeFieldAt(idx)} className="text-red-600">✕</button>
+                  </td>
+                </tr>
+              ))}
+
+              {/* Options textarea for dropdown type only */}
+              {editFields.map((fld, idx) => (
+                fld.type==='dropdown' && (
+                  <tr key={`opts-${fld.id}`}>
+                    <td colSpan="6" className="border p-2">
+                      <label className="block mb-1">Options (comma-separated):</label>
+                      <textarea
+                        className="border p-1 w-full"
+                        rows="2"
+                        value={fld.optionsText}
+                        onChange={e=>updateFieldAt(idx,'optionsText',e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                )
+              ))}
+
+              {/* Add Field button */}
+              <tr>
+                <td colSpan="6" className="border p-2 text-center">
+                  <button
+                    onClick={addField}
+                    className="text-green-600"
+                  >+ Add Field</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="text-right">
+            <button
+              onClick={()=>setEditingFormId(null)}
+              className="mr-4 text-gray-600"
+            >Cancel</button>
+            <button
+              onClick={saveForm}
+              className="text-blue-600"
+            >Save Form</button>
+          </div>
+        </div>
+      )}
+    </div>
+);
+}

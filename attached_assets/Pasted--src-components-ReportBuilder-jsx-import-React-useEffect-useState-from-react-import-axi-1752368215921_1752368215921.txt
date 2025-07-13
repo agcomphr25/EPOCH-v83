@@ -1,0 +1,87 @@
+// src/components/ReportBuilder.jsx
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+export default function ReportBuilder() {
+  const [forms, setForms] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [subs, setSubs] = useState([]);
+  const [loadingForms, setLoadingForms] = useState(true);
+  const [loadingSubs, setLoadingSubs] = useState(false);
+
+  // Fetch forms list
+  useEffect(() => {
+    axios.get('/api/forms')
+      .then(res => setForms(res.data))
+      .catch(()=>toast.error('Failed loading forms'))
+      .finally(()=>setLoadingForms(false));
+  }, []);
+
+  // Fetch submissions whenever selectedId changes
+  useEffect(() => {
+    if (!selectedId) return;
+    setLoadingSubs(true);
+    axios.get(`/api/form-submissions?formId=${selectedId}`)
+      .then(res => setSubs(res.data))
+      .catch(()=>toast.error('Load submissions failed'))
+      .finally(()=>setLoadingSubs(false));
+  }, [selectedId]);
+
+  if (loadingForms) return <div>Loading…</div>;
+
+  // derive columns from first submission’s data keys
+  const columns = subs.length > 0
+    ? Object.keys(subs[0].data)
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mr-2 font-medium">Select Form:</label>
+        <select
+          className="border p-2 rounded"
+          value={selectedId}
+          onChange={e=>setSelectedId(e.target.value)}
+        >
+          <option value="">— Choose —</option>
+          {forms.map(f=>(
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {loadingSubs
+        ? <div>Loading submissions…</div>
+        : (subs.length === 0 && selectedId)
+          ? <div>No submissions yet</div>
+          : (subs.length > 0 && (
+            <table className="table-auto w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  {columns.map(col=>(
+                    <th key={col} className="border p-2">{col}</th>
+                  ))}
+                  <th className="border p-2">Submitted At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subs.map(s => (
+                  <tr key={s.id}>
+                    {columns.map(col=>(
+                      <td key={col} className="border p-2">
+                        {String(s.data[col])}
+                      </td>
+                    ))}
+                    <td className="border p-2">
+                      {new Date(s.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))
+      }
+    </div>
+  );
+}

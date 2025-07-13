@@ -1,0 +1,309 @@
+Here’s a complete scaffold for Next.js + Express + Drizzle ORM + PostgreSQL, with PWA, Capacitor, Tailwind, TypeScript, Prettier, ESLint and Husky all wired up. 🔨🤖🔧
+
+1. Project Structure
+bash
+Copy
+Edit
+.
+├── client                  # Next.js PWA frontend
+│   ├── components/
+│   ├── pages/
+│   ├── public/
+│   │   ├── icons/…         # PWA app icons
+│   │   └── manifest.json
+│   ├── styles/
+│   ├── next.config.js
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   └── package.json
+├── server                  # Express + Drizzle ORM backend
+│   ├── src/
+│   │   ├── db/
+│   │   │   ├── schema.ts
+│   │   │   └── drizzle.config.ts
+│   │   └── index.ts
+│   ├── tsconfig.json
+│   └── package.json
+├── capacitor.config.ts     # Capacitor mobile config
+├── .eslintrc.js
+├── .prettierrc.js
+├── lint-staged.config.js
+└── .husky/
+    └── pre-commit
+2. /client/next.config.js
+js
+Copy
+Edit
+// next.config.js
+const withPWA = require('next-pwa');
+
+module.exports = withPWA({
+  // Next.js config
+  reactStrictMode: true,
+  // PWA plugin config
+  pwa: {
+    dest: 'public',           // where to output service worker & assets
+    register: true,           // auto-register SW in _app.js
+    skipWaiting: true,        // activate new SW ASAP
+    // Next-PWA uses Workbox under the hood—custom strategies can go here
+    // e.g. runtimeCaching: [ { urlPattern: /\/api\//, handler: 'NetworkFirst' }, … ]
+  },
+});
+3. /client/public/manifest.json
+json
+Copy
+Edit
+{
+  "name": "My App Name",               /* Full app name */
+  "short_name": "MyApp",               /* Shown under icon */
+  "start_url": "/",                    /* Launch path */
+  "display": "standalone",             /* Hide browser UI */
+  "background_color": "#ffffff",       /* Splash background */
+  "theme_color": "#1d4ed8",           /* Toolbar color */
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+4. Service Worker
+Note: Next-PWA auto-generates a service worker (.next/static/workbox) using Workbox.
+To customize, add a runtimeCaching array in the pwa section of next.config.js (see above).
+
+5. /capacitor.config.ts
+ts
+Copy
+Edit
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.example.myapp',      // Bundle/package ID
+  appName: 'My App Name',          // Display name on device
+  webDir: 'client/out',            // Next.js export output
+  bundledWebRuntime: false,        // Don’t bundle Capacitor runtime
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 3000,    // Show splash 3s
+      backgroundColor: '#ffffffff'
+    },
+    StatusBar: {
+      style: 'DARK'                // Dark text on light background
+    }
+  }
+};
+
+export default config;
+6. Tailwind & PostCSS (/client)
+tailwind.config.js
+
+js
+Copy
+Edit
+module.exports = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {},       // Customize design tokens here
+  },
+  plugins: [],        // Add Tailwind plugins (forms, typography, etc.)
+};
+postcss.config.js
+
+js
+Copy
+Edit
+module.exports = {
+  plugins: {
+    tailwindcss: {},   // Tailwind’s core
+    autoprefixer: {},  // Vendor prefixes
+  },
+};
+7. Drizzle ORM Setup (/server/src/db)
+schema.ts
+
+ts
+Copy
+Edit
+import { pgTable, serial, text, integer, timestamp } from 'drizzle-orm/pg-core';
+
+// Users table
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull(),
+  name: text('name'),
+  created_at: timestamp('created_at').defaultNow(),
+});
+
+// Sales orders
+export const sales_orders = pgTable('sales_orders', {
+  id: serial('id').primaryKey(),
+  user_id: integer('user_id').references(() => users.id),
+  total: integer('total').notNull(),
+  created_at: timestamp('created_at').defaultNow(),
+});
+
+// Inventory items
+export const inventory = pgTable('inventory', {
+  id: serial('id').primaryKey(),
+  product_name: text('product_name').notNull(),
+  quantity: integer('quantity').notNull(),
+  updated_at: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+drizzle.config.ts
+
+ts
+Copy
+Edit
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema';
+
+// Initialize a Postgres connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,  // Set in .env
+});
+
+export const db = drizzle(pool, { schema });
+8. Express Server (/server/src/index.ts)
+ts
+Copy
+Edit
+import express from 'express';
+import dotenv from 'dotenv';
+import { db } from './db/drizzle.config';
+
+dotenv.config();  // Load DB URL, PORT
+
+const app = express();
+app.use(express.json());
+
+// API stub
+app.use('/api', (req, res) => {
+  res.json({ message: 'Hello from Express + Drizzle!' });
+});
+
+// Initialize Drizzle (e.g., test connection)
+db.query`SELECT 1`.then(() => {
+  console.log('🗄️  DB connected');
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+});
+9. TypeScript Configs
+/client/tsconfig.json
+
+json
+Copy
+Edit
+{
+  "compilerOptions": {
+    "target": "es6",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve"
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+/server/tsconfig.json
+
+json
+Copy
+Edit
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+10. Linting & Formatting
+.eslintrc.js
+
+js
+Copy
+Edit
+module.exports = {
+  root: true,
+  parser: '@typescript-eslint/parser', 
+  parserOptions: { ecmaVersion: 2020, sourceType: 'module' },
+  extends: [
+    'eslint:recommended',                    // core JS rules
+    'plugin:@typescript-eslint/recommended', // TS-specific checks
+    'next/core-web-vitals'                  // Next.js best practices
+  ],
+  rules: {
+    // your overrides, e.g.:
+    '@typescript-eslint/explicit-module-boundary-types': 'off'
+  },
+};
+.prettierrc.js
+
+js
+Copy
+Edit
+module.exports = {
+  singleQuote: true,      // prefer '
+  trailingComma: 'all',   // diff-friendly
+  printWidth: 80,         // wrap at 80 chars
+  semi: true
+};
+lint-staged.config.js
+
+js
+Copy
+Edit
+module.exports = {
+  '**/*.{js,ts,jsx,tsx}': [
+    'eslint --fix',       // fix lint errors
+    'prettier --write'    // format code
+  ]
+};
+11. Husky (.husky/pre-commit)
+bash
+Copy
+Edit
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+npx lint-staged           # run staged lint & prettier
+12. Dependencies
+bash
+Copy
+Edit
+# In /client
+npm install next react react-dom next-pwa tailwindcss postcss autoprefixer typescript @types/react @types/node
+
+# In /server
+npm install express drizzle-orm pg dotenv typescript @types/express
+
+# Dev tools (root or both)
+npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin prettier husky lint-staged

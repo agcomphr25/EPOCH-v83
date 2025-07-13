@@ -20,6 +20,18 @@ const categories = [
   'Scopes',
   'Accessories',
   'Hardware',
+  'Springs',
+  'Screws',
+  'Bolts',
+  'Nuts',
+  'Washers',
+  'Pins',
+  'Tools',
+  'Lubricants',
+  'Cleaning Supplies',
+  'Safety Equipment',
+  'Raw Materials',
+  'Finished Goods',
   'Other'
 ];
 

@@ -10,9 +10,7 @@ import {
   insertFeatureSubCategorySchema,
   insertFeatureSchema,
   insertStockModelSchema,
-  insertOrderDraftSchema,
-  insertFormSchema,
-  insertFormSubmissionSchema
+  insertOrderDraftSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -503,90 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Forms routes
-  app.get("/api/forms", async (req, res) => {
-    try {
-      const forms = await storage.getAllForms();
-      res.json(forms);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch forms" });
-    }
-  });
 
-  app.get("/api/forms/:id", async (req, res) => {
-    try {
-      const form = await storage.getForm(req.params.id);
-      if (!form) {
-        return res.status(404).json({ error: "Form not found" });
-      }
-      res.json(form);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch form" });
-    }
-  });
-
-  app.post("/api/forms", async (req, res) => {
-    try {
-      console.log("Raw request body:", req.body);
-      console.log("Body type:", typeof req.body);
-      const result = insertFormSchema.parse(req.body);
-      const form = await storage.createForm(result);
-      res.json(form);
-    } catch (error) {
-      console.error("Form creation error:", error);
-      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid form data" });
-    }
-  });
-
-  app.put("/api/forms/:id", async (req, res) => {
-    try {
-      const result = insertFormSchema.parse(req.body);
-      const form = await storage.updateForm(req.params.id, result);
-      res.json(form);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid form data" });
-    }
-  });
-
-  app.delete("/api/forms/:id", async (req, res) => {
-    try {
-      await storage.deleteForm(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete form" });
-    }
-  });
-
-  // Form submissions routes
-  app.get("/api/form-submissions", async (req, res) => {
-    try {
-      const { formId } = req.query;
-      const submissions = await storage.getAllFormSubmissions(formId as string);
-      res.json(submissions);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch form submissions" });
-    }
-  });
-
-  app.post("/api/form-submissions", async (req, res) => {
-    try {
-      const result = insertFormSubmissionSchema.parse(req.body);
-      const submission = await storage.createFormSubmission(result);
-      res.json(submission);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid submission data" });
-    }
-  });
-
-  app.delete("/api/form-submissions/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteFormSubmission(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete submission" });
-    }
-  });
 
   const httpServer = createServer(app);
 

@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 13, 2025 (Early Morning)**: Successfully isolated and removed all FormBuilder and ReportBuilder code from active codebase - removed database tables, storage interface, API routes, components, pages, and navigation elements to prevent conflicts with existing work
 - **July 12, 2025 (Late Evening)**: Successfully resolved critical draft loading issue - fixed URL parameter extraction to use window.location.search instead of wouter's location API, enabling proper draft form population when clicking "Edit" from Draft Orders page
 - **July 12, 2025 (Evening)**: Implemented complete Stock Model management system with database table, API endpoints, and UI manager - replaced hardcoded stock models with dynamic database-driven system
 - **July 12, 2025 (Evening)**: Updated pricing formula to include personalization feature option prices - QD accessories and other dropdown options now add their specific prices to order totals

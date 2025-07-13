@@ -1,6 +1,7 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
   inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
+  timeClockEntries, checklistItems, onboardingDocs,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -18,7 +19,10 @@ import {
   type QcDefinition, type InsertQcDefinition,
   type QcSubmission, type InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
-  type MaintenanceLog, type InsertMaintenanceLog
+  type MaintenanceLog, type InsertMaintenanceLog,
+  type TimeClockEntry, type InsertTimeClockEntry,
+  type ChecklistItem, type InsertChecklistItem,
+  type OnboardingDoc, type InsertOnboardingDoc
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -152,6 +156,26 @@ export interface IStorage {
   createMaintenanceLog(data: InsertMaintenanceLog): Promise<MaintenanceLog>;
   updateMaintenanceLog(id: number, data: Partial<InsertMaintenanceLog>): Promise<MaintenanceLog>;
   deleteMaintenanceLog(id: number): Promise<void>;
+
+  // Time Clock CRUD
+  getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }>;
+  clockIn(employeeId: string, timestamp: string): Promise<void>;
+  clockOut(employeeId: string, timestamp: string): Promise<void>;
+  getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]>;
+  createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
+  updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry>;
+
+  // Checklist CRUD
+  getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]>;
+  createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem>;
+  updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem>;
+  completeChecklist(employeeId: string, date: string, items: ChecklistItem[]): Promise<void>;
+
+  // Onboarding Docs CRUD
+  getOnboardingDocs(employeeId: string): Promise<OnboardingDoc[]>;
+  createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc>;
+  signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc>;
+  updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc>;
 
 }
 
@@ -721,6 +745,200 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMaintenanceLog(id: number): Promise<void> {
     await db.delete(maintenanceLogs).where(eq(maintenanceLogs.id, id));
+  }
+
+  // Time Clock CRUD
+  async getTimeClockStatus(employeeId: string): Promise<{ status: 'IN' | 'OUT'; clockIn: string | null; clockOut: string | null }> {
+    const today = new Date().toISOString().split('T')[0];
+    const [entry] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .limit(1);
+    
+    if (!entry) {
+      return { status: 'OUT', clockIn: null, clockOut: null };
+    }
+    
+    return {
+      status: entry.clockOut ? 'OUT' : 'IN',
+      clockIn: entry.clockIn?.toISOString() || null,
+      clockOut: entry.clockOut?.toISOString() || null
+    };
+  }
+
+  async clockIn(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockInTime = new Date(timestamp);
+    
+    // Check if entry already exists for today
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .limit(1);
+    
+    if (existing) {
+      // Update existing entry
+      await db.update(timeClockEntries)
+        .set({ clockIn: clockInTime, clockOut: null })
+        .where(eq(timeClockEntries.id, existing.id));
+    } else {
+      // Create new entry
+      await db.insert(timeClockEntries).values({
+        employeeId,
+        clockIn: clockInTime,
+        clockOut: null,
+        date: today
+      });
+    }
+  }
+
+  async clockOut(employeeId: string, timestamp: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const clockOutTime = new Date(timestamp);
+    
+    const [existing] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
+      .limit(1);
+    
+    if (existing) {
+      await db.update(timeClockEntries)
+        .set({ clockOut: clockOutTime })
+        .where(eq(timeClockEntries.id, existing.id));
+    }
+  }
+
+  async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
+    let query = db.select().from(timeClockEntries);
+    
+    if (employeeId && date) {
+      query = query.where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, date)));
+    } else if (employeeId) {
+      query = query.where(eq(timeClockEntries.employeeId, employeeId));
+    } else if (date) {
+      query = query.where(eq(timeClockEntries.date, date));
+    }
+    
+    return await query.orderBy(desc(timeClockEntries.date));
+  }
+
+  async createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
+    const [entry] = await db.insert(timeClockEntries).values(data).returning();
+    return entry;
+  }
+
+  async updateTimeClockEntry(id: number, data: Partial<InsertTimeClockEntry>): Promise<TimeClockEntry> {
+    const [entry] = await db.update(timeClockEntries)
+      .set(data)
+      .where(eq(timeClockEntries.id, id))
+      .returning();
+    return entry;
+  }
+
+  // Checklist CRUD
+  async getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]> {
+    const items = await db
+      .select()
+      .from(checklistItems)
+      .where(and(eq(checklistItems.employeeId, employeeId), eq(checklistItems.date, date)))
+      .orderBy(checklistItems.id);
+    
+    // If no items exist for today, create default checklist items
+    if (items.length === 0) {
+      const defaultItems = [
+        { employeeId, date, label: 'Review safety procedures', type: 'checkbox', required: true },
+        { employeeId, date, label: 'Check equipment status', type: 'dropdown', options: ['Good', 'Needs Attention', 'Broken'], required: true },
+        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown', options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
+        { employeeId, date, label: 'Special notes', type: 'text', required: false }
+      ];
+      
+      const createdItems = [];
+      for (const item of defaultItems) {
+        const [created] = await db.insert(checklistItems).values(item).returning();
+        createdItems.push(created);
+      }
+      return createdItems;
+    }
+    
+    return items;
+  }
+
+  async createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem> {
+    const [item] = await db.insert(checklistItems).values(data).returning();
+    return item;
+  }
+
+  async updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem> {
+    const [item] = await db.update(checklistItems)
+      .set(data)
+      .where(eq(checklistItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async completeChecklist(employeeId: string, date: string, items: ChecklistItem[]): Promise<void> {
+    // Update all items with their values
+    for (const item of items) {
+      await db.update(checklistItems)
+        .set({ value: item.value })
+        .where(eq(checklistItems.id, item.id));
+    }
+  }
+
+  // Onboarding Docs CRUD
+  async getOnboardingDocs(employeeId: string): Promise<OnboardingDoc[]> {
+    let docs = await db
+      .select()
+      .from(onboardingDocs)
+      .where(eq(onboardingDocs.employeeId, employeeId))
+      .orderBy(onboardingDocs.id);
+    
+    // If no docs exist, create default onboarding documents
+    if (docs.length === 0) {
+      const defaultDocs = [
+        { employeeId, title: 'Employee Handbook', url: '/docs/employee-handbook.pdf', signed: false },
+        { employeeId, title: 'Safety Training Manual', url: '/docs/safety-training.pdf', signed: false },
+        { employeeId, title: 'Code of Conduct', url: '/docs/code-of-conduct.pdf', signed: false },
+        { employeeId, title: 'Emergency Procedures', url: '/docs/emergency-procedures.pdf', signed: false }
+      ];
+      
+      const createdDocs = [];
+      for (const doc of defaultDocs) {
+        const [created] = await db.insert(onboardingDocs).values(doc).returning();
+        createdDocs.push(created);
+      }
+      return createdDocs;
+    }
+    
+    return docs;
+  }
+
+  async createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc> {
+    const [doc] = await db.insert(onboardingDocs).values(data).returning();
+    return doc;
+  }
+
+  async signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc> {
+    const [doc] = await db.update(onboardingDocs)
+      .set({ 
+        signed: true, 
+        signatureDataURL, 
+        signedAt: new Date() 
+      })
+      .where(eq(onboardingDocs.id, id))
+      .returning();
+    return doc;
+  }
+
+  async updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc> {
+    const [doc] = await db.update(onboardingDocs)
+      .set(data)
+      .where(eq(onboardingDocs.id, id))
+      .returning();
+    return doc;
   }
 
 }

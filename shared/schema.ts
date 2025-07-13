@@ -229,6 +229,39 @@ export const maintenanceLogs = pgTable("maintenance_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Employee Portal & Time Keeping Tables
+export const timeClockEntries = pgTable("time_clock_entries", {
+  id: serial("id").primaryKey(),
+  employeeId: text("employee_id").notNull(),
+  clockIn: timestamp("clock_in"),
+  clockOut: timestamp("clock_out"),
+  date: date("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const checklistItems = pgTable("checklist_items", {
+  id: serial("id").primaryKey(),
+  employeeId: text("employee_id").notNull(),
+  date: date("date").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(), // "checkbox", "dropdown", "text"
+  options: json("options"), // for dropdown options
+  value: text("value"), // stored value
+  required: boolean("required").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const onboardingDocs = pgTable("onboarding_docs", {
+  id: serial("id").primaryKey(),
+  employeeId: text("employee_id").notNull(),
+  title: text("title").notNull(),
+  url: text("url").notNull(), // PDF URL
+  signed: boolean("signed").default(false),
+  signatureDataURL: text("signature_data_url"), // base64 signature image
+  signedAt: timestamp("signed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -469,6 +502,41 @@ export const insertMaintenanceLogSchema = createInsertSchema(maintenanceLogs).om
   nextDueDate: z.coerce.date().optional().nullable(),
 });
 
+export const insertTimeClockEntrySchema = createInsertSchema(timeClockEntries).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  employeeId: z.string().min(1, "Employee ID is required"),
+  clockIn: z.coerce.date().optional().nullable(),
+  clockOut: z.coerce.date().optional().nullable(),
+  date: z.coerce.date(),
+});
+
+export const insertChecklistItemSchema = createInsertSchema(checklistItems).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  employeeId: z.string().min(1, "Employee ID is required"),
+  date: z.coerce.date(),
+  label: z.string().min(1, "Label is required"),
+  type: z.enum(['checkbox', 'dropdown', 'text']),
+  options: z.array(z.string()).optional().nullable(),
+  value: z.string().optional().nullable(),
+  required: z.boolean().default(false),
+});
+
+export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs).omit({
+  id: true,
+  createdAt: true,
+  signedAt: true,
+}).extend({
+  employeeId: z.string().min(1, "Employee ID is required"),
+  title: z.string().min(1, "Title is required"),
+  url: z.string().url("Must be a valid URL"),
+  signed: z.boolean().default(false),
+  signatureDataURL: z.string().optional().nullable(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -509,3 +577,9 @@ export type InsertMaintenanceSchedule = z.infer<typeof insertMaintenanceSchedule
 export type MaintenanceSchedule = typeof maintenanceSchedules.$inferSelect;
 export type InsertMaintenanceLog = z.infer<typeof insertMaintenanceLogSchema>;
 export type MaintenanceLog = typeof maintenanceLogs.$inferSelect;
+export type InsertTimeClockEntry = z.infer<typeof insertTimeClockEntrySchema>;
+export type TimeClockEntry = typeof timeClockEntries.$inferSelect;
+export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+export type ChecklistItem = typeof checklistItems.$inferSelect;
+export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
+export type OnboardingDoc = typeof onboardingDocs.$inferSelect;

@@ -19,7 +19,10 @@ import {
   insertQcDefinitionSchema,
   insertQcSubmissionSchema,
   insertMaintenanceScheduleSchema,
-  insertMaintenanceLogSchema
+  insertMaintenanceLogSchema,
+  insertTimeClockEntrySchema,
+  insertChecklistItemSchema,
+  insertOnboardingDocSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -809,6 +812,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create maintenance log error:", error);
       res.status(400).json({ error: "Invalid maintenance log data" });
+    }
+  });
+
+  // Employee Portal - Time Clock routes
+  app.get("/api/timeclock", async (req, res) => {
+    try {
+      const { employeeId } = req.query;
+      if (!employeeId) {
+        return res.status(400).json({ error: "Employee ID is required" });
+      }
+      const status = await storage.getTimeClockStatus(employeeId as string);
+      res.json(status);
+    } catch (error) {
+      console.error("Get time clock status error:", error);
+      res.status(500).json({ error: "Failed to get time clock status" });
+    }
+  });
+
+  app.post("/api/timeclock", async (req, res) => {
+    try {
+      const { employeeId, action, timestamp } = req.body;
+      if (!employeeId || !action || !timestamp) {
+        return res.status(400).json({ error: "Employee ID, action, and timestamp are required" });
+      }
+      
+      if (action === 'IN') {
+        await storage.clockIn(employeeId, timestamp);
+      } else if (action === 'OUT') {
+        await storage.clockOut(employeeId, timestamp);
+      } else {
+        return res.status(400).json({ error: "Invalid action. Must be 'IN' or 'OUT'" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Time clock action error:", error);
+      res.status(500).json({ error: "Failed to perform time clock action" });
+    }
+  });
+
+  app.get("/api/timeclock/entries", async (req, res) => {
+    try {
+      const { employeeId, date } = req.query;
+      const entries = await storage.getTimeClockEntries(
+        employeeId as string, 
+        date as string
+      );
+      res.json(entries);
+    } catch (error) {
+      console.error("Get time clock entries error:", error);
+      res.status(500).json({ error: "Failed to get time clock entries" });
+    }
+  });
+
+  // Employee Portal - Checklist routes
+  app.get("/api/checklist", async (req, res) => {
+    try {
+      const { employeeId, date } = req.query;
+      if (!employeeId || !date) {
+        return res.status(400).json({ error: "Employee ID and date are required" });
+      }
+      const items = await storage.getChecklistItems(employeeId as string, date as string);
+      res.json(items);
+    } catch (error) {
+      console.error("Get checklist items error:", error);
+      res.status(500).json({ error: "Failed to get checklist items" });
+    }
+  });
+
+  app.post("/api/checklist", async (req, res) => {
+    try {
+      const validatedData = insertChecklistItemSchema.parse(req.body);
+      const item = await storage.createChecklistItem(validatedData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create checklist item error:", error);
+      res.status(400).json({ error: "Invalid checklist item data" });
+    }
+  });
+
+  app.post("/api/checklist/complete", async (req, res) => {
+    try {
+      const { employeeId, date, items } = req.body;
+      if (!employeeId || !date || !items) {
+        return res.status(400).json({ error: "Employee ID, date, and items are required" });
+      }
+      await storage.completeChecklist(employeeId, date, items);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Complete checklist error:", error);
+      res.status(500).json({ error: "Failed to complete checklist" });
+    }
+  });
+
+  // Employee Portal - Onboarding Documents routes
+  app.get("/api/onboarding-docs", async (req, res) => {
+    try {
+      const { employeeId } = req.query;
+      if (!employeeId) {
+        return res.status(400).json({ error: "Employee ID is required" });
+      }
+      const docs = await storage.getOnboardingDocs(employeeId as string);
+      res.json(docs);
+    } catch (error) {
+      console.error("Get onboarding docs error:", error);
+      res.status(500).json({ error: "Failed to get onboarding documents" });
+    }
+  });
+
+  app.post("/api/onboarding-docs", async (req, res) => {
+    try {
+      const validatedData = insertOnboardingDocSchema.parse(req.body);
+      const doc = await storage.createOnboardingDoc(validatedData);
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Create onboarding doc error:", error);
+      res.status(400).json({ error: "Invalid onboarding document data" });
+    }
+  });
+
+  app.post("/api/onboarding-docs/:id/sign", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { signatureDataURL } = req.body;
+      if (!signatureDataURL) {
+        return res.status(400).json({ error: "Signature data URL is required" });
+      }
+      const doc = await storage.signOnboardingDoc(id, signatureDataURL);
+      res.json(doc);
+    } catch (error) {
+      console.error("Sign onboarding doc error:", error);
+      res.status(500).json({ error: "Failed to sign onboarding document" });
     }
   });
 

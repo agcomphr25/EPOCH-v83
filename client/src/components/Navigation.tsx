@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,12 @@ export default function Navigation() {
       label: 'Maintenance',
       icon: Wrench,
       description: 'Preventive maintenance schedules'
+    },
+    {
+      path: '/employee-portal',
+      label: 'Employee Portal',
+      icon: Users,
+      description: 'Employee time tracking and onboarding'
     }
   ];
 

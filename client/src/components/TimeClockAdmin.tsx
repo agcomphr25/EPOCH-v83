@@ -116,7 +116,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
   // Filter entries based on search
   const filteredEntries = timeEntries.filter(entry => {
     if (!searchTerm) return true;
-    const employee = employees.find(emp => emp.id.toString() === entry.employeeId);
+    const employee = employees.find(emp => emp.employeeCode === entry.employeeId);
     return employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
            entry.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
   });
@@ -143,8 +143,12 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
   };
 
   const getEmployeeName = (employeeId: string) => {
-    const employee = employees.find(emp => emp.id.toString() === employeeId);
+    const employee = employees.find(emp => emp.employeeCode === employeeId);
     return employee?.name || `Employee ${employeeId}`;
+  };
+
+  const getEmployeeById = (employeeId: string) => {
+    return employees.find(emp => emp.employeeCode === employeeId);
   };
 
   return (
@@ -186,7 +190,7 @@ export default function TimeClockAdmin({ className }: TimeClockAdminProps) {
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
                   {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id.toString()}>
+                    <SelectItem key={employee.id} value={employee.employeeCode || employee.id.toString()}>
                       {employee.name}
                     </SelectItem>
                   ))}
@@ -369,7 +373,7 @@ function TimeEntryForm({ employees, initialData, onSubmit, isLoading }: TimeEntr
           </SelectTrigger>
           <SelectContent>
             {employees.map((employee) => (
-              <SelectItem key={employee.id} value={employee.id.toString()}>
+              <SelectItem key={employee.id} value={employee.employeeCode || employee.id.toString()}>
                 {employee.name}
               </SelectItem>
             ))}

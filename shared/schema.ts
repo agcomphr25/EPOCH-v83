@@ -171,6 +171,7 @@ export const inventoryScans = pgTable("inventory_scans", {
 
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
+  employeeCode: text("employee_code").unique(),
   name: text("name").notNull(),
   role: text("role").notNull(),
   department: text("department"),

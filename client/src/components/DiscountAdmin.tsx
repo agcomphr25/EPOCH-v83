@@ -30,10 +30,11 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest('/api/short-term-sales', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
+      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' });
       toast({ title: "Success", description: "Short-term sale created successfully" });
     },
     onError: () => {
@@ -46,10 +47,11 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
     mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest(`/api/short-term-sales/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
+      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' });
       toast({ title: "Success", description: "Short-term sale updated successfully" });
     },
     onError: () => {
@@ -147,6 +149,11 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Short-Term Sales
+            {formSale.id && (
+              <Badge variant="secondary" className="ml-2">
+                Editing: {formSale.name}
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -199,14 +206,26 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                 />
               </div>
             </div>
-            <Button 
-              type="submit" 
-              disabled={!isFormValid || createMutation.isPending || updateMutation.isPending} 
-              className="w-full md:w-auto"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              {formSale.id ? 'Update' : 'Add'} Sale
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                type="submit" 
+                disabled={!isFormValid || createMutation.isPending || updateMutation.isPending} 
+                className="w-full md:w-auto"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {formSale.id ? 'Update' : 'Add'} Sale
+              </Button>
+              {formSale.id && (
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' })}
+                  className="w-full md:w-auto"
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
           </form>
 
           {isLoading ? (

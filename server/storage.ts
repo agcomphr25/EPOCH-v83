@@ -97,6 +97,7 @@ export interface IStorage {
   updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft>;
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
+  getLastOrderId(): Promise<string>;
   
   // Forms CRUD
   getAllForms(): Promise<Form[]>;
@@ -489,6 +490,12 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
     return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+  }
+
+  async getLastOrderId(): Promise<string> {
+    // Get the most recent order draft by order ID
+    const [lastOrder] = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.createdAt)).limit(1);
+    return lastOrder?.orderId || '';
   }
 
   // Forms CRUD

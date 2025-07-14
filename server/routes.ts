@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { generateP1OrderId } from "./utils/orderIdGenerator";
 
 // SmartyStreets direct API calls
 import axios from 'axios';
@@ -192,8 +193,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Order API endpoints for OrderEntry component
   app.get("/api/orders/last-id", async (req, res) => {
     try {
-      // Mock response for now - in real implementation, query the orders table
-      res.json({ lastOrderId: "AP001" });
+      const lastOrderId = await storage.getLastOrderId();
+      const nextOrderId = generateP1OrderId(new Date(), lastOrderId);
+      res.json({ lastOrderId: nextOrderId });
     } catch (error) {
       res.status(500).json({ error: "Failed to retrieve last order ID" });
     }

@@ -121,7 +121,7 @@ export default function FeatureManager() {
   const createFeatureMutation = useMutation({
     mutationFn: (data: Partial<Feature>) => apiRequest('/api/features', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: data
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/features'] });
@@ -138,7 +138,7 @@ export default function FeatureManager() {
     mutationFn: ({ id, data }: { id: string; data: Partial<Feature> }) => 
       apiRequest(`/api/features/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data)
+        body: data
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/features'] });
@@ -166,7 +166,7 @@ export default function FeatureManager() {
   const createCategoryMutation = useMutation({
     mutationFn: (data: Partial<FeatureCategory>) => apiRequest('/api/feature-categories', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: data
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });
@@ -183,7 +183,7 @@ export default function FeatureManager() {
     mutationFn: ({ id, data }: { id: string; data: Partial<FeatureCategory> }) => 
       apiRequest(`/api/feature-categories/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data)
+        body: data
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/feature-categories'] });

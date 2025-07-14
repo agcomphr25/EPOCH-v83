@@ -12,6 +12,7 @@ import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
 import OrdersList from "./pages/OrdersList";
+import OrdersListSimple from "./pages/OrdersListSimple";
 import FeatureManager from "./pages/FeatureManager";
 import StockModels from "./pages/StockModels";
 import DraftOrders from "./components/DraftOrders";
@@ -49,9 +50,9 @@ function App() {
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
-                <Route path="/orders-list" component={OrdersList} />
-                <Route path="/orders" component={OrdersList} />
-                <Route path="/all-orders" component={OrdersList} />
+                <Route path="/orders-list" component={OrdersListSimple} />
+                <Route path="/orders" component={OrdersListSimple} />
+                <Route path="/all-orders" component={OrdersListSimple} />
                 <Route path="/draft-orders" component={DraftOrders} />
                 <Route path="/feature-manager" component={FeatureManager} />
                 <Route path="/stock-models" component={StockModels} />

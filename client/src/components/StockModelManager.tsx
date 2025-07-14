@@ -59,7 +59,7 @@ export default function StockModelManager() {
   const createMutation = useMutation({
     mutationFn: (data: StockModelFormData) => apiRequest('/api/stock-models', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
@@ -83,7 +83,7 @@ export default function StockModelManager() {
   const updateMutation = useMutation({
     mutationFn: (data: StockModelFormData) => apiRequest(`/api/stock-models/${editingModel?.id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });

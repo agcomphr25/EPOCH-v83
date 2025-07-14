@@ -50,23 +50,68 @@ export default function AddressInput({ label, value, onChange, required = false 
     fetchSuggestions(query);
   }, [query]);
 
-  const handleSelect = async (street: string) => {
-    setQuery(street);
+  // Update query when value.street changes (for external updates)
+  useEffect(() => {
+    setQuery(value.street || '');
+  }, [value.street]);
+
+  const parseAddressFromSuggestion = (suggestion: string): AddressData => {
+    // SmartyStreets typically returns suggestions in format: "123 Main St, City, ST 12345"
+    const parts = suggestion.split(', ');
+    
+    if (parts.length >= 3) {
+      const street = parts[0];
+      const city = parts[1];
+      const stateZip = parts[2];
+      
+      // Parse state and zip from "ST 12345" format
+      const stateZipMatch = stateZip.match(/^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+      const state = stateZipMatch ? stateZipMatch[1] : '';
+      const zipCode = stateZipMatch ? stateZipMatch[2] : '';
+      
+      return {
+        street,
+        city,
+        state,
+        zipCode,
+        country: 'United States'
+      };
+    }
+    
+    // Fallback: treat the entire suggestion as street address
+    return {
+      street: suggestion,
+      city: value.city,
+      state: value.state,
+      zipCode: value.zipCode,
+      country: value.country || 'United States'
+    };
+  };
+
+  const handleSelect = async (suggestion: string) => {
+    setQuery(suggestion);
     setOpen(false);
     setSuggestions([]);
     
     try {
-      const validated = await validateAddress({ ...value, street });
+      // First parse the suggestion to extract address components
+      const parsedAddress = parseAddressFromSuggestion(suggestion);
+      
+      // Then validate the parsed address with SmartyStreets
+      const validated = await validateAddress(parsedAddress);
       onChange(validated);
       toast({
         title: 'Address validated',
-        description: 'Address has been validated and normalized',
+        description: 'Address has been validated and all fields filled',
       });
     } catch (error) {
+      // If validation fails, still use the parsed address
+      const parsedAddress = parseAddressFromSuggestion(suggestion);
+      onChange(parsedAddress);
       toast({
-        title: 'Address validation failed',
-        description: (error as Error).message,
-        variant: 'destructive',
+        title: 'Address selected',
+        description: 'Address fields have been filled. You may need to verify the details.',
+        variant: 'default',
       });
     }
   };

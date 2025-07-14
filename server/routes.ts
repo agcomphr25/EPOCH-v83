@@ -992,16 +992,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Query parameter is required" });
       }
       
-      // Mock address autocomplete - in production, integrate with Google Places API or similar
-      const mockSuggestions = [
-        `${query} Main St, New York, NY 10001`,
-        `${query} Oak Avenue, Los Angeles, CA 90210`,
-        `${query} Pine Street, Chicago, IL 60601`,
-        `${query} Cedar Drive, Houston, TX 77001`,
-        `${query} Elm Boulevard, Phoenix, AZ 85001`
-      ].filter(suggestion => suggestion.toLowerCase().includes(query.toLowerCase()));
+      // SmartyStreets US Autocomplete API
+      const SmartyStreetsSDK = require("smartystreets-javascript-sdk");
+      const SmartyStreetsCore = SmartyStreetsSDK.core;
+      const Lookup = SmartyStreetsSDK.usAutocomplete.Lookup;
+      const ClientBuilder = SmartyStreetsSDK.ClientBuilder;
       
-      res.json(mockSuggestions);
+      const authId = process.env.SMARTYSTREETS_AUTH_ID;
+      const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+      
+      if (!authId || !authToken) {
+        return res.status(500).json({ error: "SmartyStreets credentials not configured" });
+      }
+      
+      const credentials = new SmartyStreetsCore.StaticCredentials(authId, authToken);
+      const client = new ClientBuilder(credentials).buildUsAutocompleteApiClient();
+      
+      const lookup = new Lookup(query);
+      lookup.maxSuggestions = 5;
+      
+      const suggestions = await new Promise((resolve, reject) => {
+        client.send(lookup, (err, response) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(response.suggestions || []);
+          }
+        });
+      });
+      
+      const formattedSuggestions = suggestions.map(suggestion => suggestion.text);
+      res.json(formattedSuggestions);
     } catch (error) {
       console.error("Address autocomplete error:", error);
       res.status(500).json({ error: "Failed to fetch address suggestions" });
@@ -1015,16 +1036,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Address is required" });
       }
       
-      // Mock address validation - in production, integrate with USPS API or similar
-      const validated = {
-        ...address,
-        // Normalize some common fields
-        state: address.state?.toUpperCase(),
-        zipCode: address.zipCode?.replace(/\D/g, '').slice(0, 5),
-        country: address.country || "United States"
+      // SmartyStreets US Street API
+      const SmartyStreetsSDK = require("smartystreets-javascript-sdk");
+      const SmartyStreetsCore = SmartyStreetsSDK.core;
+      const Lookup = SmartyStreetsSDK.usStreet.Lookup;
+      const ClientBuilder = SmartyStreetsSDK.ClientBuilder;
+      
+      const authId = process.env.SMARTYSTREETS_AUTH_ID;
+      const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+      
+      if (!authId || !authToken) {
+        return res.status(500).json({ error: "SmartyStreets credentials not configured" });
+      }
+      
+      const credentials = new SmartyStreetsCore.StaticCredentials(authId, authToken);
+      const client = new ClientBuilder(credentials).buildUsStreetApiClient();
+      
+      const lookup = new Lookup();
+      lookup.street = address.street;
+      lookup.city = address.city;
+      lookup.state = address.state;
+      lookup.zipCode = address.zipCode;
+      
+      const results = await new Promise((resolve, reject) => {
+        client.send(lookup, (err, response) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(response.lookups?.[0]?.result || []);
+          }
+        });
+      });
+      
+      if (results.length === 0) {
+        return res.status(400).json({ error: "Address could not be validated" });
+      }
+      
+      const validated = results[0];
+      const normalizedAddress = {
+        street: `${validated.deliveryLine1}${validated.deliveryLine2 ? ' ' + validated.deliveryLine2 : ''}`,
+        city: validated.components.cityName,
+        state: validated.components.state,
+        zipCode: `${validated.components.zipCode}-${validated.components.plus4Code}`,
+        country: "United States"
       };
       
-      res.json(validated);
+      res.json(normalizedAddress);
     } catch (error) {
       console.error("Address validation error:", error);
       res.status(500).json({ error: "Failed to validate address" });

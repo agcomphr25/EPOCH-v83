@@ -47,7 +47,7 @@ export default function OrdersList() {
   });
 
   const { data: customers } = useQuery<Customer[]>({
-    queryKey: ['/api/customers/search'],
+    queryKey: ['/api/customers'],
   });
 
   const getCustomerName = (customerId: string) => {

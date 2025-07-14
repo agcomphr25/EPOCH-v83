@@ -681,8 +681,8 @@ export default function FeatureManager() {
               </div>
             </div>
 
-            {/* Options for dropdown */}
-            {featureForm.type === 'dropdown' && (
+            {/* Options for dropdown and checkbox */}
+            {(featureForm.type === 'dropdown' || featureForm.type === 'checkbox') && (
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <Label>Options</Label>

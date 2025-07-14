@@ -659,31 +659,11 @@ export default function OrderEntry() {
               {/* Customer Selection */}
               <div className="space-y-2">
                 <Label htmlFor="customer">Customer</Label>
-                <Combobox value={customer} onChange={setCustomer}>
-                  <div className="relative">
-                    <Combobox.Input
-                      className="w-full border rounded-md px-3 py-2"
-                      placeholder="Search customer..."
-                      displayValue={(customer: Customer) => customer?.name || ''}
-                      onChange={(event) => setCustomerQuery(event.target.value)}
-                    />
-                    <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md mt-1 max-h-60 overflow-auto">
-                      {customerOptions.map((customer) => (
-                        <Combobox.Option
-                          key={customer.id}
-                          value={customer}
-                          className={({ active }) =>
-                            `relative cursor-default select-none py-2 pl-3 pr-9 ${
-                              active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                            }`
-                          }
-                        >
-                          {customer.name}
-                        </Combobox.Option>
-                      ))}
-                    </Combobox.Options>
-                  </div>
-                </Combobox>
+                <Input
+                  placeholder="Search customer..."
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                />
                 {errors.customerId && <p className="text-red-500 text-sm">{errors.customerId}</p>}
               </div>
 
@@ -836,47 +816,41 @@ export default function OrderEntry() {
                     </Select>
                   )}
                   {featureDef.type === 'combobox' && (
-                    <Combobox
-                      value={features[featureDef.id] || ''}
-                      onChange={(value) => {
-                        setFeatures(prev => ({ ...prev, [featureDef.id]: value }));
-                        setPaintQuery('');
-                      }}
-                    >
-                      <div className="relative">
-                        <div className="flex">
-                          <Combobox.Input
-                            className="w-full border rounded-l-md px-3 py-2 bg-white border-r-0"
-                            placeholder="Select or search..."
-                            displayValue={(value: string) => {
-                              const option = featureDef.options?.find(opt => opt.value === value);
-                              return option ? option.label : '';
-                            }}
-                            onChange={(event) => setPaintQuery(event.target.value)}
-                          />
-                          <Combobox.Button className="border border-l-0 rounded-r-md px-2 py-2 bg-white hover:bg-gray-50">
-                            <ChevronDown className="h-4 w-4 text-gray-400" />
-                          </Combobox.Button>
-                        </div>
-                        <Combobox.Options className="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto mt-1">
-                          {featureDef.options?.filter((option) => 
-                            paintQuery === '' || option.label.toLowerCase().includes(paintQuery.toLowerCase())
-                          ).map((option) => (
-                            <Combobox.Option
-                              key={option.value}
-                              value={option.value}
-                              className={({ active }) =>
-                                `relative cursor-default select-none py-2 pl-3 pr-9 ${
-                                  active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                                }`
-                              }
-                            >
-                              {option.label}
-                            </Combobox.Option>
-                          ))}
-                        </Combobox.Options>
-                      </div>
-                    </Combobox>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {features[featureDef.id] 
+                            ? featureDef.options?.find(opt => opt.value === features[featureDef.id])?.label || features[featureDef.id]
+                            : "Select or search..."}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput placeholder="Search options..." />
+                          <CommandList>
+                            <CommandEmpty>No option found.</CommandEmpty>
+                            <CommandGroup>
+                              {featureDef.options?.map((option) => (
+                                <CommandItem
+                                  key={option.value}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    setFeatures(prev => ({ ...prev, [featureDef.id]: option.value }));
+                                  }}
+                                >
+                                  {option.label}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {featureDef.type === 'textarea' && (
                     <textarea

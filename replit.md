@@ -6,6 +6,8 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 14, 2025 (Afternoon)**: Removed all mock customers from database - cleaned up customer search to only show real customers entered by users, removed 10 sample customers with names like "John Smith", "Sarah Johnson", etc., and fixed customer address creation validation
+- **July 14, 2025 (Afternoon)**: Fixed customer creation validation error - updated frontend to properly clean empty email strings and backend schema to handle optional email fields correctly
 - **July 14, 2025 (Afternoon)**: Fixed critical Order Entry "Edit Order" and "Create Order" functionality - resolved JSON double-stringification error causing order creation failures and fixed customer dropdown not updating after adding new customers
 - **July 14, 2025 (Afternoon)**: Updated onSingleSubmit function to use correct '/api/orders/draft' endpoint instead of non-existent '/api/orders' endpoint, ensuring proper order creation workflow
 - **July 14, 2025 (Afternoon)**: Fixed CustomerSearchInput cache invalidation to properly refresh search results after creating new customers

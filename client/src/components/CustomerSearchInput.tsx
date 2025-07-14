@@ -95,7 +95,7 @@ export default function CustomerSearchInput({
             body: {
               customerId: response.id.toString(),
               ...customerAddress,
-              type: 'primary'
+              type: 'both'
             }
           });
         } catch (error) {

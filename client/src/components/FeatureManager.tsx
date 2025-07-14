@@ -341,10 +341,17 @@ export default function FeatureManager() {
   };
 
   const handleFeatureSubmit = () => {
+    // Ensure sortOrder is a valid number
+    const formData = {
+      ...featureForm,
+      sortOrder: featureForm.sortOrder || 0,
+      price: featureForm.price || 0
+    };
+    
     if (isEditing && selectedFeature) {
-      updateFeatureMutation.mutate({ id: selectedFeature.id, data: featureForm });
+      updateFeatureMutation.mutate({ id: selectedFeature.id, data: formData });
     } else {
-      createFeatureMutation.mutate(featureForm);
+      createFeatureMutation.mutate(formData);
     }
   };
 
@@ -650,7 +657,7 @@ export default function FeatureManager() {
                 <Input
                   type="number"
                   value={featureForm.sortOrder || 0}
-                  onChange={(e) => setFeatureForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) }))}
+                  onChange={(e) => setFeatureForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
                 />
               </div>
               <div>

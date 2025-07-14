@@ -106,8 +106,13 @@ export default function EnhancedFormRenderer({
     return () => {
       Object.values(sigPads.current).forEach(pad => {
         try {
-          if (pad && typeof pad.off === 'function') {
-            pad.off();
+          if (pad) {
+            if (typeof pad.off === 'function') {
+              pad.off();
+            }
+            if (typeof pad.cleanup === 'function') {
+              pad.cleanup();
+            }
           }
         } catch (error) {
           console.error('Error cleaning up signature pad:', error);
@@ -377,31 +382,108 @@ export default function EnhancedFormRenderer({
                           canvas.width = rect.width || 300;
                           canvas.height = rect.height || 128;
                           
-                          // Double-check that SignaturePad is available
-                          if (typeof SignaturePad !== 'function') {
-                            console.error('SignaturePad is not available');
-                            return;
-                          }
+                          // Check if we're in a webview/iframe context
+                          const isWebview = window.parent !== window || window.frameElement;
                           
-                          const pad = new SignaturePad(canvas, {
-                            backgroundColor: 'rgba(255, 255, 255, 0)',
-                            penColor: 'rgb(0, 0, 0)',
-                            minWidth: 0.5,
-                            maxWidth: 2.5,
-                            throttle: 16,
-                            minDistance: 5,
-                          });
-                          
-                          // Use onEnd callback instead of addEventListener
-                          pad.onEnd = () => {
-                            try {
-                              handleChange(key, pad.toDataURL());
-                            } catch (error) {
-                              console.error('Error saving signature:', error);
+                          if (isWebview) {
+                            // For webview, use a custom implementation without SignaturePad
+                            let isDrawing = false;
+                            let lastX = 0;
+                            let lastY = 0;
+                            
+                            const ctx = canvas.getContext('2d');
+                            if (!ctx) return;
+                            
+                            ctx.strokeStyle = '#000';
+                            ctx.lineWidth = 2;
+                            ctx.lineCap = 'round';
+                            ctx.lineJoin = 'round';
+                            
+                            const startDrawing = (e: MouseEvent | TouchEvent) => {
+                              isDrawing = true;
+                              const rect = canvas.getBoundingClientRect();
+                              const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+                              const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+                              lastX = clientX - rect.left;
+                              lastY = clientY - rect.top;
+                            };
+                            
+                            const draw = (e: MouseEvent | TouchEvent) => {
+                              if (!isDrawing) return;
+                              e.preventDefault();
+                              
+                              const rect = canvas.getBoundingClientRect();
+                              const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+                              const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+                              const currentX = clientX - rect.left;
+                              const currentY = clientY - rect.top;
+                              
+                              ctx.beginPath();
+                              ctx.moveTo(lastX, lastY);
+                              ctx.lineTo(currentX, currentY);
+                              ctx.stroke();
+                              
+                              lastX = currentX;
+                              lastY = currentY;
+                            };
+                            
+                            const stopDrawing = () => {
+                              if (!isDrawing) return;
+                              isDrawing = false;
+                              handleChange(key, canvas.toDataURL());
+                            };
+                            
+                            // Mouse events
+                            canvas.addEventListener('mousedown', startDrawing);
+                            canvas.addEventListener('mousemove', draw);
+                            canvas.addEventListener('mouseup', stopDrawing);
+                            canvas.addEventListener('mouseout', stopDrawing);
+                            
+                            // Touch events
+                            canvas.addEventListener('touchstart', startDrawing);
+                            canvas.addEventListener('touchmove', draw);
+                            canvas.addEventListener('touchend', stopDrawing);
+                            
+                            // Store cleanup function
+                            sigPads.current[element.id] = {
+                              clear: () => ctx.clearRect(0, 0, canvas.width, canvas.height),
+                              toDataURL: () => canvas.toDataURL(),
+                              cleanup: () => {
+                                canvas.removeEventListener('mousedown', startDrawing);
+                                canvas.removeEventListener('mousemove', draw);
+                                canvas.removeEventListener('mouseup', stopDrawing);
+                                canvas.removeEventListener('mouseout', stopDrawing);
+                                canvas.removeEventListener('touchstart', startDrawing);
+                                canvas.removeEventListener('touchmove', draw);
+                                canvas.removeEventListener('touchend', stopDrawing);
+                              }
+                            };
+                          } else {
+                            // For regular browser tabs, use SignaturePad
+                            if (typeof SignaturePad !== 'function') {
+                              console.error('SignaturePad is not available');
+                              return;
                             }
-                          };
-                          
-                          sigPads.current[element.id] = pad;
+                            
+                            const pad = new SignaturePad(canvas, {
+                              backgroundColor: 'rgba(255, 255, 255, 0)',
+                              penColor: 'rgb(0, 0, 0)',
+                              minWidth: 0.5,
+                              maxWidth: 2.5,
+                              throttle: 16,
+                              minDistance: 5,
+                            });
+                            
+                            pad.onEnd = () => {
+                              try {
+                                handleChange(key, pad.toDataURL());
+                              } catch (error) {
+                                console.error('Error saving signature:', error);
+                              }
+                            };
+                            
+                            sigPads.current[element.id] = pad;
+                          }
                         } catch (error) {
                           console.error('Error initializing signature pad:', error);
                         }

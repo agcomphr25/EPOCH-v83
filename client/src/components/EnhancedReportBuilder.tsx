@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 
 import { apiRequest } from '@/lib/queryClient';
-import TestSignaturePad from './TestSignaturePad';
 
 interface EnhancedForm {
   id: number;
@@ -214,7 +213,6 @@ export default function EnhancedReportBuilder() {
 
   return (
     <div className="space-y-6">
-      <TestSignaturePad />
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Enhanced Report Builder</h1>
         <Button 

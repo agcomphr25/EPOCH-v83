@@ -285,7 +285,7 @@ export class DatabaseStorage implements IStorage {
   async updatePersistentDiscount(id: number, data: Partial<InsertPersistentDiscount>): Promise<PersistentDiscount> {
     const [result] = await db
       .update(persistentDiscounts)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(persistentDiscounts.id, id))
       .returning();
     return result;
@@ -343,7 +343,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory> {
     const [category] = await db.update(featureCategories)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(featureCategories.id, id))
       .returning();
     return category;
@@ -385,7 +385,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory> {
     const [subCategory] = await db.update(featureSubCategories)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(featureSubCategories.id, id))
       .returning();
     return subCategory;
@@ -415,7 +415,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature> {
     const [feature] = await db.update(features)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(features.id, id))
       .returning();
     return feature;
@@ -445,7 +445,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel> {
     const [stockModel] = await db.update(stockModels)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(stockModels.id, id))
       .returning();
     return stockModel;
@@ -468,7 +468,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft> {
     const [draft] = await db.update(orderDrafts)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(orderDrafts.orderId, orderId))
       .returning();
     return draft;
@@ -499,7 +499,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateForm(id: number, data: Partial<InsertForm>): Promise<Form> {
     const [form] = await db.update(forms)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(forms.id, id))
       .returning();
     return form;
@@ -555,7 +555,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
     const [item] = await db.update(inventoryItems)
-      .set({ ...data, updatedAt: new Date() })
+      .set(data)
       .where(eq(inventoryItems.id, id))
       .returning();
     return item;
@@ -563,7 +563,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInventoryItem(id: number): Promise<void> {
     await db.update(inventoryItems)
-      .set({ isActive: false, updatedAt: new Date() })
+      .set({ isActive: false })
       .where(eq(inventoryItems.id, id));
   }
 
@@ -590,8 +590,7 @@ export class DatabaseStorage implements IStorage {
       await db.update(inventoryItems)
         .set({ 
           onHand: newOnHand,
-          available: newAvailable,
-          updatedAt: new Date() 
+          available: newAvailable
         })
         .where(eq(inventoryItems.id, item.id));
     }

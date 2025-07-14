@@ -758,8 +758,8 @@ export default function OrderEntry() {
               {/* Model Selection */}
               <div className="space-y-2">
                 <Label htmlFor="model">Stock Model</Label>
-                <Combobox value={modelId} onChange={setModelId}>
-                  <div className="relative">
+                <div className="relative">
+                  <Combobox value={modelId} onChange={setModelId}>
                     <ComboboxInput
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       displayValue={(modelId: string) => modelOptions.find(m => m.id === modelId)?.displayName || ''}
@@ -769,23 +769,23 @@ export default function OrderEntry() {
                     <ComboboxButton className="absolute inset-y-0 right-0 flex items-center pr-3">
                       <ChevronDown className="h-4 w-4 text-gray-400" />
                     </ComboboxButton>
-                  </div>
-                  <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                    {modelOptions
-                      .filter((model) =>
-                        model.displayName.toLowerCase().includes(modelQuery.toLowerCase())
-                      )
-                      .map((model) => (
-                        <ComboboxOption
-                          key={model.id}
-                          value={model.id}
-                          className="relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 data-[focus]:bg-blue-600 data-[focus]:text-white"
-                        >
-                          {model.displayName}
-                        </ComboboxOption>
-                      ))}
-                  </ComboboxOptions>
-                </Combobox>
+                    <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                      {modelOptions
+                        .filter((model) =>
+                          model.displayName.toLowerCase().includes(modelQuery.toLowerCase())
+                        )
+                        .map((model) => (
+                          <ComboboxOption
+                            key={model.id}
+                            value={model.id}
+                            className="relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 data-[focus]:bg-blue-600 data-[focus]:text-white"
+                          >
+                            {model.displayName}
+                          </ComboboxOption>
+                        ))}
+                    </ComboboxOptions>
+                  </Combobox>
+                </div>
                 {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
               </div>
 

@@ -573,13 +573,13 @@ export default function FeatureManager() {
 
       {/* Feature Dialog */}
       <Dialog open={isFeatureDialogOpen} onOpenChange={setIsFeatureDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {isEditing ? 'Edit Feature' : 'Add New Feature'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Name (ID)</Label>

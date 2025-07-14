@@ -61,10 +61,24 @@ export default function EnhancedReportBuilder() {
     queryKey: ['/api/enhanced-forms/submissions', selectedFormId],
     queryFn: () => apiRequest('/api/enhanced-forms/submissions', { params: { formId: selectedFormId } }),
     enabled: !!selectedFormId,
+    select: (data) => {
+      // Ensure we always return an array
+      if (Array.isArray(data)) {
+        return data;
+      }
+      console.warn('Submissions API returned non-array data:', data);
+      return [];
+    }
   });
 
   // Filter submissions based on date range and search term
   React.useEffect(() => {
+    // Ensure submissions is an array
+    if (!Array.isArray(submissions)) {
+      setFilteredData([]);
+      return;
+    }
+
     let filtered = [...submissions];
 
     // Date filter

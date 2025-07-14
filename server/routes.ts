@@ -1548,6 +1548,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Form submissions routes (must come before /:id routes)
+  app.post("/api/enhanced-forms/submissions", async (req, res) => {
+    try {
+      const { formId, data } = req.body;
+      
+      if (!formId || !data) {
+        return res.status(400).json({ error: "Form ID and data are required" });
+      }
+      
+      const mockSubmission = {
+        id: Date.now(),
+        formId: parseInt(formId),
+        data,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockSubmission);
+    } catch (error) {
+      console.error("Enhanced forms submission error:", error);
+      res.status(500).json({ error: "Failed to submit form" });
+    }
+  });
+
+  app.get("/api/enhanced-forms/submissions", async (req, res) => {
+    try {
+      const { formId } = req.query;
+      
+      if (!formId) {
+        return res.status(400).json({ error: "Form ID is required" });
+      }
+      
+      // Mock submissions data
+      const mockSubmissions = [
+        {
+          id: 1,
+          formId: parseInt(formId as string),
+          data: {
+            customer_name: "John Doe",
+            notes: "Sample submission data"
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 2,
+          formId: parseInt(formId as string),
+          data: {
+            customer_name: "Jane Smith",
+            notes: "Another sample submission"
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      res.json(mockSubmissions);
+    } catch (error) {
+      console.error("Enhanced forms get submissions error:", error);
+      res.status(500).json({ error: "Failed to fetch submissions" });
+    }
+  });
+
   // Enhanced forms CRUD routes
   app.get("/api/enhanced-forms", async (req, res) => {
     try {
@@ -1738,68 +1801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Form submissions routes
-  app.post("/api/enhanced-forms/submissions", async (req, res) => {
-    try {
-      const { formId, data } = req.body;
-      
-      if (!formId || !data) {
-        return res.status(400).json({ error: "Form ID and data are required" });
-      }
-      
-      const mockSubmission = {
-        id: Date.now(),
-        formId: parseInt(formId),
-        data,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      res.json(mockSubmission);
-    } catch (error) {
-      console.error("Enhanced forms submission error:", error);
-      res.status(500).json({ error: "Failed to submit form" });
-    }
-  });
 
-  app.get("/api/enhanced-forms/submissions", async (req, res) => {
-    try {
-      const { formId } = req.query;
-      
-      if (!formId) {
-        return res.status(400).json({ error: "Form ID is required" });
-      }
-      
-      // Mock submissions data
-      const mockSubmissions = [
-        {
-          id: 1,
-          formId: parseInt(formId as string),
-          data: {
-            customer_name: "John Doe",
-            notes: "Sample submission data"
-          },
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          id: 2,
-          formId: parseInt(formId as string),
-          data: {
-            customer_name: "Jane Smith",
-            notes: "Another sample submission"
-          },
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ];
-      
-      res.json(mockSubmissions);
-    } catch (error) {
-      console.error("Enhanced forms get submissions error:", error);
-      res.status(500).json({ error: "Failed to fetch submissions" });
-    }
-  });
 
   const httpServer = createServer(app);
 

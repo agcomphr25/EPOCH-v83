@@ -1998,6 +1998,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
+  // Documentation endpoint
+  app.get("/api/documentation", async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const docPath = path.join(process.cwd(), 'EPOCH_v8_Complete_Architecture.md');
+      const content = fs.readFileSync(docPath, 'utf-8');
+      
+      res.setHeader('Content-Type', 'text/markdown');
+      res.send(content);
+    } catch (error) {
+      console.error("Documentation error:", error);
+      res.status(500).json({ error: "Failed to load documentation" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

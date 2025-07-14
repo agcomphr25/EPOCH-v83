@@ -44,13 +44,19 @@ interface Customer {
 export default function OrdersList() {
   console.log('OrdersList component rendering');
   
-  const { data: orders, isLoading, error } = useQuery<Order[]>({
-    queryKey: ['/api/orders/all'],
-  });
+  try {
+    const { data: orders, isLoading, error } = useQuery<Order[]>({
+      queryKey: ['/api/orders/all'],
+    });
 
-  const { data: customers } = useQuery<Customer[]>({
-    queryKey: ['/api/customers'],
-  });
+    const { data: customers } = useQuery<Customer[]>({
+      queryKey: ['/api/customers'],
+    });
+
+    console.log('Orders data:', orders);
+    console.log('Customers data:', customers);
+    console.log('Loading state:', isLoading);
+    console.log('Error state:', error);
 
   const getCustomerName = (customerId: string) => {
     if (!customers) return customerId;
@@ -215,4 +221,18 @@ export default function OrdersList() {
       )}
     </div>
   );
+  } catch (error) {
+    console.error('Error in OrdersList component:', error);
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Orders</h3>
+            <p className="text-red-700">An error occurred while loading the orders page. Please try refreshing the page.</p>
+            <p className="text-sm text-red-600 mt-2">Error: {error instanceof Error ? error.message : 'Unknown error'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }

@@ -586,6 +586,19 @@ export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 
 // Module 8: API Integrations & Communications
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  company: text("company"),
+  customerType: text("customer_type").default("standard"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const customerAddresses = pgTable("customer_addresses", {
   id: serial("id").primaryKey(),
   customerId: text("customer_id").notNull(),
@@ -630,6 +643,20 @@ export const pdfDocuments = pgTable("pdf_documents", {
 });
 
 // Insert schemas for Module 8
+export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Customer name is required"),
+  email: z.string().email("Invalid email format").optional(),
+  phone: z.string().optional(),
+  company: z.string().optional(),
+  customerType: z.string().default("standard"),
+  notes: z.string().optional(),
+  isActive: z.boolean().default(true),
+});
+
 export const insertCustomerAddressSchema = createInsertSchema(customerAddresses).omit({
   id: true,
   createdAt: true,
@@ -672,6 +699,8 @@ export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
 });
 
 // Types for Module 8
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Customer = typeof customers.$inferSelect;
 export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
 export type CustomerAddress = typeof customerAddresses.$inferSelect;
 export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema>;

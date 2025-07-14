@@ -26,6 +26,7 @@ import {
   insertTimeClockEntrySchema,
   insertChecklistItemSchema,
   insertOnboardingDocSchema,
+  insertCustomerSchema,
   insertCustomerAddressSchema,
   insertCommunicationLogSchema,
   insertPdfDocumentSchema
@@ -988,6 +989,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Module 8: Address Management routes
+  
+  // Customers CRUD
+  app.get('/api/customers', async (req, res) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      res.json(customers);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      res.status(500).json({ error: "Failed to fetch customers" });
+    }
+  });
+
+  app.get('/api/customers/search', async (req, res) => {
+    try {
+      const { query } = req.query;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+      
+      const customers = await storage.searchCustomers(query);
+      res.json(customers);
+    } catch (error) {
+      console.error("Error searching customers:", error);
+      res.status(500).json({ error: "Failed to search customers" });
+    }
+  });
+
+  app.get('/api/customers/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const customer = await storage.getCustomer(id);
+      
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+      
+      res.json(customer);
+    } catch (error) {
+      console.error("Error fetching customer:", error);
+      res.status(500).json({ error: "Failed to fetch customer" });
+    }
+  });
+
+  app.post('/api/customers', async (req, res) => {
+    try {
+      const result = insertCustomerSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
+      }
+      
+      const customer = await storage.createCustomer(result.data);
+      res.status(201).json(customer);
+    } catch (error) {
+      console.error("Error creating customer:", error);
+      res.status(500).json({ error: "Failed to create customer" });
+    }
+  });
+
+  app.put('/api/customers/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertCustomerSchema.partial().safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
+      }
+      
+      const customer = await storage.updateCustomer(id, result.data);
+      res.json(customer);
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      res.status(500).json({ error: "Failed to update customer" });
+    }
+  });
+
+  app.delete('/api/customers/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteCustomer(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      res.status(500).json({ error: "Failed to delete customer" });
+    }
+  });
   app.get("/api/address/autocomplete", async (req, res) => {
     try {
       const { query } = req.query;

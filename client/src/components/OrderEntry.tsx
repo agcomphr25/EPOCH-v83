@@ -14,13 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle } from 'lucide-react';
 import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
-
-interface Customer {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-}
+import CustomerSearchInput from '@/components/CustomerSearchInput';
+import type { Customer } from '@shared/schema';
 
 interface StockModel {
   id: string;
@@ -61,8 +56,6 @@ export default function OrderEntry() {
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
 
   const [modelOptions, setModelOptions] = useState<StockModel[]>([]);
   const [modelId, setModelId] = useState('');
@@ -128,11 +121,7 @@ export default function OrderEntry() {
         ]);
 
         // Load customer options first
-        setCustomerOptions([
-          { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
-          { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
-          { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
-        ]);
+
 
         // If there's a draft ID, load the draft
         if (draftId) {
@@ -157,15 +146,13 @@ export default function OrderEntry() {
             setShipping(draftResponse.shipping || 36.95);
             setOrderStatus(draftResponse.status || 'DRAFT');
             
-            // Set customer object properly - use the customer options that were just loaded
+            // Set customer object properly - load from database if customerId exists
             if (draftResponse.customerId) {
-              const foundCustomer = [
-                { id: 'cust1', name: 'ABC Defense', email: 'contact@abcdefense.com' },
-                { id: 'cust2', name: 'XYZ Tactical', email: 'orders@xyztactical.com' },
-                { id: 'cust3', name: 'Smith Industries', email: 'john@smithind.com' },
-              ].find(c => c.id === draftResponse.customerId);
-              if (foundCustomer) {
-                setCustomer(foundCustomer);
+              try {
+                const customerResponse = await apiRequest(`/api/customers/${draftResponse.customerId}`);
+                setCustomer(customerResponse);
+              } catch (error) {
+                console.error('Error loading customer:', error);
               }
             }
             
@@ -420,19 +407,7 @@ export default function OrderEntry() {
   };
 
   // Debounced customer search
-  const debouncedCustomerSearch = useCallback(
-    debounce((query: string) => {
-      // In real implementation, this would search via API
-      console.log('Searching customers:', query);
-    }, 300),
-    []
-  );
 
-  useEffect(() => {
-    if (customerQuery.length > 0) {
-      debouncedCustomerSearch(customerQuery);
-    }
-  }, [customerQuery, debouncedCustomerSearch]);
 
   const onSingleSubmit = async () => {
     setErrors({});
@@ -444,7 +419,7 @@ export default function OrderEntry() {
         body: JSON.stringify({
           orderId,
           orderDate: orderDate.toISOString(),
-          customerId: customer?.id,
+          customerId: customer?.id.toString(),
           modelId,
           features,
         }),
@@ -460,7 +435,6 @@ export default function OrderEntry() {
 
       // Reset form
       setCustomer(null);
-      setCustomerQuery('');
       setModelId('');
       setFeatures({});
       
@@ -557,7 +531,7 @@ export default function OrderEntry() {
         orderId,
         orderDate: orderDate.toISOString(),
         dueDate: dueDate.toISOString(),
-        customerId: customer?.id,
+        customerId: customer?.id.toString(),
         customerPO: hasCustomerPO ? customerPO : null,
         fbOrderNumber: fbOrderNumber || null,
         agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
@@ -657,15 +631,12 @@ export default function OrderEntry() {
             {/* Main Order Form */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Customer Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="customer">Customer</Label>
-                <Input
-                  placeholder="Search customer..."
-                  value={customerQuery}
-                  onChange={(e) => setCustomerQuery(e.target.value)}
-                />
-                {errors.customerId && <p className="text-red-500 text-sm">{errors.customerId}</p>}
-              </div>
+              <CustomerSearchInput
+                value={customer}
+                onValueChange={setCustomer}
+                placeholder="Search customer..."
+                error={errors.customerId}
+              />
 
               {/* Customer PO */}
               <div className="space-y-2">

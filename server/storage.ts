@@ -1,7 +1,7 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
   inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
-  timeClockEntries, checklistItems, onboardingDocs, customerAddresses, communicationLogs, pdfDocuments,
+  timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -23,12 +23,13 @@ import {
   type TimeClockEntry, type InsertTimeClockEntry,
   type ChecklistItem, type InsertChecklistItem,
   type OnboardingDoc, type InsertOnboardingDoc,
+  type Customer, type InsertCustomer,
   type CustomerAddress, type InsertCustomerAddress,
   type CommunicationLog, type InsertCommunicationLog,
   type PdfDocument, type InsertPdfDocument
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, ilike } from "drizzle-orm";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -180,6 +181,14 @@ export interface IStorage {
   createOnboardingDoc(data: InsertOnboardingDoc): Promise<OnboardingDoc>;
   signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc>;
   updateOnboardingDoc(id: number, data: Partial<InsertOnboardingDoc>): Promise<OnboardingDoc>;
+
+  // Module 8: Customers CRUD
+  getAllCustomers(): Promise<Customer[]>;
+  searchCustomers(query: string): Promise<Customer[]>;
+  getCustomer(id: number): Promise<Customer | undefined>;
+  createCustomer(data: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer>;
+  deleteCustomer(id: number): Promise<void>;
 
   // Module 8: Customer Addresses CRUD
   getCustomerAddresses(customerId: string): Promise<CustomerAddress[]>;
@@ -976,6 +985,60 @@ export class DatabaseStorage implements IStorage {
       .where(eq(onboardingDocs.id, id))
       .returning();
     return doc;
+  }
+
+  // Module 8: Customers CRUD
+  async getAllCustomers(): Promise<Customer[]> {
+    return await db
+      .select()
+      .from(customers)
+      .where(eq(customers.isActive, true))
+      .orderBy(customers.name);
+  }
+
+  async searchCustomers(query: string): Promise<Customer[]> {
+    return await db
+      .select()
+      .from(customers)
+      .where(and(
+        eq(customers.isActive, true),
+        // Search by name or company
+        or(
+          ilike(customers.name, `%${query}%`),
+          ilike(customers.company, `%${query}%`)
+        )
+      ))
+      .orderBy(customers.name)
+      .limit(10);
+  }
+
+  async getCustomer(id: number): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, id))
+      .limit(1);
+    return customer;
+  }
+
+  async createCustomer(data: InsertCustomer): Promise<Customer> {
+    const [customer] = await db.insert(customers).values(data).returning();
+    return customer;
+  }
+
+  async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer> {
+    const [customer] = await db.update(customers)
+      .set(data)
+      .where(eq(customers.id, id))
+      .returning();
+    return customer;
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db.update(customers)
+      .set({ isActive: false })
+      .where(eq(customers.id, id));
   }
 
   // Module 8: Customer Addresses CRUD

@@ -433,7 +433,7 @@ export default function OrderEntry() {
 
       await apiRequest('/api/orders/draft', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
       // Update last order ID
@@ -568,7 +568,7 @@ export default function OrderEntry() {
       
       await apiRequest(url, {
         method,
-        body: JSON.stringify(payload),
+        body: payload,
       });
       
       toast({

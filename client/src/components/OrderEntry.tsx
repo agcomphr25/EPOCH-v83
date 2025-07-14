@@ -969,7 +969,7 @@ export default function OrderEntry() {
               ))}
 
               {/* Conditional Shank Length Field - only show when Bartlein #3B is selected */}
-              {features.action === 'bartlein_#3b' && (
+              {features.action === 'bartlein_3b' && (
                 <div className="space-y-2">
                   <Label htmlFor="shankLength">Shank Length</Label>
                   <Input
@@ -979,6 +979,14 @@ export default function OrderEntry() {
                     value={shankLength}
                     onChange={(e) => setShankLength(e.target.value)}
                   />
+                </div>
+              )}
+
+              {/* Debug: Show current action value */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                  Debug: Action value = "{features.action || 'none'}"
+                  {features.action === 'bartlein_3b' && ' (Shank Length should be visible)'}
                 </div>
               )}
 

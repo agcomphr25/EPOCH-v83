@@ -678,3 +678,93 @@ export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema
 export type CommunicationLog = typeof communicationLogs.$inferSelect;
 export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
 export type PdfDocument = typeof pdfDocuments.$inferSelect;
+
+// Enhanced Forms Schema
+export const enhancedFormCategories = pgTable('enhanced_form_categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const enhancedForms = pgTable('enhanced_forms', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  categoryId: integer('category_id').references(() => enhancedFormCategories.id),
+  tableName: text('table_name'),
+  layout: jsonb('layout').notNull(),
+  version: integer('version').default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const enhancedFormVersions = pgTable('enhanced_form_versions', {
+  id: serial('id').primaryKey(),
+  formId: integer('form_id').references(() => enhancedForms.id).notNull(),
+  version: integer('version').notNull(),
+  layout: jsonb('layout').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
+  id: serial('id').primaryKey(),
+  formId: integer('form_id').references(() => enhancedForms.id).notNull(),
+  data: jsonb('data').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// Enhanced Form Insert Schemas
+export const insertEnhancedFormCategorySchema = createInsertSchema(enhancedFormCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Category name is required"),
+  description: z.string().optional(),
+});
+
+export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Form name is required"),
+  description: z.string().optional(),
+  categoryId: z.number().optional(),
+  tableName: z.string().optional(),
+  layout: z.any(),
+  version: z.number().default(1),
+});
+
+export const insertEnhancedFormVersionSchema = createInsertSchema(enhancedFormVersions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  formId: z.number().min(1, "Form ID is required"),
+  version: z.number().min(1, "Version is required"),
+  layout: z.any(),
+});
+
+export const insertEnhancedFormSubmissionSchema = createInsertSchema(enhancedFormSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  formId: z.number().min(1, "Form ID is required"),
+  data: z.any(),
+});
+
+// Enhanced Form Types
+export type InsertEnhancedFormCategory = z.infer<typeof insertEnhancedFormCategorySchema>;
+export type EnhancedFormCategory = typeof enhancedFormCategories.$inferSelect;
+export type InsertEnhancedForm = z.infer<typeof insertEnhancedFormSchema>;
+export type EnhancedForm = typeof enhancedForms.$inferSelect;
+export type InsertEnhancedFormVersion = z.infer<typeof insertEnhancedFormVersionSchema>;
+export type EnhancedFormVersion = typeof enhancedFormVersions.$inferSelect;
+export type InsertEnhancedFormSubmission = z.infer<typeof insertEnhancedFormSubmissionSchema>;
+export type EnhancedFormSubmission = typeof enhancedFormSubmissions.$inferSelect;

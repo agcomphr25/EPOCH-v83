@@ -1419,6 +1419,388 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Enhanced Forms API routes
+  app.get("/api/enhanced-forms/categories", async (req, res) => {
+    try {
+      // Mock categories data - replace with actual database call
+      const mockCategories = [
+        { id: 1, name: "Quality Control", description: "QC inspection forms", createdAt: new Date(), updatedAt: new Date() },
+        { id: 2, name: "Maintenance", description: "Equipment maintenance forms", createdAt: new Date(), updatedAt: new Date() },
+        { id: 3, name: "Production", description: "Production tracking forms", createdAt: new Date(), updatedAt: new Date() }
+      ];
+      res.json(mockCategories);
+    } catch (error) {
+      console.error("Enhanced forms categories error:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.post("/api/enhanced-forms/categories", async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Category name is required" });
+      }
+      
+      const mockCategory = {
+        id: Date.now(),
+        name,
+        description: description || "",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockCategory);
+    } catch (error) {
+      console.error("Enhanced forms create category error:", error);
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+
+  app.put("/api/enhanced-forms/categories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description } = req.body;
+      
+      const mockCategory = {
+        id: parseInt(id),
+        name: name || "Updated Category",
+        description: description || "",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockCategory);
+    } catch (error) {
+      console.error("Enhanced forms update category error:", error);
+      res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/enhanced-forms/categories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      res.json({ success: true, id: parseInt(id) });
+    } catch (error) {
+      console.error("Enhanced forms delete category error:", error);
+      res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
+  // Schema discovery routes
+  app.get("/api/enhanced-forms/schema", async (req, res) => {
+    try {
+      // Mock database tables
+      const mockTables = [
+        { name: "orders", label: "Orders", description: "Customer orders table" },
+        { name: "inventory_items", label: "Inventory Items", description: "Inventory tracking table" },
+        { name: "qc_submissions", label: "QC Submissions", description: "Quality control submissions" },
+        { name: "maintenance_logs", label: "Maintenance Logs", description: "Equipment maintenance records" }
+      ];
+      
+      res.json({ tables: mockTables });
+    } catch (error) {
+      console.error("Enhanced forms schema error:", error);
+      res.status(500).json({ error: "Failed to fetch schema" });
+    }
+  });
+
+  app.get("/api/enhanced-forms/schema/:tableName/columns", async (req, res) => {
+    try {
+      const { tableName } = req.params;
+      
+      // Mock column data based on table
+      const mockColumns: Record<string, any[]> = {
+        orders: [
+          { name: "order_id", label: "Order ID", type: "text", nullable: false },
+          { name: "customer", label: "Customer", type: "text", nullable: false },
+          { name: "product", label: "Product", type: "text", nullable: false },
+          { name: "quantity", label: "Quantity", type: "number", nullable: false },
+          { name: "status", label: "Status", type: "text", nullable: false }
+        ],
+        inventory_items: [
+          { name: "sku", label: "SKU", type: "text", nullable: false },
+          { name: "name", label: "Item Name", type: "text", nullable: false },
+          { name: "category", label: "Category", type: "text", nullable: false },
+          { name: "quantity", label: "Quantity", type: "number", nullable: false },
+          { name: "location", label: "Location", type: "text", nullable: true }
+        ],
+        qc_submissions: [
+          { name: "order_id", label: "Order ID", type: "text", nullable: false },
+          { name: "line", label: "Line", type: "text", nullable: false },
+          { name: "department", label: "Department", type: "text", nullable: false },
+          { name: "sku", label: "SKU", type: "text", nullable: false },
+          { name: "summary", label: "Summary", type: "text", nullable: true }
+        ],
+        maintenance_logs: [
+          { name: "equipment", label: "Equipment", type: "text", nullable: false },
+          { name: "completed_by", label: "Completed By", type: "text", nullable: true },
+          { name: "notes", label: "Notes", type: "text", nullable: true },
+          { name: "next_due_date", label: "Next Due Date", type: "date", nullable: true }
+        ]
+      };
+      
+      const columns = mockColumns[tableName] || [];
+      res.json({ columns });
+    } catch (error) {
+      console.error("Enhanced forms columns error:", error);
+      res.status(500).json({ error: "Failed to fetch columns" });
+    }
+  });
+
+  // Enhanced forms CRUD routes
+  app.get("/api/enhanced-forms", async (req, res) => {
+    try {
+      // Mock forms data
+      const mockForms = [
+        {
+          id: 1,
+          name: "QC Inspection Form",
+          description: "Quality control inspection checklist",
+          categoryId: 1,
+          tableName: "qc_submissions",
+          layout: [],
+          version: 1,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 2,
+          name: "Maintenance Report",
+          description: "Equipment maintenance report form",
+          categoryId: 2,
+          tableName: "maintenance_logs",
+          layout: [],
+          version: 1,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      res.json(mockForms);
+    } catch (error) {
+      console.error("Enhanced forms error:", error);
+      res.status(500).json({ error: "Failed to fetch forms" });
+    }
+  });
+
+  app.get("/api/enhanced-forms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const mockForm = {
+        id: parseInt(id),
+        name: "Sample Form",
+        description: "A sample form for testing",
+        categoryId: 1,
+        tableName: "orders",
+        layout: [
+          {
+            id: "input-1",
+            type: "input",
+            x: 20,
+            y: 20,
+            width: 300,
+            height: 50,
+            config: {
+              label: "Customer Name",
+              required: true,
+              key: "customer_name"
+            }
+          },
+          {
+            id: "textarea-1",
+            type: "textarea",
+            x: 20,
+            y: 80,
+            width: 300,
+            height: 100,
+            config: {
+              label: "Additional Notes",
+              required: false,
+              key: "notes"
+            }
+          }
+        ],
+        version: 1,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockForm);
+    } catch (error) {
+      console.error("Enhanced forms get form error:", error);
+      res.status(500).json({ error: "Failed to fetch form" });
+    }
+  });
+
+  app.post("/api/enhanced-forms", async (req, res) => {
+    try {
+      const { name, description, categoryId, tableName, layout } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: "Form name is required" });
+      }
+      
+      const mockForm = {
+        id: Date.now(),
+        name,
+        description: description || "",
+        categoryId: categoryId || null,
+        tableName: tableName || null,
+        layout: layout || [],
+        version: 1,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockForm);
+    } catch (error) {
+      console.error("Enhanced forms create form error:", error);
+      res.status(500).json({ error: "Failed to create form" });
+    }
+  });
+
+  app.put("/api/enhanced-forms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description, categoryId, tableName, layout } = req.body;
+      
+      const mockForm = {
+        id: parseInt(id),
+        name: name || "Updated Form",
+        description: description || "",
+        categoryId: categoryId || null,
+        tableName: tableName || null,
+        layout: layout || [],
+        version: 1,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockForm);
+    } catch (error) {
+      console.error("Enhanced forms update form error:", error);
+      res.status(500).json({ error: "Failed to update form" });
+    }
+  });
+
+  app.delete("/api/enhanced-forms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      res.json({ success: true, id: parseInt(id) });
+    } catch (error) {
+      console.error("Enhanced forms delete form error:", error);
+      res.status(500).json({ error: "Failed to delete form" });
+    }
+  });
+
+  // Form versions routes
+  app.get("/api/enhanced-forms/:id/versions", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const mockVersions = [
+        {
+          id: 1,
+          formId: parseInt(id),
+          version: 1,
+          layout: [],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      res.json(mockVersions);
+    } catch (error) {
+      console.error("Enhanced forms versions error:", error);
+      res.status(500).json({ error: "Failed to fetch versions" });
+    }
+  });
+
+  app.get("/api/enhanced-forms/:id/versions/:version", async (req, res) => {
+    try {
+      const { id, version } = req.params;
+      
+      const mockVersion = {
+        id: 1,
+        formId: parseInt(id),
+        version: parseInt(version),
+        layout: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockVersion);
+    } catch (error) {
+      console.error("Enhanced forms get version error:", error);
+      res.status(500).json({ error: "Failed to fetch version" });
+    }
+  });
+
+  // Form submissions routes
+  app.post("/api/enhanced-forms/submissions", async (req, res) => {
+    try {
+      const { formId, data } = req.body;
+      
+      if (!formId || !data) {
+        return res.status(400).json({ error: "Form ID and data are required" });
+      }
+      
+      const mockSubmission = {
+        id: Date.now(),
+        formId: parseInt(formId),
+        data,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      res.json(mockSubmission);
+    } catch (error) {
+      console.error("Enhanced forms submission error:", error);
+      res.status(500).json({ error: "Failed to submit form" });
+    }
+  });
+
+  app.get("/api/enhanced-forms/submissions", async (req, res) => {
+    try {
+      const { formId } = req.query;
+      
+      if (!formId) {
+        return res.status(400).json({ error: "Form ID is required" });
+      }
+      
+      // Mock submissions data
+      const mockSubmissions = [
+        {
+          id: 1,
+          formId: parseInt(formId as string),
+          data: {
+            customer_name: "John Doe",
+            notes: "Sample submission data"
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 2,
+          formId: parseInt(formId as string),
+          data: {
+            customer_name: "Jane Smith",
+            notes: "Another sample submission"
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      res.json(mockSubmissions);
+    } catch (error) {
+      console.error("Enhanced forms get submissions error:", error);
+      res.status(500).json({ error: "Failed to fetch submissions" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

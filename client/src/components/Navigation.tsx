@@ -71,6 +71,18 @@ export default function Navigation() {
       label: 'Reports',
       icon: PieChart,
       description: 'View form submissions and reports'
+    },
+    {
+      path: '/enhanced-forms',
+      label: 'Enhanced Forms',
+      icon: FormInput,
+      description: 'Advanced form builder with drag-and-drop'
+    },
+    {
+      path: '/enhanced-reports',
+      label: 'Enhanced Reports',
+      icon: PieChart,
+      description: 'Advanced reporting with PDF/CSV export'
     }
   ];
 

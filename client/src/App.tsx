@@ -28,6 +28,9 @@ import APJournalPage from "./pages/APJournalPage";
 import ARJournalPage from "./pages/ARJournalPage";
 import COGSReportPage from "./pages/COGSReportPage";
 import FinanceDashboardPage from "./pages/FinanceDashboardPage";
+import EnhancedFormsPage from "./pages/EnhancedFormsPage";
+import EnhancedReportsPage from "./pages/EnhancedReportsPage";
+import FormRendererPage from "./pages/FormRendererPage";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -50,6 +53,9 @@ function App() {
                 <Route path="/admin/forms" component={AdminFormsPage} />
                 <Route path="/forms/:formId" component={FormPage} />
                 <Route path="/admin/reports" component={ReportPage} />
+                <Route path="/enhanced-forms" component={EnhancedFormsPage} />
+                <Route path="/enhanced-reports" component={EnhancedReportsPage} />
+                <Route path="/forms/render/:formId" component={FormRendererPage} />
                 <Route path="/inventory/scanner" component={InventoryScannerPage} />
                 <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                 <Route path="/inventory/manager" component={InventoryManagerPage} />

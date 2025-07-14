@@ -1,0 +1,683 @@
+Project Structure
+pgsql
+Copy
+Edit
+src/
+├─ api/                     ← axios wrappers
+│   ├─ categories.js
+│   ├─ schema.js
+│   ├─ forms.js
+│   └─ submissions.js
+├─ components/
+│   ├─ EnhancedFormBuilderAdmin.jsx
+│   ├─ EnhancedFormRenderer.jsx
+│   └─ EnhancedReportBuilder.jsx
+└─ utils/
+    ├─ dnd.js              ← DnDKit setup helpers
+    └─ pdfExport.js        ← html2pdf wrapper
+You’ll need to install:
+
+bash
+Copy
+Edit
+npm install axios react-hot-toast @dnd-kit/core @dnd-kit/sortable signature_pad html2pdf.js
+And wrap your app in <Toaster /> (from react-hot-toast).
+
+1. API Wrappers (src/api/*.js)
+js
+Copy
+Edit
+// src/api/categories.js
+import axios from 'axios';
+export const fetchCategories = ()=> axios.get('/api/categories');
+export const createCategory = data=> axios.post('/api/categories', data);
+export const updateCategory = (id,data)=> axios.put(`/api/categories/${id}`, data);
+export const deleteCategory = id=> axios.delete(`/api/categories/${id}`);
+
+// src/api/schema.js
+import axios from 'axios';
+export const fetchTables = categoryId =>
+  axios.get('/api/schema', { params: { category: categoryId }});
+export const fetchColumns = tableName =>
+  axios.get(`/api/schema/${tableName}/columns`);
+
+// src/api/forms.js
+import axios from 'axios';
+export const fetchForms = ()=> axios.get('/api/forms');
+export const fetchForm = id=> axios.get(`/api/forms/${id}`);
+export const createForm = data=> axios.post('/api/forms', data);
+export const updateForm = (id,data)=> axios.put(`/api/forms/${id}`, data);
+export const deleteForm = id=> axios.delete(`/api/forms/${id}`);
+export const fetchFormVersions = id=> axios.get(`/api/forms/${id}/versions`);
+export const fetchFormVersion = (id, v)=> axios.get(`/api/forms/${id}/versions/${v}`);
+
+// src/api/submissions.js
+import axios from 'axios';
+export const submitForm = data=> axios.post('/api/form-submissions', data);
+export const fetchSubmissions = formId =>
+  axios.get('/api/form-submissions', { params: { formId }});
+2. EnhancedFormBuilderAdmin.jsx
+jsx
+Copy
+Edit
+// src/components/EnhancedFormBuilderAdmin.jsx
+import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import SignaturePad from 'signature_pad';
+
+import * as catAPI from '../api/categories';
+import * as schemaAPI from '../api/schema';
+import * as formAPI from '../api/forms';
+
+export default function EnhancedFormBuilderAdmin() {
+  // Categories
+  const [categories, setCategories] = useState([]);
+  const [catEditing, setCatEditing] = useState(null);
+  const [newCat, setNewCat] = useState('');
+
+  // Forms list & versions
+  const [forms, setForms] = useState([]);
+  const [versions, setVersions] = useState([]);
+  const [selectedFormId, setSelectedFormId] = useState(null);
+  const [formDef, setFormDef] = useState(null);
+  const [formVersion, setFormVersion] = useState(null);
+
+  // Schema discovery
+  const [tables, setTables] = useState([]);
+  const [columns, setColumns] = useState([]);
+
+  // Canvas items & selection
+  const [elements, setElements] = useState([]); // {id,type,x,y,width,height,config}
+  const [selectedElId, setSelectedElId] = useState(null);
+
+  // Drag-and-drop handlers
+  function Draggable({ id, children, style }) {
+    const { attributes, listeners, setNodeRef, transform } = useDraggable({ id });
+    const draggedStyle = {
+      transform: transform
+        ? `translate3d(${transform.x}px,${transform.y}px,0)`
+        : undefined
+    };
+    return (
+      <div
+        ref={setNodeRef}
+        style={{ ...style, ...draggedStyle }}
+        {...listeners}
+        {...attributes}
+      >{children}</div>
+    );
+  }
+
+  // Fetch categories & forms on mount
+  useEffect(()=>{
+    catAPI.fetchCategories().then(r=>setCategories(r.data));
+    formAPI.fetchForms().then(r=>setForms(r.data));
+  },[]);
+
+  // Load tables when category selected
+  useEffect(()=>{
+    if (!formDef?.category) return;
+    schemaAPI.fetchTables(formDef.category)
+      .then(r=>setTables(r.data.tables));
+  },[formDef?.category]);
+
+  // Load columns when table chosen
+  useEffect(()=>{
+    if (!selectedElId) return;
+    const el = elements.find(e=>e.id===selectedElId);
+    if (el?.type==='column') {
+      schemaAPI.fetchColumns(el.config.table)
+        .then(r=>setColumns(r.data.columns));
+    }
+  },[selectedElId, elements]);
+
+  // Category CRUD
+  const saveCategory = () => {
+    if (!catEditing) {
+      catAPI.createCategory({ name:newCat })
+        .then(r=> setCategories([...categories, r.data])) 
+        .catch(()=>toast.error('Create failed'));
+    } else {
+      catAPI.updateCategory(catEditing.id,{ name:newCat })
+        .then(r=> {
+          setCategories(categories.map(c=>c.id===r.data.id?r.data:c));
+        })
+        .catch(()=>toast.error('Update failed'));
+    }
+    setNewCat(''); setCatEditing(null);
+  };
+  const delCategory = id => {
+    if (!confirm('Delete category?')) return;
+    catAPI.deleteCategory(id)
+      .then(()=> setCategories(cs=>cs.filter(c=>c.id!==id)))
+      .catch(()=>toast.error('Delete failed'));
+  };
+
+  // Form selection & versioning
+  const loadForm = id => {
+    setSelectedFormId(id);
+    formAPI.fetchForm(id).then(r=>{
+      setFormDef(r.data);
+      setElements(r.data.layout || []);
+    });
+    formAPI.fetchFormVersions(id).then(r=>setVersions(r.data));
+  };
+  const loadVersion = v => {
+    if (!selectedFormId) return;
+    formAPI.fetchFormVersion(selectedFormId, v)
+      .then(r=> {
+        setFormVersion(v);
+        setFormDef(r.data);
+        setElements(r.data.layout);
+      });
+  };
+
+  // Canvas drop area
+  function Canvas() {
+    const { setNodeRef } = useDroppable({ id: 'canvas' });
+    return (
+      <div
+        ref={setNodeRef}
+        id="canvas"
+        className="relative w-full h-[600px] bg-white border"
+      >
+        {elements.map(el => (
+          <Draggable
+            key={el.id}
+            id={el.id}
+            style={{
+              position:'absolute',
+              left:el.x, top:el.y,
+              width: el.width, height: el.height,
+              border: selectedElId===el.id ? '2px solid blue' : '1px solid #ccc',
+              padding:'4px',
+              background:'#f9f9f9',
+            }}
+          >
+            <div onClick={()=>setSelectedElId(el.id)}>
+              {el.type==='text' && <div>{el.config.text||'Text'}</div>}
+              {el.type==='input' && <input placeholder={el.config.label||'Input'} />}
+              {el.type==='signature' && <canvas id={`sig-${el.id}`}
+                style={{ width:'100%', height:'100%' }}
+                ref={cnv=>{
+                  if (cnv && !el.config._sigPad) {
+                    const pad = new SignaturePad(cnv);
+                    el.config._sigPad = pad;
+                  }
+                }}
+              />}
+              {el.type==='column' && <div>Column: {el.config.column}</div>}
+              {el.type==='repeat'} /*...repeatable grid UI...*/
+            </div>
+          </Draggable>
+        ))}
+      </div>
+    );
+  }
+
+  // Add element to canvas
+  const addElement = (type) => {
+    const id = `${type}-${Date.now()}`;
+    const base = { id, type, x:20, y:20, width:200, height:50, config:{} };
+    if (type==='column') base.config.table = formDef.table;
+    setElements(es=>[...es, base]);
+    setSelectedElId(id);
+  };
+
+  // Save form definition (with versioning)
+  const saveForm = () => {
+    if (!selectedFormId) {
+      // create new
+      formAPI.createForm({ ...formDef, layout:elements })
+        .then(r=> {
+          toast.success('Form created');
+          setForms(fs=>[...fs,r.data]);
+          loadForm(r.data.id);
+        });
+    } else {
+      formAPI.updateForm(selectedFormId, { ...formDef, layout:elements})
+        .then(()=> toast.success('Form saved'));
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Category Admin */}
+      <section className="space-y-2">
+        <h2 className="text-lg font-bold">Categories</h2>
+        <ul className="flex space-x-4">
+          {categories.map(c=>(
+            <li key={c.id}>
+              {c.name}
+              <button onClick={()=>{setCatEditing(c);setNewCat(c.name)}} className="ml-2 text-blue">✎</button>
+              <button onClick={()=>delCategory(c.id)} className="ml-1 text-red">✕</button>
+            </li>
+          ))}
+        </ul>
+        <div className="flex space-x-2">
+          <input
+            value={newCat}
+            onChange={e=>setNewCat(e.target.value)}
+            placeholder="New or edit name"
+            className="border p-1"
+          />
+          <button onClick={saveCategory} className="px-3 py-1 bg-green-500 text-white">
+            {catEditing ? 'Update' : 'Add'}
+          </button>
+        </div>
+      </section>
+
+      {/* Form select & version */}
+      <section className="flex items-center space-x-4">
+        <select
+          value={selectedFormId||''}
+          onChange={e=>loadForm(e.target.value)}
+          className="border p-2"
+        >
+          <option value="">— New / Select Form —</option>
+          {forms.map(f=>(
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        {selectedFormId && (
+          <select
+            value={formVersion||''}
+            onChange={e=>loadVersion(e.target.value)}
+            className="border p-2"
+          >
+            <option value="">— Latest Version —</option>
+            {versions.map(v=>(
+              <option key={v.version} value={v.version}>
+                v{v.version} ({new Date(v.updatedAt).toLocaleDateString()})
+              </option>
+            ))}
+          </select>
+        )}
+        <button onClick={saveForm} className="px-4 py-2 bg-blue-600 text-white">
+          Save Form
+        </button>
+      </section>
+
+      {/* Form properties */}
+      {selectedFormId===null && (
+        <div className="space-y-2">
+          <input
+            placeholder="Form name"
+            className="border p-2 w-1/3"
+            value={formDef?.name||''}
+            onChange={e=>setFormDef(fd=>({...fd,name:e.target.value}))}
+          />
+          <select
+            className="border p-2"
+            value={formDef?.category||''}
+            onChange={e=>{
+              setFormDef(fd=>({...fd,category:e.target.value}));
+              setTables([]); setColumns([]);
+            }}
+          >
+            <option value="">— Pick Category —</option>
+            {categories.map(c=>(
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Schema Dropdowns (for new columns) */}
+      {formDef?.category && (
+        <div className="flex space-x-4">
+          <select
+            onChange={e=>{
+              setFormDef(fd=>({...fd,table:e.target.value}));
+              schemaAPI.fetchColumns(e.target.value)
+                .then(r=>setColumns(r.data.columns));
+            }}
+            className="border p-2"
+            value={formDef.table||''}
+          >
+            <option value="">— Pick Table —</option>
+            {tables.map(t=>(
+              <option key={t.name} value={t.name}>{t.label}</option>
+            ))}
+          </select>
+
+          <select
+            onChange={e=>{
+              addElement('column');
+              setElements(es=>{
+                const el = es[es.length-1];
+                el.config = { table: formDef.table, column: e.target.value };
+                return [...es];
+              });
+            }}
+            className="border p-2"
+            value=""
+          >
+            <option value="">— Pick Column —</option>
+            {columns.map(c=>(
+              <option key={c.name} value={c.name}>{c.label}</option>
+            ))}
+          </select>
+
+          <button onClick={()=>addElement('input')} className="px-3 py-1 bg-gray-200">
+            + Text Input
+          </button>
+          <button onClick={()=>addElement('signature')} className="px-3 py-1 bg-gray-200">
+            + Signature
+          </button>
+          <button onClick={()=>addElement('repeat')} className="px-3 py-1 bg-gray-200">
+            + Repeat Group
+          </button>
+        </div>
+      )}
+
+      {/* Canvas */}
+      <DndContext>
+        <Canvas/>
+      </DndContext>
+
+      {/* Sidebar for selected element config */}
+      {selectedElId && (() => {
+        const el = elements.find(e=>e.id===selectedElId);
+        return (
+          <div className="fixed top-20 right-4 w-64 p-4 bg-white border shadow">
+            <h3 className="font-bold mb-2">Configure {el.type}</h3>
+            {['input','column','repeat'].includes(el.type) && (
+              <>
+                <label className="block">Label:</label>
+                <input
+                  className="border p-1 w-full mb-2"
+                  value={el.config.label||''}
+                  onChange={e=>{
+                    el.config.label = e.target.value;
+                    setElements([...elements]);
+                  }}
+                />
+              </>
+            )}
+            <label className="block">Required:</label>
+            <input
+              type="checkbox"
+              checked={el.config.required||false}
+              onChange={e=>{
+                el.config.required = e.target.checked;
+                setElements([...elements]);
+              }}
+            />
+            {/* Visual rule builder placeholder */}
+            <label className="block mt-2">Visible If:</label>
+            <input
+              className="border p-1 w-full"
+              placeholder="e.g. quantity > 0"
+              value={el.config.visibleIf||''}
+              onChange={e=>{
+                el.config.visibleIf = e.target.value;
+                setElements([...elements]);
+              }}
+            />
+          </div>
+        );
+      })()}
+
+    </div>
+  );
+}
+3. EnhancedFormRenderer.jsx
+jsx
+Copy
+Edit
+// src/components/EnhancedFormRenderer.jsx
+import React, { useEffect, useState, useRef } from 'react';
+import toast from 'react-hot-toast';
+import html2pdf from 'html2pdf.js';
+
+import * as formAPI from '../api/forms';
+import * as subAPI from '../api/submissions';
+
+export default function EnhancedFormRenderer({ formId, userRole }) {
+  const [formDef, setFormDef] = useState(null);
+  const [data, setData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const formRef = useRef();
+
+  useEffect(()=>{
+    formAPI.fetchForm(formId)
+      .then(r=>{
+        setFormDef(r.data);
+        // init data
+        const init = {};
+        (r.data.layout||[]).forEach(el=>{
+          if (el.type==='repeat') init[el.id] = [];
+          else if (el.type==='signature') init[el.id] = '';
+          else init[el.config.key||el.id] = '';
+        });
+        setData(init);
+      })
+      .catch(()=>toast.error('Load failed'))
+      .finally(()=>setLoading(false));
+  },[formId]);
+
+  const handleChange = (key, val) =>
+    setData(d=>({ ...d, [key]:val }));
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    try {
+      await subAPI.submitForm({ formId, data });
+      toast.success('Saved');
+    } catch {
+      toast.error('Submit failed');
+    }
+  };
+
+  const handlePrint = () => {
+    html2pdf().from(formRef.current).save(`${formDef.name}.pdf`);
+  };
+
+  if (loading) return <div>Loading…</div>;
+  if (!formDef) return <div>Not found</div>;
+
+  return (
+    <div>
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 p-4 bg-white">
+        <h1 className="text-2xl font-bold mb-4">{formDef.name}</h1>
+        {(formDef.layout||[]).map(el => {
+          // conditional
+          if (el.config.visibleIf) {
+            // eslint-disable-next-line no-eval
+            const ok = eval(el.config.visibleIf.replace(/\b(\w+)\b/g,'data.$1'));
+            if (!ok) return null;
+          }
+          switch(el.type) {
+            case 'input':
+              return (
+                <div key={el.id}>
+                  <label>{el.config.label}</label>
+                  <input
+                    required={el.config.required}
+                    className="border p-2 w-full"
+                    value={data[el.id]||''}
+                    onChange={e=>handleChange(el.id,e.target.value)}
+                  />
+                </div>
+              );
+            case 'column':
+              return (
+                <div key={el.id}>
+                  <label>{el.config.column}</label>
+                  <input
+                    readOnly
+                    className="border p-2 w-full bg-gray-100"
+                    value={data[el.id]||''}
+                  />
+                </div>
+              );
+            case 'signature':
+              return (
+                <div key={el.id}>
+                  <label>Signature</label>
+                  <canvas
+                    className="border w-full h-32"
+                    ref={cnv=>{
+                      if (cnv && !cnv._sigPad) {
+                        const pad = new SignaturePad(cnv);
+                        pad.onEnd = () => {
+                          handleChange(el.id, pad.toDataURL());
+                        };
+                        cnv._sigPad = pad;
+                      }
+                    }}
+                  />
+                </div>
+              );
+            case 'repeat':
+              return (
+                <div key={el.id} className="space-y-2">
+                  <label>{el.config.label}</label>
+                  {/* bind to GET /api/lots/{lot}/serials */}
+                  {/* omitted for brevity */}
+                </div>
+              );
+            default: return null;
+          }
+        })}
+
+        <div className="space-x-4">
+          <button type="submit" className="px-4 py-2 bg-blue-600 text-white">
+            Submit
+          </button>
+          <button type="button" onClick={handlePrint}
+            className="px-4 py-2 bg-gray-600 text-white"
+          >
+            Print/PDF
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+4. EnhancedReportBuilder.jsx
+jsx
+Copy
+Edit
+// src/components/EnhancedReportBuilder.jsx
+import React, { useEffect, useState, useRef } from 'react';
+import { CSVLink } from 'react-csv';
+import html2pdf from 'html2pdf.js';
+import toast from 'react-hot-toast';
+
+import * as formAPI from '../api/forms';
+import * as subAPI from '../api/submissions';
+
+export default function EnhancedReportBuilder() {
+  const [forms, setForms] = useState([]);
+  const [selected, setSelected] = useState('');
+  const [subs, setSubs] = useState([]);
+  const reportRef = useRef();
+
+  useEffect(()=>{
+    formAPI.fetchForms()
+      .then(r=>setForms(r.data))
+      .catch(()=>toast.error('Load forms failed'));
+  },[]);
+
+  useEffect(()=>{
+    if (!selected) return;
+    subAPI.fetchSubmissions(selected)
+      .then(r=>setSubs(r.data))
+      .catch(()=>toast.error('Load subs failed'));
+  },[selected]);
+
+  const exportPDF = () => {
+    html2pdf().from(reportRef.current).save(`Report-${selected}.pdf`);
+  };
+
+  if (!forms) return null;
+  return (
+    <div className="p-4 space-y-4">
+      <div>
+        <select
+          className="border p-2"
+          value={selected}
+          onChange={e=>setSelected(e.target.value)}
+        >
+          <option value="">— Select Form —</option>
+          {forms.map(f=>(
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {subs.length>0 && (
+        <>
+          {/* CSV export */}
+          <CSVLink
+            data={subs.map(s=>s.data)}
+            filename={`Report-${selected}.csv`}
+            className="px-3 py-1 bg-green-500 text-white"
+          >
+            Export CSV
+          </CSVLink>
+
+          {/* JSON export */}
+          <button
+            onClick={()=>{
+              const blob = new Blob([JSON.stringify(subs, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `Report-${selected}.json`;
+              a.click();
+            }}
+            className="px-3 py-1 bg-yellow-500 text-white"
+          >
+            Export JSON
+          </button>
+
+          {/* PDF export */}
+          <button
+            onClick={exportPDF}
+            className="px-3 py-1 bg-gray-700 text-white"
+          >
+            Export PDF
+          </button>
+
+          {/* Report table */}
+          <div ref={reportRef} className="mt-4">
+            <table className="table-auto w-full border-collapse">
+              <thead>
+                <tr>
+                  {Object.keys(subs[0].data).map(k=>(
+                    <th key={k} className="border p-2">{k}</th>
+                  ))}
+                  <th className="border p-2">Submitted At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subs.map(s=>(
+                  <tr key={s.id}>
+                    {Object.values(s.data).map((v,i)=>(
+                      <td key={i} className="border p-2">{String(v)}</td>
+                    ))}
+                    <td className="border p-2">
+                      {new Date(s.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+Next Steps
+Wire these into your router under /admin/forms, /forms/:formId, /reports.
+
+Implement the omitted bits (repeat-group data binding, rule-builder UI) as needed.
+
+Styling: refine Tailwind classes for spacing, colors, mobile responsiveness.
+
+This scaffolds the full dynamic FormBuilder (with versioning, drag-drop, signature, PDF) and ReportBuilder (flexible exports). Let me know which parts you’d like to iterate on next! 🚀🔨🤖🔧

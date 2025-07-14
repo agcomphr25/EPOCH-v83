@@ -75,7 +75,12 @@ function App() {
                 <Route path="/finance/ar" component={ARJournalPage} />
                 <Route path="/finance/cogs" component={COGSReportPage} />
                 <Route path="/finance/dashboard" component={FinanceDashboardPage} />
-                <Route path="/documentation" component={DocumentationPage} />
+                <Route path="/documentation">
+                  <div className="p-6">
+                    <h1>Test Documentation Route</h1>
+                    <p>This is a test to see if the route is working</p>
+                  </div>
+                </Route>
 
                 <Route component={NotFound} />
               </Switch>

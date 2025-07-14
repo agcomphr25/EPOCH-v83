@@ -1,4 +1,7 @@
 export default function DocumentationPage() {
+  console.log('DocumentationPage component rendering');
+  console.log('Current location:', window.location.pathname);
+  
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">EPOCH v8 - System Documentation</h1>

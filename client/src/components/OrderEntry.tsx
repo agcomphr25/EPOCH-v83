@@ -414,15 +414,26 @@ export default function OrderEntry() {
     setIsSubmitting(true);
 
     try {
-      await apiRequest('/api/orders', {
+      const payload = {
+        orderId,
+        orderDate: orderDate.toISOString(),
+        dueDate: dueDate.toISOString(),
+        customerId: customer?.id.toString(),
+        customerPO: hasCustomerPO ? customerPO : null,
+        fbOrderNumber: fbOrderNumber || null,
+        agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
+        modelId,
+        handedness,
+        features,
+        featureQuantities,
+        discountCode,
+        shipping,
+        status: 'FINALIZED' // Create directly as finalized instead of draft
+      };
+
+      await apiRequest('/api/orders/draft', {
         method: 'POST',
-        body: JSON.stringify({
-          orderId,
-          orderDate: orderDate.toISOString(),
-          customerId: customer?.id.toString(),
-          modelId,
-          features,
-        }),
+        body: JSON.stringify(payload),
       });
 
       // Update last order ID
@@ -437,6 +448,14 @@ export default function OrderEntry() {
       setCustomer(null);
       setModelId('');
       setFeatures({});
+      setFeatureQuantities({});
+      setDiscountCode('');
+      setCustomerPO('');
+      setFbOrderNumber('');
+      setAgrOrderDetails('');
+      setHandedness('');
+      setHasCustomerPO(false);
+      setHasAgrOrder(false);
       
     } catch (error: any) {
       if (error.response?.data?.errors) {

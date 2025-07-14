@@ -74,6 +74,7 @@ export default function OrderEntry() {
   const [hasAgrOrder, setHasAgrOrder] = useState(false);
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
+  const [shankLength, setShankLength] = useState('');
   
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
@@ -139,6 +140,7 @@ export default function OrderEntry() {
             setAgrOrderDetails(draftResponse.agrOrderDetails || '');
             setModelId(draftResponse.modelId || '');
             setHandedness(draftResponse.handedness || '');
+            setShankLength(draftResponse.shankLength || '');
             setFeatures(draftResponse.features || {});
             setFeatureQuantities(draftResponse.featureQuantities || {});
             setDiscountCode(draftResponse.discountCode || '');
@@ -423,6 +425,7 @@ export default function OrderEntry() {
         agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
         modelId,
         handedness,
+        shankLength,
         features,
         featureQuantities,
         discountCode,
@@ -555,6 +558,7 @@ export default function OrderEntry() {
         agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
         modelId,
         handedness,
+        shankLength,
         features,
         featureQuantities,
         discountCode,
@@ -964,7 +968,19 @@ export default function OrderEntry() {
                 </div>
               ))}
 
-
+              {/* Conditional Shank Length Field - only show when Bartlein #3B is selected */}
+              {features.action === 'bartlein_#3b' && (
+                <div className="space-y-2">
+                  <Label htmlFor="shankLength">Shank Length</Label>
+                  <Input
+                    type="text"
+                    id="shankLength"
+                    placeholder="Enter shank length..."
+                    value={shankLength}
+                    onChange={(e) => setShankLength(e.target.value)}
+                  />
+                </div>
+              )}
 
               {/* Special Instructions */}
               <div className="md:col-span-2 space-y-2">

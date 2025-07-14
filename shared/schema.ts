@@ -117,6 +117,7 @@ export const orderDrafts = pgTable("order_drafts", {
   agrOrderDetails: text("agr_order_details"),
   modelId: text("model_id"),
   handedness: text("handedness"),
+  shankLength: text("shank_length"),
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
   discountCode: text("discount_code"),

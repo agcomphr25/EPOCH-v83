@@ -383,26 +383,23 @@ export default function EnhancedFormRenderer({
                             return;
                           }
                           
-                          const pad = new SignaturePad(canvas);
+                          const pad = new SignaturePad(canvas, {
+                            backgroundColor: 'rgba(255, 255, 255, 0)',
+                            penColor: 'rgb(0, 0, 0)',
+                            minWidth: 0.5,
+                            maxWidth: 2.5,
+                            throttle: 16,
+                            minDistance: 5,
+                          });
                           
-                          // Use different event listeners for compatibility
-                          if (pad.addEventListener) {
-                            pad.addEventListener('endStroke', () => {
-                              try {
-                                handleChange(key, pad.toDataURL());
-                              } catch (error) {
-                                console.error('Error saving signature:', error);
-                              }
-                            });
-                          } else if (pad.onEnd) {
-                            pad.onEnd = () => {
-                              try {
-                                handleChange(key, pad.toDataURL());
-                              } catch (error) {
-                                console.error('Error saving signature:', error);
-                              }
-                            };
-                          }
+                          // Use onEnd callback instead of addEventListener
+                          pad.onEnd = () => {
+                            try {
+                              handleChange(key, pad.toDataURL());
+                            } catch (error) {
+                              console.error('Error saving signature:', error);
+                            }
+                          };
                           
                           sigPads.current[element.id] = pad;
                         } catch (error) {

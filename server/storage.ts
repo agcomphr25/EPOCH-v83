@@ -2,6 +2,7 @@ import {
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
   inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
+  enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -26,7 +27,11 @@ import {
   type Customer, type InsertCustomer,
   type CustomerAddress, type InsertCustomerAddress,
   type CommunicationLog, type InsertCommunicationLog,
-  type PdfDocument, type InsertPdfDocument
+  type PdfDocument, type InsertPdfDocument,
+  type EnhancedFormCategory, type InsertEnhancedFormCategory,
+  type EnhancedForm, type InsertEnhancedForm,
+  type EnhancedFormVersion, type InsertEnhancedFormVersion,
+  type EnhancedFormSubmission, type InsertEnhancedFormSubmission
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike } from "drizzle-orm";

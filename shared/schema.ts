@@ -80,7 +80,7 @@ export const features = pgTable("features", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   displayName: text("display_name").notNull(),
-  type: text("type").notNull(), // 'dropdown', 'text', 'number', 'checkbox', 'textarea'
+  type: text("type").notNull(), // 'dropdown', 'combobox', 'text', 'number', 'checkbox', 'textarea'
   required: boolean("required").default(false),
   placeholder: text("placeholder"),
   options: json("options"), // JSON array for dropdown options

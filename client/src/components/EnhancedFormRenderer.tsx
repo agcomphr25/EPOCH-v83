@@ -348,9 +348,9 @@ export default function EnhancedFormRenderer({
                 ref={(canvas) => {
                   if (canvas && !sigPads.current[element.id]) {
                     const pad = new SignaturePad(canvas);
-                    pad.addEventListener('endStroke', () => {
+                    pad.onEnd = () => {
                       handleChange(key, pad.toDataURL());
-                    });
+                    };
                     sigPads.current[element.id] = pad;
                   }
                 }}

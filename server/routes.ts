@@ -1003,7 +1003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "SmartyStreets credentials not configured" });
       }
       
-      // Try SmartyStreets API with fallback to intelligent mock data
+      // Try SmartyStreets US Autocomplete API
       try {
         const response = await axios.get('https://us-autocomplete.api.smartystreets.com/suggest', {
           params: {
@@ -1018,20 +1018,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const formattedSuggestions = suggestions.map((suggestion: any) => suggestion.text);
         res.json(formattedSuggestions);
       } catch (error: any) {
-        // If SmartyStreets API fails (payment required, rate limit, etc.), 
-        // provide intelligent fallback suggestions
-        console.log('SmartyStreets API not available - using fallback suggestions');
+        // If autocomplete API is not available, try using Street API for partial lookups
+        console.log('Autocomplete API not available, trying Street API approach');
         
-        // Intelligent fallback based on common US addresses
-        const fallbackSuggestions = [
-          `${query} St, New York, NY 10001`,
-          `${query} Ave, Los Angeles, CA 90210`,
-          `${query} Blvd, Chicago, IL 60601`,
-          `${query} Dr, Houston, TX 77001`,
-          `${query} Rd, Phoenix, AZ 85001`
-        ].filter(suggestion => suggestion.toLowerCase().includes(query.toLowerCase()));
+        // Use Street API with common endings to generate suggestions
+        const streetSuffixes = ['St', 'Ave', 'Blvd', 'Dr', 'Rd'];
+        const suggestions = [];
         
-        res.json(fallbackSuggestions);
+        for (const suffix of streetSuffixes) {
+          const testAddress = `${query} ${suffix}`;
+          try {
+            const streetResponse = await axios.get('https://us-street.api.smartystreets.com/street-address', {
+              params: {
+                'auth-id': authId,
+                'auth-token': authToken,
+                'street': testAddress,
+                'city': '',
+                'state': '',
+                'zipcode': ''
+              }
+            });
+            
+            if (streetResponse.data && streetResponse.data.length > 0) {
+              const result = streetResponse.data[0];
+              const fullAddress = `${result.delivery_line_1}, ${result.components.city_name}, ${result.components.state_abbreviation} ${result.components.zipcode}`;
+              suggestions.push(fullAddress);
+            }
+          } catch (streetError) {
+            // Continue with next suffix
+          }
+        }
+        
+        // If no Street API results, fall back to basic suggestions
+        if (suggestions.length === 0) {
+          const fallbackSuggestions = [
+            `${query} St, New York, NY 10001`,
+            `${query} Ave, Los Angeles, CA 90210`,
+            `${query} Blvd, Chicago, IL 60601`,
+            `${query} Dr, Houston, TX 77001`,
+            `${query} Rd, Phoenix, AZ 85001`
+          ];
+          res.json(fallbackSuggestions);
+        } else {
+          res.json(suggestions.slice(0, 5));
+        }
       }
     } catch (error) {
       console.error("Address autocomplete error:", error);
@@ -1054,48 +1084,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "SmartyStreets credentials not configured" });
       }
       
-      try {
-        const response = await axios.get('https://us-street.api.smartystreets.com/street-address', {
-          params: {
-            'auth-id': authId,
-            'auth-token': authToken,
-            'street': address.street,
-            'city': address.city,
-            'state': address.state,
-            'zipcode': address.zipCode
-          }
-        });
-        
-        const results = response.data;
-        
-        if (!results || results.length === 0) {
-          return res.status(400).json({ error: "Address could not be validated" });
+      const response = await axios.get('https://us-street.api.smartystreets.com/street-address', {
+        params: {
+          'auth-id': authId,
+          'auth-token': authToken,
+          'street': address.street,
+          'city': address.city,
+          'state': address.state,
+          'zipcode': address.zipCode
         }
-        
-        const validated = results[0];
-        const normalizedAddress = {
-          street: `${validated.delivery_line_1}${validated.delivery_line_2 ? ' ' + validated.delivery_line_2 : ''}`,
-          city: validated.components.city_name,
-          state: validated.components.state_abbreviation,
-          zipCode: `${validated.components.zipcode}-${validated.components.plus4_code}`,
-          country: "United States"
-        };
-        
-        res.json(normalizedAddress);
-      } catch (error: any) {
-        console.log('SmartyStreets API not available - using basic validation');
-        
-        // Basic validation and normalization when API is not available
-        const normalizedAddress = {
-          street: address.street,
-          city: address.city,
-          state: address.state?.toUpperCase(),
-          zipCode: address.zipCode?.replace(/\D/g, '').slice(0, 5),
-          country: "United States"
-        };
-        
-        res.json(normalizedAddress);
+      });
+      
+      const results = response.data;
+      
+      if (!results || results.length === 0) {
+        return res.status(400).json({ error: "Address could not be validated" });
       }
+      
+      const validated = results[0];
+      const normalizedAddress = {
+        street: `${validated.delivery_line_1}${validated.delivery_line_2 ? ' ' + validated.delivery_line_2 : ''}`,
+        city: validated.components.city_name,
+        state: validated.components.state_abbreviation,
+        zipCode: `${validated.components.zipcode}-${validated.components.plus4_code}`,
+        country: "United States"
+      };
+      
+      res.json(normalizedAddress);
     } catch (error) {
       console.error("Address validation error:", error);
       res.status(500).json({ error: "Failed to validate address" });

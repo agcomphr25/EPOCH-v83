@@ -507,14 +507,14 @@ export default function EnhancedFormBuilderAdmin() {
 
             {selectedFormId && versions.length > 0 && (
               <Select 
-                value={formVersion?.toString() || ''} 
-                onValueChange={(value) => value ? loadVersion(parseInt(value)) : setFormVersion(null)}
+                value={formVersion?.toString() || 'latest'} 
+                onValueChange={(value) => value !== 'latest' ? loadVersion(parseInt(value)) : setFormVersion(null)}
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Latest Version" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— Latest Version —</SelectItem>
+                  <SelectItem value="latest">— Latest Version —</SelectItem>
                   {versions.map(version => (
                     <SelectItem key={version.version} value={version.version.toString()}>
                       v{version.version} ({new Date(version.createdAt).toLocaleDateString()})
@@ -556,9 +556,9 @@ export default function EnhancedFormBuilderAdmin() {
               <div>
                 <Label htmlFor="form-category">Category</Label>
                 <Select 
-                  value={formDef?.categoryId?.toString() || ''} 
+                  value={formDef?.categoryId?.toString() || 'none'} 
                   onValueChange={(value) => {
-                    setFormDef(prev => ({ ...prev, categoryId: value ? parseInt(value) : undefined }));
+                    setFormDef(prev => ({ ...prev, categoryId: value !== 'none' ? parseInt(value) : undefined }));
                     setTables([]);
                     setColumns([]);
                   }}
@@ -567,6 +567,7 @@ export default function EnhancedFormBuilderAdmin() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">— Select Category —</SelectItem>
                     {categories.map(cat => (
                       <SelectItem key={cat.id} value={cat.id.toString()}>
                         {cat.name}
@@ -578,13 +579,14 @@ export default function EnhancedFormBuilderAdmin() {
               <div>
                 <Label htmlFor="form-table">Database Table</Label>
                 <Select 
-                  value={formDef?.tableName || ''} 
-                  onValueChange={(value) => setFormDef(prev => ({ ...prev, tableName: value }))}
+                  value={formDef?.tableName || 'none'} 
+                  onValueChange={(value) => setFormDef(prev => ({ ...prev, tableName: value !== 'none' ? value : undefined }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select table" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">— Select Table —</SelectItem>
                     {tables.map(table => (
                       <SelectItem key={table.name} value={table.name}>
                         {table.label}

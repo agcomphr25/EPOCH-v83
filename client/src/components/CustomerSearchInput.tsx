@@ -73,9 +73,18 @@ export default function CustomerSearchInput({
 
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: typeof newCustomer) => {
+      // Clean up empty strings for optional fields
+      const cleanedData = {
+        ...customerData,
+        email: customerData.email?.trim() || undefined,
+        phone: customerData.phone?.trim() || undefined,
+        company: customerData.company?.trim() || undefined,
+        notes: customerData.notes?.trim() || undefined
+      };
+      
       const response = await apiRequest('/api/customers', {
         method: 'POST',
-        body: customerData
+        body: cleanedData
       });
       
       // If address is provided, create customer address

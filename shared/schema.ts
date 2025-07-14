@@ -649,7 +649,10 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   updatedAt: true,
 }).extend({
   name: z.string().min(1, "Customer name is required"),
-  email: z.string().email("Invalid email format").optional(),
+  email: z.string().optional().transform((val) => val === "" ? undefined : val).refine(
+    (email) => !email || z.string().email().safeParse(email).success,
+    { message: "Invalid email format" }
+  ),
   phone: z.string().optional(),
   company: z.string().optional(),
   customerType: z.string().default("standard"),

@@ -85,7 +85,15 @@ export default function CustomerSearchInput({
       setShowAddDialog(false);
       onValueChange(customer);
       setIsOpen(false);
+      
+      // Invalidate both customer queries and search queries
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/search'] });
+      
+      // Trigger a new search to refresh the dropdown
+      if (searchQuery.trim()) {
+        searchCustomers(searchQuery);
+      }
     },
     onError: (error: any) => {
       toast({

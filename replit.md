@@ -6,6 +6,9 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 14, 2025 (Afternoon)**: Fixed critical Order Entry "Edit Order" and "Create Order" functionality - resolved JSON double-stringification error causing order creation failures and fixed customer dropdown not updating after adding new customers
+- **July 14, 2025 (Afternoon)**: Updated onSingleSubmit function to use correct '/api/orders/draft' endpoint instead of non-existent '/api/orders' endpoint, ensuring proper order creation workflow
+- **July 14, 2025 (Afternoon)**: Fixed CustomerSearchInput cache invalidation to properly refresh search results after creating new customers
 - **July 14, 2025 (Early Morning)**: Successfully implemented Enhanced FormBuilder/ReportBuilder system with comprehensive drag-and-drop form creation, signature pad integration, PDF/CSV export capabilities, and PostgreSQL database schema
 - **July 14, 2025 (Early Morning)**: Created complete Enhanced Forms module with EnhancedFormBuilderAdmin component supporting visual form builder, element positioning, signature capture, and database column integration
 - **July 14, 2025 (Early Morning)**: Built EnhancedFormRenderer component with dynamic form rendering, signature pad support, conditional field visibility, form validation, and submission handling

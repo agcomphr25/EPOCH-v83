@@ -7,7 +7,7 @@ import { useState } from "react";
 export default function DocumentationPage() {
   const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview');
 
-  const { data: documentation, isLoading } = useQuery({
+  const { data: documentation, isLoading, error } = useQuery({
     queryKey: ['/api/documentation'],
     queryFn: async () => {
       const response = await fetch('/api/documentation');
@@ -15,6 +15,17 @@ export default function DocumentationPage() {
       return response.text();
     }
   });
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Error Loading Documentation</h1>
+          <p className="text-gray-600">Unable to load the documentation. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownload = () => {
     if (!documentation) return;

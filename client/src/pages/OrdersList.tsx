@@ -1,0 +1,216 @@
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Edit, Eye, Package, CalendarDays, User, FileText } from 'lucide-react';
+import { format } from 'date-fns';
+
+interface Order {
+  id: number;
+  orderId: string;
+  orderDate: string;
+  dueDate: string;
+  customerId: string;
+  customerPO: string;
+  fbOrderNumber: string;
+  agrOrderDetails: string;
+  modelId: string;
+  handedness: string;
+  features: any;
+  featureQuantities: any;
+  discountCode: string;
+  shipping: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Customer {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  customerType: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function OrdersList() {
+  const { data: orders, isLoading, error } = useQuery<Order[]>({
+    queryKey: ['/api/orders/all'],
+  });
+
+  const { data: customers } = useQuery<Customer[]>({
+    queryKey: ['/api/customers/search'],
+  });
+
+  const getCustomerName = (customerId: string) => {
+    if (!customers) return customerId;
+    const customer = customers.find(c => c.id.toString() === customerId);
+    return customer ? customer.name : customerId;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-200 rounded animate-pulse" />
+          <div className="h-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-32 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-red-600">
+              Error loading orders. Please try again later.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'DRAFT':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'FINALIZED':
+        return 'bg-green-100 text-green-800';
+      case 'SHIPPED':
+        return 'bg-blue-100 text-blue-800';
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Package className="h-6 w-6" />
+              All Orders
+            </h1>
+            <p className="text-gray-600 mt-1">
+              View and manage all created orders
+            </p>
+          </div>
+          <Link href="/order-entry">
+            <Button className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Create New Order
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {!orders || orders.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+              <p className="text-gray-600 mb-4">
+                You haven't created any orders yet. Start by creating your first order.
+              </p>
+              <Link href="/order-entry">
+                <Button>
+                  Create Your First Order
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Orders ({orders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Order Date</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">
+                      {order.orderId}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(order.status)}>
+                        {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-gray-400" />
+                        {getCustomerName(order.customerId) || 'N/A'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-gray-400" />
+                        {order.modelId || 'N/A'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-gray-400" />
+                        {format(new Date(order.orderDate), 'MMM d, yyyy')}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-gray-400" />
+                        {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/order-entry?edit=${order.id}`}>
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

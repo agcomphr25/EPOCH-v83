@@ -201,6 +201,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/orders/all", async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retrieve orders" });
+    }
+  });
+
   app.post("/api/orders", async (req, res) => {
     try {
       // Mock order creation - in real implementation, save to orders table

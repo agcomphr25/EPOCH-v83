@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 14, 2025 (Afternoon)**: Added Orders List page with navigation button - created comprehensive order listing with customer names, status badges, order dates, and edit/view actions accessible from main navigation bar
 - **July 14, 2025 (Afternoon)**: Fixed Order ID generation to produce unique sequential IDs - replaced static mock "AP001" with proper year-month algorithm (AG001, AG002, etc.) that generates A=2025, G=July, with monthly sequence reset and database integration
 - **July 14, 2025 (Afternoon)**: Removed all mock customers from database - cleaned up customer search to only show real customers entered by users, removed 10 sample customers with names like "John Smith", "Sarah Johnson", etc., and fixed customer address creation validation
 - **July 14, 2025 (Afternoon)**: Fixed customer creation validation error - updated frontend to properly clean empty email strings and backend schema to handle optional email fields correctly

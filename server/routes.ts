@@ -406,14 +406,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const result = insertOrderDraftSchema.parse(req.body);
       
-      // Check if draft already exists with this orderId
+      // Check if draft already exists with this orderId (for editing existing orders)
       const existingDraft = await storage.getOrderDraft(result.orderId);
       if (existingDraft) {
         // Update existing draft instead of creating new one
         const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
         res.json(updatedDraft);
       } else {
-        const draft = await storage.createOrderDraft(result);
+        // Generate new unique order ID for new orders
+        const lastOrderId = await storage.getLastOrderId();
+        const newOrderId = generateP1OrderId(new Date(), lastOrderId);
+        
+        const draft = await storage.createOrderDraft({ ...result, orderId: newOrderId });
         res.json(draft);
       }
     } catch (error) {

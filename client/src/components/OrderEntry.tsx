@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { generateP1OrderId } from '@/utils/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -65,7 +66,7 @@ export default function OrderEntry() {
 
   const [modelOptions, setModelOptions] = useState<StockModel[]>([]);
   const [modelId, setModelId] = useState('');
-  const [modelQuery, setModelQuery] = useState('');
+  const [modelOpen, setModelOpen] = useState(false);
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
 
@@ -758,34 +759,43 @@ export default function OrderEntry() {
               {/* Model Selection */}
               <div className="space-y-2">
                 <Label htmlFor="model">Stock Model</Label>
-                <div className="relative">
-                  <Combobox value={modelId} onChange={setModelId}>
-                    <ComboboxInput
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      displayValue={(modelId: string) => modelOptions.find(m => m.id === modelId)?.displayName || ''}
-                      onChange={(event) => setModelQuery(event.target.value)}
-                      placeholder="Select or search model..."
-                    />
-                    <ComboboxButton className="absolute inset-y-0 right-0 flex items-center pr-3">
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    </ComboboxButton>
-                    <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                      {modelOptions
-                        .filter((model) =>
-                          model.displayName.toLowerCase().includes(modelQuery.toLowerCase())
-                        )
-                        .map((model) => (
-                          <ComboboxOption
-                            key={model.id}
-                            value={model.id}
-                            className="relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 data-[focus]:bg-blue-600 data-[focus]:text-white"
-                          >
-                            {model.displayName}
-                          </ComboboxOption>
-                        ))}
-                    </ComboboxOptions>
-                  </Combobox>
-                </div>
+                <Popover open={modelOpen} onOpenChange={setModelOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={modelOpen}
+                      className="w-full justify-between"
+                    >
+                      {modelId 
+                        ? modelOptions.find(m => m.id === modelId)?.displayName
+                        : "Select or search model..."}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search models..." />
+                      <CommandList>
+                        <CommandEmpty>No model found.</CommandEmpty>
+                        <CommandGroup>
+                          {modelOptions.map((model) => (
+                            <CommandItem
+                              key={model.id}
+                              value={model.displayName}
+                              onSelect={() => {
+                                setModelId(model.id);
+                                setModelOpen(false);
+                              }}
+                            >
+                              {model.displayName}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
               </div>
 

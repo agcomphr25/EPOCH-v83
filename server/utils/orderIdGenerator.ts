@@ -30,25 +30,36 @@ export function generateP1OrderId(date: Date, lastId: string): string {
     return currentPrefix + '001';
   }
   
-  // Parse the last order ID
-  const match = /^([A-Z]+)([A-Z])(\d{3,})$/.exec(lastId.trim());
-  if (!match) {
-    // Invalid format, start with current prefix + 001
+  // Parse the last order ID - handle both current format and legacy formats
+  // Try new format first: AG001, AG002, etc.
+  let match = /^([A-Z]+)([A-Z])(\d{3,})$/.exec(lastId.trim());
+  
+  if (match) {
+    // New format matched
+    const [, lastYearLetter, lastMonthLetter, numStr] = match;
+    const lastSeq = parseInt(numStr, 10);
+    const lastPrefix = lastYearLetter + lastMonthLetter;
+    
+    if (lastPrefix === currentPrefix) {
+      // Same month and year - increment sequence
+      const nextSeq = lastSeq + 1;
+      return currentPrefix + String(nextSeq).padStart(3, '0');
+    } else {
+      // Different month or year - reset to 001
+      return currentPrefix + '001';
+    }
+  }
+  
+  // Try legacy formats: UNIQUE002, TEST001, ED001, EG001, AP002, etc.
+  match = /^([A-Z]+)(\d{3,})$/.exec(lastId.trim());
+  if (match) {
+    // Legacy format - just use current prefix and start with 001
+    // Since we're switching to new format, start fresh
     return currentPrefix + '001';
   }
   
-  const [, lastYearLetter, lastMonthLetter, numStr] = match;
-  const lastSeq = parseInt(numStr, 10);
-  const lastPrefix = lastYearLetter + lastMonthLetter;
-  
-  if (lastPrefix === currentPrefix) {
-    // Same month and year - increment sequence
-    const nextSeq = lastSeq + 1;
-    return currentPrefix + String(nextSeq).padStart(3, '0');
-  } else {
-    // Different month or year - reset to 001
-    return currentPrefix + '001';
-  }
+  // If no format matches, start with current prefix + 001
+  return currentPrefix + '001';
 }
 
 // Utility function to get the last order ID from the database

@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 14, 2025 (Afternoon)**: Successfully fixed Order ID generation system to create unique sequential IDs - updated algorithm to handle legacy formats (UNIQUE002, TEST001) and generate proper year-month format (AG001, AG002, etc.) with database integration and automatic incrementing
 - **July 14, 2025 (Afternoon)**: Debugging All Orders page 404 issue - verified API endpoints work correctly, added multiple route aliases (/orders, /orders-list, /all-orders), investigating routing and component rendering
 - **July 14, 2025 (Afternoon)**: Added Orders List page with navigation button - created comprehensive order listing with customer names, status badges, order dates, and edit/view actions accessible from main navigation bar
 - **July 14, 2025 (Afternoon)**: Fixed Order ID generation to produce unique sequential IDs - replaced static mock "AP001" with proper year-month algorithm (AG001, AG002, etc.) that generates A=2025, G=July, with monthly sequence reset and database integration

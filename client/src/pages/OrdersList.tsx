@@ -202,7 +202,7 @@ export default function OrdersList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Link href={`/order-entry?edit=${order.id}`}>
+                        <Link href={`/order-entry?draft=${order.id}`}>
                           <Button variant="outline" size="sm">
                             <Edit className="h-4 w-4" />
                           </Button>

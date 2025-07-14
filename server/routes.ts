@@ -468,16 +468,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/orders/draft/:orderId", async (req, res) => {
+  app.get("/api/orders/draft/:id", async (req, res) => {
     try {
-      const { orderId } = req.params;
-      const draft = await storage.getOrderDraft(orderId);
+      const { id } = req.params;
+      
+      // Try to get by database ID first (when coming from All Orders page)
+      let draft = await storage.getOrderDraftById(parseInt(id));
+      
+      // If not found by ID, try by orderId string (legacy support)
+      if (!draft) {
+        draft = await storage.getOrderDraft(id);
+      }
+      
       if (draft) {
         res.json(draft);
       } else {
         res.status(404).json({ error: "Order draft not found" });
       }
     } catch (error) {
+      console.error("Get order draft error:", error);
       res.status(500).json({ error: "Failed to retrieve order draft" });
     }
   });

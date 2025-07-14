@@ -99,6 +99,7 @@ export interface IStorage {
   // Order Drafts CRUD
   createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft>;
   getOrderDraft(orderId: string): Promise<OrderDraft | undefined>;
+  getOrderDraftById(id: number): Promise<OrderDraft | undefined>;
   updateOrderDraft(orderId: string, data: Partial<InsertOrderDraft>): Promise<OrderDraft>;
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
@@ -479,6 +480,11 @@ export class DatabaseStorage implements IStorage {
 
   async getOrderDraft(orderId: string): Promise<OrderDraft | undefined> {
     const [draft] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+    return draft || undefined;
+  }
+
+  async getOrderDraftById(id: number): Promise<OrderDraft | undefined> {
+    const [draft] = await db.select().from(orderDrafts).where(eq(orderDrafts.id, id));
     return draft || undefined;
   }
 

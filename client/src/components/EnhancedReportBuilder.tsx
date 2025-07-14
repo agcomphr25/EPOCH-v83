@@ -59,15 +59,34 @@ export default function EnhancedReportBuilder() {
   // Fetch submissions for selected form
   const { data: submissions = [], isLoading: loadingSubmissions, refetch } = useQuery<FormSubmission[]>({
     queryKey: ['/api/enhanced-forms/submissions', selectedFormId],
-    queryFn: () => apiRequest('/api/enhanced-forms/submissions', { params: { formId: selectedFormId } }),
+    queryFn: async () => {
+      try {
+        const response = await apiRequest('/api/enhanced-forms/submissions', { params: { formId: selectedFormId } });
+        return response;
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+        throw error;
+      }
+    },
     enabled: !!selectedFormId,
     select: (data) => {
       // Ensure we always return an array
-      if (Array.isArray(data)) {
-        return data;
+      try {
+        if (Array.isArray(data)) {
+          return data;
+        }
+        console.warn('Submissions API returned non-array data:', data);
+        return [];
+      } catch (error) {
+        console.error('Error processing submissions data:', error);
+        return [];
       }
-      console.warn('Submissions API returned non-array data:', data);
-      return [];
+    },
+    retry: 1,
+    retryDelay: 1000,
+    onError: (error) => {
+      console.error('Submissions query error:', error);
+      toast.error('Failed to fetch submissions data');
     }
   });
 
@@ -196,8 +215,21 @@ export default function EnhancedReportBuilder() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Enhanced Report Builder</h1>
-        <Button onClick={() => refetch()} variant="outline" className="flex items-center gap-2">
-          <RefreshCw className="h-4 w-4" />
+        <Button 
+          onClick={async () => {
+            try {
+              await refetch();
+              toast.success('Data refreshed successfully');
+            } catch (error) {
+              console.error('Error refreshing data:', error);
+              toast.error('Failed to refresh data');
+            }
+          }} 
+          variant="outline" 
+          className="flex items-center gap-2"
+          disabled={loadingSubmissions}
+        >
+          <RefreshCw className={`h-4 w-4 ${loadingSubmissions ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>

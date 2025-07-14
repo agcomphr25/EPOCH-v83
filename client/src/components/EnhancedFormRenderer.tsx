@@ -367,19 +367,43 @@ export default function EnhancedFormRenderer({
                       // Use setTimeout to ensure canvas is fully rendered
                       setTimeout(() => {
                         try {
+                          // Check if canvas still exists and hasn't been cleaned up
+                          if (!canvas || !canvas.parentElement) {
+                            return;
+                          }
+                          
                           // Set canvas dimensions based on container
                           const rect = canvas.getBoundingClientRect();
                           canvas.width = rect.width || 300;
                           canvas.height = rect.height || 128;
                           
+                          // Double-check that SignaturePad is available
+                          if (typeof SignaturePad !== 'function') {
+                            console.error('SignaturePad is not available');
+                            return;
+                          }
+                          
                           const pad = new SignaturePad(canvas);
-                          pad.addEventListener('endStroke', () => {
-                            try {
-                              handleChange(key, pad.toDataURL());
-                            } catch (error) {
-                              console.error('Error saving signature:', error);
-                            }
-                          });
+                          
+                          // Use different event listeners for compatibility
+                          if (pad.addEventListener) {
+                            pad.addEventListener('endStroke', () => {
+                              try {
+                                handleChange(key, pad.toDataURL());
+                              } catch (error) {
+                                console.error('Error saving signature:', error);
+                              }
+                            });
+                          } else if (pad.onEnd) {
+                            pad.onEnd = () => {
+                              try {
+                                handleChange(key, pad.toDataURL());
+                              } catch (error) {
+                                console.error('Error saving signature:', error);
+                              }
+                            };
+                          }
+                          
                           sigPads.current[element.id] = pad;
                         } catch (error) {
                           console.error('Error initializing signature pad:', error);

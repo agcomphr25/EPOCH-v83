@@ -50,6 +50,8 @@ function App() {
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
                 <Route path="/orders-list" component={OrdersList} />
+                <Route path="/orders" component={OrdersList} />
+                <Route path="/all-orders" component={OrdersList} />
                 <Route path="/draft-orders" component={DraftOrders} />
                 <Route path="/feature-manager" component={FeatureManager} />
                 <Route path="/stock-models" component={StockModels} />

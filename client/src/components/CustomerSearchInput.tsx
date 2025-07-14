@@ -8,10 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Search, Plus, User, Building, Phone, Mail, ChevronDown, Check } from 'lucide-react';
+import { Search, Plus, User, Building, Phone, Mail, ChevronDown, Check, MapPin } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
+import AddressInput from '@/components/AddressInput';
+import type { AddressData } from '@/utils/addressUtils';
 
 interface CustomerSearchInputProps {
   value?: Customer | null;
@@ -41,6 +43,14 @@ export default function CustomerSearchInput({
     customerType: 'standard',
     notes: ''
   });
+  
+  const [customerAddress, setCustomerAddress] = useState<AddressData>({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States'
+  });
 
   // Debounced search
   const debouncedSearch = useRef(
@@ -67,6 +77,23 @@ export default function CustomerSearchInput({
         method: 'POST',
         body: customerData
       });
+      
+      // If address is provided, create customer address
+      if (customerAddress.street || customerAddress.city) {
+        try {
+          await apiRequest('/api/addresses', {
+            method: 'POST',
+            body: {
+              customerId: response.id.toString(),
+              ...customerAddress,
+              type: 'primary'
+            }
+          });
+        } catch (error) {
+          console.error('Failed to create customer address:', error);
+        }
+      }
+      
       return response as Customer;
     },
     onSuccess: (customer) => {
@@ -81,6 +108,13 @@ export default function CustomerSearchInput({
         company: '',
         customerType: 'standard',
         notes: ''
+      });
+      setCustomerAddress({
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'United States'
       });
       setShowAddDialog(false);
       onValueChange(customer);
@@ -211,7 +245,7 @@ export default function CustomerSearchInput({
                     Add New Customer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
@@ -275,6 +309,19 @@ export default function CustomerSearchInput({
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
                         className="col-span-3"
                         placeholder="Additional notes..."
+                      />
+                    </div>
+                    
+                    {/* Address Field */}
+                    <div className="col-span-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MapPin className="h-4 w-4 text-gray-500" />
+                        <Label>Address (Optional)</Label>
+                      </div>
+                      <AddressInput 
+                        label=""
+                        value={customerAddress}
+                        onChange={setCustomerAddress}
                       />
                     </div>
                   </div>

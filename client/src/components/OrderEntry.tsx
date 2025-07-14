@@ -962,6 +962,141 @@ export default function OrderEntry() {
                       })}
                     </div>
                   )}
+                  {featureDef.type === 'multiselect' && (
+                    <div className="space-y-3">
+                      {/* Multi-select dropdown */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between h-auto min-h-[40px] p-3"
+                          >
+                            <div className="flex flex-wrap gap-1 max-w-full">
+                              {features[featureDef.id]?.length > 0 ? (
+                                features[featureDef.id].map((selectedValue: string) => {
+                                  const option = featureDef.options?.find(opt => opt.value === selectedValue);
+                                  return (
+                                    <Badge key={selectedValue} variant="secondary" className="text-xs">
+                                      {option?.label || selectedValue}
+                                    </Badge>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-gray-500">Select options...</span>
+                              )}
+                            </div>
+                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0">
+                          <Command>
+                            <CommandInput placeholder="Search options..." />
+                            <CommandList>
+                              <CommandEmpty>No option found.</CommandEmpty>
+                              <CommandGroup>
+                                {featureDef.options?.map((option) => {
+                                  const selectedOptions = features[featureDef.id] || [];
+                                  const isSelected = selectedOptions.includes(option.value);
+                                  
+                                  return (
+                                    <CommandItem
+                                      key={option.value}
+                                      value={option.label}
+                                      onSelect={() => {
+                                        const currentSelection = features[featureDef.id] || [];
+                                        let newSelection;
+                                        
+                                        if (isSelected) {
+                                          newSelection = currentSelection.filter((val: string) => val !== option.value);
+                                          // Remove quantity when deselected
+                                          setFeatureQuantities(prev => {
+                                            const newQuantities = { ...prev };
+                                            if (newQuantities[featureDef.id]) {
+                                              delete newQuantities[featureDef.id][option.value];
+                                            }
+                                            return newQuantities;
+                                          });
+                                        } else {
+                                          newSelection = [...currentSelection, option.value];
+                                          // Initialize quantity to 1 when first selected
+                                          setFeatureQuantities(prev => ({
+                                            ...prev,
+                                            [featureDef.id]: {
+                                              ...prev[featureDef.id],
+                                              [option.value]: 1
+                                            }
+                                          }));
+                                        }
+                                        
+                                        setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
+                                      }}
+                                    >
+                                      <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => {}} // Handled by onSelect
+                                            className="mr-2 rounded border-gray-300"
+                                          />
+                                          <span>{option.label}</span>
+                                        </div>
+                                        {option.price && option.price > 0 && (
+                                          <span className="text-blue-600 font-medium text-sm">
+                                            (+${option.price})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  );
+                                })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      
+                      {/* Quantity inputs for selected options */}
+                      {features[featureDef.id]?.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm font-medium">Quantities:</Label>
+                          {features[featureDef.id].map((selectedValue: string) => {
+                            const option = featureDef.options?.find(opt => opt.value === selectedValue);
+                            const quantity = featureQuantities[featureDef.id]?.[selectedValue] || 1;
+                            
+                            return (
+                              <div key={selectedValue} className="flex items-center justify-between">
+                                <span className="text-sm">{option?.label || selectedValue}</span>
+                                <div className="flex items-center space-x-2">
+                                  <Label htmlFor={`${featureDef.id}-${selectedValue}-qty`} className="text-xs text-gray-600">
+                                    Qty:
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    id={`${featureDef.id}-${selectedValue}-qty`}
+                                    min="1"
+                                    value={quantity}
+                                    onChange={(e) => {
+                                      const newQuantity = parseInt(e.target.value) || 1;
+                                      setFeatureQuantities(prev => ({
+                                        ...prev,
+                                        [featureDef.id]: {
+                                          ...prev[featureDef.id],
+                                          [selectedValue]: newQuantity
+                                        }
+                                      }));
+                                    }}
+                                    className="w-16 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {errors[`features.${featureDef.id}`] && (
                     <p className="text-red-500 text-sm">{errors[`features.${featureDef.id}`]}</p>
                   )}

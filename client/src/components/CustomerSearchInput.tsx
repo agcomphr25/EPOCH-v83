@@ -65,7 +65,7 @@ export default function CustomerSearchInput({
     mutationFn: async (customerData: typeof newCustomer) => {
       const response = await apiRequest('/api/customers', {
         method: 'POST',
-        body: JSON.stringify(customerData)
+        body: customerData
       });
       return response as Customer;
     },

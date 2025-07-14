@@ -101,6 +101,22 @@ export default function EnhancedFormRenderer({
     }
   }, [formId]);
 
+  // Cleanup signature pads on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(sigPads.current).forEach(pad => {
+        try {
+          if (pad && typeof pad.off === 'function') {
+            pad.off();
+          }
+        } catch (error) {
+          console.error('Error cleaning up signature pad:', error);
+        }
+      });
+      sigPads.current = {};
+    };
+  }, []);
+
   // Handle form field changes
   const handleChange = (key: string, value: any) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -347,14 +363,35 @@ export default function EnhancedFormRenderer({
               <canvas
                 ref={(canvas) => {
                   if (canvas && !sigPads.current[element.id]) {
-                    const pad = new SignaturePad(canvas);
-                    pad.onEnd = () => {
-                      handleChange(key, pad.toDataURL());
-                    };
-                    sigPads.current[element.id] = pad;
+                    try {
+                      // Use setTimeout to ensure canvas is fully rendered
+                      setTimeout(() => {
+                        try {
+                          // Set canvas dimensions based on container
+                          const rect = canvas.getBoundingClientRect();
+                          canvas.width = rect.width || 300;
+                          canvas.height = rect.height || 128;
+                          
+                          const pad = new SignaturePad(canvas);
+                          pad.addEventListener('endStroke', () => {
+                            try {
+                              handleChange(key, pad.toDataURL());
+                            } catch (error) {
+                              console.error('Error saving signature:', error);
+                            }
+                          });
+                          sigPads.current[element.id] = pad;
+                        } catch (error) {
+                          console.error('Error initializing signature pad:', error);
+                        }
+                      }, 100);
+                    } catch (error) {
+                      console.error('Error setting up signature pad:', error);
+                    }
                   }
                 }}
                 className="w-full h-32 border border-gray-200 rounded"
+                style={{ width: '100%', height: '128px' }}
               />
               <div className="mt-2 flex justify-between items-center">
                 <Button
@@ -362,10 +399,14 @@ export default function EnhancedFormRenderer({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const pad = sigPads.current[element.id];
-                    if (pad) {
-                      pad.clear();
-                      handleChange(key, '');
+                    try {
+                      const pad = sigPads.current[element.id];
+                      if (pad && typeof pad.clear === 'function') {
+                        pad.clear();
+                        handleChange(key, '');
+                      }
+                    } catch (error) {
+                      console.error('Error clearing signature pad:', error);
                     }
                   }}
                 >

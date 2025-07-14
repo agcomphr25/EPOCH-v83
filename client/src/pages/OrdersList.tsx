@@ -42,6 +42,8 @@ interface Customer {
 }
 
 export default function OrdersList() {
+  console.log('OrdersList component rendering');
+  
   const { data: orders, isLoading, error } = useQuery<Order[]>({
     queryKey: ['/api/orders/all'],
   });

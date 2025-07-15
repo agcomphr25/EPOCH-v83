@@ -34,7 +34,7 @@ import FinanceDashboardPage from "./pages/FinanceDashboardPage";
 import EnhancedFormsPage from "./pages/EnhancedFormsPage";
 import EnhancedReportsPage from "./pages/EnhancedReportsPage";
 import FormRendererPage from "./pages/FormRendererPage";
-import DocumentationPage from "./pages/DocumentationPage";
+import DocumentationPageNew from "./pages/DocumentationPageNew";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -75,12 +75,7 @@ function App() {
                 <Route path="/finance/ar" component={ARJournalPage} />
                 <Route path="/finance/cogs" component={COGSReportPage} />
                 <Route path="/finance/dashboard" component={FinanceDashboardPage} />
-                <Route path="/documentation">
-                  <div className="p-6">
-                    <h1>Test Documentation Route</h1>
-                    <p>This is a test to see if the route is working</p>
-                  </div>
-                </Route>
+                <Route path="/documentation" component={DocumentationPageNew} />
 
                 <Route component={NotFound} />
               </Switch>

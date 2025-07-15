@@ -414,12 +414,28 @@ export class DatabaseStorage implements IStorage {
 
   // Features CRUD
   async getAllFeatures(): Promise<Feature[]> {
-    return await db.select().from(features).orderBy(features.sortOrder);
+    const rawFeatures = await db.select().from(features).orderBy(features.sortOrder);
+    
+    // Parse JSON options field if it's a string
+    return rawFeatures.map(feature => ({
+      ...feature,
+      options: typeof feature.options === 'string' 
+        ? JSON.parse(feature.options) 
+        : feature.options
+    }));
   }
 
   async getFeature(id: string): Promise<Feature | undefined> {
     const [feature] = await db.select().from(features).where(eq(features.id, id));
-    return feature || undefined;
+    if (!feature) return undefined;
+    
+    // Parse JSON options field if it's a string
+    return {
+      ...feature,
+      options: typeof feature.options === 'string' 
+        ? JSON.parse(feature.options) 
+        : feature.options
+    };
   }
 
   async createFeature(data: InsertFeature): Promise<Feature> {

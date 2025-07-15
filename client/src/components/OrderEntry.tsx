@@ -132,12 +132,16 @@ export default function OrderEntry() {
         // Store all features for processing
         const allFeatures = featuresResponse || [];
         
-        // Debug: Check if other_options has proper structure
+        // Debug: Check if other_options has proper structure (temporary)
         const otherOptionsFeature = allFeatures.find((f: any) => f.id === 'other_options');
         if (otherOptionsFeature) {
-          console.log('Other Options Feature:', otherOptionsFeature);
-          console.log('Options type:', typeof otherOptionsFeature.options);
-          console.log('Options value:', otherOptionsFeature.options);
+          console.log('✓ Other Options Feature loaded:', {
+            id: otherOptionsFeature.id,
+            type: otherOptionsFeature.type,
+            optionsType: typeof otherOptionsFeature.options,
+            optionsCount: otherOptionsFeature.options?.length || 0,
+            firstOption: otherOptionsFeature.options?.[0]
+          });
         }
         
         setAllFeatures(allFeatures);

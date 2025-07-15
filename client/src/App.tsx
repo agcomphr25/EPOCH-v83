@@ -45,19 +45,51 @@ function App() {
   
   try {
     return (
-      <div style={{ padding: '20px', backgroundColor: '#f0f0f0', border: '2px solid #333' }}>
-        <h1 style={{ color: '#333' }}>EPOCH v8 - Manufacturing ERP</h1>
-        <h2 style={{ color: '#666' }}>React Application Successfully Fixed!</h2>
-        <p>The RefreshRuntime.register error has been resolved.</p>
-        <div style={{ marginTop: '20px' }}>
-          <h3>Application Status:</h3>
-          <ul>
-            <li>✅ React is now rendering properly</li>
-            <li>✅ Vite plugin configuration resolved</li>
-            <li>✅ Ready to restore full functionality</li>
-          </ul>
-        </div>
-      </div>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <CSVProvider>
+            <div className="min-h-screen bg-gray-50">
+              <Navigation />
+              <OfflineIndicator />
+              <main className="container mx-auto px-4 py-8">
+                <Switch>
+                  <Route path="/" component={SimpleTest} />
+                  <Route path="/order-management" component={OrderManagement} />
+                  <Route path="/order-entry" component={OrderEntry} />
+                  <Route path="/test-order-entry" component={OrderEntryTest} />
+                  <Route path="/orders" component={OrdersList} />
+                  <Route path="/orders-list" component={OrdersList} />
+                  <Route path="/orders-simple" component={OrdersListSimple} />
+                  <Route path="/all-orders" component={OrdersList} />
+                  <Route path="/discounts" component={DiscountManagement} />
+                  <Route path="/feature-manager" component={FeatureManager} />
+                  <Route path="/stock-models" component={StockModels} />
+                  <Route path="/draft-orders" component={DraftOrders} />
+                  <Route path="/inventory/scanner" component={InventoryScannerPage} />
+                  <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
+                  <Route path="/inventory/manager" component={InventoryManagerPage} />
+                  <Route path="/qc" component={QCPage} />
+                  <Route path="/maintenance" component={MaintenancePage} />
+                  <Route path="/employee-portal" component={EmployeePortalPage} />
+                  <Route path="/time-clock-admin" component={TimeClockAdminPage} />
+                  <Route path="/module8-test" component={Module8TestPage} />
+                  <Route path="/finance/ap-journal" component={APJournalPage} />
+                  <Route path="/finance/ar-journal" component={ARJournalPage} />
+                  <Route path="/finance/cogs-report" component={COGSReportPage} />
+                  <Route path="/finance/dashboard" component={FinanceDashboardPage} />
+                  <Route path="/enhanced-forms" component={EnhancedFormsPage} />
+                  <Route path="/enhanced-reports" component={EnhancedReportsPage} />
+                  <Route path="/forms/render/:formId" component={FormRendererPage} />
+                  <Route path="/documentation" component={DocumentationPageNew} />
+                  <Route component={NotFound} />
+                </Switch>
+              </main>
+            </div>
+            <Toaster />
+            <HotToaster />
+          </CSVProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
     );
   } catch (error) {
     console.error("Error in App component:", error);

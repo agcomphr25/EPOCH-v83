@@ -99,7 +99,7 @@ const rootElement = document.getElementById("root");
 if (rootElement) {
   console.log("Initializing React application...");
   const root = createRoot(rootElement);
-  root.render(React.createElement(TestApp));
+  root.render(React.createElement(App));
   console.log("React application rendered successfully");
 } else {
   console.error("Root element not found");

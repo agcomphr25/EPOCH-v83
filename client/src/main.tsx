@@ -3,12 +3,19 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 
-// Clear any existing content and initialize React properly
+// Ensure React refresh is properly initialized
+if (typeof window !== 'undefined') {
+  if (!(window as any).$RefreshReg$) {
+    (window as any).$RefreshReg$ = () => {};
+  }
+  if (!(window as any).$RefreshSig$) {
+    (window as any).$RefreshSig$ = () => (type: any) => type;
+  }
+}
+
 const rootElement = document.getElementById("root");
 if (rootElement) {
-  // Clear any existing content
   rootElement.innerHTML = "";
-  
   console.log("Initializing React application...");
   const root = createRoot(rootElement);
   root.render(

@@ -332,7 +332,7 @@ export const insertFeatureSchema = createInsertSchema(features).omit({
   id: z.string().optional(), // Allow client to provide ID or we'll generate one
   name: z.string().min(1, "Name is required"),
   displayName: z.string().min(1, "Display name is required"),
-  type: z.enum(['dropdown', 'text', 'number', 'checkbox', 'textarea']),
+  type: z.enum(['dropdown', 'text', 'number', 'checkbox', 'textarea', 'multiselect']),
   required: z.boolean().default(false),
   placeholder: z.string().optional().nullable(),
   category: z.string().min(1, "Category is required"),

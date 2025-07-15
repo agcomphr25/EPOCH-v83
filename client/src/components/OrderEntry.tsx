@@ -131,6 +131,15 @@ export default function OrderEntry() {
 
         // Store all features for processing
         const allFeatures = featuresResponse || [];
+        
+        // Debug: Check if other_options has proper structure
+        const otherOptionsFeature = allFeatures.find((f: any) => f.id === 'other_options');
+        if (otherOptionsFeature) {
+          console.log('Other Options Feature:', otherOptionsFeature);
+          console.log('Options type:', typeof otherOptionsFeature.options);
+          console.log('Options value:', otherOptionsFeature.options);
+        }
+        
         setAllFeatures(allFeatures);
 
         // Separate paint features from other features

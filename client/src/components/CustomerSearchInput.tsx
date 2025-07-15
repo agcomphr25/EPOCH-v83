@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,7 @@ export default function CustomerSearchInput({
   // Debounced search with proper cleanup
   const debouncedSearchRef = useRef<((query: string) => void) | null>(null);
 
+  // Initialize debounce on mount
   useEffect(() => {
     debouncedSearchRef.current = debounce((query: string) => {
       if (query.length > 0) {
@@ -73,7 +74,6 @@ export default function CustomerSearchInput({
     }, 300);
 
     return () => {
-      // cleanup on unmount
       if (debouncedSearchRef.current && (debouncedSearchRef.current as any).cancel) {
         (debouncedSearchRef.current as any).cancel();
       }
@@ -156,7 +156,7 @@ export default function CustomerSearchInput({
     }
   });
 
-  // Trigger debounced search when searchQuery changes
+  // Trigger debounce on query change
   useEffect(() => {
     if (debouncedSearchRef.current) {
       debouncedSearchRef.current(searchQuery);

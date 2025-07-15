@@ -5,5 +5,10 @@ import "./index.css";
 
 const rootElement = document.getElementById("root");
 if (rootElement) {
-  createRoot(rootElement).render(<App />);
+  console.log("Root element found, creating React app...");
+  const root = createRoot(rootElement);
+  root.render(<App />);
+  console.log("React app rendered successfully");
+} else {
+  console.error("Root element not found");
 }

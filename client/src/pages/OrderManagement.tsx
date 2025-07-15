@@ -1,3 +1,4 @@
+import React from "react";
 import { Factory, User } from "lucide-react";
 import { OrderIDGenerator } from "@/components/OrderIDGenerator";
 import { CSVImport } from "@/components/CSVImport";

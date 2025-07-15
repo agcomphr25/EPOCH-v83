@@ -1,3 +1,4 @@
+import React from "react";
 import OrderEntryComponent from "@/components/OrderEntry-test";
 
 export default function OrderEntry() {

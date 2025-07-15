@@ -133,9 +133,15 @@ export default function OrderEntry() {
         const allFeatures = featuresResponse || [];
         setAllFeatures(allFeatures);
 
+        // Debug: Log all features to see what we're working with
+        console.log('All features loaded:', allFeatures);
+
         // Separate paint features from other features
         const paintFeatures = allFeatures.filter((f: any) => f.category === 'paint_options');
         const nonPaintFeatures = allFeatures.filter((f: any) => f.category !== 'paint_options');
+
+        console.log('Paint features:', paintFeatures);
+        console.log('Non-paint features:', nonPaintFeatures);
 
         setPaintFeatures(paintFeatures);
 
@@ -163,12 +169,15 @@ export default function OrderEntry() {
           ? [...nonPaintFeatures, paintOptionsFeature]
           : nonPaintFeatures;
 
-        setFeatureDefs(finalFeatures.map((feature: any) => ({
+        const mappedFeatures = finalFeatures.map((feature: any) => ({
           id: feature.id,
           name: feature.displayName || feature.name,
           type: feature.type,
           options: feature.options || []
-        })));
+        }));
+
+        console.log('Final mapped features for display:', mappedFeatures);
+        setFeatureDefs(mappedFeatures);
       } catch (error) {
         console.error('Failed to load initial data:', error);
       } finally {

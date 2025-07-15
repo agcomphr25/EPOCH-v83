@@ -5,10 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Check, ChevronDown, Mail, MapPin, Phone, Plus, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Search, Plus, User, Building, Phone, Mail, ChevronDown, Check, MapPin } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
@@ -23,12 +22,12 @@ interface CustomerSearchInputProps {
   error?: string;
 }
 
-export default function CustomerSearchInput({ 
-  value, 
-  onValueChange, 
-  placeholder = "Search customers...", 
-  className = "",
-  error 
+export default function CustomerSearchInput({
+  value,
+  onValueChange,
+  placeholder = 'Search customers...',
+  className = '',
+  error,
 }: CustomerSearchInputProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -41,7 +40,7 @@ export default function CustomerSearchInput({
     phone: '',
     company: '',
     customerType: 'standard',
-    notes: ''
+    notes: '',
   });
 
   const [customerAddress, setCustomerAddress] = useState<AddressData>({
@@ -49,27 +48,31 @@ export default function CustomerSearchInput({
     city: '',
     state: '',
     zipCode: '',
-    country: 'United States'
+    country: 'United States',
   });
 
-  const { data: customers = [], isLoading, refetch: searchCustomers } = useQuery({
+  const {
+    data: customers = [],
+    refetch: searchCustomers,
+  } = useQuery({
     queryKey: ['/api/customers/search', searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
-      const response = await apiRequest(`/api/customers/search?query=${encodeURIComponent(searchQuery.trim())}`);
+      const response = await apiRequest(
+        `/api/customers/search?query=${encodeURIComponent(searchQuery.trim())}`
+      );
       return response as Customer[];
     },
-    enabled: false
+    enabled: false,
   });
 
-  // Debounced search with proper cleanup
-  const debouncedSearchRef = useRef<((query: string) => void) | null>(null);
+  // 🔧 Debounced search
+  const debouncedSearchRef = useRef<(() => void) | null>(null);
 
-  // Initialize debounce on mount
   useEffect(() => {
-    debouncedSearchRef.current = debounce((query: string) => {
-      if (query.length > 0) {
-        searchCustomers(query);
+    debouncedSearchRef.current = debounce(() => {
+      if (searchQuery.length > 0) {
+        searchCustomers(); // ✅ call without params
       }
     }, 300);
 
@@ -78,25 +81,29 @@ export default function CustomerSearchInput({
         (debouncedSearchRef.current as any).cancel();
       }
     };
-  }, [searchCustomers]);
+  }, [searchCustomers, searchQuery]);
+
+  useEffect(() => {
+    if (debouncedSearchRef.current) {
+      debouncedSearchRef.current();
+    }
+  }, [searchQuery]);
 
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: typeof newCustomer) => {
-      // Clean up empty strings for optional fields
       const cleanedData = {
         ...customerData,
         email: customerData.email?.trim() || undefined,
         phone: customerData.phone?.trim() || undefined,
         company: customerData.company?.trim() || undefined,
-        notes: customerData.notes?.trim() || undefined
+        notes: customerData.notes?.trim() || undefined,
       };
 
       const response = await apiRequest('/api/customers', {
         method: 'POST',
-        body: cleanedData
+        body: cleanedData,
       });
 
-      // If address is provided, create customer address
       if (customerAddress.street || customerAddress.city) {
         try {
           await apiRequest('/api/addresses', {
@@ -104,8 +111,8 @@ export default function CustomerSearchInput({
             body: {
               customerId: response.id.toString(),
               ...customerAddress,
-              type: 'both'
-            }
+              type: 'both',
+            },
           });
         } catch (error) {
           console.error('Failed to create customer address:', error);
@@ -116,8 +123,8 @@ export default function CustomerSearchInput({
     },
     onSuccess: (customer) => {
       toast({
-        title: "Customer Created",
-        description: `${customer.name} has been added successfully.`
+        title: 'Customer Created',
+        description: `${customer.name} has been added successfully.`,
       });
       setNewCustomer({
         name: '',
@@ -125,43 +132,32 @@ export default function CustomerSearchInput({
         phone: '',
         company: '',
         customerType: 'standard',
-        notes: ''
+        notes: '',
       });
       setCustomerAddress({
         street: '',
         city: '',
         state: '',
         zipCode: '',
-        country: 'United States'
+        country: 'United States',
       });
       setShowAddDialog(false);
       onValueChange(customer);
       setIsOpen(false);
-
-      // Invalidate both customer queries and search queries
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers/search'] });
-
-      // Trigger a new search to refresh the dropdown
       if (searchQuery.trim()) {
-        searchCustomers(searchQuery);
+        searchCustomers();
       }
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to create customer",
-        variant: "destructive"
+        title: 'Error',
+        description: error.message || 'Failed to create customer',
+        variant: 'destructive',
       });
-    }
+    },
   });
-
-  // Trigger debounce on query change
-  useEffect(() => {
-    if (debouncedSearchRef.current) {
-      debouncedSearchRef.current(searchQuery);
-    }
-  }, [searchQuery]);
 
   const handleSelectCustomer = (customer: Customer) => {
     onValueChange(customer);
@@ -172,17 +168,20 @@ export default function CustomerSearchInput({
   const handleAddCustomer = () => {
     if (!newCustomer.name.trim()) {
       toast({
-        title: "Error",
-        description: "Customer name is required",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Customer name is required',
+        variant: 'destructive',
       });
       return;
     }
-
     createCustomerMutation.mutate(newCustomer);
   };
 
-  const displayValue = value ? (value.company ? `${value.name} (${value.company})` : value.name) : '';
+  const displayValue = value
+    ? value.company
+      ? `${value.name} (${value.company})`
+      : value.name
+    : '';
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -202,8 +201,8 @@ export default function CustomerSearchInput({
           </PopoverTrigger>
           <PopoverContent className="w-full p-0" align="start">
             <Command>
-              <CommandInput 
-                placeholder="Search customers..." 
+              <CommandInput
+                placeholder="Search customers..."
                 value={searchQuery}
                 onValueChange={setSearchQuery}
               />
@@ -213,7 +212,6 @@ export default function CustomerSearchInput({
                     {searchQuery ? 'No customers found.' : 'Type to search customers...'}
                   </div>
                 </CommandEmpty>
-
                 {customers.length > 0 && (
                   <CommandGroup>
                     {customers.map((customer) => (
@@ -229,7 +227,9 @@ export default function CustomerSearchInput({
                             <div className="flex items-center space-x-2">
                               <span className="font-medium">{customer.name}</span>
                               {customer.company && (
-                                <span className="text-sm text-gray-500">({customer.company})</span>
+                                <span className="text-sm text-gray-500">
+                                  ({customer.company})
+                                </span>
                               )}
                             </div>
                             <div className="flex items-center space-x-4 text-xs text-gray-500">
@@ -257,7 +257,6 @@ export default function CustomerSearchInput({
                 )}
               </CommandList>
             </Command>
-
             <div className="border-t p-2">
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>

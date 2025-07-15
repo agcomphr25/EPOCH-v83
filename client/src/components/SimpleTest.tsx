@@ -1,10 +1,9 @@
-import React from 'react';
-
 export default function SimpleTest() {
   return (
-    <div style={{ padding: '20px', background: '#f0f0f0' }}>
-      <h1>SIMPLE TEST COMPONENT WORKING</h1>
-      <p>If you see this, React is working correctly.</p>
+    <div style={{ padding: '20px', border: '2px solid green', margin: '20px' }}>
+      <h1>Simple Test Component</h1>
+      <p>This is a basic test to verify React is working</p>
+      <button onClick={() => alert('Button clicked!')}>Test Button</button>
     </div>
   );
 }

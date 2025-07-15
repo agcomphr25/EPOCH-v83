@@ -37,6 +37,7 @@ import EnhancedReportsPage from "./pages/EnhancedReportsPage";
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import { Toaster as HotToaster } from 'react-hot-toast';
+import SimpleTest from "./components/SimpleTest";
 
 
 function App() {
@@ -52,7 +53,8 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                 <Switch>
-                  <Route path="/" component={Dashboard} />
+                  <Route path="/" component={SimpleTest} />
+                  <Route path="/dashboard" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/order-entry" component={OrderEntry} />
                   <Route path="/test-order-entry" component={OrderEntryTest} />

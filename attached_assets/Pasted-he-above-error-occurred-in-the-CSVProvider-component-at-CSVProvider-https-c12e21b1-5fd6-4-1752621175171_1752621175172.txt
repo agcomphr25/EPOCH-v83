@@ -1,0 +1,35 @@
+he above error occurred in the <CSVProvider> component:
+
+    at CSVProvider (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/src/contexts/CSVContext.tsx:26:31)
+    at TooltipProvider (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/src/components/ui/tooltip.tsx:19:28)
+    at QueryClientProvider (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=52c5e9b8:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ chunk-276SZO74.js?v=52c5e9b8:14032
+update.callback @ chunk-276SZO74.js?v=52c5e9b8:14052
+callCallback @ chunk-276SZO74.js?v=52c5e9b8:11248
+commitUpdateQueue @ chunk-276SZO74.js?v=52c5e9b8:11265
+commitLayoutEffectOnFiber @ chunk-276SZO74.js?v=52c5e9b8:17093
+commitLayoutMountEffects_complete @ chunk-276SZO74.js?v=52c5e9b8:17980
+commitLayoutEffects_begin @ chunk-276SZO74.js?v=52c5e9b8:17969
+commitLayoutEffects @ chunk-276SZO74.js?v=52c5e9b8:17920
+commitRootImpl @ chunk-276SZO74.js?v=52c5e9b8:19353
+commitRoot @ chunk-276SZO74.js?v=52c5e9b8:19277
+finishConcurrentRender @ chunk-276SZO74.js?v=52c5e9b8:18760
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=52c5e9b8:18718
+workLoop @ chunk-276SZO74.js?v=52c5e9b8:197
+flushWork @ chunk-276SZO74.js?v=52c5e9b8:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=52c5e9b8:384Understand this error
+chunk-276SZO74.js?v=52c5e9b8:19413 Uncaught TypeError: Cannot read properties of null (reading 'useState')
+    at useState (chunk-ZMLY2J2T.js?v=6209e42f:1066:29)
+    at CSVProvider (CSVContext.tsx:33:29)
+    at renderWithHooks (chunk-276SZO74.js?v=52c5e9b8:11548:26)
+    at mountIndeterminateComponent (chunk-276SZO74.js?v=52c5e9b8:14926:21)
+    at beginWork (chunk-276SZO74.js?v=52c5e9b8:15914:22)
+    at beginWork$1 (chunk-276SZO74.js?v=52c5e9b8:19753:22)
+    at performUnitOfWork (chunk-276SZO74.js?v=52c5e9b8:19198:20)
+    at workLoopSync (chunk-276SZO74.js?v=52c5e9b8:19137:13)
+    at renderRootSync (chunk-276SZO74.js?v=52c5e9b8:19116:15)
+    at recoverFromConcurrentError (chunk-276SZO74.js?v=52c5e9b8:18736:28)

@@ -1,0 +1,33 @@
+chunk-ZMLY2J2T.js?v=6209e42f:1074 Uncaught TypeError: Cannot read properties of null (reading 'useRef')
+    at Object.useRef (chunk-ZMLY2J2T.js?v=6209e42f:1074:29)
+    at TooltipProvider (@radix-ui_react-tool…js?v=6209e42f:66:34)
+    at renderWithHooks (chunk-276SZO74.js?v=52c5e9b8:11548:26)
+    at mountIndeterminateComponent (chunk-276SZO74.js?v=52c5e9b8:14926:21)
+    at beginWork (chunk-276SZO74.js?v=52c5e9b8:15914:22)
+    at HTMLUnknownElement.callCallback2 (chunk-276SZO74.js?v=52c5e9b8:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-276SZO74.js?v=52c5e9b8:3699:24)
+    at invokeGuardedCallback (chunk-276SZO74.js?v=52c5e9b8:3733:39)
+    at beginWork$1 (chunk-276SZO74.js?v=52c5e9b8:19765:15)
+    at performUnitOfWork (chunk-276SZO74.js?v=52c5e9b8:19198:20)
+chunk-276SZO74.js?v=52c5e9b8:14032 The above error occurred in the <TooltipProvider> component:
+
+    at TooltipProvider (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.de…rkspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=6209e42f:60:5)
+    at QueryClientProvider (https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.de…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=52c5e9b8:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+chunk-276SZO74.js?v=52c5e9b8:19413 Uncaught TypeError: Cannot read properties of null (reading 'useRef')
+    at Object.useRef (chunk-ZMLY2J2T.js?v=6209e42f:1074:29)
+    at TooltipProvider (@radix-ui_react-tool…js?v=6209e42f:66:34)
+    at renderWithHooks (chunk-276SZO74.js?v=52c5e9b8:11548:26)
+    at mountIndeterminateComponent (chunk-276SZO74.js?v=52c5e9b8:14926:21)
+    at beginWork (chunk-276SZO74.js?v=52c5e9b8:15914:22)
+    at beginWork$1 (chunk-276SZO74.js?v=52c5e9b8:19753:22)
+    at performUnitOfWork (chunk-276SZO74.js?v=52c5e9b8:19198:20)
+    at workLoopSync (chunk-276SZO74.js?v=52c5e9b8:19137:13)
+    at renderRootSync (chunk-276SZO74.js?v=52c5e9b8:19116:15)
+    at recoverFromConcurrentError (chunk-276SZO74.js?v=52c5e9b8:18736:28)
+﻿
+

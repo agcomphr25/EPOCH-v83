@@ -52,15 +52,6 @@ export default function CustomerSearchInput({
     country: 'United States'
   });
 
-  // Debounced search
-  const debouncedSearch = useRef(
-    debounce((query: string) => {
-      if (query.length > 0) {
-        searchCustomers(query);
-      }
-    }, 300)
-  ).current;
-
   const { data: customers = [], isLoading, refetch: searchCustomers } = useQuery({
     queryKey: ['/api/customers/search', searchQuery],
     queryFn: async () => {
@@ -70,6 +61,24 @@ export default function CustomerSearchInput({
     },
     enabled: false
   });
+
+  // Debounced search with proper cleanup
+  const debouncedSearchRef = useRef<((query: string) => void) | null>(null);
+
+  useEffect(() => {
+    debouncedSearchRef.current = debounce((query: string) => {
+      if (query.length > 0) {
+        searchCustomers(query);
+      }
+    }, 300);
+
+    return () => {
+      // cleanup on unmount
+      if (debouncedSearchRef.current && (debouncedSearchRef.current as any).cancel) {
+        (debouncedSearchRef.current as any).cancel();
+      }
+    };
+  }, [searchCustomers]);
 
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: typeof newCustomer) => {
@@ -147,9 +156,12 @@ export default function CustomerSearchInput({
     }
   });
 
+  // Trigger debounced search when searchQuery changes
   useEffect(() => {
-    debouncedSearch(searchQuery);
-  }, [searchQuery, debouncedSearch]);
+    if (debouncedSearchRef.current) {
+      debouncedSearchRef.current(searchQuery);
+    }
+  }, [searchQuery]);
 
   const handleSelectCustomer = (customer: Customer) => {
     onValueChange(customer);

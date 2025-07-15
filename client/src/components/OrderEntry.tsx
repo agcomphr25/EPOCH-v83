@@ -797,9 +797,72 @@ export default function OrderEntry() {
                   <span>Base Price:</span>
                   <span>${pricing.basePrice.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Features:</span>
-                  <span>${pricing.featureCost.toFixed(2)}</span>
+                
+                {/* Feature Breakdown */}
+                <div className="border-t pt-2">
+                  <div className="text-sm font-medium mb-2">Features:</div>
+                  <div className="space-y-1 text-sm">
+                    {Object.entries(features).map(([featureId, value]) => {
+                      if (!value || featureId === 'specialInstructions') return null;
+                      
+                      const feature = allFeatures.find(f => f.id === featureId);
+                      if (!feature) return null;
+                      
+                      // Handle paint options
+                      if (featureId === 'paint_options_combined') {
+                        const [paintFeatureId, optionValue] = value.split(':');
+                        const paintFeature = paintFeatures.find(f => f.id === paintFeatureId);
+                        if (paintFeature && paintFeature.subCategory) {
+                          const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);
+                          const option = paintFeature.options?.find((opt: any) => opt.value === optionValue);
+                          if (option && subCategory) {
+                            return (
+                              <div key={featureId} className="flex justify-between">
+                                <span className="text-xs">{option.label}</span>
+                                <span className="text-xs">${subCategory.price.toFixed(2)}</span>
+                              </div>
+                            );
+                          }
+                        }
+                        return null;
+                      }
+                      
+                      // Handle multiselect features
+                      if (feature.type === 'multiselect' && Array.isArray(value)) {
+                        return value.map((selectedValue: string) => {
+                          const option = feature.options?.find((opt: any) => opt.value === selectedValue);
+                          if (option && option.price > 0) {
+                            return (
+                              <div key={`${featureId}-${selectedValue}`} className="flex justify-between">
+                                <span className="text-xs">{option.label}</span>
+                                <span className="text-xs">${option.price.toFixed(2)}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        });
+                      }
+                      
+                      // Handle other feature types
+                      if (feature.options) {
+                        const selectedOption = feature.options.find((opt: any) => opt.value === value);
+                        if (selectedOption && selectedOption.price > 0) {
+                          return (
+                            <div key={featureId} className="flex justify-between">
+                              <span className="text-xs">{selectedOption.label}</span>
+                              <span className="text-xs">${selectedOption.price.toFixed(2)}</span>
+                            </div>
+                          );
+                        }
+                      }
+                      
+                      return null;
+                    })}
+                  </div>
+                  <div className="flex justify-between font-medium mt-2 pt-1 border-t">
+                    <span>Features Total:</span>
+                    <span>${pricing.featureCost.toFixed(2)}</span>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span>Additional Items:</span>

@@ -133,15 +133,9 @@ export default function OrderEntry() {
         const allFeatures = featuresResponse || [];
         setAllFeatures(allFeatures);
 
-        // Debug: Log all features to see what we're working with
-        console.log('All features loaded:', allFeatures);
-
         // Separate paint features from other features
         const paintFeatures = allFeatures.filter((f: any) => f.category === 'paint_options');
         const nonPaintFeatures = allFeatures.filter((f: any) => f.category !== 'paint_options');
-
-        console.log('Paint features:', paintFeatures);
-        console.log('Non-paint features:', nonPaintFeatures);
 
         setPaintFeatures(paintFeatures);
 
@@ -176,7 +170,6 @@ export default function OrderEntry() {
           options: feature.options || []
         }));
 
-        console.log('Final mapped features for display:', mappedFeatures);
         setFeatureDefs(mappedFeatures);
       } catch (error) {
         console.error('Failed to load initial data:', error);
@@ -283,25 +276,21 @@ export default function OrderEntry() {
       if (featureId === 'paint_options_combined' || !value) continue; // Skip empty values and paint options
 
       const feature = allFeatures.find(f => f.id === featureId);
-      console.log(`Processing feature ${featureId} with value ${value}:`, feature);
       
-      if (feature && feature.options) {
+      if (feature && feature.options && Array.isArray(feature.options)) {
         if (feature.type === 'checkbox') {
           // For checkbox features, calculate based on quantities
           const quantities = featureQuantities[featureId] || {};
           for (const [optionValue, quantity] of Object.entries(quantities)) {
             const option = feature.options.find((opt: any) => opt.value === optionValue);
-            if (option && option.price && quantity > 0) {
-              console.log(`Adding checkbox option price: ${option.price} * ${quantity} = ${option.price * quantity}`);
+            if (option && typeof option.price === 'number' && quantity > 0) {
               featureCost += option.price * quantity;
             }
           }
         } else {
           // For other feature types, find the selected option
           const selectedOption = feature.options.find((opt: any) => opt.value === value);
-          console.log(`Selected option for ${featureId}:`, selectedOption);
-          if (selectedOption && selectedOption.price) {
-            console.log(`Adding feature price: ${selectedOption.price}`);
+          if (selectedOption && typeof selectedOption.price === 'number') {
             featureCost += selectedOption.price;
           }
         }

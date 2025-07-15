@@ -567,7 +567,7 @@ export default function OrderEntry() {
       };
 
       const method = draftId ? 'PUT' : 'POST';
-      const url = draftId ? `/api/orders/draft/${draftId}` : '/api/orders/draft';
+      const url = draftId ? `/api/orders/draft/${orderId}` : '/api/orders/draft';
 
       await apiRequest(url, {
         method,
@@ -580,9 +580,10 @@ export default function OrderEntry() {
       });
 
     } catch (error: any) {
+      console.error('Save draft error:', error);
       toast({
         title: "Error",
-        description: "Failed to save draft",
+        description: error?.message || "Failed to save draft",
         variant: "destructive",
         });
     } finally {

@@ -1,4 +1,4 @@
-import OrderEntryComponent from "@/components/OrderEntry-clean";
+import OrderEntryComponent from "@/components/OrderEntry-test";
 
 export default function OrderEntry() {
   return <OrderEntryComponent />;

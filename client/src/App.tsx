@@ -40,59 +40,62 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 
 
 function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <CSVProvider>
-          <div className="min-h-screen bg-background">
-            <Navigation />
-            <OfflineIndicator />
-            <main>
-              <Switch>
-                {/* Removed test routes that may be causing React hook issues */}
-                {/* <Route path="/test-react" component={ReactErrorTest} /> */}
-                {/* <Route path="/minimal-test" component={MinimalTest} /> */}
-                {/* <Route path="/test-useref" component={TestUseRef} /> */}
-                <Route path="/" component={OrderManagement} />
-                <Route path="/discounts" component={DiscountManagement} />
-                <Route path="/order-entry" component={OrderEntry} />
-                <Route path="/order-entry-test" component={OrderEntryTest} />
-                <Route path="/orders-list" component={OrdersList} />
-                <Route path="/orders" component={OrdersList} />
-                <Route path="/all-orders" component={OrdersList} />
-                <Route path="/draft-orders" component={DraftOrders} />
-                <Route path="/feature-manager" component={FeatureManager} />
-                <Route path="/stock-models" component={StockModels} />
-                <Route path="/admin/forms" component={AdminFormsPage} />
-                <Route path="/forms/:formId" component={FormPage} />
-                <Route path="/admin/reports" component={ReportPage} />
-                <Route path="/enhanced-forms" component={EnhancedFormsPage} />
-                <Route path="/enhanced-reports" component={EnhancedReportsPage} />
-                <Route path="/forms/render/:formId" component={FormRendererPage} />
-                <Route path="/inventory/scanner" component={InventoryScannerPage} />
-                <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
-                <Route path="/inventory/manager" component={InventoryManagerPage} />
-                <Route path="/qc" component={QCPage} />
-                <Route path="/maintenance" component={MaintenancePage} />
-                <Route path="/employee-portal" component={EmployeePortalPage} />
-                <Route path="/time-clock-admin" component={TimeClockAdminPage} />
-                <Route path="/module8-test" component={Module8TestPage} />
-                <Route path="/finance/ap" component={APJournalPage} />
-                <Route path="/finance/ar" component={ARJournalPage} />
-                <Route path="/finance/cogs" component={COGSReportPage} />
-                <Route path="/finance/dashboard" component={FinanceDashboardPage} />
-                <Route path="/documentation" component={DocumentationPageNew} />
+  console.log("App component is rendering...");
+  
+  try {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <CSVProvider>
+            <div className="min-h-screen bg-background">
+              <Navigation />
+              <OfflineIndicator />
+              <main>
+                <Switch>
+                  <Route path="/" component={OrderManagement} />
+                  <Route path="/discounts" component={DiscountManagement} />
+                  <Route path="/order-entry" component={OrderEntry} />
+                  <Route path="/order-entry-test" component={OrderEntryTest} />
+                  <Route path="/orders-list" component={OrdersList} />
+                  <Route path="/orders" component={OrdersList} />
+                  <Route path="/all-orders" component={OrdersList} />
+                  <Route path="/draft-orders" component={DraftOrders} />
+                  <Route path="/feature-manager" component={FeatureManager} />
+                  <Route path="/stock-models" component={StockModels} />
+                  <Route path="/admin/forms" component={AdminFormsPage} />
+                  <Route path="/forms/:formId" component={FormPage} />
+                  <Route path="/admin/reports" component={ReportPage} />
+                  <Route path="/enhanced-forms" component={EnhancedFormsPage} />
+                  <Route path="/enhanced-reports" component={EnhancedReportsPage} />
+                  <Route path="/forms/render/:formId" component={FormRendererPage} />
+                  <Route path="/inventory/scanner" component={InventoryScannerPage} />
+                  <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
+                  <Route path="/inventory/manager" component={InventoryManagerPage} />
+                  <Route path="/qc" component={QCPage} />
+                  <Route path="/maintenance" component={MaintenancePage} />
+                  <Route path="/employee-portal" component={EmployeePortalPage} />
+                  <Route path="/time-clock-admin" component={TimeClockAdminPage} />
+                  <Route path="/module8-test" component={Module8TestPage} />
+                  <Route path="/finance/ap" component={APJournalPage} />
+                  <Route path="/finance/ar" component={ARJournalPage} />
+                  <Route path="/finance/cogs" component={COGSReportPage} />
+                  <Route path="/finance/dashboard" component={FinanceDashboardPage} />
+                  <Route path="/documentation" component={DocumentationPageNew} />
 
-                <Route component={NotFound} />
-              </Switch>
-            </main>
-          </div>
-          <Toaster />
-          <HotToaster position="top-right" />
-        </CSVProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+                  <Route component={NotFound} />
+                </Switch>
+              </main>
+            </div>
+            <Toaster />
+            <HotToaster position="top-right" />
+          </CSVProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  } catch (error) {
+    console.error("Error in App component:", error);
+    return <div>Error loading application</div>;
+  }
 }
 
 export default App;

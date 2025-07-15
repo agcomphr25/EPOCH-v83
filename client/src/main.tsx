@@ -15,7 +15,6 @@ if (typeof window !== 'undefined') {
     createSignatureFunctionForTransform: () => () => {},
     isLikelyComponentType: () => false,
     getFamilyByType: () => null,
-    register: () => {},
     performReactRefresh: () => {},
     findAffectedHostInstances: () => [],
     injectIntoGlobalHook: () => {},

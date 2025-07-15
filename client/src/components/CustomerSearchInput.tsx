@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ export default function CustomerSearchInput({
     customerType: 'standard',
     notes: ''
   });
-  
+
   const [customerAddress, setCustomerAddress] = useState<AddressData>({
     street: '',
     city: '',
@@ -81,12 +81,12 @@ export default function CustomerSearchInput({
         company: customerData.company?.trim() || undefined,
         notes: customerData.notes?.trim() || undefined
       };
-      
+
       const response = await apiRequest('/api/customers', {
         method: 'POST',
         body: cleanedData
       });
-      
+
       // If address is provided, create customer address
       if (customerAddress.street || customerAddress.city) {
         try {
@@ -102,7 +102,7 @@ export default function CustomerSearchInput({
           console.error('Failed to create customer address:', error);
         }
       }
-      
+
       return response as Customer;
     },
     onSuccess: (customer) => {
@@ -128,11 +128,11 @@ export default function CustomerSearchInput({
       setShowAddDialog(false);
       onValueChange(customer);
       setIsOpen(false);
-      
+
       // Invalidate both customer queries and search queries
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers/search'] });
-      
+
       // Trigger a new search to refresh the dropdown
       if (searchQuery.trim()) {
         searchCustomers(searchQuery);
@@ -201,7 +201,7 @@ export default function CustomerSearchInput({
                     {searchQuery ? 'No customers found.' : 'Type to search customers...'}
                   </div>
                 </CommandEmpty>
-                
+
                 {customers.length > 0 && (
                   <CommandGroup>
                     {customers.map((customer) => (
@@ -245,7 +245,7 @@ export default function CustomerSearchInput({
                 )}
               </CommandList>
             </Command>
-            
+
             <div className="border-t p-2">
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>
@@ -320,7 +320,7 @@ export default function CustomerSearchInput({
                         placeholder="Additional notes..."
                       />
                     </div>
-                    
+
                     {/* Address Field */}
                     <div className="col-span-4">
                       <div className="flex items-center gap-2 mb-2">

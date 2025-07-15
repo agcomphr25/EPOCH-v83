@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CSVLink } from 'react-csv';
 import html2pdf from 'html2pdf.js';
@@ -259,7 +259,7 @@ export default function EnhancedReportBuilder() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {selectedForm && (
               <div className="flex items-end">
                 <Badge variant="outline" className="h-fit">
@@ -471,7 +471,7 @@ export default function EnhancedReportBuilder() {
                     ))}
                   </tbody>
                 </table>
-                
+
                 {filteredData.length > 0 && (
                   <div className="mt-4 text-sm text-gray-600 text-center">
                     Showing {filteredData.length} of {submissions.length} submissions

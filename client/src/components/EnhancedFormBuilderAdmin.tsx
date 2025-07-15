@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DndContext, useDraggable, useDroppable, DragEndEvent } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -94,13 +94,13 @@ interface FormVersion {
 // Draggable Component
 function Draggable({ id, children, style }: { id: string; children: React.ReactNode; style?: React.CSSProperties }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
-  
+
   const dragStyle = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     ...style
   };
-  
+
   return (
     <div
       ref={setNodeRef}
@@ -127,7 +127,7 @@ function Canvas({
   onElementMove: (id: string, x: number, y: number) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: 'canvas' });
-  
+
   return (
     <div
       ref={setNodeRef}
@@ -136,7 +136,7 @@ function Canvas({
       <div className="absolute top-2 left-2 text-xs text-gray-500">
         Drag elements here to build your form
       </div>
-      
+
       {elements.map(el => (
         <Draggable
           key={el.id}
@@ -256,7 +256,7 @@ export default function EnhancedFormBuilderAdmin() {
   // Load tables when category selected
   useEffect(() => {
     if (!formDef?.categoryId) return;
-    
+
     const fetchTables = async () => {
       try {
         const response = await apiRequest('/api/enhanced-forms/schema', {
@@ -273,7 +273,7 @@ export default function EnhancedFormBuilderAdmin() {
   // Load columns when table chosen
   useEffect(() => {
     if (!formDef?.tableName) return;
-    
+
     const fetchColumns = async () => {
       try {
         const response = await apiRequest(`/api/enhanced-forms/schema/${formDef.tableName}/columns`);
@@ -312,7 +312,7 @@ export default function EnhancedFormBuilderAdmin() {
 
   const deleteCategory = async (id: number) => {
     if (!confirm('Delete category? This will also delete all associated forms.')) return;
-    
+
     try {
       await apiRequest(`/api/enhanced-forms/categories/${id}`, { method: 'DELETE' });
       setCategories(categories.filter(c => c.id !== id));
@@ -340,7 +340,7 @@ export default function EnhancedFormBuilderAdmin() {
 
   const loadVersion = async (version: number) => {
     if (!selectedFormId) return;
-    
+
     try {
       const response = await apiRequest(`/api/enhanced-forms/${selectedFormId}/versions/${version}`);
       setFormVersion(version);
@@ -656,7 +656,7 @@ export default function EnhancedFormBuilderAdmin() {
               <DndContext onDragEnd={(event: DragEndEvent) => {
                 const { active, delta } = event;
                 if (delta.x === 0 && delta.y === 0) return;
-                
+
                 const element = elements.find(el => el.id === active.id);
                 if (element) {
                   updateElement(element.id, {

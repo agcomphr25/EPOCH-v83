@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,17 +36,17 @@ interface FeatureDefinition {
 export default function OrderEntry() {
   const { toast } = useToast();
   const [location] = useLocation();
-  
+
   // Extract draft ID from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const draftId = urlParams.get('draft');
-  
+
   // Debug logging (can be removed after testing)
   // console.log('OrderEntry component - Location:', location);
   // console.log('OrderEntry component - Window URL:', window.location.href);
   // console.log('OrderEntry component - Draft ID:', draftId);
   // console.log('OrderEntry component - URL search params:', window.location.search || 'none');
-  
+
   // Draft management state
   const [orderStatus, setOrderStatus] = useState('DRAFT');
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
@@ -75,15 +75,15 @@ export default function OrderEntry() {
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
   const [shankLength, setShankLength] = useState('');
-  
+
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
   const [paintQuery, setPaintQuery] = useState('');
   const [allFeatures, setAllFeatures] = useState<any[]>([]);
-  
+
   // Quantities for checkbox options (feature_id -> { option_value: quantity })
   const [featureQuantities, setFeatureQuantities] = useState<Record<string, Record<string, number>>>({});
-  
+
   // Order summary data
   const [discountCode, setDiscountCode] = useState('');
   const [shipping, setShipping] = useState(36.95);
@@ -94,7 +94,7 @@ export default function OrderEntry() {
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [payments, setPayments] = useState<{type: string, date: Date, amount: number}[]>([]);
-  
+
   // Discount data
   const [shortTermSales, setShortTermSales] = useState<any[]>([]);
   const [persistentDiscounts, setPersistentDiscounts] = useState<any[]>([]);
@@ -109,7 +109,7 @@ export default function OrderEntry() {
         if (draftId) {
           setIsLoadingDraft(true);
         }
-        
+
         // Load all data in parallel
         const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse, subCategoriesResponse] = await Promise.all([
           apiRequest('/api/orders/last-id'),
@@ -127,10 +127,10 @@ export default function OrderEntry() {
         if (draftId) {
           try {
             const draftResponse = await apiRequest(`/api/orders/draft/${draftId}`);
-            
+
             // Wait for all the data to be loaded first
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Populate form with draft data
             setOrderId(draftResponse.orderId);
             setOrderDate(new Date(draftResponse.orderDate));
@@ -146,7 +146,7 @@ export default function OrderEntry() {
             setDiscountCode(draftResponse.discountCode || '');
             setShipping(draftResponse.shipping || 36.95);
             setOrderStatus(draftResponse.status || 'DRAFT');
-            
+
             // Set customer object properly - load from database if customerId exists
             if (draftResponse.customerId) {
               try {
@@ -156,11 +156,11 @@ export default function OrderEntry() {
                 console.error('Error loading customer:', error);
               }
             }
-            
+
             // Set checkbox states
             setHasCustomerPO(!!draftResponse.customerPO);
             setHasAgrOrder(!!draftResponse.agrOrderDetails);
-            
+
             toast({
               title: "Draft Loaded",
               description: `Loaded draft order ${draftResponse.orderId}`,
@@ -180,7 +180,7 @@ export default function OrderEntry() {
         setPersistentDiscounts(discountsResponse);
         setCustomerTypes(typesResponse);
         setSubCategories(subCategoriesResponse);
-        
+
         // Debug logging to check percentage values
         console.log('Short-term sales:', salesResponse);
         console.log('Persistent discounts:', discountsResponse);
@@ -191,17 +191,17 @@ export default function OrderEntry() {
 
         // Load features from API (group paint options under one feature)
         const activeFeatures = featuresResponse.filter((feature: any) => feature.isActive);
-        
+
         // Store all features for pricing calculations
         setAllFeatures(activeFeatures);
-        
+
         // Group paint options into a single feature
         const paintFeatures = activeFeatures.filter((feature: any) => feature.category === 'paint_options');
         const nonPaintFeatures = activeFeatures.filter((feature: any) => feature.category !== 'paint_options');
-        
+
         // Store paint features for modal use
         setPaintFeatures(paintFeatures);
-        
+
         // Create a single Paint Options feature with all options from all sub-categories
         const allPaintOptions = paintFeatures.flatMap((feature: any) => 
           (feature.options || []).map((option: any) => ({
@@ -212,18 +212,18 @@ export default function OrderEntry() {
             featureId: feature.id // Include feature ID for lookup
           }))
         );
-        
+
         const paintOptionsFeature = {
           id: 'paint_options_combined',
           name: 'Paint Options',
           type: 'combobox',
           options: allPaintOptions
         };
-        
+
         const finalFeatures = paintFeatures.length > 0 
           ? [...nonPaintFeatures, paintOptionsFeature]
           : nonPaintFeatures;
-        
+
         setFeatureDefs(finalFeatures.map((feature: any) => ({
           id: feature.id,
           name: feature.displayName || feature.name,
@@ -252,16 +252,16 @@ export default function OrderEntry() {
   const calculateTotals = () => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
     const basePrice = selectedModel?.price || 0;
-    
+
     // Calculate feature costs - includes both individual feature prices and paint sub-category pricing
     let featureCost = 0;
-    
+
     // Calculate paint options cost based on sub-category pricing
     const paintOptionsValue = features['paint_options_combined'];
     if (paintOptionsValue) {
       // Extract the feature ID from the paint options value (format: "featureId:optionValue")
       const [featureId, optionValue] = paintOptionsValue.split(':');
-      
+
       // Find the original paint feature from the loaded features to get its sub-category
       const paintFeature = paintFeatures.find(f => f.id === featureId);
       if (paintFeature && paintFeature.subCategory) {
@@ -272,12 +272,12 @@ export default function OrderEntry() {
         }
       }
     }
-    
+
     // Calculate individual feature prices for non-paint features
     Object.entries(features).forEach(([featureId, featureValue]) => {
       // Skip paint options as they're handled above
       if (featureId === 'paint_options_combined' || !featureValue) return;
-      
+
       // Find the feature definition to get its price
       const featureDefinition = allFeatures.find(f => f.id === featureId);
       if (featureDefinition) {
@@ -285,7 +285,7 @@ export default function OrderEntry() {
         if (featureDefinition.price) {
           featureCost += featureDefinition.price;
         }
-        
+
         // Add the specific option price if this is a dropdown with options
         if (featureDefinition.type === 'dropdown' && featureDefinition.options) {
           const selectedOption = featureDefinition.options.find(opt => opt.value === featureValue);
@@ -293,7 +293,7 @@ export default function OrderEntry() {
             featureCost += selectedOption.price;
           }
         }
-        
+
         // Handle checkbox arrays - add prices for each selected option with quantities
         if (featureDefinition.type === 'checkbox' && Array.isArray(featureValue) && featureDefinition.options) {
           featureValue.forEach(selectedValue => {
@@ -306,9 +306,9 @@ export default function OrderEntry() {
         }
       }
     });
-    
+
     let subtotal = basePrice + featureCost;
-    
+
     // Apply discount if selected
     let discountAmount = 0;
     if (discountCode && discountCode !== 'none') {
@@ -332,10 +332,10 @@ export default function OrderEntry() {
         }
       }
     }
-    
+
     const subtotalAfterDiscount = subtotal - discountAmount;
     const total = subtotalAfterDiscount + shipping;
-    
+
     return { basePrice, featureCost, subtotal: subtotalAfterDiscount, total, discountAmount };
   };
 
@@ -347,35 +347,35 @@ export default function OrderEntry() {
   const getFeatureDisplayValue = (featureId: string, value: any) => {
     const feature = featureDefs.find(f => f.id === featureId);
     if (!feature) return value || 'Not selected';
-    
+
     if (feature.type === 'dropdown' || feature.type === 'combobox') {
       const option = feature.options?.find(opt => opt.value === value);
       return option ? option.label : (value || 'Not selected');
     }
-    
+
     if (feature.type === 'checkbox' && Array.isArray(value)) {
       if (value.length === 0) return 'None selected';
-      
+
       const selectedLabels = value.map(val => {
         const option = feature.options?.find(opt => opt.value === val);
         const quantity = featureQuantities[featureId]?.[val] || 1;
         const label = option ? option.label : val;
         return quantity > 1 ? `${label} (${quantity})` : label;
       });
-      
+
       return selectedLabels.join(', ');
     }
-    
+
     return value || 'Not selected';
   };
 
   // Helper function to get price for feature selections
   const getFeaturePrice = (featureId: string, value: any) => {
     if (!value) return 0;
-    
+
     const feature = featureDefs.find(f => f.id === featureId);
     if (!feature) return 0;
-    
+
     // Handle paint options combined feature
     if (featureId === 'paint_options_combined') {
       const [originalFeatureId, optionValue] = value.split(':');
@@ -386,7 +386,7 @@ export default function OrderEntry() {
       }
       return 0;
     }
-    
+
     // Handle checkbox arrays with quantities
     if (feature.type === 'checkbox' && Array.isArray(value)) {
       return value.reduce((total, val) => {
@@ -395,13 +395,13 @@ export default function OrderEntry() {
         return total + (option?.price || 0) * quantity;
       }, 0);
     }
-    
+
     // Handle regular features with options
     if (feature.type === 'dropdown' || feature.type === 'combobox') {
       const option = feature.options?.find(opt => opt.value === value);
       return option?.price || 0;
     }
-    
+
     // Handle features with base price
     const originalFeature = allFeatures.find(f => f.id === featureId);
     return originalFeature?.price || 0;
@@ -440,7 +440,7 @@ export default function OrderEntry() {
 
       // Update last order ID
       setLastOrderId(orderId);
-      
+
       toast({
         title: "Order Created",
         description: `Order ${orderId} created successfully!`,
@@ -458,7 +458,7 @@ export default function OrderEntry() {
       setHandedness('');
       setHasCustomerPO(false);
       setHasAgrOrder(false);
-      
+
     } catch (error: any) {
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
@@ -484,20 +484,20 @@ export default function OrderEntry() {
       });
       return;
     }
-    
+
     setIsConfirming(true);
-    
+
     try {
       await apiRequest(`/api/orders/draft/${draftId}/send-confirmation`, {
         method: 'POST',
       });
-      
+
       setOrderStatus('CONFIRMED');
       toast({
         title: "Sent for Confirmation",
         description: "Order has been sent for confirmation",
       });
-      
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -519,20 +519,20 @@ export default function OrderEntry() {
       });
       return;
     }
-    
+
     setIsFinalizing(true);
-    
+
     try {
       await apiRequest(`/api/orders/draft/${draftId}/finalize`, {
         method: 'POST',
       });
-      
+
       setOrderStatus('FINALIZED');
       toast({
         title: "Order Finalized",
         description: "Order has been finalized successfully",
       });
-      
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -546,7 +546,7 @@ export default function OrderEntry() {
 
   const saveDraft = async () => {
     setIsSubmitting(true);
-    
+
     try {
       const payload = {
         orderId,
@@ -565,26 +565,26 @@ export default function OrderEntry() {
         shipping,
         status: 'DRAFT'
       };
-      
+
       const method = draftId ? 'PUT' : 'POST';
       const url = draftId ? `/api/orders/draft/${draftId}` : '/api/orders/draft';
-      
+
       await apiRequest(url, {
         method,
         body: payload,
       });
-      
+
       toast({
         title: "Draft Saved",
         description: `Draft order ${orderId} saved successfully!`,
       });
-      
+
     } catch (error: any) {
       toast({
         title: "Error",
         description: "Failed to save draft",
         variant: "destructive",
-      });
+        });
     } finally {
       setIsSubmitting(false);
     }
@@ -881,18 +881,17 @@ export default function OrderEntry() {
                         const selectedOptions = features[featureDef.id] || [];
                         const isChecked = selectedOptions.includes(option.value);
                         const quantity = featureQuantities[featureDef.id]?.[option.value] || 1;
-                        
+
                         return (
                           <div key={option.value} className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <input
+                            <div className="flex items-center space-x-2                              <input
                                 type="checkbox"
                                 id={`${featureDef.id}-${option.value}`}
                                 checked={isChecked}
                                 onChange={(e) => {
                                   const currentSelection = features[featureDef.id] || [];
                                   let newSelection;
-                                  
+
                                   if (e.target.checked) {
                                     newSelection = [...currentSelection, option.value];
                                     // Initialize quantity to 1 when first selected
@@ -914,7 +913,7 @@ export default function OrderEntry() {
                                       return newQuantities;
                                     });
                                   }
-                                  
+
                                   setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
                                 }}
                                 className="rounded border-gray-300"
@@ -931,7 +930,7 @@ export default function OrderEntry() {
                                 )}
                               </label>
                             </div>
-                            
+
                             {/* Quantity input - only shown when checkbox is selected */}
                             {isChecked && (
                               <div className="ml-6 flex items-center space-x-2">
@@ -998,7 +997,7 @@ export default function OrderEntry() {
                                 {featureDef.options?.map((option) => {
                                   const selectedOptions = features[featureDef.id] || [];
                                   const isSelected = selectedOptions.includes(option.value);
-                                  
+
                                   return (
                                     <CommandItem
                                       key={option.value}
@@ -1006,7 +1005,7 @@ export default function OrderEntry() {
                                       onSelect={() => {
                                         const currentSelection = features[featureDef.id] || [];
                                         let newSelection;
-                                        
+
                                         if (isSelected) {
                                           newSelection = currentSelection.filter((val: string) => val !== option.value);
                                           // Remove quantity when deselected
@@ -1028,7 +1027,7 @@ export default function OrderEntry() {
                                             }
                                           }));
                                         }
-                                        
+
                                         setFeatures(prev => ({ ...prev, [featureDef.id]: newSelection }));
                                       }}
                                     >
@@ -1056,7 +1055,7 @@ export default function OrderEntry() {
                           </Command>
                         </PopoverContent>
                       </Popover>
-                      
+
                       {/* Quantity inputs for selected options */}
                       {features[featureDef.id]?.length > 0 && (
                         <div className="space-y-2 pt-2 border-t">
@@ -1064,7 +1063,7 @@ export default function OrderEntry() {
                           {features[featureDef.id].map((selectedValue: string) => {
                             const option = featureDef.options?.find(opt => opt.value === selectedValue);
                             const quantity = featureQuantities[featureDef.id]?.[selectedValue] || 1;
-                            
+
                             return (
                               <div key={selectedValue} className="flex items-center justify-between">
                                 <span className="text-sm">{option?.label || selectedValue}</span>
@@ -1178,7 +1177,7 @@ export default function OrderEntry() {
                       </span>
                     </div>
                   </div>
-                  
+
                   {/* Handedness */}
                   <div className="flex justify-between items-start text-sm">
                     <span className="text-gray-600 flex-1">Handedness:</span>
@@ -1191,14 +1190,14 @@ export default function OrderEntry() {
                       <span className="font-medium text-blue-600">$0.00</span>
                     </div>
                   </div>
-                  
+
                   {/* Dynamic Features */}
                   {featureDefs.map((feature) => {
                     const value = features[feature.id];
                     const displayValue = getFeatureDisplayValue(feature.id, value);
                     const price = getFeaturePrice(feature.id, value);
                     const hasValue = value && value !== '';
-                    
+
                     return (
                       <div key={feature.id} className="flex justify-between items-start text-sm">
                         <span className="text-gray-600 flex-1">{feature.name}:</span>
@@ -1227,14 +1226,14 @@ export default function OrderEntry() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    
+
                     {/* Short-Term Sales */}
                     {shortTermSales.map((sale: any) => {
                       const now = new Date();
                       const startDate = new Date(sale.startDate);
                       const endDate = new Date(sale.endDate);
                       const isActive = now >= startDate && now <= endDate;
-                      
+
                       return (
                         <SelectItem 
                           key={sale.id} 
@@ -1246,16 +1245,16 @@ export default function OrderEntry() {
                         </SelectItem>
                       );
                     })}
-                    
+
                     {/* Persistent Discounts */}
                     {persistentDiscounts.map((discount: any) => {
                       const customerType = customerTypes.find((ct: any) => ct.id === discount.customerTypeId);
-                      
+
                       // Display logic for percentage vs fixed amount
                       const discountText = discount.percent 
                         ? `${discount.percent}% Off`
                         : `$${discount.fixedAmount} Off`;
-                      
+
                       return (
                         <SelectItem 
                           key={discount.id} 
@@ -1355,7 +1354,7 @@ export default function OrderEntry() {
                 >
                   {isSubmitting ? 'Saving...' : draftId ? 'Update Draft' : 'Save as Draft'}
                 </Button>
-                
+
                 {draftId && (
                   <>
                     <Button
@@ -1367,7 +1366,7 @@ export default function OrderEntry() {
                       <Send className="w-4 h-4 mr-2" />
                       {isConfirming ? 'Sending...' : 'Send for Confirmation'}
                     </Button>
-                    
+
                     <Button
                       variant="default"
                       className="w-full bg-green-600 hover:bg-green-700"
@@ -1379,7 +1378,7 @@ export default function OrderEntry() {
                     </Button>
                   </>
                 )}
-                
+
                 {!draftId && (
                   <Button
                     className="w-full"
@@ -1459,17 +1458,17 @@ export default function OrderEntry() {
                     date: paymentDate,
                     amount: paymentAmount
                   }]);
-                  
+
                   // Check if fully paid
                   const newTotalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0) + paymentAmount;
                   setMarkAsPaid(newTotalPaid >= total);
-                  
+
                   // Reset modal state
                   setShowPaymentModal(false);
                   setPaymentType('');
                   setPaymentDate(new Date());
                   setPaymentAmount(0);
-                  
+
                   toast({
                     title: "Payment Recorded",
                     description: `Payment of $${paymentAmount.toFixed(2)} recorded for ${paymentDate.toLocaleDateString()}`,

@@ -11,6 +11,7 @@ import NotFound from "./pages/not-found";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
+import OrderEntryTest from "./components/OrderEntryTest";
 import OrdersList from "./pages/OrdersList";
 import OrdersListSimple from "./pages/OrdersListSimple";
 import FeatureManager from "./pages/FeatureManager";
@@ -55,6 +56,7 @@ function App() {
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />
+                <Route path="/order-entry-test" component={OrderEntryTest} />
                 <Route path="/orders-list" component={OrdersList} />
                 <Route path="/orders" component={OrdersList} />
                 <Route path="/all-orders" component={OrdersList} />

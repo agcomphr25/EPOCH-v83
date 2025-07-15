@@ -884,7 +884,8 @@ export default function OrderEntry() {
 
                         return (
                           <div key={option.value} className="space-y-2">
-                            <div className="flex items-center space-x-2                              <input
+                            <div className="flex items-center space-x-2">
+                              <input
                                 type="checkbox"
                                 id={`${featureDef.id}-${option.value}`}
                                 checked={isChecked}

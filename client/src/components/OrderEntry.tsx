@@ -280,9 +280,11 @@ export default function OrderEntry() {
 
     // Calculate non-paint feature costs
     for (const [featureId, value] of Object.entries(features)) {
-      if (featureId === 'paint_options_combined') continue; // Already handled above
+      if (featureId === 'paint_options_combined' || !value) continue; // Skip empty values and paint options
 
       const feature = allFeatures.find(f => f.id === featureId);
+      console.log(`Processing feature ${featureId} with value ${value}:`, feature);
+      
       if (feature && feature.options) {
         if (feature.type === 'checkbox') {
           // For checkbox features, calculate based on quantities
@@ -290,13 +292,16 @@ export default function OrderEntry() {
           for (const [optionValue, quantity] of Object.entries(quantities)) {
             const option = feature.options.find((opt: any) => opt.value === optionValue);
             if (option && option.price && quantity > 0) {
+              console.log(`Adding checkbox option price: ${option.price} * ${quantity} = ${option.price * quantity}`);
               featureCost += option.price * quantity;
             }
           }
         } else {
           // For other feature types, find the selected option
           const selectedOption = feature.options.find((opt: any) => opt.value === value);
+          console.log(`Selected option for ${featureId}:`, selectedOption);
           if (selectedOption && selectedOption.price) {
+            console.log(`Adding feature price: ${selectedOption.price}`);
             featureCost += selectedOption.price;
           }
         }

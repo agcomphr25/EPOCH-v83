@@ -1,16 +1,12 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 
 export function SimpleTest() {
-  const [count, setCount] = useState(0);
+  const testRef = useRef<HTMLDivElement>(null);
   
   return (
-    <div>
-      <h1>Simple Test: {count}</h1>
-      <button onClick={() => setCount(count + 1)}>
-        Click me
-      </button>
+    <div ref={testRef}>
+      <h1>Simple Test</h1>
+      <p>Testing useRef functionality</p>
     </div>
   );
 }
-
-export default SimpleTest;

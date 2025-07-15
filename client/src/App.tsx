@@ -37,6 +37,8 @@ import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import ReactErrorTest from "./components/ReactErrorTest";
 import { MinimalTest } from "./components/MinimalTest";
+import { EmptyTest } from "./components/EmptyTest";
+// import { TestUseRef } from "../test-useref";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -52,6 +54,7 @@ function App() {
               <Switch>
                 <Route path="/test-react" component={ReactErrorTest} />
                 <Route path="/minimal-test" component={MinimalTest} />
+                {/* <Route path="/test-useref" component={TestUseRef} /> */}
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />

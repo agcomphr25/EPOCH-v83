@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug React Issue</title>
+    <script>
+        // Capture all errors
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            document.body.innerHTML += '<div style="color: red; font-weight: bold;">ERROR: ' + e.error.message + '</div>';
+        });
+        
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+            document.body.innerHTML += '<div style="color: red; font-weight: bold;">PROMISE REJECTION: ' + e.reason + '</div>';
+        });
+    </script>
+</head>
+<body>
+    <h1>Debug React Issue</h1>
+    <div id="errors"></div>
+    <script>
+        // Test React availability
+        setTimeout(() => {
+            fetch('/')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('errors').innerHTML = html.substring(0, 2000);
+                })
+                .catch(err => {
+                    document.getElementById('errors').innerHTML = 'Fetch error: ' + err;
+                });
+        }, 1000);
+    </script>
+</body>
+</html>

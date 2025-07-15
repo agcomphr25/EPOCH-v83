@@ -19,36 +19,8 @@
   </head>
   <body>
     <div id="root">
-      <!-- Immediate fallback content while React loads -->
-      <div style="padding: 20px; background-color: #f0fdf4; border: 3px solid #22c55e; border-radius: 8px; font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; position: relative; z-index: 9999;">
-        <h1 style="color: #166534; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">🎉 EPOCH v8 - Manufacturing ERP</h1>
-        <h2 style="color: #059669; margin: 0 0 15px 0; font-size: 24px;">✅ RefreshRuntime Error Successfully Fixed!</h2>
-        <p style="margin: 0 0 15px 0; font-size: 18px;">The RefreshRuntime.register error has been completely resolved. The React application is now working correctly.</p>
-        <div style="background-color: #dcfce7; border: 1px solid #22c55e; border-radius: 5px; padding: 15px; margin: 15px 0;">
-          <h3 style="margin: 0 0 10px 0;">System Status:</h3>
-          <ul style="margin: 0; padding-left: 20px;">
-            <li style="margin: 5px 0;">✅ React runtime initialized successfully</li>
-            <li style="margin: 5px 0;">✅ RefreshRuntime errors completely eliminated</li>
-            <li style="margin: 5px 0;">✅ Server running on port 5000</li>
-            <li style="margin: 5px 0;">✅ Ready to restore full ERP functionality</li>
-          </ul>
-        </div>
-        <button onclick="goToOrderEntry()" style="background-color: #22c55e; color: white; border: none; padding: 20px 40px; border-radius: 8px; cursor: pointer; font-size: 20px; margin-top: 20px; font-weight: bold; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4); transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#16a34a'; this.style.transform='translateY(-2px)'" onmouseout="this.style.backgroundColor='#22c55e'; this.style.transform='translateY(0)'">
-          Go to Order Entry Page
-        </button>
-        <div style="margin-top: 20px; padding: 15px; background-color: #eff6ff; border: 1px solid #3b82f6; border-radius: 5px;">
-          <h4 style="margin: 0 0 10px 0; color: #1e40af;">Available ERP Modules:</h4>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-            <div>• Order Management</div>
-            <div>• Order Entry</div>
-            <div>• Inventory Manager</div>
-            <div>• Employee Portal</div>
-            <div>• Discount Management</div>
-            <div>• Finance Dashboard</div>
-            <div>• Enhanced Forms</div>
-            <div>• QC & Maintenance</div>
-          </div>
-        </div>
+      <div style="padding: 20px; text-align: center; color: #666;">
+        Loading EPOCH v8 ERP System...
       </div>
     </div>
     
@@ -58,44 +30,6 @@
       window.$RefreshSig$ = function() { return function(type) { return type; }; };
       window.__vite_plugin_react_preamble_installed__ = true;
       window.injectIntoGlobalHook = function() {};
-      
-      // Aggressive workaround for Replit's runtime error plugin
-      function removeErrorOverlay() {
-        // Remove any error overlays or modals from the runtime error plugin
-        const errorOverlays = document.querySelectorAll('[data-vite-error-overlay], [data-runtime-error], .vite-error-overlay, .runtime-error-overlay');
-        errorOverlays.forEach(overlay => {
-          overlay.remove();
-        });
-        
-        // Remove any elements with error-related IDs or classes
-        const errorElements = document.querySelectorAll('[id*="error"], [class*="error-overlay"], [class*="modal"]');
-        errorElements.forEach(element => {
-          if (element.style.position === 'fixed' || element.style.zIndex > 1000) {
-            element.remove();
-          }
-        });
-      }
-      
-      // Run immediately and repeatedly to ensure error overlay is removed
-      removeErrorOverlay();
-      setInterval(removeErrorOverlay, 100);
-      
-      function goToOrderEntry() {
-        // Force navigation to order entry page
-        window.location.href = '/order-entry';
-      }
-      
-      function restoreFullApp() {
-        alert('✅ SUCCESS! The React application is now working correctly!\n\nThe RefreshRuntime.register error has been completely resolved.\n\nClick OK to continue using the ERP system.');
-        
-        // Show additional success message
-        const root = document.getElementById('root');
-        root.innerHTML = '<div style="padding: 40px; text-align: center; background-color: #f0fdf4; border: 3px solid #22c55e; border-radius: 10px; margin: 20px auto; max-width: 600px; font-family: Arial, sans-serif;"><h1 style="color: #166534; font-size: 28px; margin: 0 0 20px 0;">🎉 EPOCH v8 ERP System</h1><h2 style="color: #059669; font-size: 22px; margin: 0 0 15px 0;">✅ Application Successfully Restored!</h2><p style="font-size: 18px; margin: 0 0 20px 0;">All RefreshRuntime errors have been eliminated.<br>The manufacturing ERP system is now fully operational.</p><div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"><button onclick="window.location.href=\'/order-management\'" style="background-color: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px;">Order Management</button><button onclick="window.location.href=\'/order-entry\'" style="background-color: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px;">Order Entry</button><button onclick="window.location.href=\'/inventory/manager\'" style="background-color: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px;">Inventory</button></div></div>';
-      }
-      
-      console.log('EPOCH v8 ERP loaded successfully at:', new Date().toISOString());
-      console.log('✅ RefreshRuntime.register error has been resolved');
-      console.log('✅ Error overlay removal script active');
     </script>
     
     <!-- React will load in the background but won't interfere with the display -->

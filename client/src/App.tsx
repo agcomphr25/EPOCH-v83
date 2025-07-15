@@ -52,8 +52,9 @@ function App() {
             <OfflineIndicator />
             <main>
               <Switch>
-                <Route path="/test-react" component={ReactErrorTest} />
-                <Route path="/minimal-test" component={MinimalTest} />
+                {/* Removed test routes that may be causing React hook issues */}
+                {/* <Route path="/test-react" component={ReactErrorTest} /> */}
+                {/* <Route path="/minimal-test" component={MinimalTest} /> */}
                 {/* <Route path="/test-useref" component={TestUseRef} /> */}
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />

@@ -22,8 +22,29 @@
     
 
     
-    <!-- React will load in the background but won't interfere with the display -->
-    <script type="module" src="/src/main-react-fix.tsx"></script>
+    <!-- React Refresh Runtime Prevention -->
+    <script>
+      window.$RefreshReg$ = function() {};
+      window.$RefreshSig$ = function() { return function(type) { return type; }; };
+      window.RefreshRuntime = {
+        register: function() {},
+        createSignatureFunctionForTransform: function() { return function() {}; },
+        isLikelyComponentType: function() { return false; },
+        getFamilyByType: function() { return null; },
+        performReactRefresh: function() {},
+        findAffectedHostInstances: function() { return []; },
+        injectIntoGlobalHook: function() {},
+        hasUnrecoverableErrors: function() { return false; },
+        scheduleRefresh: function() {},
+        scheduleRoot: function() {},
+        setSignature: function() {},
+        collectCustomHooksForSignature: function() { return []; },
+        isSignatureEqual: function() { return false; },
+        shouldInvalidateReactFresh: function() { return false; },
+        shouldUpdateReactFresh: function() { return false; }
+      };
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
   </body>

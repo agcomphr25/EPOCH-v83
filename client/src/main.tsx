@@ -3,14 +3,31 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 
-// Ensure React refresh is properly initialized
+// Comprehensive React refresh runtime prevention
 if (typeof window !== 'undefined') {
-  if (!(window as any).$RefreshReg$) {
-    (window as any).$RefreshReg$ = () => {};
-  }
-  if (!(window as any).$RefreshSig$) {
-    (window as any).$RefreshSig$ = () => (type: any) => type;
-  }
+  // Disable React refresh completely
+  (window as any).$RefreshReg$ = () => {};
+  (window as any).$RefreshSig$ = () => (type: any) => type;
+  
+  // Prevent RefreshRuntime from being called
+  (window as any).RefreshRuntime = {
+    register: () => {},
+    createSignatureFunctionForTransform: () => () => {},
+    isLikelyComponentType: () => false,
+    getFamilyByType: () => null,
+    register: () => {},
+    performReactRefresh: () => {},
+    findAffectedHostInstances: () => [],
+    injectIntoGlobalHook: () => {},
+    hasUnrecoverableErrors: () => false,
+    scheduleRefresh: () => {},
+    scheduleRoot: () => {},
+    setSignature: () => {},
+    collectCustomHooksForSignature: () => [],
+    isSignatureEqual: () => false,
+    shouldInvalidateReactFresh: () => false,
+    shouldUpdateReactFresh: () => false,
+  };
 }
 
 const rootElement = document.getElementById("root");

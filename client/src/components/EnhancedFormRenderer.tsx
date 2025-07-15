@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import html2pdf from 'html2pdf.js';
-import SignaturePad from 'signature_pad';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,7 +64,7 @@ export default function EnhancedFormRenderer({
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLDivElement>(null);
-  const sigPads = useRef<Record<string, SignaturePad>>({});
+  const sigPads = useRef<Record<string, any>>({});
 
   // Load form definition
   useEffect(() => {
@@ -104,20 +103,6 @@ export default function EnhancedFormRenderer({
   // Cleanup signature pads on unmount
   useEffect(() => {
     return () => {
-      Object.values(sigPads.current).forEach(pad => {
-        try {
-          if (pad) {
-            if (typeof pad.off === 'function') {
-              pad.off();
-            }
-            if (typeof pad.cleanup === 'function') {
-              pad.cleanup();
-            }
-          }
-        } catch (error) {
-          console.error('Error cleaning up signature pad:', error);
-        }
-      });
       sigPads.current = {};
     };
   }, []);
@@ -365,152 +350,16 @@ export default function EnhancedFormRenderer({
               {isRequired && <span className="text-red-500">*</span>}
             </Label>
             <div className="border border-gray-300 rounded-md p-2">
-              <canvas
-                ref={(canvas) => {
-                  if (canvas && !sigPads.current[element.id]) {
-                    try {
-                      // Use setTimeout to ensure canvas is fully rendered
-                      setTimeout(() => {
-                        try {
-                          // Check if canvas still exists and hasn't been cleaned up
-                          if (!canvas || !canvas.parentElement) {
-                            return;
-                          }
-                          
-                          // Set canvas dimensions based on container
-                          const rect = canvas.getBoundingClientRect();
-                          canvas.width = rect.width || 300;
-                          canvas.height = rect.height || 128;
-                          
-                          // Check if we're in a webview/iframe context
-                          const isWebview = window.parent !== window || window.frameElement;
-                          
-                          if (isWebview) {
-                            // For webview, use a custom implementation without SignaturePad
-                            let isDrawing = false;
-                            let lastX = 0;
-                            let lastY = 0;
-                            
-                            const ctx = canvas.getContext('2d');
-                            if (!ctx) return;
-                            
-                            ctx.strokeStyle = '#000';
-                            ctx.lineWidth = 2;
-                            ctx.lineCap = 'round';
-                            ctx.lineJoin = 'round';
-                            
-                            const startDrawing = (e: MouseEvent | TouchEvent) => {
-                              isDrawing = true;
-                              const rect = canvas.getBoundingClientRect();
-                              const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-                              const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-                              lastX = clientX - rect.left;
-                              lastY = clientY - rect.top;
-                            };
-                            
-                            const draw = (e: MouseEvent | TouchEvent) => {
-                              if (!isDrawing) return;
-                              e.preventDefault();
-                              
-                              const rect = canvas.getBoundingClientRect();
-                              const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-                              const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-                              const currentX = clientX - rect.left;
-                              const currentY = clientY - rect.top;
-                              
-                              ctx.beginPath();
-                              ctx.moveTo(lastX, lastY);
-                              ctx.lineTo(currentX, currentY);
-                              ctx.stroke();
-                              
-                              lastX = currentX;
-                              lastY = currentY;
-                            };
-                            
-                            const stopDrawing = () => {
-                              if (!isDrawing) return;
-                              isDrawing = false;
-                              handleChange(key, canvas.toDataURL());
-                            };
-                            
-                            // Mouse events
-                            canvas.addEventListener('mousedown', startDrawing);
-                            canvas.addEventListener('mousemove', draw);
-                            canvas.addEventListener('mouseup', stopDrawing);
-                            canvas.addEventListener('mouseout', stopDrawing);
-                            
-                            // Touch events
-                            canvas.addEventListener('touchstart', startDrawing);
-                            canvas.addEventListener('touchmove', draw);
-                            canvas.addEventListener('touchend', stopDrawing);
-                            
-                            // Store cleanup function
-                            sigPads.current[element.id] = {
-                              clear: () => ctx.clearRect(0, 0, canvas.width, canvas.height),
-                              toDataURL: () => canvas.toDataURL(),
-                              cleanup: () => {
-                                canvas.removeEventListener('mousedown', startDrawing);
-                                canvas.removeEventListener('mousemove', draw);
-                                canvas.removeEventListener('mouseup', stopDrawing);
-                                canvas.removeEventListener('mouseout', stopDrawing);
-                                canvas.removeEventListener('touchstart', startDrawing);
-                                canvas.removeEventListener('touchmove', draw);
-                                canvas.removeEventListener('touchend', stopDrawing);
-                              }
-                            };
-                          } else {
-                            // For regular browser tabs, use SignaturePad
-                            if (typeof SignaturePad !== 'function') {
-                              console.error('SignaturePad is not available');
-                              return;
-                            }
-                            
-                            const pad = new SignaturePad(canvas, {
-                              backgroundColor: 'rgba(255, 255, 255, 0)',
-                              penColor: 'rgb(0, 0, 0)',
-                              minWidth: 0.5,
-                              maxWidth: 2.5,
-                              throttle: 16,
-                              minDistance: 5,
-                            });
-                            
-                            pad.onEnd = () => {
-                              try {
-                                handleChange(key, pad.toDataURL());
-                              } catch (error) {
-                                console.error('Error saving signature:', error);
-                              }
-                            };
-                            
-                            sigPads.current[element.id] = pad;
-                          }
-                        } catch (error) {
-                          console.error('Error initializing signature pad:', error);
-                        }
-                      }, 100);
-                    } catch (error) {
-                      console.error('Error setting up signature pad:', error);
-                    }
-                  }
-                }}
-                className="w-full h-32 border border-gray-200 rounded"
-                style={{ width: '100%', height: '128px' }}
-              />
+              <div className="w-full h-32 bg-gray-100 rounded border-2 border-dashed border-gray-300 flex items-center justify-center">
+                <span className="text-gray-500">Signature pad temporarily disabled</span>
+              </div>
               <div className="mt-2 flex justify-between items-center">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    try {
-                      const pad = sigPads.current[element.id];
-                      if (pad && typeof pad.clear === 'function') {
-                        pad.clear();
-                        handleChange(key, '');
-                      }
-                    } catch (error) {
-                      console.error('Error clearing signature pad:', error);
-                    }
+                    handleChange(key, '');
                   }}
                 >
                   Clear

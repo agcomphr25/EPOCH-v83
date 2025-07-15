@@ -1,37 +1,27 @@
-import React, { useState, useEffect, useRef } from "react";
-import debounce from "lodash.debounce";
+import React, { useState } from "react";
 
 export default function BareSearch() {
   const [searchQuery, setSearchQuery] = useState("");
-  const debouncedRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
-    debouncedRef.current = debounce(() => {
-      console.log("Would search for:", searchQuery);
-    }, 300);
-
-    return () => {
-      if (debouncedRef.current && (debouncedRef.current as any).cancel) {
-        (debouncedRef.current as any).cancel();
-      }
-    };
-  }, [searchQuery]);
-
-  useEffect(() => {
-    if (debouncedRef.current) {
-      debouncedRef.current();
-    }
-  }, [searchQuery]);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    console.log("Typing:", value);
+  };
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Bare Search Test</h1>
+      <h1>Minimal React Test</h1>
+      <p>Current value: {searchQuery}</p>
       <input
         value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
+        onChange={handleChange}
         placeholder="Type something..."
         style={{ padding: 8, fontSize: 16, width: "100%" }}
       />
+      <button onClick={() => console.log("Button clicked!")}>
+        Test Click
+      </button>
     </div>
   );
 }

@@ -1,11 +1,21 @@
-// Complete removal of React refresh runtime to prevent errors
+// Emergency fix: Override all React refresh functionality
 if (typeof window !== 'undefined') {
-  // Set up permanent stubs that never change
+  // Override ALL refresh-related functions before any module loads
   window.$RefreshReg$ = () => {};
   window.$RefreshSig$ = () => (type) => type;
   window.__vite_plugin_react_preamble_installed__ = true;
   
-  // Disable hot module replacement completely
+  // Intercept and disable the refresh runtime injection
+  const originalCreateElement = document.createElement;
+  document.createElement = function(tagName) {
+    const element = originalCreateElement.call(this, tagName);
+    if (tagName === 'script' && element.src && element.src.includes('react-refresh')) {
+      element.src = 'data:application/javascript,';
+    }
+    return element;
+  };
+  
+  // Disable hot module replacement
   if (import.meta.hot) {
     import.meta.hot.accept = () => {};
     import.meta.hot.dispose = () => {};

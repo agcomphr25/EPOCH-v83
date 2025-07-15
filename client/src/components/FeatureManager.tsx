@@ -25,7 +25,7 @@ interface Feature {
   id: string;
   name: string;
   displayName: string;
-  type: 'dropdown' | 'text' | 'number' | 'checkbox' | 'textarea';
+  type: 'dropdown' | 'text' | 'number' | 'checkbox' | 'textarea' | 'multiselect';
   required: boolean;
   placeholder?: string;
   options?: FeatureOption[];
@@ -622,6 +622,7 @@ export default function FeatureManager() {
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="checkbox">Checkbox</SelectItem>
                     <SelectItem value="textarea">Textarea</SelectItem>
+                    <SelectItem value="multiselect">Multiselect</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -689,7 +690,7 @@ export default function FeatureManager() {
             </div>
 
             {/* Options for dropdown and checkbox */}
-            {(featureForm.type === 'dropdown' || featureForm.type === 'checkbox') && (
+            {(featureForm.type === 'dropdown' || featureForm.type === 'checkbox' || featureForm.type === 'multiselect') && (
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <Label>Options</Label>

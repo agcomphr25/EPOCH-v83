@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,7 +15,7 @@ interface OnboardingDocsProps {
 
 export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
   const [signingDoc, setSigningDoc] = useState<OnboardingDoc | null>(null);
-  const [sigPad, setSigPad] = useState<SignatureCanvas | null>(null);
+  const sigPadRef = useRef<SignatureCanvas | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -34,14 +34,14 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
   };
 
   const saveSignature = async () => {
-    if (!sigPad || sigPad.isEmpty()) {
+    if (!sigPadRef.current || sigPadRef.current.isEmpty()) {
       toast({ title: 'Please provide a signature', variant: 'destructive' });
       return;
     }
     
     if (!signingDoc) return;
 
-    const dataURL = sigPad.getTrimmedCanvas().toDataURL('image/png');
+    const dataURL = sigPadRef.current.getTrimmedCanvas().toDataURL('image/png');
     
     try {
       const response = await fetch(`/api/onboarding-docs/${signingDoc.id}/sign`, {
@@ -59,7 +59,7 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
       
       toast({ title: 'Document signed successfully!' });
       setSigningDoc(null);
-      if (sigPad) sigPad.clear();
+      if (sigPadRef.current) sigPadRef.current.clear();
     } catch (error) {
       toast({ title: 'Failed to save signature', variant: 'destructive' });
     }
@@ -67,7 +67,7 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
 
   const closeModal = () => {
     setSigningDoc(null);
-    if (sigPad) sigPad.clear();
+    if (sigPadRef.current) sigPadRef.current.clear();
   };
 
   return (
@@ -154,7 +154,7 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
                   canvasProps={{
                     className: 'w-full h-48 bg-white border rounded',
                   }}
-                  ref={(ref) => setSigPad(ref)}
+                  ref={sigPadRef}
                 />
               </div>
               
@@ -163,7 +163,7 @@ export default function OnboardingDocs({ employeeId }: OnboardingDocsProps) {
                   Cancel
                 </Button>
                 <Button 
-                  onClick={() => sigPad?.clear()}
+                  onClick={() => sigPadRef.current?.clear()}
                   variant="outline"
                 >
                   Clear

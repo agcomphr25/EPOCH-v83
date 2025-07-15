@@ -426,9 +426,19 @@ export default function OrderEntry() {
 
     } catch (error: any) {
       console.error('Submit error:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      let errorMessage = "Failed to save order";
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to save order",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

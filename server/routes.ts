@@ -450,12 +450,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/orders/draft/:orderId", async (req, res) => {
     try {
       const { orderId } = req.params;
+      console.log('Updating draft order:', orderId);
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
       const result = insertOrderDraftSchema.partial().parse(req.body);
+      console.log('Parsed result:', JSON.stringify(result, null, 2));
+      
       const updatedDraft = await storage.updateOrderDraft(orderId, result);
+      console.log('Updated draft:', JSON.stringify(updatedDraft, null, 2));
+      
       res.json(updatedDraft);
     } catch (error) {
       console.error("Order draft update error:", error);
-      res.status(400).json({ error: "Invalid order draft data" });
+      
+      let errorMessage = "Invalid order draft data";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      res.status(400).json({ error: errorMessage });
     }
   });
 

@@ -25,11 +25,13 @@
     </div>
     
     <script>
-      // Complete React refresh disable
-      window.$RefreshReg$ = function() {};
-      window.$RefreshSig$ = function() { return function(type) { return type; }; };
-      window.__vite_plugin_react_preamble_installed__ = true;
-      window.injectIntoGlobalHook = function() {};
+      // React refresh runtime setup
+      if (typeof window !== 'undefined') {
+        window.$RefreshReg$ = function() {};
+        window.$RefreshSig$ = function() { return function(type) { return type; }; };
+        window.__vite_plugin_react_preamble_installed__ = true;
+        window.injectIntoGlobalHook = function() {};
+      }
     </script>
     
     <!-- React will load in the background but won't interfere with the display -->

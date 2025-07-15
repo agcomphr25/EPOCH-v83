@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CSVLink } from 'react-csv';
 import html2pdf from 'html2pdf.js';
@@ -91,7 +91,7 @@ export default function EnhancedReportBuilder() {
   });
 
   // Filter submissions based on date range and search term
-  React.useEffect(() => {
+  useEffect(() => {
     // Ensure submissions is an array
     if (!Array.isArray(submissions)) {
       setFilteredData([]);

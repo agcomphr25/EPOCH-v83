@@ -39,13 +39,14 @@ export default function Navigation() {
       label: 'Module 8 Test',
       icon: TestTube,
       description: 'Test API integrations and communications'
-    },
-    {
-      path: '/documentation',
-      label: 'Documentation',
-      icon: BookOpen,
-      description: 'Complete system architecture and structure'
     }
+    // Documentation button disabled per user request - was causing problems
+    // {
+    //   path: '/documentation',
+    //   label: 'Documentation',
+    //   icon: BookOpen,
+    //   description: 'Complete system architecture and structure'
+    // }
 
   ];
 

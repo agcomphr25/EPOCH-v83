@@ -8,7 +8,7 @@ import { CSVProvider } from "./contexts/CSVContext";
 import Navigation from "./components/Navigation";
 import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
-import SimpleTest from "./pages/SimpleTest";
+import Dashboard from "./pages/Dashboard";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
@@ -53,7 +53,7 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                 <Switch>
-                  <Route path="/" component={SimpleTest} />
+                  <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/order-entry" component={OrderEntry} />
                   <Route path="/test-order-entry" component={OrderEntryTest} />

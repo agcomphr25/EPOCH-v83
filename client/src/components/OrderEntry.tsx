@@ -29,8 +29,8 @@ interface StockModel {
 interface FeatureDefinition {
   id: string;
   name: string;
-  type: 'dropdown' | 'search' | 'text';
-  options?: { value: string; label: string }[];
+  type: 'dropdown' | 'search' | 'text' | 'multiselect';
+  options?: { value: string; label: string; price?: number }[];
 }
 
 export default function OrderEntry() {
@@ -287,6 +287,15 @@ export default function OrderEntry() {
               featureCost += option.price * quantity;
             }
           }
+        } else if (feature.type === 'multiselect') {
+          // For multiselect features, value is an array of selected option values
+          const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
+          selectedValues.forEach((selectedValue: string) => {
+            const option = feature.options.find((opt: any) => opt.value === selectedValue);
+            if (option && typeof option.price === 'number') {
+              featureCost += option.price;
+            }
+          });
         } else {
           // For other feature types, find the selected option
           const selectedOption = feature.options.find((opt: any) => opt.value === value);
@@ -694,6 +703,46 @@ export default function OrderEntry() {
                         </Command>
                       </PopoverContent>
                     </Popover>
+                  )}
+                  {featureDef.type === 'multiselect' && (
+                    <div className="space-y-2">
+                      {featureDef.options?.map((option) => (
+                        <div key={option.value} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`${featureDef.id}-${option.value}`}
+                            checked={Array.isArray(features[featureDef.id]) 
+                              ? features[featureDef.id].includes(option.value)
+                              : features[featureDef.id] === option.value
+                            }
+                            onChange={(e) => {
+                              const currentValues = Array.isArray(features[featureDef.id]) 
+                                ? features[featureDef.id] 
+                                : (features[featureDef.id] ? [features[featureDef.id]] : []);
+                              
+                              if (e.target.checked) {
+                                // Add the option to the array
+                                const newValues = [...currentValues, option.value];
+                                setFeatures(prev => ({ ...prev, [featureDef.id]: newValues }));
+                              } else {
+                                // Remove the option from the array
+                                const newValues = currentValues.filter((v: string) => v !== option.value);
+                                setFeatures(prev => ({ ...prev, [featureDef.id]: newValues }));
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <label htmlFor={`${featureDef.id}-${option.value}`} className="flex-1 cursor-pointer">
+                            <span>{option.label}</span>
+                            {option.price > 0 && (
+                              <span className="text-sm text-gray-500 ml-2">
+                                (+${option.price.toFixed(2)})
+                              </span>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}

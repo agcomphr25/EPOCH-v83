@@ -1,4 +1,5 @@
 // Completely bypass React refresh and HMR
+import "./react-refresh-disable";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";

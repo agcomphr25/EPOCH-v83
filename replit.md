@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 15, 2025 (Morning)**: RAILS FEATURE ISSUE RESOLVED - Fixed rail feature not displaying in Features Manager and Order Entry by correcting feature type from 'text' to 'dropdown' in database. Rail Accessory feature now properly shows with dropdown options (No Rail, 4" ARCA Rail, 6" ARCA Rail, 8" ARCA Rail, Pic, Pic w/Int Stud) with correct pricing.
 - **July 15, 2025 (Morning)**: STYLING ISSUES RESOLVED - Fixed critical styling problems that were causing "blocky" appearance by removing HTML fallback content overriding React, adding proper CSS imports to main.tsx, and cleaning up index.html. Application now displays with professional modern UI components, cards, buttons, and proper Tailwind styling.
 - **July 15, 2025 (Morning)**: APPLICATION FULLY RESTORED - Cleaned up main.tsx to remove test components and restore normal ERP functionality. Application now properly renders the full EPOCH v8 ERP system with all modules accessible through navigation. React refresh runtime fixes maintained while eliminating temporary test interfaces.
 - **July 15, 2025 (Morning)**: ISSUE RESOLVED - Successfully eliminated RefreshRuntime.register errors by completely disabling React refresh runtime. Implemented permanent stubs for $RefreshReg$ and $RefreshSig$ functions, disabled HMR to prevent conflicts, and restored React application functionality. Application now renders properly with working test component and restoration button.

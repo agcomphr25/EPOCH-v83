@@ -581,11 +581,22 @@ export default function OrderEntry() {
 
     } catch (error: any) {
       console.error('Save draft error:', error);
+      
+      // Extract detailed error message from server response
+      let errorMessage = "Failed to save draft";
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error?.error) {
+        errorMessage = error.error;
+      }
+      
       toast({
         title: "Error",
-        description: error?.message || "Failed to save draft",
+        description: errorMessage,
         variant: "destructive",
-        });
+      });
     } finally {
       setIsSubmitting(false);
     }

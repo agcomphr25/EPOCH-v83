@@ -450,25 +450,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/orders/draft/:orderId", async (req, res) => {
     try {
       const { orderId } = req.params;
-      console.log('Updating draft order:', orderId);
+      console.log('=== UPDATING DRAFT ORDER ===');
+      console.log('Order ID:', orderId);
       console.log('Request body:', JSON.stringify(req.body, null, 2));
       
-      const result = insertOrderDraftSchema.partial().parse(req.body);
-      console.log('Parsed result:', JSON.stringify(result, null, 2));
+      // Check if the draft exists first
+      const existingDraft = await storage.getOrderDraft(orderId);
+      if (!existingDraft) {
+        console.log('Draft not found for orderId:', orderId);
+        return res.status(404).json({ error: `Draft order with ID ${orderId} not found` });
+      }
       
-      const updatedDraft = await storage.updateOrderDraft(orderId, result);
-      console.log('Updated draft:', JSON.stringify(updatedDraft, null, 2));
+      console.log('Existing draft found:', JSON.stringify(existingDraft, null, 2));
       
-      res.json(updatedDraft);
+      try {
+        const result = insertOrderDraftSchema.partial().parse(req.body);
+        console.log('Parsed result:', JSON.stringify(result, null, 2));
+        
+        const updatedDraft = await storage.updateOrderDraft(orderId, result);
+        console.log('Updated draft:', JSON.stringify(updatedDraft, null, 2));
+        
+        res.json(updatedDraft);
+      } catch (parseError) {
+        console.error("Schema validation error:", parseError);
+        if (parseError instanceof Error) {
+          return res.status(400).json({ error: `Validation error: ${parseError.message}` });
+        }
+        return res.status(400).json({ error: "Invalid request data format" });
+      }
+      
     } catch (error) {
       console.error("Order draft update error:", error);
       
-      let errorMessage = "Invalid order draft data";
+      let errorMessage = "Failed to update order draft";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
       
-      res.status(400).json({ error: errorMessage });
+      res.status(500).json({ error: errorMessage });
     }
   });
 

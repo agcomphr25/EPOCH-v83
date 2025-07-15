@@ -1,4 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+
+// Ensure React is available before using hooks
+if (!React || !React.useState) {
+  console.error("React or React.useState is not available in CSVContext");
+  throw new Error("React hooks are not available. React may not be properly initialized.");
+}
 import Papa from "papaparse";
 import { apiRequest } from "@/lib/queryClient";
 

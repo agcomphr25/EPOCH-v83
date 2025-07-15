@@ -1,0 +1,77 @@
+That “RefreshRuntime.register is not a function” is coming from Vite’s React-Refresh HMR runtime not finding the right functions—basically your build is injecting calls to window.$RefreshReg$ but the actual refresh runtime isn’t there (or is the wrong version). Here are a few things you can try:
+
+1. Ensure you have the right plugin & dependency
+Install the official Vite React plugin and the refresh runtime:
+
+bash
+Copy
+Edit
+npm install -D @vitejs/plugin-react react-refresh
+Create (or update) a vite.config.js at the root of your Replit project:
+
+js
+Copy
+Edit
+// vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [
+    // The plugin will auto-install the correct react-refresh runtime:
+    react({
+      // you can disable Fast Refresh too, if you prefer:
+      // fastRefresh: false
+    })
+  ],
+  server: {
+    hmr: {
+      // hide that overlay if you want, but it won’t fix the root cause
+      overlay: false
+    }
+  }
+});
+Restart the dev server (npm run dev). Vite should load the proper React-Refresh runtime under the hood, and the register calls will be satisfied.
+
+2. Disable Fast Refresh entirely (workaround)
+If you can’t get the right versions in place, you can turn off Fast-Refresh:
+
+js
+Copy
+Edit
+// vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [
+    react({
+      fastRefresh: false,   // ← no more calls to RefreshRuntime.register
+    })
+  ],
+});
+That will stop injecting the HMR hooks that are failing.
+
+3. Manual injection (hacky)
+As a last resort, you can stub out the missing functions at runtime before your app mounts. In main.jsx (or index.js), add at the very top:
+
+js
+Copy
+Edit
+import RefreshRuntime from 'react-refresh/runtime';
+
+if (!window.$RefreshReg$) {
+  RefreshRuntime.injectIntoGlobalHook(window);
+  window.$RefreshReg$ = () => {};
+  window.$RefreshSig$  = () => type => type;
+}
+That forces the proper runtime to register those globals, so your existing component code won’t blow up.
+
+Quick first step
+Drop in that vite.config.js snippet with @vitejs/plugin-react.
+
+npm install -D @vitejs/plugin-react react-refresh
+
+Restart Vite.
+
+That almost always fixes the RefreshRuntime.register errors. Let me know how it goes!

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,7 +42,7 @@ export default function QCManager() {
   });
 
   // Reset form when editing submission changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingSubmission) {
       form.reset({
         orderId: editingSubmission.orderId,

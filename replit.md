@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **July 15, 2025 (Early Morning)**: Successfully resolved React runtime error "Cannot read properties of null (reading 'useRef')" - fixed use-toast.ts hook to use proper useState/useEffect imports, standardized React imports across components, cleared Vite cache, and confirmed application loads without errors
 - **July 14, 2025 (Afternoon)**: Successfully fixed Order ID generation system to create unique sequential IDs - updated algorithm to handle legacy formats (UNIQUE002, TEST001) and generate proper year-month format (AG001, AG002, etc.) with database integration and automatic incrementing
 - **July 14, 2025 (Afternoon)**: Debugging All Orders page 404 issue - verified API endpoints work correctly, added multiple route aliases (/orders, /orders-list, /all-orders), investigating routing and component rendering
 - **July 14, 2025 (Afternoon)**: Added Orders List page with navigation button - created comprehensive order listing with customer names, status badges, order dates, and edit/view actions accessible from main navigation bar

@@ -24,15 +24,7 @@
       </div>
     </div>
     
-    <script>
-      // React refresh runtime setup
-      if (typeof window !== 'undefined') {
-        window.$RefreshReg$ = function() {};
-        window.$RefreshSig$ = function() { return function(type) { return type; }; };
-        window.__vite_plugin_react_preamble_installed__ = true;
-        window.injectIntoGlobalHook = function() {};
-      }
-    </script>
+
     
     <!-- React will load in the background but won't interfere with the display -->
     <script type="module" src="/src/main.tsx"></script>

@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import Papa from "papaparse";
 import { apiRequest } from "@/lib/queryClient";
@@ -124,36 +123,30 @@ export function CSVProvider({ children }: { children: ReactNode }) {
       
       if (hasHeaders && rawData.length > 1) {
         const headers = rawData[0];
-        processedData = rawData.slice(1).map(row => {
-          const obj: CSVData = {};
-          headers.forEach((header, index) => {
-            if (header) {
-              obj[header] = row[index] || '';
-            }
+        const dataRows = rawData.slice(1);
+        
+        processedData = dataRows.map((row, index) => {
+          const rowData: CSVData = {};
+          headers.forEach((header, headerIndex) => {
+            const cleanHeader = header.trim();
+            const value = row[headerIndex] || '';
+            
+            // Try to convert to number if possible
+            const numValue = Number(value);
+            rowData[cleanHeader] = !isNaN(numValue) && value !== '' ? numValue : value;
           });
-          return obj;
+          return rowData;
         });
       } else {
-        processedData = rawData.map(row => {
-          const obj: CSVData = {};
-          row.forEach((value, index) => {
-            obj[`Column ${index + 1}`] = value || '';
+        // No headers - use generic column names
+        processedData = rawData.map((row, index) => {
+          const rowData: CSVData = {};
+          row.forEach((value, colIndex) => {
+            const numValue = Number(value);
+            rowData[`Column ${colIndex + 1}`] = !isNaN(numValue) && value !== '' ? numValue : value;
           });
-          return obj;
+          return rowData;
         });
-      }
-
-      // Save to database
-      try {
-        await apiRequest('/api/csv-data', {
-          method: 'POST',
-          body: JSON.stringify({
-            fileName: state.fileName,
-            data: processedData,
-          }),
-        });
-      } catch (error) {
-        console.error('Failed to save CSV data:', error);
       }
 
       setState(prev => ({
@@ -161,27 +154,31 @@ export function CSVProvider({ children }: { children: ReactNode }) {
         data: processedData,
         rowCount: processedData.length,
       }));
+
+      // Save to backend
+      await apiRequest('/api/csv-data', {
+        method: 'POST',
+        body: JSON.stringify({
+          data: processedData,
+          fileName: state.fileName,
+        }),
+      });
+      
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: `Error processing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: `Error processing data: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }));
     }
   };
 
-  const processData = useCallback(async (hasHeaders: boolean) => {
+  const processData = useCallback((hasHeaders: boolean) => {
     if (state.rawData) {
-      await processDataInternal(state.rawData, hasHeaders);
+      processDataInternal(state.rawData, hasHeaders);
     }
   }, [state.rawData, state.fileName]);
 
-  const clearData = useCallback(async () => {
-    try {
-      await apiRequest('/api/csv-data', { method: 'DELETE' });
-    } catch (error) {
-      console.error('Failed to clear CSV data:', error);
-    }
-    
+  const clearData = useCallback(() => {
     setState({
       data: [],
       isLoading: false,
@@ -206,7 +203,7 @@ export function CSVProvider({ children }: { children: ReactNode }) {
 
 export function useCSVContext() {
   const context = useContext(CSVContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useCSVContext must be used within a CSVProvider');
   }
   return context;

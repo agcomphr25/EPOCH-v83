@@ -53,8 +53,8 @@ function App() {
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                 <Switch>
-                  <Route path="/" component={SimpleTest} />
-                  <Route path="/dashboard" component={Dashboard} />
+                  <Route path="/" component={Dashboard} />
+                  <Route path="/simple-test" component={SimpleTest} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/order-entry" component={OrderEntry} />
                   <Route path="/test-order-entry" component={OrderEntryTest} />

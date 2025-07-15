@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CSVLink } from 'react-csv';
 import html2pdf from 'html2pdf.js';

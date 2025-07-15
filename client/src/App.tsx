@@ -36,6 +36,7 @@ import EnhancedReportsPage from "./pages/EnhancedReportsPage";
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import ReactErrorTest from "./components/ReactErrorTest";
+import { MinimalTest } from "./components/MinimalTest";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 
@@ -50,6 +51,7 @@ function App() {
             <main>
               <Switch>
                 <Route path="/test-react" component={ReactErrorTest} />
+                <Route path="/minimal-test" component={MinimalTest} />
                 <Route path="/" component={OrderManagement} />
                 <Route path="/discounts" component={DiscountManagement} />
                 <Route path="/order-entry" component={OrderEntry} />

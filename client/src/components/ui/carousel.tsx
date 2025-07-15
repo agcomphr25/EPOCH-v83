@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useState, forwardRef } from "react"
+import React, { createContext, useContext, useCallback, useEffect, useState, forwardRef } from "react"
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
 } from "embla-carousel-react"

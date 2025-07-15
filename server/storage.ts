@@ -493,6 +493,11 @@ export class DatabaseStorage implements IStorage {
       .set(data)
       .where(eq(orderDrafts.orderId, orderId))
       .returning();
+    
+    if (!draft) {
+      throw new Error(`Draft order with ID ${orderId} not found`);
+    }
+    
     return draft;
   }
 

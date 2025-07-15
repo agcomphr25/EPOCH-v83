@@ -277,6 +277,11 @@ export default function OrderEntry() {
 
       const feature = allFeatures.find(f => f.id === featureId);
       
+      // Debug logging for "Other Options"
+      if (featureId === 'other_options') {
+        console.log('Processing other_options:', { featureId, value, feature });
+      }
+      
       if (feature && feature.options && Array.isArray(feature.options)) {
         if (feature.type === 'checkbox') {
           // For checkbox features, calculate based on quantities
@@ -290,9 +295,18 @@ export default function OrderEntry() {
         } else if (feature.type === 'multiselect') {
           // For multiselect features, value is an array of selected option values
           const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
+          
+          // Debug logging for "Other Options"
+          if (featureId === 'other_options') {
+            console.log('Processing multiselect other_options:', { selectedValues, options: feature.options });
+          }
+          
           selectedValues.forEach((selectedValue: string) => {
             const option = feature.options.find((opt: any) => opt.value === selectedValue);
-            if (option && typeof option.price === 'number') {
+            if (featureId === 'other_options') {
+              console.log('Found option for', selectedValue, ':', option);
+            }
+            if (option && typeof option.price === 'number' && option.price > 0) {
               featureCost += option.price;
             }
           });

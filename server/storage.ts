@@ -420,7 +420,7 @@ export class DatabaseStorage implements IStorage {
     return rawFeatures.map(feature => ({
       ...feature,
       options: typeof feature.options === 'string' 
-        ? JSON.parse(feature.options) 
+        ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     }));
   }
@@ -433,7 +433,7 @@ export class DatabaseStorage implements IStorage {
     return {
       ...feature,
       options: typeof feature.options === 'string' 
-        ? JSON.parse(feature.options) 
+        ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
   }
@@ -443,7 +443,14 @@ export class DatabaseStorage implements IStorage {
     const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const featureData = { ...data, id };
     const [feature] = await db.insert(features).values(featureData).returning();
-    return feature;
+    
+    // Parse JSON options field if it's a string
+    return {
+      ...feature,
+      options: typeof feature.options === 'string' 
+        ? (feature.options ? JSON.parse(feature.options) : null)
+        : feature.options
+    };
   }
 
   async updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature> {
@@ -451,7 +458,14 @@ export class DatabaseStorage implements IStorage {
       .set(data)
       .where(eq(features.id, id))
       .returning();
-    return feature;
+    
+    // Parse JSON options field if it's a string
+    return {
+      ...feature,
+      options: typeof feature.options === 'string' 
+        ? (feature.options ? JSON.parse(feature.options) : null)
+        : feature.options
+    };
   }
 
   async deleteFeature(id: string): Promise<void> {

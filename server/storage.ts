@@ -32,7 +32,7 @@ import {
   type EnhancedForm, type InsertEnhancedForm,
   type EnhancedFormVersion, type InsertEnhancedFormVersion,
   type EnhancedFormSubmission, type InsertEnhancedFormSubmission
-} from "@shared/schema";
+} from "./schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike } from "drizzle-orm";
 

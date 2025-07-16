@@ -680,7 +680,7 @@ export default function OrderEntry() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
+                <Label htmlFor="dueDate">Estimated Completion Date</Label>
                 <Input
                   type="date"
                   value={dueDate.toISOString().substr(0, 10)}

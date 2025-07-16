@@ -286,8 +286,8 @@ export default function OrderEntry() {
           featureCost += featureDefinition.price;
         }
 
-        // Add the specific option price if this is a dropdown with options
-        if (featureDefinition.type === 'dropdown' && featureDefinition.options) {
+        // Add the specific option price if this is a dropdown/multiselect with options
+        if ((featureDefinition.type === 'dropdown' || featureDefinition.type === 'multiselect') && featureDefinition.options) {
           const selectedOption = featureDefinition.options.find(opt => opt.value === featureValue);
           if (selectedOption && selectedOption.price) {
             featureCost += selectedOption.price;
@@ -348,7 +348,7 @@ export default function OrderEntry() {
     const feature = featureDefs.find(f => f.id === featureId);
     if (!feature) return value || 'Not selected';
 
-    if (feature.type === 'dropdown' || feature.type === 'combobox') {
+    if (feature.type === 'dropdown' || feature.type === 'combobox' || feature.type === 'multiselect') {
       const option = feature.options?.find(opt => opt.value === value);
       return option ? option.label : (value || 'Not selected');
     }
@@ -397,7 +397,7 @@ export default function OrderEntry() {
     }
 
     // Handle regular features with options
-    if (feature.type === 'dropdown' || feature.type === 'combobox') {
+    if (feature.type === 'dropdown' || feature.type === 'combobox' || feature.type === 'multiselect') {
       const option = feature.options?.find(opt => opt.value === value);
       return option?.price || 0;
     }
@@ -803,7 +803,7 @@ export default function OrderEntry() {
               {featureDefs.map((featureDef) => (
                 <div key={featureDef.id} className="space-y-2">
                   <Label className="capitalize">{featureDef.name}</Label>
-                  {featureDef.type === 'dropdown' && (
+                  {(featureDef.type === 'dropdown' || featureDef.type === 'multiselect') && (
                     <Select
                       value={features[featureDef.id] || ''}
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, [featureDef.id]: value }))}

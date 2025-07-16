@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Test - EPOCH v8</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            padding: 12px 24px;
+            margin: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .primary { background-color: #007bff; color: white; }
+        .success { background-color: #28a745; color: white; }
+        .counter {
+            font-size: 18px;
+            margin: 20px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EPOCH v8 ERP System</h1>
+        <p>Basic HTML/JavaScript test - No React dependencies</p>
+        
+        <div class="counter" id="counter">
+            Button clicked 0 times
+        </div>
+        
+        <button class="button primary" onclick="incrementCounter()">
+            Click Me
+        </button>
+        
+        <button class="button success" onclick="restoreReact()">
+            Restore React App
+        </button>
+        
+        <div id="status" style="margin-top: 20px; padding: 10px; background: #d4edda; border-radius: 4px;">
+            ✓ Basic HTML/JavaScript working correctly
+        </div>
+    </div>
+
+    <script>
+        let count = 0;
+        
+        function incrementCounter() {
+            count++;
+            document.getElementById('counter').textContent = `Button clicked ${count} times`;
+        }
+        
+        function restoreReact() {
+            // This will restore the original React app
+            window.location.href = '/';
+        }
+        
+        // Test basic functionality
+        console.log('Basic HTML/JavaScript test loaded successfully');
+        document.getElementById('status').innerHTML = '✓ Basic HTML/JavaScript working correctly<br>✓ Console logging functional<br>✓ DOM manipulation working';
+    </script>
+</body>
+</html>

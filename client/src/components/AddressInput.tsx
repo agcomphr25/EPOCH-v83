@@ -8,7 +8,7 @@ import { Check, ChevronsUpDown, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { autocompleteAddress, validateAddress, type AddressData } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
-import { debounce } from 'lodash';
+import debounce from 'lodash.debounce';
 
 interface AddressInputProps {
   label: string;
@@ -30,12 +30,14 @@ export default function AddressInput({ label, value, onChange, required = false 
       setSuggestions([]);
       return;
     }
+    console.log('Fetching suggestions for:', q);
     setIsLoading(true);
     try {
       const results = await autocompleteAddress(q);
+      console.log('Autocomplete results:', results);
       setSuggestions(results);
     } catch (error) {
-      console.error(error);
+      console.error('Address autocomplete error:', error);
       toast({
         title: 'Address lookup failed',
         description: (error as Error).message,

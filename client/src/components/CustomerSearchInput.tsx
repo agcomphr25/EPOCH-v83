@@ -11,7 +11,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import debounce from 'lodash.debounce';
 import type { Customer } from '@shared/schema';
-import AddressInput from '@/components/AddressInput';
+import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 
 interface CustomerSearchInputProps {
@@ -338,7 +338,7 @@ export default function CustomerSearchInput({
                         <MapPin className="h-4 w-4 text-gray-500" />
                         <Label>Address (Optional)</Label>
                       </div>
-                      <AddressInput 
+                      <SimpleAddressInput 
                         label=""
                         value={customerAddress}
                         onChange={setCustomerAddress}

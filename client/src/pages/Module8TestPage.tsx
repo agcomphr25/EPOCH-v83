@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, FileText, MessageSquare, Download, Send, Mail } from 'lucide-react';
 import AddressInput from '@/components/AddressInput';
+import AddressTestComponent from '@/components/AddressTestComponent';
 import PdfViewer from '@/components/PdfViewer';
 import CommunicationPanel from '@/components/CommunicationPanel';
 import { type AddressData } from '@/utils/addressUtils';
@@ -57,6 +58,21 @@ export default function Module8TestPage() {
         </TabsList>
 
         <TabsContent value="address" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Address API Direct Test
+              </CardTitle>
+              <CardDescription>
+                Test address autocomplete API directly
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AddressTestComponent />
+            </CardContent>
+          </Card>
+          
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -286,12 +286,22 @@ export default function OrderEntry() {
           featureCost += featureDefinition.price;
         }
 
-        // Add the specific option price if this is a dropdown/multiselect with options
-        if ((featureDefinition.type === 'dropdown' || featureDefinition.type === 'multiselect') && featureDefinition.options) {
+        // Add the specific option price if this is a dropdown with options
+        if (featureDefinition.type === 'dropdown' && featureDefinition.options) {
           const selectedOption = featureDefinition.options.find(opt => opt.value === featureValue);
           if (selectedOption && selectedOption.price) {
             featureCost += selectedOption.price;
           }
+        }
+
+        // Handle multiselect arrays - add prices for each selected option
+        if (featureDefinition.type === 'multiselect' && Array.isArray(featureValue) && featureDefinition.options) {
+          featureValue.forEach(selectedValue => {
+            const selectedOption = featureDefinition.options.find(opt => opt.value === selectedValue);
+            if (selectedOption && selectedOption.price) {
+              featureCost += selectedOption.price;
+            }
+          });
         }
 
         // Handle checkbox arrays - add prices for each selected option with quantities
@@ -348,9 +358,18 @@ export default function OrderEntry() {
     const feature = featureDefs.find(f => f.id === featureId);
     if (!feature) return value || 'Not selected';
 
-    if (feature.type === 'dropdown' || feature.type === 'combobox' || feature.type === 'multiselect') {
+    if (feature.type === 'dropdown' || feature.type === 'combobox') {
       const option = feature.options?.find(opt => opt.value === value);
       return option ? option.label : (value || 'Not selected');
+    }
+
+    if (feature.type === 'multiselect' && Array.isArray(value)) {
+      if (value.length === 0) return 'None selected';
+      const selectedLabels = value.map(val => {
+        const option = feature.options?.find(opt => opt.value === val);
+        return option ? option.label : val;
+      });
+      return selectedLabels.join(', ');
     }
 
     if (feature.type === 'checkbox' && Array.isArray(value)) {
@@ -397,9 +416,17 @@ export default function OrderEntry() {
     }
 
     // Handle regular features with options
-    if (feature.type === 'dropdown' || feature.type === 'combobox' || feature.type === 'multiselect') {
+    if (feature.type === 'dropdown' || feature.type === 'combobox') {
       const option = feature.options?.find(opt => opt.value === value);
       return option?.price || 0;
+    }
+
+    // Handle multiselect arrays
+    if (feature.type === 'multiselect' && Array.isArray(value)) {
+      return value.reduce((total, val) => {
+        const option = feature.options?.find(opt => opt.value === val);
+        return total + (option?.price || 0);
+      }, 0);
     }
 
     // Handle features with base price
@@ -803,7 +830,7 @@ export default function OrderEntry() {
               {featureDefs.map((featureDef) => (
                 <div key={featureDef.id} className="space-y-2">
                   <Label className="capitalize">{featureDef.name}</Label>
-                  {(featureDef.type === 'dropdown' || featureDef.type === 'multiselect') && (
+                  {featureDef.type === 'dropdown' && (
                     <Select
                       value={features[featureDef.id] || ''}
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, [featureDef.id]: value }))}

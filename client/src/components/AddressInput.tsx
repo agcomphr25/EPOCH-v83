@@ -30,11 +30,9 @@ export default function AddressInput({ label, value, onChange, required = false 
       setSuggestions([]);
       return;
     }
-    console.log('Fetching suggestions for:', q);
     setIsLoading(true);
     try {
       const results = await autocompleteAddress(q);
-      console.log('Autocomplete results:', results);
       setSuggestions(results);
     } catch (error) {
       console.error('Address autocomplete error:', error);

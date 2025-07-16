@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiRequest } from '@/lib/queryClient';
 
 export interface AddressData {
   street: string;
@@ -15,10 +15,9 @@ export interface AddressData {
  */
 export async function autocompleteAddress(query: string): Promise<string[]> {
   try {
-    const response = await axios.get(`/api/address/autocomplete`, {
-      params: { query },
-    });
-    return response.data;
+    const url = `/api/address/autocomplete?query=${encodeURIComponent(query)}`;
+    const response = await apiRequest(url);
+    return response;
   } catch (error) {
     console.error('Error fetching address autocomplete:', error);
     throw new Error('Failed to fetch address suggestions');
@@ -32,11 +31,13 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
  */
 export async function validateAddress(address: AddressData): Promise<AddressData> {
   try {
-    const response = await axios.post(`/api/address/validate`, { address });
-    return response.data;
+    const response = await apiRequest('/api/address/validate', {
+      method: 'POST',
+      body: { address }
+    });
+    return response;
   } catch (error) {
     console.error('Error validating address:', error);
-    const msg = (error as any).response?.data?.message || 'Address validation failed';
-    throw new Error(msg);
+    throw new Error('Address validation failed');
   }
 }

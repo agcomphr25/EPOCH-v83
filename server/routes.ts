@@ -2,6 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateP1OrderId } from "./utils/orderIdGenerator";
+import { db } from "./db";
+import { enhancedForms, enhancedFormCategories } from "./schema";
+import { eq } from "drizzle-orm";
 
 // SmartyStreets direct API calls
 import axios from 'axios';
@@ -1649,13 +1652,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced Forms API routes
   app.get("/api/enhanced-forms/categories", async (req, res) => {
     try {
-      // Mock categories data - replace with actual database call
-      const mockCategories = [
-        { id: 1, name: "Quality Control", description: "QC inspection forms", createdAt: new Date(), updatedAt: new Date() },
-        { id: 2, name: "Maintenance", description: "Equipment maintenance forms", createdAt: new Date(), updatedAt: new Date() },
-        { id: 3, name: "Production", description: "Production tracking forms", createdAt: new Date(), updatedAt: new Date() }
-      ];
-      res.json(mockCategories);
+      const categories = await db.select().from(enhancedFormCategories);
+      res.json(categories);
     } catch (error) {
       console.error("Enhanced forms categories error:", error);
       res.status(500).json({ error: "Failed to fetch categories" });
@@ -1669,15 +1667,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Category name is required" });
       }
       
-      const mockCategory = {
-        id: Date.now(),
+      const [newCategory] = await db.insert(enhancedFormCategories).values({
         name,
         description: description || "",
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      }).returning();
       
-      res.json(mockCategory);
+      res.json(newCategory);
     } catch (error) {
       console.error("Enhanced forms create category error:", error);
       res.status(500).json({ error: "Failed to create category" });
@@ -1689,15 +1684,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { name, description } = req.body;
       
-      const mockCategory = {
-        id: parseInt(id),
-        name: name || "Updated Category",
-        description: description || "",
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const [updatedCategory] = await db.update(enhancedFormCategories)
+        .set({
+          name: name || "Updated Category",
+          description: description || "",
+          updatedAt: new Date()
+        })
+        .where(eq(enhancedFormCategories.id, parseInt(id)))
+        .returning();
       
-      res.json(mockCategory);
+      if (!updatedCategory) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
+      res.json(updatedCategory);
     } catch (error) {
       console.error("Enhanced forms update category error:", error);
       res.status(500).json({ error: "Failed to update category" });
@@ -1707,6 +1707,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/enhanced-forms/categories/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      const [deletedCategory] = await db.delete(enhancedFormCategories)
+        .where(eq(enhancedFormCategories.id, parseInt(id)))
+        .returning();
+      
+      if (!deletedCategory) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
       res.json({ success: true, id: parseInt(id) });
     } catch (error) {
       console.error("Enhanced forms delete category error:", error);

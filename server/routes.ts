@@ -1841,33 +1841,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced forms CRUD routes
   app.get("/api/enhanced-forms", async (req, res) => {
     try {
-      // Mock forms data
-      const mockForms = [
-        {
-          id: 1,
-          name: "QC Inspection Form",
-          description: "Quality control inspection checklist",
-          categoryId: 1,
-          tableName: "qc_submissions",
-          layout: [],
-          version: 1,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          id: 2,
-          name: "Maintenance Report",
-          description: "Equipment maintenance report form",
-          categoryId: 2,
-          tableName: "maintenance_logs",
-          layout: [],
-          version: 1,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ];
-      
-      res.json(mockForms);
+      const forms = await db.select().from(enhancedForms);
+      res.json(forms);
     } catch (error) {
       console.error("Enhanced forms error:", error);
       res.status(500).json({ error: "Failed to fetch forms" });
@@ -1878,46 +1853,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const mockForm = {
-        id: parseInt(id),
-        name: "Sample Form",
-        description: "A sample form for testing",
-        categoryId: 1,
-        tableName: "orders",
-        layout: [
-          {
-            id: "input-1",
-            type: "input",
-            x: 20,
-            y: 20,
-            width: 300,
-            height: 50,
-            config: {
-              label: "Customer Name",
-              required: true,
-              key: "customer_name"
-            }
-          },
-          {
-            id: "textarea-1",
-            type: "textarea",
-            x: 20,
-            y: 80,
-            width: 300,
-            height: 100,
-            config: {
-              label: "Additional Notes",
-              required: false,
-              key: "notes"
-            }
-          }
-        ],
-        version: 1,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const [form] = await db.select()
+        .from(enhancedForms)
+        .where(eq(enhancedForms.id, parseInt(id)));
       
-      res.json(mockForm);
+      if (!form) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+      
+      res.json(form);
     } catch (error) {
       console.error("Enhanced forms get form error:", error);
       res.status(500).json({ error: "Failed to fetch form" });
@@ -1932,19 +1876,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Form name is required" });
       }
       
-      const mockForm = {
-        id: Date.now(),
+      const [newForm] = await db.insert(enhancedForms).values({
         name,
         description: description || "",
         categoryId: categoryId || null,
         tableName: tableName || null,
         layout: layout || [],
         version: 1,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      }).returning();
       
-      res.json(mockForm);
+      res.json(newForm);
     } catch (error) {
       console.error("Enhanced forms create form error:", error);
       res.status(500).json({ error: "Failed to create form" });
@@ -1956,19 +1897,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { name, description, categoryId, tableName, layout } = req.body;
       
-      const mockForm = {
-        id: parseInt(id),
-        name: name || "Updated Form",
-        description: description || "",
-        categoryId: categoryId || null,
-        tableName: tableName || null,
-        layout: layout || [],
-        version: 1,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const [updatedForm] = await db.update(enhancedForms)
+        .set({
+          name: name || "Updated Form",
+          description: description || "",
+          categoryId: categoryId || null,
+          tableName: tableName || null,
+          layout: layout || [],
+          updatedAt: new Date(),
+        })
+        .where(eq(enhancedForms.id, parseInt(id)))
+        .returning();
       
-      res.json(mockForm);
+      if (!updatedForm) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+      
+      res.json(updatedForm);
     } catch (error) {
       console.error("Enhanced forms update form error:", error);
       res.status(500).json({ error: "Failed to update form" });
@@ -1978,6 +1923,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/enhanced-forms/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      
+      const [deletedForm] = await db.delete(enhancedForms)
+        .where(eq(enhancedForms.id, parseInt(id)))
+        .returning();
+      
+      if (!deletedForm) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+      
       res.json({ success: true, id: parseInt(id) });
     } catch (error) {
       console.error("Enhanced forms delete form error:", error);

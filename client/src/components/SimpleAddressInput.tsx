@@ -35,6 +35,9 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     setIsLoading(true);
     try {
       const url = `/api/address/autocomplete?query=${encodeURIComponent(q)}`;
+      console.log('Fetching address suggestions for:', q);
+      console.log('URL:', url);
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -43,11 +46,17 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
         credentials: 'include'
       });
       
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('HTTP error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Address suggestions received:', data);
       setSuggestions(data);
       setShowSuggestions(data.length > 0);
       setSelectedIndex(-1);
@@ -55,7 +64,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       console.error('Address autocomplete error:', error);
       toast({
         title: 'Address lookup failed',
-        description: 'Unable to fetch address suggestions',
+        description: `Unable to fetch address suggestions: ${error.message}`,
         variant: 'destructive',
       });
     } finally {

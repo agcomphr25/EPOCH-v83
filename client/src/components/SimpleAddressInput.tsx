@@ -34,20 +34,39 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     
     setIsLoading(true);
     try {
-      const url = `/api/address/autocomplete?query=${encodeURIComponent(q)}`;
+      // Try relative path first (for local development)
+      let url = `/api/address/autocomplete?query=${encodeURIComponent(q)}`;
       console.log('Fetching address suggestions for:', q);
-      console.log('URL:', url);
+      console.log('Trying relative URL:', url);
       
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include'
       });
       
+      // If relative path fails, try absolute path (for deployment)
+      if (!response.ok && response.status === 404) {
+        const baseUrl = window.location.origin;
+        url = `${baseUrl}/api/address/autocomplete?query=${encodeURIComponent(q)}`;
+        console.log('Relative path failed, trying absolute URL:', url);
+        
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          credentials: 'include'
+        });
+      }
+      
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
+      console.log('Final URL used:', url);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -57,9 +76,15 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
       
       const data = await response.json();
       console.log('Address suggestions received:', data);
-      setSuggestions(data);
-      setShowSuggestions(data.length > 0);
-      setSelectedIndex(-1);
+      
+      if (Array.isArray(data)) {
+        setSuggestions(data);
+        setShowSuggestions(data.length > 0);
+        setSelectedIndex(-1);
+      } else {
+        console.error('Unexpected response format:', data);
+        throw new Error('Invalid response format from server');
+      }
     } catch (error) {
       console.error('Address autocomplete error:', error);
       toast({
@@ -67,6 +92,8 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
         description: `Unable to fetch address suggestions: ${error.message}`,
         variant: 'destructive',
       });
+      setSuggestions([]);
+      setShowSuggestions(false);
     } finally {
       setIsLoading(false);
     }

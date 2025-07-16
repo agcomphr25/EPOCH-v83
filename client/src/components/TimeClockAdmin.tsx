@@ -358,6 +358,7 @@ function TimeEntryForm({ employees, initialData, onSubmit, isLoading }: TimeEntr
   const [formData, setFormData] = useState({
     employeeId: initialData?.employeeId || '',
     date: initialData?.date || new Date().toISOString().split('T')[0],
+    currentDate: new Date().toISOString().split('T')[0],
     clockIn: toLocalDateTimeString(initialData?.clockIn),
     clockOut: toLocalDateTimeString(initialData?.clockOut)
   });
@@ -400,6 +401,17 @@ function TimeEntryForm({ employees, initialData, onSubmit, isLoading }: TimeEntr
           type="date"
           value={formData.date}
           onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="currentDate">Current Date</Label>
+        <Input
+          id="currentDate"
+          type="date"
+          value={formData.currentDate}
+          onChange={(e) => setFormData(prev => ({ ...prev, currentDate: e.target.value }))}
           required
         />
       </div>

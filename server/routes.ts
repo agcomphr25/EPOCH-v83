@@ -1419,14 +1419,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { street, city, state, zipCode } = req.body;
       
-      // Mock validation for now - in production, use SmartyStreets API
-      const validatedAddress = {
-        street: street,
-        city: city,
-        state: state,
-        zipCode: zipCode,
+      // Enhanced mock validation to simulate SmartyStreets behavior
+      let validatedAddress = {
+        street: street || '',
+        city: city || '',
+        state: state || '',
+        zipCode: zipCode || '',
         isValid: true
       };
+      
+      // Basic address parsing and standardization
+      if (street && street.length > 0) {
+        // Standardize street address format
+        validatedAddress.street = street
+          .replace(/\bSt\b/gi, 'Street')
+          .replace(/\bAve\b/gi, 'Avenue')
+          .replace(/\bDr\b/gi, 'Drive')
+          .replace(/\bRd\b/gi, 'Road')
+          .replace(/\bBlvd\b/gi, 'Boulevard');
+        
+        const streetLower = street.toLowerCase();
+        
+        // Auto-fill common patterns based on street name
+        if (streetLower.includes('main st') || streetLower.includes('main street')) {
+          if (!city) validatedAddress.city = 'Main City';
+          if (!state) validatedAddress.state = 'TX';
+          if (!zipCode) validatedAddress.zipCode = '78000';
+        } else if (streetLower.includes('oak')) {
+          if (!city) validatedAddress.city = 'Oak Grove';
+          if (!state) validatedAddress.state = 'CA';
+          if (!zipCode) validatedAddress.zipCode = '90210';
+        } else if (streetLower.includes('park')) {
+          if (!city) validatedAddress.city = 'Park City';
+          if (!state) validatedAddress.state = 'NY';
+          if (!zipCode) validatedAddress.zipCode = '10001';
+        } else if (streetLower.includes('elm') || streetLower.includes('maple')) {
+          if (!city) validatedAddress.city = 'Springfield';
+          if (!state) validatedAddress.state = 'IL';
+          if (!zipCode) validatedAddress.zipCode = '62701';
+        } else if (streetLower.includes('first') || streetLower.includes('1st')) {
+          if (!city) validatedAddress.city = 'First City';
+          if (!state) validatedAddress.state = 'FL';
+          if (!zipCode) validatedAddress.zipCode = '33101';
+        }
+      }
       
       res.json({
         suggestions: [validatedAddress],

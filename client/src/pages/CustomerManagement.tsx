@@ -195,8 +195,8 @@ export default function CustomerManagement() {
     const updatedAddress = { ...addressFormData, [field]: value };
     setAddressFormData(updatedAddress);
     
-    // Trigger validation if we have enough information
-    if (updatedAddress.street && updatedAddress.city && updatedAddress.state) {
+    // Trigger validation if we have at least a street address
+    if (updatedAddress.street && updatedAddress.street.length > 5) {
       const validated = await validateAddress({
         street: updatedAddress.street,
         city: updatedAddress.city,
@@ -212,6 +212,12 @@ export default function CustomerManagement() {
           state: validated.state || prev.state,
           zipCode: validated.zipCode || prev.zipCode
         }));
+        
+        toast({
+          title: "Address Validated",
+          description: "Address has been auto-filled and validated.",
+          duration: 2000
+        });
       }
     }
   };

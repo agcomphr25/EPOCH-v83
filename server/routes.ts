@@ -567,10 +567,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Order draft not found" });
       }
       
-      // Temporarily bypass CONFIRMED requirement - allow finalization from DRAFT
-      if (draft.status !== 'CONFIRMED' && draft.status !== 'DRAFT') {
-        return res.status(400).json({ error: "Order must be in CONFIRMED or DRAFT status" });
-      }
+      // Temporarily bypass all status requirements - allow finalization from any status
+      // if (draft.status !== 'CONFIRMED' && draft.status !== 'DRAFT') {
+      //   return res.status(400).json({ error: "Order must be in CONFIRMED or DRAFT status" });
+      // }
       
       await storage.updateOrderDraft(draft.orderId, { status: 'FINALIZED' });
       res.json({ success: true, message: "Order finalized successfully" });

@@ -31,6 +31,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type Customer = {
   id: number;
@@ -45,6 +46,21 @@ type Customer = {
   updatedAt: string;
 };
 
+type CustomerAddress = {
+  id: number;
+  customerId: string;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  type: 'shipping' | 'billing' | 'both';
+  isDefault: boolean;
+  isValidated: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CustomerFormData = {
   name: string;
   email: string;
@@ -53,6 +69,17 @@ type CustomerFormData = {
   customerType: string;
   notes: string;
   isActive: boolean;
+};
+
+type AddressFormData = {
+  customerId: string;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  type: 'shipping' | 'billing' | 'both';
+  isDefault: boolean;
 };
 
 const initialFormData: CustomerFormData = {
@@ -80,11 +107,31 @@ export default function CustomerManagement() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [selectedCustomers, setSelectedCustomers] = useState<number[]>([]);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
+  const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<CustomerAddress | null>(null);
+  const [addressFormData, setAddressFormData] = useState<AddressFormData>({
+    customerId: '',
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States',
+    type: 'shipping',
+    isDefault: false,
+  });
 
   // Fetch customers
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
+  });
+
+  // Fetch addresses for selected customer
+  const { data: addresses = [], isLoading: addressesLoading } = useQuery<CustomerAddress[]>({
+    queryKey: ['/api/addresses', selectedCustomer?.id],
+    enabled: !!selectedCustomer?.id,
+    queryFn: () => apiRequest(`/api/addresses?customerId=${selectedCustomer?.id}`),
   });
 
   // Filter customers based on search and status
@@ -167,6 +214,73 @@ export default function CustomerManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete customer",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Address mutations
+  const createAddressMutation = useMutation({
+    mutationFn: (data: AddressFormData) => apiRequest('/api/addresses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
+      setIsAddressDialogOpen(false);
+      resetAddressForm();
+      toast({
+        title: "Success",
+        description: "Address created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create address",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateAddressMutation = useMutation({
+    mutationFn: (data: AddressFormData & { id: number }) => apiRequest(`/api/addresses/${data.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
+      setIsEditAddressDialogOpen(false);
+      resetAddressForm();
+      toast({
+        title: "Success",
+        description: "Address updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update address",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/addresses/${id}`, {
+      method: 'DELETE',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
+      toast({
+        title: "Success",
+        description: "Address deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete address",
         variant: "destructive",
       });
     },
@@ -264,6 +378,72 @@ export default function CustomerManagement() {
     } else {
       setSelectedCustomers(filteredCustomers.map((c: Customer) => c.id));
     }
+  };
+
+  // Address management functions
+  const resetAddressForm = () => {
+    setAddressFormData({
+      customerId: '',
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'United States',
+      type: 'shipping',
+      isDefault: false,
+    });
+    setSelectedAddress(null);
+  };
+
+  const handleCreateAddress = () => {
+    if (!selectedCustomer) return;
+    
+    const addressData = {
+      ...addressFormData,
+      customerId: selectedCustomer.id.toString(),
+    };
+    
+    createAddressMutation.mutate(addressData);
+  };
+
+  const handleUpdateAddress = () => {
+    if (!selectedAddress) return;
+    
+    const addressData = {
+      ...addressFormData,
+      id: selectedAddress.id,
+    };
+    
+    updateAddressMutation.mutate(addressData);
+  };
+
+  const handleEditAddress = (address: CustomerAddress) => {
+    setSelectedAddress(address);
+    setAddressFormData({
+      customerId: address.customerId,
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      zipCode: address.zipCode,
+      country: address.country,
+      type: address.type,
+      isDefault: address.isDefault,
+    });
+    setIsEditAddressDialogOpen(true);
+  };
+
+  const handleDeleteAddress = (id: number) => {
+    deleteAddressMutation.mutate(id);
+  };
+
+  const handleAddAddress = () => {
+    if (!selectedCustomer) return;
+    
+    setAddressFormData({
+      ...addressFormData,
+      customerId: selectedCustomer.id.toString(),
+    });
+    setIsAddressDialogOpen(true);
   };
 
   const handleDeleteCustomer = (customer: Customer) => {
@@ -660,65 +840,135 @@ export default function CustomerManagement() {
 
       {/* View Customer Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
           </DialogHeader>
           {selectedCustomer && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Name</Label>
-                  <p className="text-sm mt-1">{selectedCustomer.name}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <div className="mt-1">
-                    <Badge variant={selectedCustomer.isActive ? "default" : "secondary"}>
-                      {selectedCustomer.isActive ? "Active" : "Inactive"}
-                    </Badge>
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="details">Customer Info</TabsTrigger>
+                <TabsTrigger value="addresses">Addresses</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="details" className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Name</Label>
+                    <p className="text-sm mt-1">{selectedCustomer.name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <div className="mt-1">
+                      <Badge variant={selectedCustomer.isActive ? "default" : "secondary"}>
+                        {selectedCustomer.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Type</Label>
+                    <p className="text-sm mt-1 capitalize">{selectedCustomer.customerType}</p>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium">Type</Label>
-                  <p className="text-sm mt-1 capitalize">{selectedCustomer.customerType}</p>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Email</Label>
+                    <p className="text-sm mt-1">{selectedCustomer.email || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Phone</Label>
+                    <p className="text-sm mt-1">{selectedCustomer.phone || 'Not provided'}</p>
+                  </div>
                 </div>
-              </div>
+                
+                <div>
+                  <Label className="text-sm font-medium">Company</Label>
+                  <p className="text-sm mt-1">{selectedCustomer.company || 'Not provided'}</p>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium">Notes</Label>
+                  <p className="text-sm mt-1">{selectedCustomer.notes || 'No notes'}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Created</Label>
+                    <p className="text-sm mt-1">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Last Updated</Label>
+                    <p className="text-sm mt-1">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </TabsContent>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Email</Label>
-                  <p className="text-sm mt-1">{selectedCustomer.email || 'Not provided'}</p>
+              <TabsContent value="addresses" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Customer Addresses</h3>
+                  <Button size="sm" onClick={handleAddAddress}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Address
+                  </Button>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium">Phone</Label>
-                  <p className="text-sm mt-1">{selectedCustomer.phone || 'Not provided'}</p>
-                </div>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Company</Label>
-                <p className="text-sm mt-1">{selectedCustomer.company || 'Not provided'}</p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Notes</Label>
-                <p className="text-sm mt-1">{selectedCustomer.notes || 'No notes'}</p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Created</Label>
-                  <p className="text-sm mt-1">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Last Updated</Label>
-                  <p className="text-sm mt-1">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</p>
-                </div>
-              </div>
-            </div>
+                
+                {addressesLoading ? (
+                  <div className="text-center py-4">Loading addresses...</div>
+                ) : addresses.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>No addresses found</p>
+                    <p className="text-sm">Add an address to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {addresses.map((address) => (
+                      <Card key={address.id} className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant={address.type === 'shipping' ? 'default' : address.type === 'billing' ? 'secondary' : 'outline'}>
+                                {address.type}
+                              </Badge>
+                              {address.isDefault && (
+                                <Badge variant="outline" className="text-xs">Default</Badge>
+                              )}
+                              {address.isValidated && (
+                                <Badge variant="default" className="text-xs bg-green-100 text-green-800">Validated</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium">{address.street}</p>
+                            <p className="text-sm text-gray-600">
+                              {address.city}, {address.state} {address.zipCode}
+                            </p>
+                            <p className="text-sm text-gray-600">{address.country}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditAddress(address)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteAddress(address.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           )}
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Close
             </Button>
@@ -730,6 +980,220 @@ export default function CustomerManagement() {
             >
               <Edit className="h-4 w-4 mr-2" />
               Edit Customer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Address Dialog */}
+      <Dialog open={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Address</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="street" className="text-right">Street</Label>
+              <Input
+                id="street"
+                value={addressFormData.street}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, street: e.target.value }))}
+                className="col-span-3"
+                placeholder="123 Main St"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city" className="text-right">City</Label>
+              <Input
+                id="city"
+                value={addressFormData.city}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, city: e.target.value }))}
+                className="col-span-3"
+                placeholder="San Francisco"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="state" className="text-right">State</Label>
+              <Input
+                id="state"
+                value={addressFormData.state}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, state: e.target.value }))}
+                className="col-span-3"
+                placeholder="CA"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="zipCode" className="text-right">ZIP Code</Label>
+              <Input
+                id="zipCode"
+                value={addressFormData.zipCode}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                className="col-span-3"
+                placeholder="94101"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="country" className="text-right">Country</Label>
+              <Input
+                id="country"
+                value={addressFormData.country}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
+                className="col-span-3"
+                placeholder="United States"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="addressType" className="text-right">Type</Label>
+              <Select 
+                value={addressFormData.type} 
+                onValueChange={(value: 'shipping' | 'billing' | 'both') => setAddressFormData(prev => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select address type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="shipping">Shipping</SelectItem>
+                  <SelectItem value="billing">Billing</SelectItem>
+                  <SelectItem value="both">Both</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="isDefault" className="text-right">Default</Label>
+              <div className="col-span-3">
+                <input
+                  type="checkbox"
+                  id="isDefault"
+                  checked={addressFormData.isDefault}
+                  onChange={(e) => setAddressFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="isDefault" className="ml-2 text-sm">Make this the default address</Label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsAddressDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateAddress}
+              disabled={createAddressMutation.isPending}
+            >
+              {createAddressMutation.isPending ? 'Creating...' : 'Create Address'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Address Dialog */}
+      <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Address</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editStreet" className="text-right">Street</Label>
+              <Input
+                id="editStreet"
+                value={addressFormData.street}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, street: e.target.value }))}
+                className="col-span-3"
+                placeholder="123 Main St"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editCity" className="text-right">City</Label>
+              <Input
+                id="editCity"
+                value={addressFormData.city}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, city: e.target.value }))}
+                className="col-span-3"
+                placeholder="San Francisco"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editState" className="text-right">State</Label>
+              <Input
+                id="editState"
+                value={addressFormData.state}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, state: e.target.value }))}
+                className="col-span-3"
+                placeholder="CA"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editZipCode" className="text-right">ZIP Code</Label>
+              <Input
+                id="editZipCode"
+                value={addressFormData.zipCode}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                className="col-span-3"
+                placeholder="94101"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editCountry" className="text-right">Country</Label>
+              <Input
+                id="editCountry"
+                value={addressFormData.country}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
+                className="col-span-3"
+                placeholder="United States"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editAddressType" className="text-right">Type</Label>
+              <Select 
+                value={addressFormData.type} 
+                onValueChange={(value: 'shipping' | 'billing' | 'both') => setAddressFormData(prev => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select address type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="shipping">Shipping</SelectItem>
+                  <SelectItem value="billing">Billing</SelectItem>
+                  <SelectItem value="both">Both</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editIsDefault" className="text-right">Default</Label>
+              <div className="col-span-3">
+                <input
+                  type="checkbox"
+                  id="editIsDefault"
+                  checked={addressFormData.isDefault}
+                  onChange={(e) => setAddressFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="editIsDefault" className="ml-2 text-sm">Make this the default address</Label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsEditAddressDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateAddress}
+              disabled={updateAddressMutation.isPending}
+            >
+              {updateAddressMutation.isPending ? 'Updating...' : 'Update Address'}
             </Button>
           </div>
         </DialogContent>

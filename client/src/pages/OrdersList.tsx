@@ -42,7 +42,7 @@ interface Customer {
 }
 
 export default function OrdersList() {
-  console.log('OrdersList component rendering');
+  console.log('OrdersList component rendering - with CSV export');
   
   const handleExportCSV = async () => {
     try {
@@ -146,12 +146,13 @@ export default function OrdersList() {
               onClick={handleExportCSV}
               variant="outline" 
               className="flex items-center gap-2"
+              data-testid="export-csv-button"
             >
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
             <Link href="/order-entry">
-              <Button className="flex items-center gap-2">
+              <Button className="flex items-center gap-2" data-testid="create-order-button">
                 <FileText className="h-4 w-4" />
                 Create New Order
               </Button>

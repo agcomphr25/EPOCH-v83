@@ -101,26 +101,39 @@ export default function InventoryManager() {
 
     try {
       const csvData = await importFile.text();
+      console.log('CSV data to import:', csvData);
+      
       const response = await apiRequest('/api/inventory/import/csv', {
         method: 'POST',
         body: { csvData }
       });
 
+      console.log('Import response:', response);
+
       if (response.success) {
-        toast.success(`Successfully imported ${response.importedCount} items`);
-        if (response.errors.length > 0) {
+        const message = `Successfully imported ${response.importedCount} items`;
+        toast.success(message);
+        
+        if (response.errors && response.errors.length > 0) {
           console.warn('Import errors:', response.errors);
-          toast.error(`${response.errors.length} rows had errors - check console for details`);
+          const errorMessage = response.errors.slice(0, 3).join(', ') + (response.errors.length > 3 ? '...' : '');
+          toast.error(`${response.errors.length} rows had errors: ${errorMessage}`);
         }
+        
         setIsImportDialogOpen(false);
         setImportFile(null);
+        // Reset file input
+        const fileInput = document.getElementById('csvFile') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+        }
         queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       } else {
         toast.error('Import failed');
       }
     } catch (error) {
       console.error('Import error:', error);
-      toast.error('Failed to import CSV file');
+      toast.error(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -497,10 +510,18 @@ export default function InventoryManager() {
               Expected columns: AG Part#, Name, Category, Source, Supplier Part #, Cost per, Order Date, Dept., Secondary Source, Notes
             </div>
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setIsImportDialogOpen(false);
+                setImportFile(null);
+                const fileInput = document.getElementById('csvFile') as HTMLInputElement;
+                if (fileInput) {
+                  fileInput.value = '';
+                }
+              }}>
                 Cancel
               </Button>
               <Button onClick={handleImportCSV} disabled={!importFile}>
+                <Upload className="h-4 w-4 mr-2" />
                 Import
               </Button>
             </div>

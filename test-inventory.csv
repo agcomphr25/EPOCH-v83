@@ -1,0 +1,3 @@
+AG Part#,Name,Category,Source,Supplier Part #,Cost per,Order Date,Dept.,Secondary Source,Notes
+TEST001,Test Item 1,Components,Test Source,SUP001,25.50,2024-01-01,Production,Secondary Source 1,Test notes for item 1
+TEST002,Test Item 2,Raw Materials,Source 2,SUP002,15.75,2024-01-02,Assembly,Secondary Source 2,Test notes for item 2

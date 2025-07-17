@@ -756,7 +756,9 @@ export default function CustomerManagement() {
                   const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
                   
                   // Debug log to see what's happening
-                  console.log('Customer:', customer.id, 'Addresses found:', customerAddresses.length, 'All addresses:', addressesData?.length);
+                  if (customerAddresses.length > 0) {
+                    console.log('Customer with address:', customer.id, customer.name, 'Addresses found:', customerAddresses.length);
+                  }
                   
                   return (
                     <TableRow key={customer.id}>

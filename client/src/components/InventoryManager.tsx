@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertTriangle, Package, Upload, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
 
@@ -50,6 +50,71 @@ export default function InventoryManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Export CSV functionality
+  const handleExportCSV = async () => {
+    try {
+      const response = await fetch('/api/inventory/export/csv');
+      if (!response.ok) {
+        throw new Error('Failed to export CSV');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Inventory exported successfully');
+    } catch (error) {
+      console.error('CSV export error:', error);
+      toast.error('Failed to export inventory');
+    }
+  };
+
+  // Import CSV functionality
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    setIsImporting(true);
+    
+    try {
+      const csvData = await file.text();
+      const response = await apiRequest('/api/inventory/import/csv', {
+        method: 'POST',
+        body: { csvData }
+      });
+
+      if (response.errors && response.errors.length > 0) {
+        toast.error(`Import completed with ${response.errors.length} errors. Check console for details.`);
+        console.error('Import errors:', response.errors);
+      } else {
+        toast.success(`Import successful! ${response.imported} items imported, ${response.updated} items updated.`);
+      }
+      
+      // Refresh the inventory list
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import inventory');
+    } finally {
+      setIsImporting(false);
+      // Reset the input
+      event.target.value = '';
+    }
+  };
   
   const [formData, setFormData] = useState<InventoryFormData>({
     code: '',
@@ -315,25 +380,49 @@ export default function InventoryManager() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Inventory Management</h2>
-        <Dialog open={isCreateOpen} onOpenChange={(open) => {
-          setIsCreateOpen(open);
-          if (open) {
-            resetForm();
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
+        <div className="flex items-center gap-2">
+          {/* Export Button */}
+          <Button variant="outline" onClick={handleExportCSV} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          
+          {/* Import Button */}
+          <div className="relative">
+            <Button variant="outline" disabled={isImporting} className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              {isImporting ? 'Importing...' : 'Import CSV'}
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Inventory Item</DialogTitle>
-            </DialogHeader>
-            <FormContent />
-          </DialogContent>
-        </Dialog>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleImportCSV}
+              disabled={isImporting}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </div>
+          
+          {/* Add Item Button */}
+          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (open) {
+              resetForm();
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Inventory Item</DialogTitle>
+              </DialogHeader>
+              <FormContent />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>

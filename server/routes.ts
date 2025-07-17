@@ -823,6 +823,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Inventory CSV export
+  app.get("/api/inventory/export/csv", async (req, res) => {
+    try {
+      const items = await storage.getAllInventoryItems();
+      
+      const csvHeader = "Code,Name,Description,Category,On Hand,Committed,Available,Reorder Point,Active,Created At,Updated At\n";
+      const csvRows = items.map(item => {
+        const available = (item.onHand || 0) - (item.committed || 0);
+        return [
+          item.code || '',
+          item.name || '',
+          (item.description || '').replace(/"/g, '""'),
+          item.category || '',
+          item.onHand || 0,
+          item.committed || 0,
+          available,
+          item.reorderPoint || 0,
+          item.isActive ? 'Yes' : 'No',
+          item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
+          item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : ''
+        ].map(field => typeof field === 'string' ? `"${field}"` : field).join(',');
+      }).join('\n');
+
+      const csvContent = csvHeader + csvRows;
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="inventory_export.csv"');
+      res.send(csvContent);
+    } catch (error) {
+      console.error("Export inventory CSV error:", error);
+      res.status(500).json({ error: "Failed to export inventory CSV" });
+    }
+  });
+
+  // Inventory CSV import
+  app.post("/api/inventory/import/csv", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+      
+      if (!csvData || typeof csvData !== 'string') {
+        return res.status(400).json({ error: "CSV data is required" });
+      }
+
+      const lines = csvData.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must have header and at least one data row" });
+      }
+
+      const header = lines[0].split(',').map(col => col.trim().replace(/"/g, ''));
+      const results = {
+        imported: 0,
+        updated: 0,
+        errors: []
+      };
+
+      // Process each row
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values = lines[i].split(',').map(val => val.trim().replace(/"/g, ''));
+          
+          if (values.length < 4) {
+            results.errors.push(`Row ${i + 1}: Insufficient columns`);
+            continue;
+          }
+
+          const itemData = {
+            code: values[0],
+            name: values[1],
+            description: values[2] || '',
+            category: values[3] || '',
+            onHand: parseInt(values[4]) || 0,
+            committed: parseInt(values[5]) || 0,
+            reorderPoint: parseInt(values[7]) || 0,
+            isActive: values[8] === 'No' ? false : true
+          };
+
+          // Validate required fields
+          if (!itemData.code || !itemData.name) {
+            results.errors.push(`Row ${i + 1}: Code and name are required`);
+            continue;
+          }
+
+          // Check if item exists
+          const existingItem = await storage.getInventoryItemByCode(itemData.code);
+          
+          if (existingItem) {
+            // Update existing item
+            await storage.updateInventoryItem(existingItem.id, itemData);
+            results.updated++;
+          } else {
+            // Create new item
+            await storage.createInventoryItem(itemData);
+            results.imported++;
+          }
+        } catch (error) {
+          results.errors.push(`Row ${i + 1}: ${error.message}`);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("Import inventory CSV error:", error);
+      res.status(500).json({ error: "Failed to import inventory CSV" });
+    }
+  });
+
   // Employee routes
   app.get("/api/employees", async (req, res) => {
     try {

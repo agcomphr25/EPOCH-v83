@@ -199,6 +199,7 @@ export interface IStorage {
   deleteCustomer(id: number): Promise<void>;
 
   // Module 8: Customer Addresses CRUD
+  getAllAddresses(): Promise<CustomerAddress[]>;
   getCustomerAddresses(customerId: string): Promise<CustomerAddress[]>;
   createCustomerAddress(data: InsertCustomerAddress): Promise<CustomerAddress>;
   updateCustomerAddress(id: number, data: Partial<InsertCustomerAddress>): Promise<CustomerAddress>;
@@ -1100,6 +1101,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 8: Customer Addresses CRUD
+  async getAllAddresses(): Promise<CustomerAddress[]> {
+    return await db
+      .select()
+      .from(customerAddresses)
+      .orderBy(customerAddresses.customerId, customerAddresses.isDefault, customerAddresses.id);
+  }
+
   async getCustomerAddresses(customerId: string): Promise<CustomerAddress[]> {
     return await db
       .select()

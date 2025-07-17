@@ -1350,6 +1350,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/addresses/all", async (req, res) => {
+    try {
+      const addresses = await storage.getAllAddresses();
+      res.json(addresses);
+    } catch (error) {
+      console.error("Get all addresses error:", error);
+      res.status(500).json({ error: "Failed to get all addresses" });
+    }
+  });
+
   app.post("/api/addresses", async (req, res) => {
     try {
       console.log("Received address data:", req.body);

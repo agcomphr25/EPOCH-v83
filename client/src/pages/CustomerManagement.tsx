@@ -130,19 +130,7 @@ export default function CustomerManagement() {
   // Fetch all addresses for table display
   const { data: addressesData = [] } = useQuery<CustomerAddress[]>({
     queryKey: ['/api/addresses/all'],
-    queryFn: async () => {
-      const allAddresses = [];
-      for (const customer of customers) {
-        try {
-          const addresses = await apiRequest(`/api/addresses?customerId=${customer.id}`);
-          allAddresses.push(...addresses);
-        } catch (error) {
-          console.error(`Failed to fetch addresses for customer ${customer.id}:`, error);
-        }
-      }
-      return allAddresses;
-    },
-    enabled: customers.length > 0,
+    queryFn: () => apiRequest('/api/addresses/all'),
   });
 
   // Fetch addresses for selected customer

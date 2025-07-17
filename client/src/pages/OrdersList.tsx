@@ -138,7 +138,7 @@ export default function OrdersList() {
               All Orders
             </h1>
             <p className="text-gray-600 mt-1">
-              View and manage all created orders
+              View and manage all created orders - with CSV export
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -36,6 +36,7 @@ import EnhancedFormsPage from "./pages/EnhancedFormsPage";
 import EnhancedReportsPage from "./pages/EnhancedReportsPage";
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
+import CustomerManagement from "./pages/CustomerManagement";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
@@ -77,6 +78,7 @@ function App() {
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
                   <Route path="/forms/render/:formId" component={FormRendererPage} />
                   <Route path="/documentation" component={DocumentationPageNew} />
+                  <Route path="/customers" component={CustomerManagement} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

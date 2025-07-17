@@ -39,6 +39,12 @@ export default function Navigation() {
       label: 'Module 8 Test',
       icon: TestTube,
       description: 'Test API integrations and communications'
+    },
+    {
+      path: '/customers',
+      label: 'Customer Management',
+      icon: Users,
+      description: 'Manage customer database'
     }
     // Documentation button disabled per user request - was causing problems
     // {

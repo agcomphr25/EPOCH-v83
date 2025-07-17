@@ -21,6 +21,7 @@ const persistentDiscountFormSchema = insertPersistentDiscountSchema.extend({
   customerTypeId: z.number().min(1, "Customer type is required"),
   name: z.string().min(1, "Name is required"),
   percent: z.number().min(0).max(100, "Percent must be between 0 and 100"),
+  appliesTo: z.string().default("stock_model"),
 });
 
 type PersistentDiscountFormData = z.infer<typeof persistentDiscountFormSchema>;
@@ -93,6 +94,7 @@ export default function PersistentDiscountManager() {
       percent: 0,
       fixedAmount: 0,
       description: "",
+      appliesTo: "stock_model",
       isActive: 1,
     },
   });
@@ -105,6 +107,7 @@ export default function PersistentDiscountManager() {
       percent: 0,
       fixedAmount: 0,
       description: "",
+      appliesTo: "stock_model",
       isActive: 1,
     },
   });
@@ -127,6 +130,7 @@ export default function PersistentDiscountManager() {
       percent: discount.percent || 0,
       fixedAmount: discount.fixedAmount || 0,
       description: discount.description || "",
+      appliesTo: discount.appliesTo || "stock_model",
       isActive: discount.isActive,
     });
   };

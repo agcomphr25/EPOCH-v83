@@ -246,6 +246,28 @@ export default function PersistentDiscountManager() {
 
                   <FormField
                     control={createForm.control}
+                    name="appliesTo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Applies To</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select what this discount applies to" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="stock_model">Stock Model Only</SelectItem>
+                            <SelectItem value="total_order">Total Order</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createForm.control}
                     name="isActive"
                     render={({ field }) => (
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
@@ -409,6 +431,28 @@ export default function PersistentDiscountManager() {
                         placeholder="e.g., 20% off for select gunbuilders" 
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="appliesTo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Applies To</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select what this discount applies to" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="stock_model">Stock Model Only</SelectItem>
+                        <SelectItem value="total_order">Total Order</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

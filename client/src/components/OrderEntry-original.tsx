@@ -339,8 +339,12 @@ export default function OrderEntry() {
         const discount = persistentDiscounts.find(d => d.id === discountId);
         if (discount) {
           if (discount.percent) {
-            // Percentage discount
-            discountAmount = (subtotal * discount.percent) / 100;
+            // Percentage discount - check if applies to stock model only or total order
+            if (discount.appliesTo === 'stock_model') {
+              discountAmount = (basePrice * discount.percent) / 100;
+            } else {
+              discountAmount = (subtotal * discount.percent) / 100;
+            }
           } else if (discount.fixedAmount) {
             // Fixed amount discount
             discountAmount = discount.fixedAmount;

@@ -39,6 +39,7 @@ export const persistentDiscounts = pgTable("persistent_discounts", {
   percent: integer("percent"), // null for fixed amount discounts
   fixedAmount: integer("fixed_amount"), // amount in cents for fixed discounts like MIL/LEO
   description: text("description"), // Optional description for the discount tier
+  appliesTo: text("applies_to").default("stock_model").notNull(), // "total" or "stock_model"
   isActive: integer("is_active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

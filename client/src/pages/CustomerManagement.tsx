@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Users, 
   Search, 
@@ -24,7 +25,10 @@ import {
   Download,
   Upload,
   UserCheck,
-  UserX
+  UserX,
+  AlertCircle,
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -72,6 +76,10 @@ export default function CustomerManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [selectedCustomers, setSelectedCustomers] = useState<number[]>([]);
+  const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
 
   // Fetch customers
   const { data: customers = [], isLoading } = useQuery({
@@ -101,7 +109,7 @@ export default function CustomerManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setIsCreateDialogOpen(false);
-      setFormData(initialFormData);
+      resetForm();
       toast({
         title: "Success",
         description: "Customer created successfully",
@@ -126,8 +134,7 @@ export default function CustomerManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setIsEditDialogOpen(false);
-      setSelectedCustomer(null);
-      setFormData(initialFormData);
+      resetForm();
       toast({
         title: "Success",
         description: "Customer updated successfully",
@@ -150,7 +157,7 @@ export default function CustomerManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setIsDeleteDialogOpen(false);
-      setSelectedCustomer(null);
+      resetForm();
       toast({
         title: "Success",
         description: "Customer deleted successfully",
@@ -165,11 +172,44 @@ export default function CustomerManagement() {
     },
   });
 
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.name.trim()) {
+      errors.name = "Customer name is required";
+    }
+    
+    if (formData.email && !isValidEmail(formData.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    
+    if (formData.phone && !isValidPhone(formData.phone)) {
+      errors.phone = "Please enter a valid phone number";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const isValidPhone = (phone: string): boolean => {
+    const phoneRegex = /^[\+]?[\d\s\-\(\)]{10,}$/;
+    return phoneRegex.test(phone);
+  };
+
   const handleCreateCustomer = () => {
+    if (!validateForm()) return;
+    
     createCustomerMutation.mutate(formData);
   };
 
   const handleUpdateCustomer = () => {
+    if (!validateForm()) return;
+    
     if (selectedCustomer) {
       updateCustomerMutation.mutate({
         id: selectedCustomer.id,
@@ -189,7 +229,41 @@ export default function CustomerManagement() {
       notes: customer.notes || '',
       isActive: customer.isActive,
     });
+    setFormErrors({});
     setIsEditDialogOpen(true);
+  };
+
+  const handleViewCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsViewDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setFormData(initialFormData);
+    setFormErrors({});
+    setSelectedCustomer(null);
+  };
+
+  const handleBulkAction = (action: 'activate' | 'deactivate' | 'delete') => {
+    setBulkAction(action);
+    // Here you would implement the bulk action logic
+    // For now, just showing the UI pattern
+  };
+
+  const toggleCustomerSelection = (customerId: number) => {
+    setSelectedCustomers(prev => 
+      prev.includes(customerId) 
+        ? prev.filter(id => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
+
+  const toggleAllCustomers = () => {
+    if (selectedCustomers.length === filteredCustomers.length) {
+      setSelectedCustomers([]);
+    } else {
+      setSelectedCustomers(filteredCustomers.map((c: Customer) => c.id));
+    }
   };
 
   const handleDeleteCustomer = (customer: Customer) => {
@@ -231,36 +305,51 @@ export default function CustomerManagement() {
     <div className="grid gap-4 py-4">
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="name" className="text-right">Name *</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-          className="col-span-3"
-          placeholder="Customer name"
-        />
+        <div className="col-span-3">
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            className={formErrors.name ? "border-red-500" : ""}
+            placeholder="Customer name"
+          />
+          {formErrors.name && (
+            <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="email" className="text-right">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          value={formData.email}
-          onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-          className="col-span-3"
-          placeholder="customer@example.com"
-        />
+        <div className="col-span-3">
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            className={formErrors.email ? "border-red-500" : ""}
+            placeholder="customer@example.com"
+          />
+          {formErrors.email && (
+            <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="phone" className="text-right">Phone</Label>
-        <Input
-          id="phone"
-          value={formData.phone}
-          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-          className="col-span-3"
-          placeholder="(555) 123-4567"
-        />
+        <div className="col-span-3">
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            className={formErrors.phone ? "border-red-500" : ""}
+            placeholder="(555) 123-4567"
+          />
+          {formErrors.phone && (
+            <p className="text-sm text-red-500 mt-1">{formErrors.phone}</p>
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-4 items-center gap-4">
@@ -327,6 +416,13 @@ export default function CustomerManagement() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Customer Management</h1>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers'] })}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
           <Button variant="outline" onClick={exportCustomers}>
             <Download className="h-4 w-4 mr-2" />
             Export CSV
@@ -510,7 +606,16 @@ export default function CustomerManagement() {
                         <Button 
                           variant="outline" 
                           size="sm"
+                          onClick={() => handleViewCustomer(customer)}
+                          title="View Customer Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
                           onClick={() => handleEditCustomer(customer)}
+                          title="Edit Customer"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -518,6 +623,7 @@ export default function CustomerManagement() {
                           variant="outline" 
                           size="sm"
                           onClick={() => handleDeleteCustomer(customer)}
+                          title="Delete Customer"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -547,6 +653,83 @@ export default function CustomerManagement() {
               disabled={updateCustomerMutation.isPending || !formData.name}
             >
               {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Customer Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Customer Details</DialogTitle>
+          </DialogHeader>
+          {selectedCustomer && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Name</Label>
+                  <p className="text-sm mt-1">{selectedCustomer.name}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Status</Label>
+                  <div className="mt-1">
+                    <Badge variant={selectedCustomer.isActive ? "default" : "secondary"}>
+                      {selectedCustomer.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Type</Label>
+                  <p className="text-sm mt-1 capitalize">{selectedCustomer.customerType}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Email</Label>
+                  <p className="text-sm mt-1">{selectedCustomer.email || 'Not provided'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Phone</Label>
+                  <p className="text-sm mt-1">{selectedCustomer.phone || 'Not provided'}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium">Company</Label>
+                <p className="text-sm mt-1">{selectedCustomer.company || 'Not provided'}</p>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium">Notes</Label>
+                <p className="text-sm mt-1">{selectedCustomer.notes || 'No notes'}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Created</Label>
+                  <p className="text-sm mt-1">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Last Updated</Label>
+                  <p className="text-sm mt-1">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Close
+            </Button>
+            <Button 
+              onClick={() => {
+                setIsViewDialogOpen(false);
+                if (selectedCustomer) handleEditCustomer(selectedCustomer);
+              }}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Customer
             </Button>
           </div>
         </DialogContent>

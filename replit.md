@@ -130,10 +130,11 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **Inventory Management**: Real-time stock tracking with barcode scanning
 
 ### Business Process Features
-- **Customer Management**: CRM with communication tracking
+- **Customer Management**: CRM with communication tracking and SmartyStreets address validation
 - **Enhanced Discount System**: Persistent and temporary discount management with targeted application (stock model vs total order)
 - **Employee Portal**: Time tracking, onboarding, and task management
 - **Reporting System**: Multi-format export capabilities (PDF, CSV, JSON)
+- **Address Management**: Real-time address autocomplete and validation via SmartyStreets API
 
 ### Technical Features
 - **Offline Capability**: PWA with service worker caching

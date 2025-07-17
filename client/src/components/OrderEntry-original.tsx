@@ -75,6 +75,7 @@ export default function OrderEntry() {
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
   const [shankLength, setShankLength] = useState('');
+  const [tikkaOption, setTikkaOption] = useState('');
 
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
@@ -798,6 +799,16 @@ export default function OrderEntry() {
                               onSelect={() => {
                                 setModelId(model.id);
                                 setModelOpen(false);
+                                
+                                // Auto-select tikka_proof_sendero for Tikka models
+                                const isTikka = model.name.toLowerCase().includes('tikka') || 
+                                              model.displayName.toLowerCase().includes('tikka');
+                                if (isTikka) {
+                                  setFeatures(prev => ({
+                                    ...prev,
+                                    'barrel_inlet': 'tikka_proof_sendero'
+                                  }));
+                                }
                               }}
                             >
                               {model.displayName}
@@ -825,6 +836,48 @@ export default function OrderEntry() {
                 </Select>
                 {errors.handedness && <p className="text-red-500 text-sm">{errors.handedness}</p>}
               </div>
+
+              {/* Tikka Options - Only show for Tikka models */}
+              {(() => {
+                const selectedModel = modelOptions.find(m => m.id === modelId);
+                const isTikka = selectedModel && 
+                  (selectedModel.name.toLowerCase().includes('tikka') || 
+                   selectedModel.displayName.toLowerCase().includes('tikka'));
+                
+                if (!isTikka) return null;
+                
+                return (
+                  <div className="space-y-2">
+                    <Label>Tikka Options</Label>
+                    <div className="flex space-x-4">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="tikka-set"
+                          name="tikka-option"
+                          value="set"
+                          checked={tikkaOption === 'set'}
+                          onChange={(e) => setTikkaOption(e.target.value)}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor="tikka-set">Set</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="tikka-loose"
+                          name="tikka-option"
+                          value="loose"
+                          checked={tikkaOption === 'loose'}
+                          onChange={(e) => setTikkaOption(e.target.value)}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor="tikka-loose">Loose</Label>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Dynamic Feature Inputs */}
               {featureDefs.map((featureDef) => (

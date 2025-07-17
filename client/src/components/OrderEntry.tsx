@@ -52,7 +52,6 @@ export default function OrderEntry() {
 
   const [modelOptions, setModelOptions] = useState<StockModel[]>([]);
   const [modelId, setModelId] = useState('');
-  console.log('Current modelId state:', modelId);
   const [modelOpen, setModelOpen] = useState(false);
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
@@ -575,10 +574,6 @@ export default function OrderEntry() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* DEBUG: Always visible test */}
-              <div className="bg-red-500 text-white p-4 text-center font-bold">
-                DEBUG: React is rendering. ModelId: {modelId || 'No model selected'}
-              </div>
               
               {/* Order ID, Date, Due Date */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

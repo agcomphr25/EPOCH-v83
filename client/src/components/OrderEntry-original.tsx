@@ -800,13 +800,14 @@ export default function OrderEntry() {
                                 setModelId(model.id);
                                 setModelOpen(false);
                                 
-                                // Auto-select tikka_proof_sendero for Tikka models
+                                // Auto-select tikka_proof_sendero and tikka_t3 for Tikka models
                                 const isTikka = model.name.toLowerCase().includes('tikka') || 
                                               model.displayName.toLowerCase().includes('tikka');
                                 if (isTikka) {
                                   setFeatures(prev => ({
                                     ...prev,
-                                    'barrel_inlet': 'tikka_proof_sendero'
+                                    'barrel_inlet': 'tikka_proof_sendero',
+                                    'bottom_metal': 'tikka_t3'
                                   }));
                                 }
                               }}

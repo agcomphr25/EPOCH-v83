@@ -15,31 +15,15 @@ export interface AddressData {
  */
 export async function autocompleteAddress(query: string): Promise<string[]> {
   try {
-    const url = `/api/address/autocomplete?query=${encodeURIComponent(query)}`;
-    console.log('Making API request to:', url);
-    
-    // Try direct fetch first
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include'
+    const response = await apiRequest('/api/autocomplete-address', {
+      method: 'POST',
+      body: { search: query }
     });
     
-    console.log('Response status:', response.status);
-    console.log('Response ok:', response.ok);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('API response:', data);
-    return data;
+    console.log('SmartyStreets autocomplete response:', response);
+    return response.suggestions || [];
   } catch (error) {
     console.error('Error fetching address autocomplete:', error);
-    console.error('Error details:', error);
     throw new Error('Failed to fetch address suggestions');
   }
 }
@@ -51,13 +35,34 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
  */
 export async function validateAddress(address: AddressData): Promise<AddressData> {
   try {
-    const response = await apiRequest('/api/address/validate', {
+    const response = await apiRequest('/api/validate-address', {
       method: 'POST',
-      body: { address }
+      body: {
+        street: address.street,
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode
+      }
     });
-    return response;
+    
+    console.log('SmartyStreets validation response:', response);
+    
+    if (response.isValid && response.suggestions && response.suggestions.length > 0) {
+      const validatedAddress = response.suggestions[0];
+      return {
+        street: validatedAddress.street,
+        city: validatedAddress.city,
+        state: validatedAddress.state,
+        zipCode: validatedAddress.zipCode,
+        country: address.country || 'United States'
+      };
+    }
+    
+    // If validation fails, return the original address
+    return address;
   } catch (error) {
     console.error('Error validating address:', error);
-    throw new Error('Address validation failed');
+    // Return original address on error
+    return address;
   }
 }

@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AddressInput from '@/components/AddressInput';
+import { type AddressData } from '@/utils/addressUtils';
 
 type Customer = {
   id: number;
@@ -73,13 +75,8 @@ type CustomerFormData = {
   isActive: boolean;
 };
 
-type AddressFormData = {
+type AddressFormData = AddressData & {
   customerId: string;
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
   type: 'shipping' | 'billing' | 'both';
   isDefault: boolean;
 };
@@ -123,9 +120,6 @@ export default function CustomerManagement() {
     isDefault: false,
   });
   
-  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
-  const addressInputRef = useRef<HTMLInputElement>(null);
-  
   // CSV Import states
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -165,139 +159,9 @@ export default function CustomerManagement() {
     return matchesSearch && matchesFilter;
   });
 
-  // Address suggestions state
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+
   
-  // Auto-fill address when street field changes using SmartyStreets autocomplete
-  const handleAddressFieldChange = async (field: string, value: string) => {
-    const updatedAddress = { ...addressFormData, [field]: value };
-    setAddressFormData(updatedAddress);
-    
-    // Only trigger autocomplete for street field with meaningful input
-    if (field === 'street' && value && value.length > 3) {
-      setIsValidatingAddress(true);
-      try {
-        const response = await fetch('/api/autocomplete-address', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            search: value
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.suggestions && data.suggestions.length > 0) {
-          // Transform autocomplete results to our format
-          const transformedSuggestions = data.suggestions.map((item: any) => ({
-            street: item.streetLine || item.text,
-            city: item.city || '',
-            state: item.state || '',
-            zipCode: item.zipCode || '',
-            fullText: item.text,
-            isValid: true
-          }));
-          
-          setAddressSuggestions(transformedSuggestions);
-          setShowSuggestions(true);
-        } else {
-          setAddressSuggestions([]);
-          setShowSuggestions(false);
-        }
-      } catch (error) {
-        console.error('Address autocomplete error:', error);
-        toast({
-          title: "Address Lookup",
-          description: "Unable to fetch address suggestions. Please enter manually.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsValidatingAddress(false);
-      }
-    } else if (field !== 'street') {
-      // For non-street fields, just update the value without autocomplete
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-    } else {
-      // Clear suggestions if street input is too short
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-  
-  // Handle suggestion selection and validate through SmartyStreets
-  const handleSuggestionSelect = async (suggestion: any) => {
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
-    setIsValidatingAddress(true);
-    
-    try {
-      // Validate the selected address through SmartyStreets
-      const response = await fetch('/api/validate-address', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          street: suggestion.street || suggestion.fullText,
-          city: suggestion.city,
-          state: suggestion.state,
-          zipCode: suggestion.zipCode
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.suggestions && data.suggestions.length > 0) {
-        const validatedAddress = data.suggestions[0];
-        setAddressFormData(prev => ({
-          ...prev,
-          street: validatedAddress.street,
-          city: validatedAddress.city,
-          state: validatedAddress.state,
-          zipCode: validatedAddress.zipCode
-        }));
-        
-        toast({
-          title: "Address Validated",
-          description: "Address has been validated and filled using SmartyStreets.",
-          duration: 2000
-        });
-      } else {
-        // Fall back to the suggestion data if validation fails
-        setAddressFormData(prev => ({
-          ...prev,
-          street: suggestion.street || suggestion.fullText,
-          city: suggestion.city,
-          state: suggestion.state,
-          zipCode: suggestion.zipCode
-        }));
-        
-        toast({
-          title: "Address Selected",
-          description: "Address filled from suggestion.",
-          duration: 2000
-        });
-      }
-    } catch (error) {
-      console.error('Address validation error:', error);
-      // Fall back to the suggestion data
-      setAddressFormData(prev => ({
-        ...prev,
-        street: suggestion.street || suggestion.fullText,
-        city: suggestion.city,
-        state: suggestion.state,
-        zipCode: suggestion.zipCode
-      }));
-      
-      toast({
-        title: "Address Selected",
-        description: "Address filled from suggestion.",
-        duration: 2000
-      });
-    } finally {
-      setIsValidatingAddress(false);
-    }
-  };
+
 
   // Create customer mutation
   const createCustomerMutation = useMutation({
@@ -1444,103 +1308,21 @@ export default function CustomerManagement() {
             <DialogTitle>Add New Address</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="street" className="text-right">Street</Label>
-              <div className="col-span-3 relative">
-                <Input
-                  id="street"
-                  ref={addressInputRef}
-                  value={addressFormData.street}
-                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
-                  className="pr-10"
-                  placeholder="123 Main St"
-                />
-                {isValidatingAddress && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
-                  </div>
-                )}
-                
-                {/* Address Suggestions Dropdown */}
-                {showSuggestions && addressSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-                    <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
-                      Address Suggestions
-                    </div>
-                    {addressSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                        onClick={() => handleSuggestionSelect(suggestion)}
-                      >
-                        <div className="font-medium text-gray-900">
-                          {suggestion.fullText || suggestion.street}
-                        </div>
-                        {suggestion.city && (
-                          <div className="text-sm text-gray-600">
-                            {suggestion.city}, {suggestion.state} {suggestion.zipCode}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <div className="p-2 text-center">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setShowSuggestions(false)}
-                        className="text-gray-500 hover:text-gray-700"
-                      >
-                        Close suggestions
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="city" className="text-right">City</Label>
-              <Input
-                id="city"
-                value={addressFormData.city}
-                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
-                className="col-span-3"
-                placeholder="San Francisco"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="state" className="text-right">State</Label>
-              <Input
-                id="state"
-                value={addressFormData.state}
-                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
-                className="col-span-3"
-                placeholder="CA"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="zipCode" className="text-right">ZIP Code</Label>
-              <Input
-                id="zipCode"
-                value={addressFormData.zipCode}
-                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
-                className="col-span-3"
-                placeholder="94101"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="country" className="text-right">Country</Label>
-              <Input
-                id="country"
-                value={addressFormData.country}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
-                className="col-span-3"
-                placeholder="United States"
-              />
-            </div>
+            <AddressInput
+              label="Address"
+              value={{
+                street: addressFormData.street,
+                city: addressFormData.city,
+                state: addressFormData.state,
+                zipCode: addressFormData.zipCode,
+                country: addressFormData.country
+              }}
+              onChange={(address) => setAddressFormData(prev => ({
+                ...prev,
+                ...address
+              }))}
+              required
+            />
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="addressType" className="text-right">Type</Label>
@@ -1594,67 +1376,21 @@ export default function CustomerManagement() {
             <DialogTitle>Edit Address</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editStreet" className="text-right">Street</Label>
-              <div className="col-span-3 relative">
-                <Input
-                  id="editStreet"
-                  value={addressFormData.street}
-                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
-                  className="pr-10"
-                  placeholder="123 Main St"
-                />
-                {isValidatingAddress && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editCity" className="text-right">City</Label>
-              <Input
-                id="editCity"
-                value={addressFormData.city}
-                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
-                className="col-span-3"
-                placeholder="San Francisco"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editState" className="text-right">State</Label>
-              <Input
-                id="editState"
-                value={addressFormData.state}
-                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
-                className="col-span-3"
-                placeholder="CA"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editZipCode" className="text-right">ZIP Code</Label>
-              <Input
-                id="editZipCode"
-                value={addressFormData.zipCode}
-                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
-                className="col-span-3"
-                placeholder="94101"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editCountry" className="text-right">Country</Label>
-              <Input
-                id="editCountry"
-                value={addressFormData.country}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
-                className="col-span-3"
-                placeholder="United States"
-              />
-            </div>
+            <AddressInput
+              label="Address"
+              value={{
+                street: addressFormData.street,
+                city: addressFormData.city,
+                state: addressFormData.state,
+                zipCode: addressFormData.zipCode,
+                country: addressFormData.country
+              }}
+              onChange={(address) => setAddressFormData(prev => ({
+                ...prev,
+                ...address
+              }))}
+              required
+            />
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="editAddressType" className="text-right">Type</Label>

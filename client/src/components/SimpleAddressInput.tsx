@@ -5,7 +5,7 @@ import { MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import debounce from 'lodash.debounce';
-import type { AddressData } from '@/utils/addressUtils';
+import { autocompleteAddress, validateAddress, type AddressData } from '@/utils/addressUtils';
 
 interface SimpleAddressInputProps {
   label: string;
@@ -24,7 +24,7 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Debounced fetch function
+  // Debounced fetch function using SmartyStreets API
   const fetchSuggestions = debounce(async (q: string) => {
     if (!q.trim()) {
       setSuggestions([]);
@@ -34,62 +34,18 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     
     setIsLoading(true);
     try {
-      // Try relative path first (for local development)
-      let url = `/api/address/autocomplete?query=${encodeURIComponent(q)}`;
-      console.log('Fetching address suggestions for:', q);
-      console.log('Trying relative URL:', url);
+      console.log('Fetching SmartyStreets suggestions for:', q);
+      const results = await autocompleteAddress(q);
+      console.log('SmartyStreets suggestions received:', results);
       
-      let response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        credentials: 'include'
-      });
-      
-      // If relative path fails, try absolute path (for deployment)
-      if (!response.ok && response.status === 404) {
-        const baseUrl = window.location.origin;
-        url = `${baseUrl}/api/address/autocomplete?query=${encodeURIComponent(q)}`;
-        console.log('Relative path failed, trying absolute URL:', url);
-        
-        response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          credentials: 'include'
-        });
-      }
-      
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-      console.log('Final URL used:', url);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('HTTP error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('Address suggestions received:', data);
-      
-      if (Array.isArray(data)) {
-        setSuggestions(data);
-        setShowSuggestions(data.length > 0);
-        setSelectedIndex(-1);
-      } else {
-        console.error('Unexpected response format:', data);
-        throw new Error('Invalid response format from server');
-      }
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setSelectedIndex(-1);
     } catch (error) {
       console.error('Address autocomplete error:', error);
       toast({
         title: 'Address lookup failed',
-        description: `Unable to fetch address suggestions: ${error.message}`,
+        description: (error as Error).message,
         variant: 'destructive',
       });
       setSuggestions([]);
@@ -137,17 +93,29 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     };
   };
 
-  const handleSelect = (suggestion: string) => {
+  const handleSelect = async (suggestion: string) => {
     const parsedAddress = parseAddressFromSuggestion(suggestion);
     setQuery(parsedAddress.street);
-    onChange(parsedAddress);
     setShowSuggestions(false);
     setSelectedIndex(-1);
     
-    toast({
-      title: 'Address selected',
-      description: 'Address fields have been filled',
-    });
+    try {
+      // Validate the selected address with SmartyStreets
+      const validatedAddress = await validateAddress(parsedAddress);
+      onChange(validatedAddress);
+      toast({
+        title: 'Address validated',
+        description: 'Address has been validated and all fields filled',
+      });
+    } catch (error) {
+      // If validation fails, still use the parsed address
+      onChange(parsedAddress);
+      toast({
+        title: 'Address selected',
+        description: 'Address fields have been filled. You may need to verify the details.',
+        variant: 'default',
+      });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

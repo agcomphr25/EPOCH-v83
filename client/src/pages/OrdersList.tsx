@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Edit, Eye, Package, CalendarDays, User, FileText } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Order {
@@ -43,6 +43,29 @@ interface Customer {
 
 export default function OrdersList() {
   console.log('OrdersList component rendering');
+  
+  const handleExportCSV = async () => {
+    try {
+      const response = await fetch('/api/orders/export/csv');
+      if (!response.ok) {
+        throw new Error('Failed to export CSV');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `orders_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('CSV export error:', error);
+      alert('Failed to export CSV. Please try again.');
+    }
+  };
   
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
@@ -118,12 +141,22 @@ export default function OrdersList() {
               View and manage all created orders
             </p>
           </div>
-          <Link href="/order-entry">
-            <Button className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Create New Order
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleExportCSV}
+              variant="outline" 
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
             </Button>
-          </Link>
+            <Link href="/order-entry">
+              <Button className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Create New Order
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

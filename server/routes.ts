@@ -585,6 +585,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Orders CSV Export
+  app.get("/api/orders/export/csv", async (req, res) => {
+    try {
+      const orders = await storage.getAllOrderDrafts();
+      const customers = await storage.getAllCustomers();
+      const stockModels = await storage.getAllStockModels();
+      
+      // Create customer lookup
+      const customerLookup = customers.reduce((acc, customer) => {
+        acc[customer.id] = customer.name;
+        return acc;
+      }, {} as Record<string, string>);
+      
+      // Create stock model lookup
+      const stockModelLookup = stockModels.reduce((acc, model) => {
+        acc[model.id] = model.displayName;
+        return acc;
+      }, {} as Record<string, string>);
+      
+      // Transform orders for CSV
+      const csvData = orders.map(order => ({
+        OrderID: order.orderId,
+        OrderDate: order.orderDate?.toISOString().split('T')[0] || '',
+        DueDate: order.dueDate?.toISOString().split('T')[0] || '',
+        CustomerName: customerLookup[order.customerId || ''] || 'Unknown',
+        CustomerPO: order.customerPO || '',
+        FBOrderNumber: order.fbOrderNumber || '',
+        AGROrderDetails: order.agrOrderDetails || '',
+        StockModel: stockModelLookup[order.modelId || ''] || 'Unknown',
+        Handedness: order.handedness || '',
+        ShankLength: order.shankLength || '',
+        Status: order.status || '',
+        DiscountCode: order.discountCode || '',
+        Shipping: order.shipping || 0,
+        Features: JSON.stringify(order.features || {}),
+        FeatureQuantities: JSON.stringify(order.featureQuantities || {}),
+        CreatedAt: order.createdAt?.toISOString().split('T')[0] || '',
+        UpdatedAt: order.updatedAt?.toISOString().split('T')[0] || ''
+      }));
+      
+      // Convert to CSV format
+      const headers = Object.keys(csvData[0] || {});
+      const csvRows = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row];
+            // Escape commas and quotes in CSV
+            const stringValue = String(value || '');
+            return stringValue.includes(',') || stringValue.includes('"') 
+              ? `"${stringValue.replace(/"/g, '""')}"` 
+              : stringValue;
+          }).join(',')
+        )
+      ];
+      
+      const csvContent = csvRows.join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="orders_export_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csvContent);
+      
+    } catch (error) {
+      console.error("CSV export error:", error);
+      res.status(500).json({ error: "Failed to export orders to CSV" });
+    }
+  });
+
   // Forms routes
   app.get("/api/forms", async (req, res) => {
     try {

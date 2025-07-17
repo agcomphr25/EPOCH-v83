@@ -619,11 +619,15 @@ export default function OrderEntry() {
                               key={model.id}
                               value={model.id}
                               onSelect={() => {
+                                console.log('Model selected:', model.name, model.displayName);
                                 setModelId(model.id);
                                 setModelOpen(false);
                                 
                                 // If the selected model has "Tikka" in its name or displayName, default barrel option to "tikka_proof_sendero"
-                                if (model.name.toLowerCase().includes('tikka') || model.displayName.toLowerCase().includes('tikka')) {
+                                const hasTikka = model.name.toLowerCase().includes('tikka') || model.displayName.toLowerCase().includes('tikka');
+                                console.log('Has Tikka:', hasTikka);
+                                if (hasTikka) {
+                                  console.log('Setting barrel_inlet to tikka_proof_sendero');
                                   setFeatures(prev => ({ ...prev, barrel_inlet: 'tikka_proof_sendero' }));
                                 }
                               }}

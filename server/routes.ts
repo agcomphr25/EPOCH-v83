@@ -1379,6 +1379,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/addresses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      console.log("Received address update data:", req.body);
+      
+      // Remove id from body to avoid conflicts
+      const { id: bodyId, ...updateData } = req.body;
+      
+      const validatedData = insertCustomerAddressSchema.parse(updateData);
+      const address = await storage.updateCustomerAddress(parseInt(id), validatedData);
+      res.json(address);
+    } catch (error) {
+      console.error("Update customer address error:", error);
+      if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
+        return res.status(400).json({ 
+          error: "Invalid customer address data", 
+          details: error.errors 
+        });
+      }
+      res.status(400).json({ error: "Failed to update customer address" });
+    }
+  });
+
+  app.delete("/api/addresses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCustomerAddress(parseInt(id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete customer address error:", error);
+      res.status(500).json({ error: "Failed to delete customer address" });
+    }
+  });
+
   // Module 8: PDF Generation routes
   app.get("/api/pdfs/order-confirmation", async (req, res) => {
     try {

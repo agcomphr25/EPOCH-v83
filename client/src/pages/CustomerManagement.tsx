@@ -29,7 +29,8 @@ import {
   AlertCircle,
   Eye,
   RefreshCw,
-  CheckCircle
+  CheckCircle,
+  FileText
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -125,6 +126,13 @@ export default function CustomerManagement() {
   const [isValidatingAddress, setIsValidatingAddress] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const addressInputRef = useRef<HTMLInputElement>(null);
+  
+  // CSV Import states
+  const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [isProcessingCSV, setIsProcessingCSV] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch customers
   const { data: customers = [], isLoading } = useQuery({
@@ -556,6 +564,125 @@ export default function CustomerManagement() {
     URL.revokeObjectURL(url);
   };
 
+  const handleCSVFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'text/csv') {
+      setCsvFile(file);
+      parseCSVFile(file);
+    } else {
+      toast({
+        title: "Invalid File",
+        description: "Please select a valid CSV file",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const parseCSVFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      const data = lines.slice(1)
+        .filter(line => line.trim())
+        .map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          return row;
+        });
+      setCsvData(data);
+    };
+    reader.readAsText(file);
+  };
+
+  const processCSVImport = async () => {
+    if (csvData.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No valid data found in CSV file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsProcessingCSV(true);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    for (const row of csvData) {
+      try {
+        // Create customer
+        const customerData = {
+          name: row.Name || row.AddressContact || 'Unknown Customer',
+          email: '',
+          phone: '',
+          company: row.Name || '',
+          customerType: 'standard',
+          notes: `Imported from CSV - Address Type: ${row.AddressType}`,
+          isActive: true
+        };
+
+        const customerResponse = await apiRequest('/api/customers', {
+          method: 'POST',
+          body: customerData,
+        });
+
+        // Create address if customer was created successfully
+        if (customerResponse.id && row.Address && row.City) {
+          // Parse address - handle multi-line addresses
+          const addressParts = row.Address.split('\n').filter((part: string) => part.trim());
+          const street = addressParts.join(', ');
+
+          const addressData = {
+            customerId: customerResponse.id.toString(),
+            street: street,
+            city: row.City,
+            state: row.State || '',
+            zipCode: row.Zip || '',
+            country: row.Country || 'United States',
+            type: 'both',
+            isDefault: row.IsDefault === 'TRUE' || row.IsDefault === true
+          };
+
+          await apiRequest('/api/addresses', {
+            method: 'POST',
+            body: addressData,
+          });
+        }
+
+        successCount++;
+      } catch (error: any) {
+        errorCount++;
+        errors.push(`${row.Name || 'Unknown'}: ${error.message || 'Unknown error'}`);
+      }
+    }
+
+    setIsProcessingCSV(false);
+    queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+
+    if (successCount > 0) {
+      toast({
+        title: "Import Complete",
+        description: `Successfully imported ${successCount} customer(s)${errorCount > 0 ? ` with ${errorCount} error(s)` : ''}`,
+        variant: successCount > errorCount ? "default" : "destructive"
+      });
+    }
+
+    if (errors.length > 0) {
+      console.error('Import errors:', errors);
+    }
+
+    setIsCSVImportDialogOpen(false);
+    setCsvFile(null);
+    setCsvData([]);
+  };
+
   const CustomerFormFields = () => (
     <div className="grid gap-4 py-4">
       <div className="grid grid-cols-4 items-center gap-4">
@@ -682,6 +809,14 @@ export default function CustomerManagement() {
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
+          <Dialog open={isCSVImportDialogOpen} onOpenChange={setIsCSVImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV
+              </Button>
+            </DialogTrigger>
+          </Dialog>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -905,6 +1040,89 @@ export default function CustomerManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={isCSVImportDialogOpen} onOpenChange={setIsCSVImportDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Import Customer Addresses from CSV
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-4" />
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Select CSV file with customer addresses
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                Expected format: Name, AddressName, AddressContact, AddressType, IsDefault, Address, City, State, Zip, Country
+              </p>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCSVFileSelect}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                onClick={() => csvInputRef.current?.click()}
+                className="bg-gray-100 hover:bg-gray-200"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Choose CSV File
+              </Button>
+            </div>
+
+            {csvFile && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                <div className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">File Selected</p>
+                    <p className="text-sm text-green-700">
+                      {csvFile.name} - {csvData.length} record(s) found
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {csvData.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium">Preview:</h4>
+                <div className="max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
+                  {csvData.slice(0, 3).map((row, index) => (
+                    <div key={index} className="text-sm mb-2 p-2 bg-white rounded border">
+                      <strong>{row.Name}</strong><br />
+                      {row.Address && <span>{row.Address.replace(/\n/g, ', ')}</span>}<br />
+                      {row.City}, {row.State} {row.Zip}
+                    </div>
+                  ))}
+                  {csvData.length > 3 && (
+                    <p className="text-sm text-gray-500">... and {csvData.length - 3} more records</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsCSVImportDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={processCSVImport}
+              disabled={csvData.length === 0 || isProcessingCSV}
+            >
+              {isProcessingCSV ? 'Processing...' : `Import ${csvData.length} Record(s)`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

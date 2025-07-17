@@ -50,6 +50,7 @@ export const shortTermSales = pgTable("short_term_sales", {
   percent: integer("percent").notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
+  appliesTo: text("applies_to").default("total").notNull(), // "total" or "stock_model"
   isActive: integer("is_active").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

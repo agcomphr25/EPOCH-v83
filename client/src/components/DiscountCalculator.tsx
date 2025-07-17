@@ -39,7 +39,8 @@ export default function DiscountCalculator({ activeSales }: DiscountCalculatorPr
       customerType,
       isMilLeo,
       new Date(),
-      activeSales
+      activeSales,
+      0 // featureCost - will be updated when integrated with order entry
     );
     setResult(calculation);
   };

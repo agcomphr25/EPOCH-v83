@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Edit3, Plus, Calendar, Percent } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -34,7 +35,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
-      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' });
+      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '', appliesTo: 'total' });
       toast({ title: "Success", description: "Short-term sale created successfully" });
     },
     onError: () => {
@@ -51,7 +52,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
-      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' });
+      setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '', appliesTo: 'total' });
       toast({ title: "Success", description: "Short-term sale updated successfully" });
     },
     onError: () => {
@@ -79,12 +80,14 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
     percent: number;
     startDate: string;
     endDate: string;
+    appliesTo: string;
   }>({
     id: null,
     name: '',
     percent: 0,
     startDate: '',
     endDate: '',
+    appliesTo: 'total'
   });
 
 
@@ -96,6 +99,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
       percent: formSale.percent,
       startDate: new Date(formSale.startDate).toISOString(),
       endDate: new Date(formSale.endDate).toISOString(),
+      appliesTo: formSale.appliesTo,
       isActive: 1,
     };
     
@@ -105,17 +109,17 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
       createMutation.mutate(saleData);
     }
     
-    setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' });
+    setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '', appliesTo: 'total' });
   };
 
   const handleEditSale = (sale: ShortTermSale) => {
-    console.log('Edit sale clicked:', sale);
     setFormSale({
       id: sale.id,
       name: sale.name,
       percent: sale.percent,
       startDate: format(new Date(sale.startDate), 'yyyy-MM-dd'),
       endDate: format(new Date(sale.endDate), 'yyyy-MM-dd'),
+      appliesTo: sale.appliesTo || 'total',
     });
   };
   
@@ -187,6 +191,18 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                 </div>
               </div>
               <div>
+                <Label htmlFor="applies-to">Applies To</Label>
+                <Select value={formSale.appliesTo} onValueChange={value => setFormSale({ ...formSale, appliesTo: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select what the discount applies to" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="total">Total Order</SelectItem>
+                    <SelectItem value="stock_model">Stock Model Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="start-date">Start Date</Label>
                 <Input
                   id="start-date"
@@ -220,7 +236,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                 <Button 
                   type="button" 
                   variant="outline"
-                  onClick={() => setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '' })}
+                  onClick={() => setFormSale({ id: null, name: '', percent: 0, startDate: '', endDate: '', appliesTo: 'total' })}
                   className="w-full md:w-auto"
                 >
                   Cancel
@@ -239,6 +255,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Discount</TableHead>
+                  <TableHead>Applies To</TableHead>
                   <TableHead>Start Date</TableHead>
                   <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -248,7 +265,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
               <TableBody>
                 {sales.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       No sales configured yet
                     </TableCell>
                   </TableRow>
@@ -260,6 +277,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                       <TableRow key={sale.id}>
                         <TableCell className="font-medium">{sale.name}</TableCell>
                         <TableCell>{sale.percent}%</TableCell>
+                        <TableCell>{sale.appliesTo === 'stock_model' ? 'Stock Model Only' : 'Total Order'}</TableCell>
                         <TableCell>{format(new Date(sale.startDate), 'yyyy-MM-dd')}</TableCell>
                         <TableCell>{format(new Date(sale.endDate), 'yyyy-MM-dd')}</TableCell>
                         <TableCell>
@@ -272,12 +290,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log('Edit button clicked for sale:', sale.id);
-                                handleEditSale(sale);
-                              }}
+                              onClick={() => handleEditSale(sale)}
                               disabled={updateMutation.isPending}
                             >
                               <Edit3 className="h-4 w-4" />

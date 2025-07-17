@@ -131,7 +131,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 
 ### Business Process Features
 - **Customer Management**: CRM with communication tracking
-- **Discount System**: Persistent and temporary discount management
+- **Enhanced Discount System**: Persistent and temporary discount management with targeted application (stock model vs total order)
 - **Employee Portal**: Time tracking, onboarding, and task management
 - **Reporting System**: Multi-format export capabilities (PDF, CSV, JSON)
 

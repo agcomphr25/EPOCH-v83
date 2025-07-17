@@ -10,6 +10,7 @@ export interface ShortTermSale {
   percent: number;
   startDate: string;
   endDate: string;
+  appliesTo?: string; // "total" or "stock_model"
 }
 
 export interface DiscountBreakdown {
@@ -52,7 +53,7 @@ export function getPersistentDiscount(customerType: string, isMilLeo: boolean): 
 /**
  * Filters and returns active short-term % discounts for a given date.
  */
-export function getActiveShortTermDiscounts(date: Date, sales: ShortTermSale[]): { name: string; percent: number }[] {
+export function getActiveShortTermDiscounts(date: Date, sales: ShortTermSale[]): { name: string; percent: number; appliesTo?: string }[] {
   const ts = date.getTime();
   return sales
     .filter(sale => {
@@ -60,7 +61,7 @@ export function getActiveShortTermDiscounts(date: Date, sales: ShortTermSale[]):
       const end = new Date(sale.endDate).getTime();
       return start <= ts && ts <= end;
     })
-    .map(sale => ({ name: sale.name, percent: sale.percent }));
+    .map(sale => ({ name: sale.name, percent: sale.percent, appliesTo: sale.appliesTo }));
 }
 
 /**
@@ -71,7 +72,8 @@ export function calculateFinalPrice(
   customerType: string,
   isMilLeo: boolean,
   date: Date,
-  shortTermSales: ShortTermSale[]
+  shortTermSales: ShortTermSale[],
+  featureCost: number = 0
 ): FinalPriceResult {
   let price = basePrice;
   const breakdown: DiscountBreakdown[] = [];
@@ -98,7 +100,14 @@ export function calculateFinalPrice(
   // Short-term sales
   const activeSales = getActiveShortTermDiscounts(date, shortTermSales);
   activeSales.forEach(sale => {
-    const amt = price * (sale.percent / 100);
+    let amt;
+    if (sale.appliesTo === 'stock_model') {
+      // Apply discount only to the base price (stock model)
+      amt = basePrice * (sale.percent / 100);
+    } else {
+      // Apply discount to total price (stock model + features)
+      amt = (basePrice + featureCost) * (sale.percent / 100);
+    }
     price -= amt;
     breakdown.push({ type: sale.name, amount: amt });
   });

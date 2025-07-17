@@ -69,6 +69,7 @@ export default function OrderEntry() {
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
   const [shankLength, setShankLength] = useState('');
+  const [tikkaOption, setTikkaOption] = useState('');
 
   // Paint options data
   const [paintFeatures, setPaintFeatures] = useState<any[]>([]);
@@ -704,6 +705,11 @@ export default function OrderEntry() {
                                   } else {
                                     console.warn('barrel_inlet feature not found in featureDefs');
                                   }
+                                  // Reset tikka option when model changes
+                                  setTikkaOption('');
+                                } else {
+                                  // Reset tikka option for non-Tikka models
+                                  setTikkaOption('');
                                 }
                               }}
                             >
@@ -736,6 +742,22 @@ export default function OrderEntry() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Tikka Options (only shown for Tikka models) */}
+              {modelId && modelOptions.find(m => m.id === modelId && (m.name.toLowerCase().includes('tikka') || m.displayName.toLowerCase().includes('tikka'))) && (
+                <div className="space-y-2">
+                  <Label>Tikka Options</Label>
+                  <Select value={tikkaOption} onValueChange={setTikkaOption}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select option..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="set">Set</SelectItem>
+                      <SelectItem value="loose">Loose</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Dynamic Features */}
               {featureDefs.map((featureDef) => (

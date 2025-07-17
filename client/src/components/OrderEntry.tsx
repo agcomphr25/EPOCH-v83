@@ -139,6 +139,9 @@ export default function OrderEntry() {
         // Separate paint features from other features
         const paintFeatures = allFeatures.filter((f: any) => f.category === 'paint_options');
         const nonPaintFeatures = allFeatures.filter((f: any) => f.category !== 'paint_options');
+        
+        console.log('All features:', allFeatures);
+        console.log('Barrel inlet feature:', allFeatures.find(f => f.id === 'barrel_inlet'));
 
         setPaintFeatures(paintFeatures);
 
@@ -173,6 +176,8 @@ export default function OrderEntry() {
           options: feature.options || []
         }));
 
+        console.log('Final mapped features:', mappedFeatures);
+        console.log('Barrel inlet in mapped features:', mappedFeatures.find(f => f.id === 'barrel_inlet'));
         setFeatureDefs(mappedFeatures);
       } catch (error) {
         console.error('Failed to load initial data:', error);

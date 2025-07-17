@@ -628,7 +628,12 @@ export default function OrderEntry() {
                                 console.log('Has Tikka:', hasTikka);
                                 if (hasTikka) {
                                   console.log('Setting barrel_inlet to tikka_proof_sendero');
-                                  setFeatures(prev => ({ ...prev, barrel_inlet: 'tikka_proof_sendero' }));
+                                  setFeatures(prev => {
+                                    const newFeatures = { ...prev, barrel_inlet: 'tikka_proof_sendero' };
+                                    console.log('Features before:', prev);
+                                    console.log('Features after:', newFeatures);
+                                    return newFeatures;
+                                  });
                                 }
                               }}
                             >

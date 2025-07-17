@@ -743,19 +743,27 @@ export default function OrderEntry() {
                 </Select>
               </div>
 
-              {/* Tikka Options (only shown for Tikka models) */}
+              {/* Tikka Options Test Field */}
               {modelId && (
-                <div className="space-y-2">
-                  <Label>Tikka Options</Label>
-                  <Select value={tikkaOption} onValueChange={setTikkaOption}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select option..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="set">Set</SelectItem>
-                      <SelectItem value="loose">Loose</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2 p-4 border border-red-500 bg-red-50">
+                  <Label className="text-red-700 font-bold">TEST: Tikka Options (Model ID: {modelId})</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTikkaOption('set')}
+                      className={`px-3 py-1 border rounded ${tikkaOption === 'set' ? 'bg-blue-500 text-white' : 'bg-white'}`}
+                    >
+                      Set
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTikkaOption('loose')}
+                      className={`px-3 py-1 border rounded ${tikkaOption === 'loose' ? 'bg-blue-500 text-white' : 'bg-white'}`}
+                    >
+                      Loose
+                    </button>
+                  </div>
+                  <div className="text-sm text-gray-600">Selected: {tikkaOption || 'None'}</div>
                 </div>
               )}
 

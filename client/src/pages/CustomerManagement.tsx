@@ -748,9 +748,15 @@ export default function CustomerManagement() {
               </TableHeader>
               <TableBody>
                 {filteredCustomers.map((customer: Customer) => {
-                  // Get addresses for this customer
-                  const customerAddresses = addressesData?.filter(addr => addr.customerId === customer.id.toString()) || [];
+                  // Get addresses for this customer - handle both string and number comparisons
+                  const customerAddresses = addressesData?.filter(addr => 
+                    addr.customerId === customer.id.toString() || 
+                    addr.customerId.toString() === customer.id.toString()
+                  ) || [];
                   const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
+                  
+                  // Debug log to see what's happening
+                  console.log('Customer:', customer.id, 'Addresses found:', customerAddresses.length, 'All addresses:', addressesData?.length);
                   
                   return (
                     <TableRow key={customer.id}>

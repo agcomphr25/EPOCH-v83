@@ -229,7 +229,7 @@ export default function CustomerManagement() {
   const createAddressMutation = useMutation({
     mutationFn: (data: AddressFormData) => apiRequest('/api/addresses', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -252,7 +252,7 @@ export default function CustomerManagement() {
   const updateAddressMutation = useMutation({
     mutationFn: (data: AddressFormData & { id: number }) => apiRequest(`/api/addresses/${data.id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });

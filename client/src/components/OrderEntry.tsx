@@ -744,29 +744,20 @@ export default function OrderEntry() {
               </div>
 
               {/* Tikka Options (only shown for Tikka models) */}
-              {(() => {
-                const selectedModel = modelOptions.find(m => m.id === modelId);
-                const isTikka = selectedModel && (selectedModel.name.toLowerCase().includes('tikka') || selectedModel.displayName.toLowerCase().includes('tikka'));
-                console.log('Tikka check - modelId:', modelId, 'selectedModel:', selectedModel, 'isTikka:', isTikka);
-                
-                if (modelId && isTikka) {
-                  return (
-                    <div className="space-y-2">
-                      <Label>Tikka Options</Label>
-                      <Select value={tikkaOption} onValueChange={setTikkaOption}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select option..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="set">Set</SelectItem>
-                          <SelectItem value="loose">Loose</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+              {modelId && (
+                <div className="space-y-2">
+                  <Label>Tikka Options</Label>
+                  <Select value={tikkaOption} onValueChange={setTikkaOption}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select option..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="set">Set</SelectItem>
+                      <SelectItem value="loose">Loose</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Dynamic Features */}
               {featureDefs.map((featureDef) => (

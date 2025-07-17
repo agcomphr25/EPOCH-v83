@@ -41,6 +41,18 @@ interface Customer {
   updatedAt: string;
 }
 
+interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
+  price: number;
+  description: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
   
@@ -76,6 +88,10 @@ export default function OrdersList() {
       queryKey: ['/api/customers'],
     });
 
+    const { data: stockModels } = useQuery<StockModel[]>({
+      queryKey: ['/api/stock-models'],
+    });
+
     console.log('Orders data:', orders);
     console.log('Customers data:', customers);
     console.log('Loading state:', isLoading);
@@ -85,6 +101,12 @@ export default function OrdersList() {
     if (!customers) return customerId;
     const customer = customers.find(c => c.id.toString() === customerId);
     return customer ? customer.name : customerId;
+  };
+
+  const getModelDisplayName = (modelId: string) => {
+    if (!stockModels) return modelId;
+    const model = stockModels.find(m => m.id === modelId);
+    return model ? model.displayName : modelId;
   };
 
   if (isLoading) {
@@ -219,7 +241,7 @@ export default function OrdersList() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 text-gray-400" />
-                        {order.modelId || 'N/A'}
+                        {getModelDisplayName(order.modelId) || 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell>

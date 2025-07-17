@@ -426,7 +426,7 @@ export default function CustomerManagement() {
   const handleEditAddress = (address: CustomerAddress) => {
     setSelectedAddress(address);
     setAddressFormData({
-      customerId: address.customerId,
+      customerId: address.customerId.toString(),
       street: address.street,
       city: address.city,
       state: address.state,

@@ -53,6 +53,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **Forms System**: Custom form definitions and submissions
 - **Employee Management**: Time tracking, onboarding, QC workflows
 - **Enhanced Forms**: Advanced form builder with versioning
+- **Inventory Management**: Restructured with AG Part#, Name, Source, Supplier Part#, Cost per, Order Date, Notes, Dept., Secondary Source fields
 
 ## Data Flow
 

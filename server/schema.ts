@@ -148,13 +148,15 @@ export const formSubmissions = pgTable("form_submissions", {
 // Inventory Management Tables
 export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
-  code: text("code").notNull().unique(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category"),
-  onHand: integer("on_hand").default(0),
-  committed: integer("committed").default(0),
-  reorderPoint: integer("reorder_point").default(0),
+  agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
+  name: text("name").notNull(), // Name
+  source: text("source"), // Source
+  supplierPartNumber: text("supplier_part_number"), // Supplier Part #
+  costPer: real("cost_per"), // Cost per
+  orderDate: date("order_date"), // Order Date
+  notes: text("notes"), // Notes
+  department: text("department"), // Dept.
+  secondarySource: text("secondary_source"), // Secondary Source
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -419,13 +421,15 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
   createdAt: true,
   updatedAt: true,
 }).extend({
-  code: z.string().min(1, "Item code is required"),
-  name: z.string().min(1, "Item name is required"),
-  description: z.string().optional().nullable(),
-  category: z.string().optional().nullable(),
-  onHand: z.number().min(0).default(0),
-  committed: z.number().min(0).default(0),
-  reorderPoint: z.number().min(0).default(0),
+  agPartNumber: z.string().min(1, "AG Part# is required"),
+  name: z.string().min(1, "Name is required"),
+  source: z.string().optional().nullable(),
+  supplierPartNumber: z.string().optional().nullable(),
+  costPer: z.number().min(0).optional().nullable(),
+  orderDate: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  secondarySource: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
 

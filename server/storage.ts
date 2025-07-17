@@ -611,8 +611,8 @@ export class DatabaseStorage implements IStorage {
     return item || undefined;
   }
 
-  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
-    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.code, code));
+  async getInventoryItemByAgPartNumber(agPartNumber: string): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, agPartNumber));
     return item || undefined;
   }
 
@@ -630,8 +630,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteInventoryItem(id: number): Promise<void> {
-    await db.update(inventoryItems)
-      .set({ isActive: false })
+    await db.delete(inventoryItems)
       .where(eq(inventoryItems.id, id));
   }
 
@@ -647,22 +646,8 @@ export class DatabaseStorage implements IStorage {
 
   async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
     const [scan] = await db.insert(inventoryScans).values(data).returning();
-    
-    // Update inventory item quantity when scan is recorded
-    const item = await this.getInventoryItemByCode(data.itemCode);
-    if (item) {
-      // Increase on-hand quantity by the scanned quantity
-      const newOnHand = item.onHand + data.quantity;
-      const newAvailable = newOnHand - item.committed;
-      
-      await db.update(inventoryItems)
-        .set({ 
-          onHand: newOnHand,
-          available: newAvailable
-        })
-        .where(eq(inventoryItems.id, item.id));
-    }
-    
+    // Note: Inventory scans are now for tracking only, not affecting inventory levels
+    // since the new inventory schema doesn't track onHand/committed quantities
     return scan;
   }
 

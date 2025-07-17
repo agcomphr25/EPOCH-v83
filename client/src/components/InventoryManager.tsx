@@ -5,44 +5,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, AlertTriangle, Package, Upload, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
 
-const categories = [
-  'Barrels',
-  'Stocks',
-  'Triggers',
-  'Scopes',
-  'Accessories',
-  'Hardware',
-  'Springs',
-  'Screws',
-  'Bolts',
-  'Nuts',
-  'Washers',
-  'Pins',
-  'Tools',
-  'Lubricants',
-  'Cleaning Supplies',
-  'Safety Equipment',
-  'Raw Materials',
-  'Finished Goods',
-  'Other'
-];
+
 
 interface InventoryFormData {
-  code: string;
+  agPartNumber: string;
   name: string;
-  description: string;
-  category: string;
-  onHand: string;
-  committed: string;
-  reorderPoint: string;
+  source: string;
+  supplierPartNumber: string;
+  costPer: string;
+  orderDate: string;
+  notes: string;
+  department: string;
+  secondarySource: string;
 }
 
 export default function InventoryManager() {
@@ -50,7 +32,7 @@ export default function InventoryManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
+
 
   // Export CSV functionality
   const handleExportCSV = async () => {
@@ -77,53 +59,18 @@ export default function InventoryManager() {
     }
   };
 
-  // Import CSV functionality
-  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-      toast.error('Please select a CSV file');
-      return;
-    }
-
-    setIsImporting(true);
-    
-    try {
-      const csvData = await file.text();
-      const response = await apiRequest('/api/inventory/import/csv', {
-        method: 'POST',
-        body: { csvData }
-      });
-
-      if (response.errors && response.errors.length > 0) {
-        toast.error(`Import completed with ${response.errors.length} errors. Check console for details.`);
-        console.error('Import errors:', response.errors);
-      } else {
-        toast.success(`Import successful! ${response.imported} items imported, ${response.updated} items updated.`);
-      }
-      
-      // Refresh the inventory list
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
-      
-    } catch (error) {
-      console.error('Import error:', error);
-      toast.error('Failed to import inventory');
-    } finally {
-      setIsImporting(false);
-      // Reset the input
-      event.target.value = '';
-    }
-  };
   
   const [formData, setFormData] = useState<InventoryFormData>({
-    code: '',
+    agPartNumber: '',
     name: '',
-    description: '',
-    category: '',
-    onHand: '0',
-    committed: '0',
-    reorderPoint: '0',
+    source: '',
+    supplierPartNumber: '',
+    costPer: '',
+    orderDate: '',
+    notes: '',
+    department: '',
+    secondarySource: ''
   });
 
   // Load inventory items
@@ -177,13 +124,15 @@ export default function InventoryManager() {
 
   const resetForm = () => {
     setFormData({
-      code: '',
+      agPartNumber: '',
       name: '',
-      description: '',
-      category: '',
-      onHand: '0',
-      committed: '0',
-      reorderPoint: '0',
+      source: '',
+      supplierPartNumber: '',
+      costPer: '',
+      orderDate: '',
+      notes: '',
+      department: '',
+      secondarySource: ''
     });
   };
 
@@ -204,19 +153,21 @@ export default function InventoryManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.code || !formData.name || !formData.category) {
-      toast.error('Please fill in all required fields');
+    if (!formData.agPartNumber || !formData.name) {
+      toast.error('Please fill in AG Part# and Name (required fields)');
       return;
     }
 
     const submitData = {
-      code: formData.code,
+      agPartNumber: formData.agPartNumber,
       name: formData.name,
-      description: formData.description,
-      category: formData.category,
-      onHand: parseInt(formData.onHand) || 0,
-      committed: parseInt(formData.committed) || 0,
-      reorderPoint: parseInt(formData.reorderPoint) || 0,
+      source: formData.source || null,
+      supplierPartNumber: formData.supplierPartNumber || null,
+      costPer: formData.costPer ? parseFloat(formData.costPer) : null,
+      orderDate: formData.orderDate || null,
+      notes: formData.notes || null,
+      department: formData.department || null,
+      secondarySource: formData.secondarySource || null,
     };
 
     if (editingItem) {
@@ -229,13 +180,15 @@ export default function InventoryManager() {
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
     setFormData({
-      code: item.code,
+      agPartNumber: item.agPartNumber,
       name: item.name,
-      description: item.description || '',
-      category: item.category,
-      onHand: item.onHand.toString(),
-      committed: item.committed.toString(),
-      reorderPoint: item.reorderPoint.toString(),
+      source: item.source || '',
+      supplierPartNumber: item.supplierPartNumber || '',
+      costPer: item.costPer ? item.costPer.toString() : '',
+      orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
+      notes: item.notes || '',
+      department: item.department || '',
+      secondarySource: item.secondarySource || '',
     });
     setIsEditOpen(true);
   };
@@ -246,29 +199,24 @@ export default function InventoryManager() {
     }
   };
 
-  const getStockStatus = (item: InventoryItem) => {
-    const available = item.onHand - item.committed;
-    if (available <= 0) return { status: 'Out of Stock', color: 'destructive' };
-    if (available <= item.reorderPoint) return { status: 'Low Stock', color: 'warning' };
-    return { status: 'In Stock', color: 'success' };
-  };
+
 
   const FormContent = React.memo(() => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="code">Item Code *</Label>
+          <Label htmlFor="agPartNumber">AG Part# *</Label>
           <Input
-            id="code"
-            name="code"
-            value={formData.code}
+            id="agPartNumber"
+            name="agPartNumber"
+            value={formData.agPartNumber}
             onChange={handleChange}
-            placeholder="Enter item code"
+            placeholder="Enter AG Part#"
             required
           />
         </div>
         <div>
-          <Label htmlFor="name">Item Name *</Label>
+          <Label htmlFor="name">Name *</Label>
           <Input
             id="name"
             name="name"
@@ -280,74 +228,87 @@ export default function InventoryManager() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="source">Source</Label>
+          <Input
+            id="source"
+            name="source"
+            value={formData.source}
+            onChange={handleChange}
+            placeholder="Enter source"
+          />
+        </div>
+        <div>
+          <Label htmlFor="supplierPartNumber">Supplier Part #</Label>
+          <Input
+            id="supplierPartNumber"
+            name="supplierPartNumber"
+            value={formData.supplierPartNumber}
+            onChange={handleChange}
+            placeholder="Enter supplier part #"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="costPer">Cost per</Label>
+          <Input
+            id="costPer"
+            name="costPer"
+            type="number"
+            step="0.01"
+            value={formData.costPer}
+            onChange={handleChange}
+            placeholder="0.00"
+          />
+        </div>
+        <div>
+          <Label htmlFor="orderDate">Order Date</Label>
+          <Input
+            id="orderDate"
+            name="orderDate"
+            type="date"
+            value={formData.orderDate}
+            onChange={handleChange}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="department">Dept.</Label>
+          <Input
+            id="department"
+            name="department"
+            value={formData.department}
+            onChange={handleChange}
+            placeholder="Enter department"
+          />
+        </div>
+        <div>
+          <Label htmlFor="secondarySource">Secondary Source</Label>
+          <Input
+            id="secondarySource"
+            name="secondarySource"
+            value={formData.secondarySource}
+            onChange={handleChange}
+            placeholder="Enter secondary source"
+          />
+        </div>
+      </div>
+
       <div>
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="notes">Notes</Label>
         <Textarea
-          id="description"
-          name="description"
-          value={formData.description}
+          id="notes"
+          name="notes"
+          value={formData.notes}
           onChange={handleChange}
-          placeholder="Enter item description"
+          placeholder="Enter notes"
           rows={3}
         />
-      </div>
-
-      <div>
-        <Label htmlFor="category">Category *</Label>
-        <Select 
-          value={formData.category} 
-          onValueChange={(value) => handleSelectChange('category', value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <Label htmlFor="onHand">On Hand</Label>
-          <Input
-            id="onHand"
-            name="onHand"
-            type="number"
-            step="1"
-            value={formData.onHand}
-            onChange={handleChange}
-            placeholder="0"
-          />
-        </div>
-        <div>
-          <Label htmlFor="committed">Committed</Label>
-          <Input
-            id="committed"
-            name="committed"
-            type="number"
-            step="1"
-            value={formData.committed}
-            onChange={handleChange}
-            placeholder="0"
-          />
-        </div>
-        <div>
-          <Label htmlFor="reorderPoint">Reorder Point</Label>
-          <Input
-            id="reorderPoint"
-            name="reorderPoint"
-            type="number"
-            step="1"
-            value={formData.reorderPoint}
-            onChange={handleChange}
-            placeholder="0"
-          />
-        </div>
       </div>
 
       <div className="flex justify-end space-x-2">
@@ -387,20 +348,7 @@ export default function InventoryManager() {
             Export CSV
           </Button>
           
-          {/* Import Button */}
-          <div className="relative">
-            <Button variant="outline" disabled={isImporting} className="flex items-center gap-2">
-              <Upload className="h-4 w-4" />
-              {isImporting ? 'Importing...' : 'Import CSV'}
-            </Button>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleImportCSV}
-              disabled={isImporting}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-          </div>
+
           
           {/* Add Item Button */}
           <Dialog open={isCreateOpen} onOpenChange={(open) => {
@@ -440,41 +388,25 @@ export default function InventoryManager() {
               <table className="w-full border-collapse border border-gray-200">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-gray-200 px-4 py-2 text-left">Code</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">AG Part#</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Category</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">On Hand</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Committed</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Available</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Source</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Supplier Part #</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Cost per</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Dept.</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
-                    const available = item.onHand - item.committed;
-                    const stockStatus = getStockStatus(item);
-                    
+                  {items.map((item) => {                    
                     return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 px-4 py-2 font-medium">{item.code}</td>
+                        <td className="border border-gray-200 px-4 py-2 font-medium">{item.agPartNumber}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.name}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.category}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.onHand}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.committed}</td>
-                        <td className="border border-gray-200 px-4 py-2">{available}</td>
-                        <td className="border border-gray-200 px-4 py-2">
-                          <Badge 
-                            variant={stockStatus.color as 'default' | 'destructive' | 'secondary'}
-                            className={
-                              stockStatus.color === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                              stockStatus.color === 'success' ? 'bg-green-100 text-green-800' : ''
-                            }
-                          >
-                            {stockStatus.status === 'Low Stock' && <AlertTriangle className="h-3 w-3 mr-1" />}
-                            {stockStatus.status}
-                          </Badge>
-                        </td>
+                        <td className="border border-gray-200 px-4 py-2">{item.source || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.supplierPartNumber || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.department || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">
                           <div className="flex space-x-2">
                             <Button

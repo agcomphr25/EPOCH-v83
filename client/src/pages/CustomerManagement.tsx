@@ -755,10 +755,7 @@ export default function CustomerManagement() {
                   ) || [];
                   const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
                   
-                  // Debug log to see what's happening
-                  if (customerAddresses.length > 0) {
-                    console.log('Customer with address:', customer.id, customer.name, 'Addresses found:', customerAddresses.length);
-                  }
+
                   
                   return (
                     <TableRow key={customer.id}>
@@ -842,12 +839,88 @@ export default function CustomerManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Customer</DialogTitle>
           </DialogHeader>
-          <CustomerFormFields />
-          <div className="flex justify-end gap-2 pt-4">
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Customer Info</TabsTrigger>
+              <TabsTrigger value="addresses">Addresses</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="details" className="space-y-4">
+              <CustomerFormFields />
+            </TabsContent>
+            
+            <TabsContent value="addresses" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Customer Addresses</h3>
+                <Button size="sm" onClick={handleAddAddress}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Address
+                </Button>
+              </div>
+              
+              {addressesLoading ? (
+                <div className="text-center py-4">Loading addresses...</div>
+              ) : addresses.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No addresses found</p>
+                  <p className="text-sm">Add an address to get started</p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {addresses.map((address) => (
+                    <Card key={address.id} className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <MapPin className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium">{address.street}</span>
+                            {address.isDefault && (
+                              <Badge variant="secondary" className="text-xs">Default</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mb-1">
+                            {address.city}, {address.state} {address.zipCode}
+                          </p>
+                          <p className="text-sm text-gray-600 mb-2">{address.country}</p>
+                          <div className="flex gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {address.type}
+                            </Badge>
+                            {address.isValidated && (
+                              <Badge variant="default" className="text-xs">Validated</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditAddress(address)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteAddress(address.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+          
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>

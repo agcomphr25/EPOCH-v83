@@ -327,7 +327,12 @@ export default function OrderEntry() {
         const saleId = parseInt(discountCode.replace('sale-', ''));
         const sale = shortTermSales.find(s => s.id === saleId);
         if (sale) {
-          discountAmount = (subtotal * sale.percent) / 100;
+          // Check if discount applies to stock model only or total order
+          if (sale.appliesTo === 'stock_model') {
+            discountAmount = (basePrice * sale.percent) / 100;
+          } else {
+            discountAmount = (subtotal * sale.percent) / 100;
+          }
         }
       } else if (discountCode.startsWith('discount-')) {
         const discountId = parseInt(discountCode.replace('discount-', ''));

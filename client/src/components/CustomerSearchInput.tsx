@@ -104,7 +104,8 @@ export default function CustomerSearchInput({
         body: cleanedData,
       });
 
-      if (customerAddress.street || customerAddress.city) {
+      // Create customer address if all required fields are present
+      if (customerAddress.street && customerAddress.city && customerAddress.state && customerAddress.zipCode && customerAddress.country) {
         try {
           await apiRequest('/api/addresses', {
             method: 'POST',
@@ -112,6 +113,7 @@ export default function CustomerSearchInput({
               customerId: response.id.toString(),
               ...customerAddress,
               type: 'both',
+              isDefault: true,
             },
           });
         } catch (error) {

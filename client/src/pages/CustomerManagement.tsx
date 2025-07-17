@@ -169,60 +169,134 @@ export default function CustomerManagement() {
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   
-  // Auto-fill address when street, city, state, or zipCode change
+  // Auto-fill address when street field changes using SmartyStreets autocomplete
   const handleAddressFieldChange = async (field: string, value: string) => {
     const updatedAddress = { ...addressFormData, [field]: value };
     setAddressFormData(updatedAddress);
     
-    // Trigger validation if we have at least a street address
-    if (updatedAddress.street && updatedAddress.street.length > 3) {
+    // Only trigger autocomplete for street field with meaningful input
+    if (field === 'street' && value && value.length > 3) {
       setIsValidatingAddress(true);
       try {
-        const response = await fetch('/api/validate-address', {
+        const response = await fetch('/api/autocomplete-address', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            street: updatedAddress.street,
-            city: updatedAddress.city,
-            state: updatedAddress.state,
-            zipCode: updatedAddress.zipCode
+            search: value
           })
         });
         
         const data = await response.json();
         
         if (data.suggestions && data.suggestions.length > 0) {
-          setAddressSuggestions(data.suggestions);
+          // Transform autocomplete results to our format
+          const transformedSuggestions = data.suggestions.map((item: any) => ({
+            street: item.streetLine || item.text,
+            city: item.city || '',
+            state: item.state || '',
+            zipCode: item.zipCode || '',
+            fullText: item.text,
+            isValid: true
+          }));
+          
+          setAddressSuggestions(transformedSuggestions);
           setShowSuggestions(true);
+        } else {
+          setAddressSuggestions([]);
+          setShowSuggestions(false);
         }
       } catch (error) {
-        console.error('Address validation error:', error);
+        console.error('Address autocomplete error:', error);
+        toast({
+          title: "Address Lookup",
+          description: "Unable to fetch address suggestions. Please enter manually.",
+          variant: "destructive"
+        });
       } finally {
         setIsValidatingAddress(false);
       }
+    } else if (field !== 'street') {
+      // For non-street fields, just update the value without autocomplete
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
     } else {
+      // Clear suggestions if street input is too short
       setAddressSuggestions([]);
       setShowSuggestions(false);
     }
   };
   
-  // Handle suggestion selection
-  const handleSuggestionSelect = (suggestion: any) => {
-    setAddressFormData(prev => ({
-      ...prev,
-      street: suggestion.street,
-      city: suggestion.city,
-      state: suggestion.state,
-      zipCode: suggestion.zipCode
-    }));
+  // Handle suggestion selection and validate through SmartyStreets
+  const handleSuggestionSelect = async (suggestion: any) => {
     setShowSuggestions(false);
     setAddressSuggestions([]);
+    setIsValidatingAddress(true);
     
-    toast({
-      title: "Address Selected",
-      description: "Address has been validated and filled.",
-      duration: 2000
-    });
+    try {
+      // Validate the selected address through SmartyStreets
+      const response = await fetch('/api/validate-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          street: suggestion.street || suggestion.fullText,
+          city: suggestion.city,
+          state: suggestion.state,
+          zipCode: suggestion.zipCode
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const validatedAddress = data.suggestions[0];
+        setAddressFormData(prev => ({
+          ...prev,
+          street: validatedAddress.street,
+          city: validatedAddress.city,
+          state: validatedAddress.state,
+          zipCode: validatedAddress.zipCode
+        }));
+        
+        toast({
+          title: "Address Validated",
+          description: "Address has been validated and filled using SmartyStreets.",
+          duration: 2000
+        });
+      } else {
+        // Fall back to the suggestion data if validation fails
+        setAddressFormData(prev => ({
+          ...prev,
+          street: suggestion.street || suggestion.fullText,
+          city: suggestion.city,
+          state: suggestion.state,
+          zipCode: suggestion.zipCode
+        }));
+        
+        toast({
+          title: "Address Selected",
+          description: "Address filled from suggestion.",
+          duration: 2000
+        });
+      }
+    } catch (error) {
+      console.error('Address validation error:', error);
+      // Fall back to the suggestion data
+      setAddressFormData(prev => ({
+        ...prev,
+        street: suggestion.street || suggestion.fullText,
+        city: suggestion.city,
+        state: suggestion.state,
+        zipCode: suggestion.zipCode
+      }));
+      
+      toast({
+        title: "Address Selected",
+        description: "Address filled from suggestion.",
+        duration: 2000
+      });
+    } finally {
+      setIsValidatingAddress(false);
+    }
   };
 
   // Create customer mutation
@@ -1399,10 +1473,14 @@ export default function CustomerManagement() {
                         className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
                         onClick={() => handleSuggestionSelect(suggestion)}
                       >
-                        <div className="font-medium text-gray-900">{suggestion.street}</div>
-                        <div className="text-sm text-gray-600">
-                          {suggestion.city}, {suggestion.state} {suggestion.zipCode}
+                        <div className="font-medium text-gray-900">
+                          {suggestion.fullText || suggestion.street}
                         </div>
+                        {suggestion.city && (
+                          <div className="text-sm text-gray-600">
+                            {suggestion.city}, {suggestion.state} {suggestion.zipCode}
+                          </div>
+                        )}
                       </div>
                     ))}
                     <div className="p-2 text-center">

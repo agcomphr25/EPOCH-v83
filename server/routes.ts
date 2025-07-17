@@ -1419,135 +1419,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { street, city, state, zipCode } = req.body;
       
-      // Generate multiple suggestions based on input
-      const suggestions = [];
+      // Check if we have SmartyStreets credentials
+      const authId = process.env.SMARTYSTREETS_AUTH_ID;
+      const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
       
-      // Base suggestion - standardized version of input
-      let baseAddress = {
+      if (!authId || !authToken) {
+        return res.status(500).json({ 
+          error: "SmartyStreets credentials not configured" 
+        });
+      }
+      
+      // Use SmartyStreets US Street API for validation
+      const smartyStreetsUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}`;
+      
+      const requestBody = [{
         street: street || '',
         city: city || '',
         state: state || '',
-        zipCode: zipCode || '',
-        isValid: true
-      };
+        zipcode: zipCode || '',
+        candidates: 3 // Request up to 3 suggestions
+      }];
       
-      // Basic address parsing and standardization
-      if (street && street.length > 0) {
-        // Standardize street address format
-        baseAddress.street = street
-          .replace(/\bSt\b/gi, 'Street')
-          .replace(/\bAve\b/gi, 'Avenue')
-          .replace(/\bDr\b/gi, 'Drive')
-          .replace(/\bRd\b/gi, 'Road')
-          .replace(/\bBlvd\b/gi, 'Boulevard');
-        
-        const streetLower = street.toLowerCase();
-        
-        // Generate multiple suggestions based on street name patterns
-        if (streetLower.includes('main st') || streetLower.includes('main street')) {
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Main City',
-            state: state || 'TX',
-            zipCode: zipCode || '78000'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Main Falls',
-            state: state || 'OR',
-            zipCode: zipCode || '97345'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Main Beach',
-            state: state || 'FL',
-            zipCode: zipCode || '33101'
-          });
-        } else if (streetLower.includes('oak')) {
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Oak Grove',
-            state: state || 'CA',
-            zipCode: zipCode || '90210'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Oak Park',
-            state: state || 'IL',
-            zipCode: zipCode || '60302'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Oak Ridge',
-            state: state || 'TN',
-            zipCode: zipCode || '37830'
-          });
-        } else if (streetLower.includes('park')) {
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Park City',
-            state: state || 'NY',
-            zipCode: zipCode || '10001'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Park Ridge',
-            state: state || 'NJ',
-            zipCode: zipCode || '07656'
-          });
-        } else if (streetLower.includes('elm') || streetLower.includes('maple')) {
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Springfield',
-            state: state || 'IL',
-            zipCode: zipCode || '62701'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Springfield',
-            state: state || 'MA',
-            zipCode: zipCode || '01103'
-          });
-        } else if (streetLower.includes('first') || streetLower.includes('1st')) {
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'First City',
-            state: state || 'FL',
-            zipCode: zipCode || '33101'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'First Beach',
-            state: state || 'CA',
-            zipCode: zipCode || '90210'
-          });
-        } else {
-          // Default suggestions for unknown streets
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Anytown',
-            state: state || 'CA',
-            zipCode: zipCode || '90210'
-          });
-          suggestions.push({
-            ...baseAddress,
-            city: city || 'Somewhere',
-            state: state || 'TX',
-            zipCode: zipCode || '78000'
-          });
-        }
-      } else {
-        // If no street provided, return base address
-        suggestions.push(baseAddress);
+      const response = await fetch(smartyStreetsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`SmartyStreets API error: ${response.status}`);
       }
       
+      const data = await response.json();
+      
+      // Transform SmartyStreets response to our format
+      const suggestions = data.map((item: any) => ({
+        street: item.delivery_line_1 || '',
+        city: item.components?.city_name || '',
+        state: item.components?.state_abbreviation || '',
+        zipCode: item.components?.zipcode || '',
+        isValid: true,
+        smartyStreetsData: {
+          deliveryLine1: item.delivery_line_1,
+          lastLine: item.last_line,
+          deliveryPointBarcode: item.delivery_point_barcode,
+          components: item.components,
+          metadata: item.metadata,
+          analysis: item.analysis
+        }
+      }));
+      
       res.json({
-        suggestions: suggestions.slice(0, 3), // Limit to 3 suggestions
+        suggestions: suggestions,
         isValid: suggestions.length > 0
       });
+      
     } catch (error) {
-      console.error("Address validation error:", error);
-      res.status(500).json({ error: "Failed to validate address" });
+      console.error("SmartyStreets validation error:", error);
+      res.status(500).json({ 
+        error: "Failed to validate address with SmartyStreets",
+        details: error.message 
+      });
+    }
+  });
+
+  // Address autocomplete endpoint using SmartyStreets API
+  app.post("/api/autocomplete-address", async (req, res) => {
+    try {
+      const { search } = req.body;
+      
+      // Check if we have SmartyStreets credentials
+      const authId = process.env.SMARTYSTREETS_AUTH_ID;
+      const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+      
+      if (!authId || !authToken) {
+        return res.status(500).json({ 
+          error: "SmartyStreets credentials not configured" 
+        });
+      }
+      
+      // Use SmartyStreets US Autocomplete API
+      const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&search=${encodeURIComponent(search)}&max_suggestions=10`;
+      
+      const response = await fetch(smartyStreetsUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`SmartyStreets Autocomplete API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Transform SmartyStreets autocomplete response
+      const suggestions = data.suggestions?.map((item: any) => ({
+        text: item.text,
+        streetLine: item.street_line,
+        city: item.city,
+        state: item.state,
+        zipCode: item.zipcode,
+        entries: item.entries
+      })) || [];
+      
+      res.json({
+        suggestions: suggestions
+      });
+      
+    } catch (error) {
+      console.error("SmartyStreets autocomplete error:", error);
+      res.status(500).json({ 
+        error: "Failed to get address suggestions",
+        details: error.message 
+      });
     }
   });
 

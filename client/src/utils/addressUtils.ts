@@ -21,7 +21,13 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
     });
     
     console.log('SmartyStreets autocomplete response:', response);
-    return response.suggestions || [];
+    
+    // Transform the response to extract the text property from each suggestion
+    if (response.suggestions && Array.isArray(response.suggestions)) {
+      return response.suggestions.map((suggestion: any) => suggestion.text || suggestion);
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching address autocomplete:', error);
     throw new Error('Failed to fetch address suggestions');

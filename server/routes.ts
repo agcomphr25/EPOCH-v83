@@ -1500,8 +1500,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Use SmartyStreets US Autocomplete API
-      const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&search=${encodeURIComponent(search)}&max_suggestions=10`;
+      // Use SmartyStreets US Autocomplete API with correct parameter name
+      const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
       
       const response = await fetch(smartyStreetsUrl, {
         method: 'GET',
@@ -1511,7 +1511,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       if (!response.ok) {
-        throw new Error(`SmartyStreets Autocomplete API error: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`SmartyStreets Autocomplete API error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();

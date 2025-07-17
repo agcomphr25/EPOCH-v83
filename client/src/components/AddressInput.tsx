@@ -58,26 +58,29 @@ export default function AddressInput({ label, value, onChange, required = false 
   }, [value.street]);
 
   const parseAddressFromSuggestion = (suggestion: string): AddressData => {
-    // SmartyStreets typically returns suggestions in format: "123 Main St, City, ST 12345"
+    // SmartyStreets returns suggestions in format: "123 Main St, City ST" or "123 Main St, City ST 12345"
     const parts = suggestion.split(', ');
     
-    if (parts.length >= 3) {
+    if (parts.length >= 2) {
       const street = parts[0];
-      const city = parts[1];
-      const stateZip = parts[2];
+      const cityStateZip = parts[1];
       
-      // Parse state and zip from "ST 12345" format
-      const stateZipMatch = stateZip.match(/^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
-      const state = stateZipMatch ? stateZipMatch[1] : '';
-      const zipCode = stateZipMatch ? stateZipMatch[2] : '';
+      // Parse city, state, and zip from "City ST" or "City ST 12345" format
+      const cityStateZipMatch = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
       
-      return {
-        street,
-        city,
-        state,
-        zipCode,
-        country: 'United States'
-      };
+      if (cityStateZipMatch) {
+        const city = cityStateZipMatch[1];
+        const state = cityStateZipMatch[2];
+        const zipCode = cityStateZipMatch[3] || '';
+        
+        return {
+          street,
+          city,
+          state,
+          zipCode,
+          country: 'United States'
+        };
+      }
     }
     
     // Fallback: treat the entire suggestion as street address

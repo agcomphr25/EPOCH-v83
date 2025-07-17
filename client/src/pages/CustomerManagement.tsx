@@ -127,6 +127,24 @@ export default function CustomerManagement() {
     queryFn: () => apiRequest('/api/customers'),
   });
 
+  // Fetch all addresses for table display
+  const { data: addressesData = [] } = useQuery<CustomerAddress[]>({
+    queryKey: ['/api/addresses/all'],
+    queryFn: async () => {
+      const allAddresses = [];
+      for (const customer of customers) {
+        try {
+          const addresses = await apiRequest(`/api/addresses?customerId=${customer.id}`);
+          allAddresses.push(...addresses);
+        } catch (error) {
+          console.error(`Failed to fetch addresses for customer ${customer.id}:`, error);
+        }
+      }
+      return allAddresses;
+    },
+    enabled: customers.length > 0,
+  });
+
   // Fetch addresses for selected customer
   const { data: addresses = [], isLoading: addressesLoading } = useQuery<CustomerAddress[]>({
     queryKey: ['/api/addresses', selectedCustomer?.id],
@@ -734,83 +752,92 @@ export default function CustomerManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Address</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCustomers.map((customer: Customer) => (
-                  <TableRow key={customer.id}>
-                    <TableCell className="font-medium">{customer.name}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {customer.email && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Mail className="h-3 w-3" />
-                            {customer.email}
-                          </div>
-                        )}
-                        {customer.phone && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3" />
-                            {customer.phone}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {customer.company && (
-                        <div className="flex items-center gap-1">
-                          <Building className="h-3 w-3" />
-                          {customer.company}
+                {filteredCustomers.map((customer: Customer) => {
+                  // Get addresses for this customer
+                  const customerAddresses = addressesData?.filter(addr => addr.customerId === customer.id.toString()) || [];
+                  const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
+                  
+                  return (
+                    <TableRow key={customer.id}>
+                      <TableCell>
+                        <div className="font-medium">{customer.name}</div>
+                        <div className="space-y-1 mt-1">
+                          {customer.email && (
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <Mail className="h-3 w-3" />
+                              {customer.email}
+                            </div>
+                          )}
+                          {customer.phone && (
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <Phone className="h-3 w-3" />
+                              {customer.phone}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{customer.customerType}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={customer.isActive ? "default" : "secondary"}>
-                        {customer.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(customer.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleViewCustomer(customer)}
-                          title="View Customer Details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditCustomer(customer)}
-                          title="Edit Customer"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteCustomer(customer)}
-                          title="Delete Customer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {defaultAddress ? (
+                          <div className="text-sm">
+                            <div className="font-medium">{defaultAddress.street}</div>
+                            <div className="text-gray-600">{defaultAddress.city}, {defaultAddress.state} {defaultAddress.zipCode}</div>
+                            <div className="text-gray-500">{defaultAddress.country}</div>
+                            {defaultAddress.type !== 'shipping' && (
+                              <Badge variant="outline" className="mt-1 text-xs">
+                                {defaultAddress.type}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-sm">No address</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={customer.isActive ? "default" : "secondary"}>
+                          {customer.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(customer.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleViewCustomer(customer)}
+                            title="View Customer Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditCustomer(customer)}
+                            title="Edit Customer"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteCustomer(customer)}
+                            title="Delete Customer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

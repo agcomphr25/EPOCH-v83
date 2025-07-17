@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +28,8 @@ import {
   UserX,
   AlertCircle,
   Eye,
-  RefreshCw
+  RefreshCw,
+  CheckCircle
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -120,6 +121,10 @@ export default function CustomerManagement() {
     type: 'shipping',
     isDefault: false,
   });
+  
+  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch customers
   const { data: customers = [], isLoading } = useQuery({
@@ -153,11 +158,69 @@ export default function CustomerManagement() {
     return matchesSearch && matchesFilter;
   });
 
+  // Address validation function using SmartyStreets API
+  const validateAddress = async (address: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  }) => {
+    try {
+      setIsValidatingAddress(true);
+      const response = await apiRequest('/api/validate-address', {
+        method: 'POST',
+        body: address
+      });
+      
+      if (response.suggestions && response.suggestions.length > 0) {
+        setAddressSuggestions(response.suggestions);
+        return response.suggestions[0]; // Return the first suggestion
+      }
+      return null;
+    } catch (error) {
+      console.error('Address validation failed:', error);
+      toast({
+        title: "Address Validation",
+        description: "Unable to validate address. Please verify manually.",
+        variant: "destructive"
+      });
+      return null;
+    } finally {
+      setIsValidatingAddress(false);
+    }
+  };
+
+  // Auto-fill address when street, city, state, or zipCode change
+  const handleAddressFieldChange = async (field: string, value: string) => {
+    const updatedAddress = { ...addressFormData, [field]: value };
+    setAddressFormData(updatedAddress);
+    
+    // Trigger validation if we have enough information
+    if (updatedAddress.street && updatedAddress.city && updatedAddress.state) {
+      const validated = await validateAddress({
+        street: updatedAddress.street,
+        city: updatedAddress.city,
+        state: updatedAddress.state,
+        zipCode: updatedAddress.zipCode
+      });
+      
+      if (validated) {
+        setAddressFormData(prev => ({
+          ...prev,
+          street: validated.street || prev.street,
+          city: validated.city || prev.city,
+          state: validated.state || prev.state,
+          zipCode: validated.zipCode || prev.zipCode
+        }));
+      }
+    }
+  };
+
   // Create customer mutation
   const createCustomerMutation = useMutation({
     mutationFn: (data: CustomerFormData) => apiRequest('/api/customers', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
@@ -182,7 +245,7 @@ export default function CustomerManagement() {
     mutationFn: ({ id, data }: { id: number; data: Partial<CustomerFormData> }) => 
       apiRequest(`/api/customers/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
@@ -1090,13 +1153,21 @@ export default function CustomerManagement() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="street" className="text-right">Street</Label>
-              <Input
-                id="street"
-                value={addressFormData.street}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, street: e.target.value }))}
-                className="col-span-3"
-                placeholder="123 Main St"
-              />
+              <div className="col-span-3 relative">
+                <Input
+                  id="street"
+                  ref={addressInputRef}
+                  value={addressFormData.street}
+                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
+                  className="pr-10"
+                  placeholder="123 Main St"
+                />
+                {isValidatingAddress && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -1104,7 +1175,7 @@ export default function CustomerManagement() {
               <Input
                 id="city"
                 value={addressFormData.city}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, city: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
                 className="col-span-3"
                 placeholder="San Francisco"
               />
@@ -1115,7 +1186,7 @@ export default function CustomerManagement() {
               <Input
                 id="state"
                 value={addressFormData.state}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, state: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
                 className="col-span-3"
                 placeholder="CA"
               />
@@ -1126,7 +1197,7 @@ export default function CustomerManagement() {
               <Input
                 id="zipCode"
                 value={addressFormData.zipCode}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
                 className="col-span-3"
                 placeholder="94101"
               />
@@ -1197,13 +1268,20 @@ export default function CustomerManagement() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="editStreet" className="text-right">Street</Label>
-              <Input
-                id="editStreet"
-                value={addressFormData.street}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, street: e.target.value }))}
-                className="col-span-3"
-                placeholder="123 Main St"
-              />
+              <div className="col-span-3 relative">
+                <Input
+                  id="editStreet"
+                  value={addressFormData.street}
+                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
+                  className="pr-10"
+                  placeholder="123 Main St"
+                />
+                {isValidatingAddress && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -1211,7 +1289,7 @@ export default function CustomerManagement() {
               <Input
                 id="editCity"
                 value={addressFormData.city}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, city: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
                 className="col-span-3"
                 placeholder="San Francisco"
               />
@@ -1222,7 +1300,7 @@ export default function CustomerManagement() {
               <Input
                 id="editState"
                 value={addressFormData.state}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, state: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
                 className="col-span-3"
                 placeholder="CA"
               />
@@ -1233,7 +1311,7 @@ export default function CustomerManagement() {
               <Input
                 id="editZipCode"
                 value={addressFormData.zipCode}
-                onChange={(e) => setAddressFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
                 className="col-span-3"
                 placeholder="94101"
               />

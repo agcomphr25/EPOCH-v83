@@ -1414,6 +1414,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Address validation endpoint using SmartyStreets API
+  app.post("/api/validate-address", async (req, res) => {
+    try {
+      const { street, city, state, zipCode } = req.body;
+      
+      // Mock validation for now - in production, use SmartyStreets API
+      const validatedAddress = {
+        street: street,
+        city: city,
+        state: state,
+        zipCode: zipCode,
+        isValid: true
+      };
+      
+      res.json({
+        suggestions: [validatedAddress],
+        isValid: true
+      });
+    } catch (error) {
+      console.error("Address validation error:", error);
+      res.status(500).json({ error: "Failed to validate address" });
+    }
+  });
+
   // Module 8: PDF Generation routes
   app.get("/api/pdfs/order-confirmation", async (req, res) => {
     try {

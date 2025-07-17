@@ -537,10 +537,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Draft workflow endpoints
-  app.post("/api/orders/draft/:orderId/send-confirmation", async (req, res) => {
+  app.post("/api/orders/draft/:draftId/send-confirmation", async (req, res) => {
     try {
-      const { orderId } = req.params;
-      const draft = await storage.getOrderDraft(orderId);
+      const { draftId } = req.params;
+      const draft = await storage.getOrderDraftById(parseInt(draftId));
       
       if (!draft) {
         return res.status(404).json({ error: "Order draft not found" });
@@ -550,7 +550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Order must be in DRAFT status" });
       }
       
-      await storage.updateOrderDraft(orderId, { status: 'CONFIRMED' });
+      await storage.updateOrderDraft(draft.orderId, { status: 'CONFIRMED' });
       res.json({ success: true, message: "Order sent for confirmation" });
     } catch (error) {
       console.error("Send confirmation error:", error);
@@ -558,10 +558,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/orders/draft/:orderId/finalize", async (req, res) => {
+  app.post("/api/orders/draft/:draftId/finalize", async (req, res) => {
     try {
-      const { orderId } = req.params;
-      const draft = await storage.getOrderDraft(orderId);
+      const { draftId } = req.params;
+      const draft = await storage.getOrderDraftById(parseInt(draftId));
       
       if (!draft) {
         return res.status(404).json({ error: "Order draft not found" });
@@ -571,7 +571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Order must be in CONFIRMED status" });
       }
       
-      await storage.updateOrderDraft(orderId, { status: 'FINALIZED' });
+      await storage.updateOrderDraft(draft.orderId, { status: 'FINALIZED' });
       res.json({ success: true, message: "Order finalized successfully" });
     } catch (error) {
       console.error("Finalize order error:", error);

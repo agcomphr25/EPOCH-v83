@@ -842,7 +842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errors = [];
 
       // Expected columns
-      const expectedColumns = ['AG Part#', 'Name', 'Category', 'Source', 'Supplier Part #', 'Cost per', 'Order Date', 'Dept.', 'Secondary Source', 'Notes'];
+      const expectedColumns = ['AG Part#', 'Name', 'Source', 'Supplier Part #', 'Cost per', 'Order Date', 'Dept.', 'Secondary Source', 'Notes'];
       
       for (let i = 1; i < lines.length; i++) {
         try {
@@ -853,14 +853,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const itemData: any = {
             agPartNumber: values[0] || '',
             name: values[1] || '',
-            category: values[2] || null,
-            source: values[3] || null,
-            supplierPartNumber: values[4] || null,
-            costPer: values[5] ? parseFloat(values[5]) || null : null,
-            orderDate: values[6] || null,
-            department: values[7] || null,
-            secondarySource: values[8] || null,
-            notes: values[9] || null,
+            source: values[2] || null,
+            supplierPartNumber: values[3] || null,
+            costPer: values[4] ? parseFloat(values[4]) || null : null,
+            orderDate: values[5] || null,
+            department: values[6] || null,
+            secondarySource: values[7] || null,
+            notes: values[8] || null,
           };
 
           if (!itemData.agPartNumber || !itemData.name) {
@@ -893,12 +892,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const items = await storage.getAllInventoryItems();
       
-      const csvHeader = "AG Part#,Name,Category,Source,Supplier Part #,Cost per,Order Date,Dept.,Secondary Source,Notes,Active,Created At,Updated At\n";
+      const csvHeader = "AG Part#,Name,Source,Supplier Part #,Cost per,Order Date,Dept.,Secondary Source,Notes,Active,Created At,Updated At\n";
       const csvRows = items.map(item => {
         return [
           item.agPartNumber || '',
           item.name || '',
-          item.category || '',
           item.source || '',
           item.supplierPartNumber || '',
           item.costPer || '',

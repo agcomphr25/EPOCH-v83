@@ -150,7 +150,6 @@ export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
   agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
   name: text("name").notNull(), // Name
-  category: text("category"), // Category
   source: text("source"), // Source
   supplierPartNumber: text("supplier_part_number"), // Supplier Part #
   costPer: real("cost_per"), // Cost per
@@ -424,7 +423,6 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
 }).extend({
   agPartNumber: z.string().min(1, "AG Part# is required"),
   name: z.string().min(1, "Name is required"),
-  category: z.string().optional().nullable(),
   source: z.string().optional().nullable(),
   supplierPartNumber: z.string().optional().nullable(),
   costPer: z.number().min(0).optional().nullable(),

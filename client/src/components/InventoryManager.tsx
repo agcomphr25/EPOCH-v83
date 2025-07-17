@@ -9,37 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Package, Download, Upload, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Download, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
-
-const categories = [
-  'Raw Materials',
-  'Components',
-  'Barrels',
-  'Stocks',
-  'Triggers',
-  'Scopes',
-  'Accessories',
-  'Hardware',
-  'Springs',
-  'Screws',
-  'Bolts',
-  'Nuts',
-  'Washers',
-  'Pins',
-  'Tools',
-  'Lubricants',
-  'Cleaning Supplies',
-  'Safety Equipment',
-  'Finished Goods',
-  'Other'
-];
 
 interface InventoryFormData {
   agPartNumber: string;
   name: string;
-  category: string;
   source: string;
   supplierPartNumber: string;
   costPer: string;
@@ -56,8 +32,6 @@ export default function InventoryManager() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [viewingNotes, setViewingNotes] = useState<string>('');
-  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
 
 
   // Export CSV functionality
@@ -137,18 +111,13 @@ export default function InventoryManager() {
     }
   };
 
-  // View notes functionality
-  const handleViewNotes = (notes: string) => {
-    setViewingNotes(notes || 'No notes available');
-    setIsNotesDialogOpen(true);
-  };
+
 
 
   
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
     name: '',
-    category: '',
     source: '',
     supplierPartNumber: '',
     costPer: '',
@@ -211,7 +180,6 @@ export default function InventoryManager() {
     setFormData({
       agPartNumber: '',
       name: '',
-      category: '',
       source: '',
       supplierPartNumber: '',
       costPer: '',
@@ -247,7 +215,6 @@ export default function InventoryManager() {
     const submitData = {
       agPartNumber: formData.agPartNumber,
       name: formData.name,
-      category: formData.category || null,
       source: formData.source || null,
       supplierPartNumber: formData.supplierPartNumber || null,
       costPer: formData.costPer ? parseFloat(formData.costPer) : null,
@@ -269,7 +236,6 @@ export default function InventoryManager() {
     setFormData({
       agPartNumber: item.agPartNumber,
       name: item.name,
-      category: item.category || '',
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
@@ -316,24 +282,7 @@ export default function InventoryManager() {
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="category">Category</Label>
-        <Select 
-          value={formData.category} 
-          onValueChange={(value) => handleSelectChange('category', value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -507,7 +456,7 @@ export default function InventoryManager() {
               </p>
             )}
             <div className="text-sm text-gray-500">
-              Expected columns: AG Part#, Name, Category, Source, Supplier Part #, Cost per, Order Date, Dept., Secondary Source, Notes
+              Expected columns: AG Part#, Name, Source, Supplier Part #, Cost per, Order Date, Dept., Secondary Source, Notes
             </div>
             <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={() => {
@@ -529,24 +478,7 @@ export default function InventoryManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Notes Viewing Dialog */}
-      <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Item Notes</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="max-h-64 overflow-y-auto">
-              <p className="text-sm whitespace-pre-wrap">{viewingNotes}</p>
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={() => setIsNotesDialogOpen(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       <Card>
         <CardHeader>
@@ -565,10 +497,10 @@ export default function InventoryManager() {
                   <tr className="bg-gray-50">
                     <th className="border border-gray-200 px-4 py-2 text-left">AG Part#</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
-                    <th className="border border-gray-200 px-4 py-2 text-left">Category</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Source</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Supplier Part #</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Cost per</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Notes</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Dept.</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Secondary Source</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
@@ -580,22 +512,18 @@ export default function InventoryManager() {
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="border border-gray-200 px-4 py-2 font-medium">{item.agPartNumber}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.name}</td>
-                        <td className="border border-gray-200 px-4 py-2">{item.category || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.source || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.supplierPartNumber || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          <div className="max-w-xs truncate" title={item.notes || 'No notes'}>
+                            {item.notes || '-'}
+                          </div>
+                        </td>
                         <td className="border border-gray-200 px-4 py-2">{item.department || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.secondarySource || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">
                           <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewNotes(item.notes || '')}
-                              title="View Notes"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
                             <Button
                               variant="outline"
                               size="sm"

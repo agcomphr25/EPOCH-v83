@@ -561,11 +561,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders/draft/:draftId/finalize", async (req, res) => {
     try {
       const { draftId } = req.params;
+      console.log("Finalize request for draftId:", draftId);
       const draft = await storage.getOrderDraftById(parseInt(draftId));
       
       if (!draft) {
+        console.log("Draft not found for ID:", draftId);
         return res.status(404).json({ error: "Order draft not found" });
       }
+      
+      console.log("Draft found:", draft.orderId, "Status:", draft.status);
       
       // Temporarily bypass all status requirements - allow finalization from any status
       // if (draft.status !== 'CONFIRMED' && draft.status !== 'DRAFT') {
@@ -573,6 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // }
       
       await storage.updateOrderDraft(draft.orderId, { status: 'FINALIZED' });
+      console.log("Successfully finalized order:", draft.orderId);
       res.json({ success: true, message: "Order finalized successfully" });
     } catch (error) {
       console.error("Finalize order error:", error);

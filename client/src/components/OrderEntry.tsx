@@ -621,6 +621,11 @@ export default function OrderEntry() {
                               onSelect={() => {
                                 setModelId(model.id);
                                 setModelOpen(false);
+                                
+                                // If the selected model has "Tikka" in its name, default barrel option to "tikka_proof_sendero"
+                                if (model.name.toLowerCase().includes('tikka')) {
+                                  setFeatures(prev => ({ ...prev, barrel_inlet: 'tikka_proof_sendero' }));
+                                }
                               }}
                             >
                               <div className="flex justify-between items-center w-full">

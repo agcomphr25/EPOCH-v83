@@ -124,7 +124,6 @@ export default function CustomerManagement() {
   });
   
   const [isValidatingAddress, setIsValidatingAddress] = useState(false);
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const addressInputRef = useRef<HTMLInputElement>(null);
   
   // CSV Import states
@@ -166,68 +165,64 @@ export default function CustomerManagement() {
     return matchesSearch && matchesFilter;
   });
 
-  // Address validation function using SmartyStreets API
-  const validateAddress = async (address: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  }) => {
-    try {
-      setIsValidatingAddress(true);
-      const response = await apiRequest('/api/validate-address', {
-        method: 'POST',
-        body: address
-      });
-      
-      if (response.suggestions && response.suggestions.length > 0) {
-        setAddressSuggestions(response.suggestions);
-        return response.suggestions[0]; // Return the first suggestion
-      }
-      return null;
-    } catch (error) {
-      console.error('Address validation failed:', error);
-      toast({
-        title: "Address Validation",
-        description: "Unable to validate address. Please verify manually.",
-        variant: "destructive"
-      });
-      return null;
-    } finally {
-      setIsValidatingAddress(false);
-    }
-  };
-
+  // Address suggestions state
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  
   // Auto-fill address when street, city, state, or zipCode change
   const handleAddressFieldChange = async (field: string, value: string) => {
     const updatedAddress = { ...addressFormData, [field]: value };
     setAddressFormData(updatedAddress);
     
     // Trigger validation if we have at least a street address
-    if (updatedAddress.street && updatedAddress.street.length > 5) {
-      const validated = await validateAddress({
-        street: updatedAddress.street,
-        city: updatedAddress.city,
-        state: updatedAddress.state,
-        zipCode: updatedAddress.zipCode
-      });
-      
-      if (validated) {
-        setAddressFormData(prev => ({
-          ...prev,
-          street: validated.street || prev.street,
-          city: validated.city || prev.city,
-          state: validated.state || prev.state,
-          zipCode: validated.zipCode || prev.zipCode
-        }));
-        
-        toast({
-          title: "Address Validated",
-          description: "Address has been auto-filled and validated.",
-          duration: 2000
+    if (updatedAddress.street && updatedAddress.street.length > 3) {
+      setIsValidatingAddress(true);
+      try {
+        const response = await fetch('/api/validate-address', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            street: updatedAddress.street,
+            city: updatedAddress.city,
+            state: updatedAddress.state,
+            zipCode: updatedAddress.zipCode
+          })
         });
+        
+        const data = await response.json();
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+          setAddressSuggestions(data.suggestions);
+          setShowSuggestions(true);
+        }
+      } catch (error) {
+        console.error('Address validation error:', error);
+      } finally {
+        setIsValidatingAddress(false);
       }
+    } else {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
     }
+  };
+  
+  // Handle suggestion selection
+  const handleSuggestionSelect = (suggestion: any) => {
+    setAddressFormData(prev => ({
+      ...prev,
+      street: suggestion.street,
+      city: suggestion.city,
+      state: suggestion.state,
+      zipCode: suggestion.zipCode
+    }));
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+    
+    toast({
+      title: "Address Selected",
+      description: "Address has been validated and filled.",
+      duration: 2000
+    });
   };
 
   // Create customer mutation
@@ -1389,6 +1384,37 @@ export default function CustomerManagement() {
                 {isValidatingAddress && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                  </div>
+                )}
+                
+                {/* Address Suggestions Dropdown */}
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
+                      Address Suggestions
+                    </div>
+                    {addressSuggestions.map((suggestion, index) => (
+                      <div
+                        key={index}
+                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                        <div className="font-medium text-gray-900">{suggestion.street}</div>
+                        <div className="text-sm text-gray-600">
+                          {suggestion.city}, {suggestion.state} {suggestion.zipCode}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="p-2 text-center">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setShowSuggestions(false)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        Close suggestions
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

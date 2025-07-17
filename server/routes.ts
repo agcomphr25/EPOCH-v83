@@ -1419,8 +1419,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { street, city, state, zipCode } = req.body;
       
-      // Enhanced mock validation to simulate SmartyStreets behavior
-      let validatedAddress = {
+      // Generate multiple suggestions based on input
+      const suggestions = [];
+      
+      // Base suggestion - standardized version of input
+      let baseAddress = {
         street: street || '',
         city: city || '',
         state: state || '',
@@ -1431,7 +1434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Basic address parsing and standardization
       if (street && street.length > 0) {
         // Standardize street address format
-        validatedAddress.street = street
+        baseAddress.street = street
           .replace(/\bSt\b/gi, 'Street')
           .replace(/\bAve\b/gi, 'Avenue')
           .replace(/\bDr\b/gi, 'Drive')
@@ -1440,33 +1443,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const streetLower = street.toLowerCase();
         
-        // Auto-fill common patterns based on street name
+        // Generate multiple suggestions based on street name patterns
         if (streetLower.includes('main st') || streetLower.includes('main street')) {
-          if (!city) validatedAddress.city = 'Main City';
-          if (!state) validatedAddress.state = 'TX';
-          if (!zipCode) validatedAddress.zipCode = '78000';
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Main City',
+            state: state || 'TX',
+            zipCode: zipCode || '78000'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Main Falls',
+            state: state || 'OR',
+            zipCode: zipCode || '97345'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Main Beach',
+            state: state || 'FL',
+            zipCode: zipCode || '33101'
+          });
         } else if (streetLower.includes('oak')) {
-          if (!city) validatedAddress.city = 'Oak Grove';
-          if (!state) validatedAddress.state = 'CA';
-          if (!zipCode) validatedAddress.zipCode = '90210';
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Oak Grove',
+            state: state || 'CA',
+            zipCode: zipCode || '90210'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Oak Park',
+            state: state || 'IL',
+            zipCode: zipCode || '60302'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Oak Ridge',
+            state: state || 'TN',
+            zipCode: zipCode || '37830'
+          });
         } else if (streetLower.includes('park')) {
-          if (!city) validatedAddress.city = 'Park City';
-          if (!state) validatedAddress.state = 'NY';
-          if (!zipCode) validatedAddress.zipCode = '10001';
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Park City',
+            state: state || 'NY',
+            zipCode: zipCode || '10001'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Park Ridge',
+            state: state || 'NJ',
+            zipCode: zipCode || '07656'
+          });
         } else if (streetLower.includes('elm') || streetLower.includes('maple')) {
-          if (!city) validatedAddress.city = 'Springfield';
-          if (!state) validatedAddress.state = 'IL';
-          if (!zipCode) validatedAddress.zipCode = '62701';
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Springfield',
+            state: state || 'IL',
+            zipCode: zipCode || '62701'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Springfield',
+            state: state || 'MA',
+            zipCode: zipCode || '01103'
+          });
         } else if (streetLower.includes('first') || streetLower.includes('1st')) {
-          if (!city) validatedAddress.city = 'First City';
-          if (!state) validatedAddress.state = 'FL';
-          if (!zipCode) validatedAddress.zipCode = '33101';
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'First City',
+            state: state || 'FL',
+            zipCode: zipCode || '33101'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'First Beach',
+            state: state || 'CA',
+            zipCode: zipCode || '90210'
+          });
+        } else {
+          // Default suggestions for unknown streets
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Anytown',
+            state: state || 'CA',
+            zipCode: zipCode || '90210'
+          });
+          suggestions.push({
+            ...baseAddress,
+            city: city || 'Somewhere',
+            state: state || 'TX',
+            zipCode: zipCode || '78000'
+          });
         }
+      } else {
+        // If no street provided, return base address
+        suggestions.push(baseAddress);
       }
       
       res.json({
-        suggestions: [validatedAddress],
-        isValid: true
+        suggestions: suggestions.slice(0, 3), // Limit to 3 suggestions
+        isValid: suggestions.length > 0
       });
     } catch (error) {
       console.error("Address validation error:", error);

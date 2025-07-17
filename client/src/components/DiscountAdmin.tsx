@@ -109,6 +109,7 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
   };
 
   const handleEditSale = (sale: ShortTermSale) => {
+    console.log('Edit sale clicked:', sale);
     setFormSale({
       id: sale.id,
       name: sale.name,
@@ -271,7 +272,12 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleEditSale(sale)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('Edit button clicked for sale:', sale.id);
+                                handleEditSale(sale);
+                              }}
                               disabled={updateMutation.isPending}
                             >
                               <Edit3 className="h-4 w-4" />

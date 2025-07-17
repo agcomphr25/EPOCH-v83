@@ -1277,11 +1277,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/addresses", async (req, res) => {
     try {
+      console.log("Received address data:", req.body);
       const validatedData = insertCustomerAddressSchema.parse(req.body);
       const address = await storage.createCustomerAddress(validatedData);
       res.status(201).json(address);
     } catch (error) {
       console.error("Create customer address error:", error);
+      if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
+        return res.status(400).json({ 
+          error: "Invalid customer address data", 
+          details: error.errors 
+        });
+      }
       res.status(400).json({ error: "Invalid customer address data" });
     }
   });

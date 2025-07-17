@@ -240,28 +240,48 @@ export default function OrderEntry() {
 
   // Auto-select Tikka barrel inlet when model and features are both loaded
   useEffect(() => {
+    console.log('=== Auto-select Effect Debug ===');
+    console.log('modelId:', modelId);
+    console.log('featureDefs.length:', featureDefs.length);
+    console.log('modelOptions.length:', modelOptions.length);
+    console.log('current features.barrel_inlet:', features.barrel_inlet);
+    
     if (modelId && featureDefs.length > 0 && modelOptions.length > 0) {
       const selectedModel = modelOptions.find(m => m.id === modelId);
+      console.log('selectedModel found:', selectedModel);
+      
       if (selectedModel) {
         const hasTikka = selectedModel.name.toLowerCase().includes('tikka') || selectedModel.displayName.toLowerCase().includes('tikka');
-        console.log('Auto-select check - Model:', selectedModel.displayName, 'Has Tikka:', hasTikka);
+        console.log('Model name check:', selectedModel.name, 'displayName check:', selectedModel.displayName, 'Has Tikka:', hasTikka);
         
         if (hasTikka) {
+          console.log('All feature definitions:', featureDefs.map(f => ({ id: f.id, name: f.name, optionsCount: f.options?.length })));
+          
           const barrelFeature = featureDefs.find(f => f.id === 'barrel_inlet');
-          console.log('Auto-select - Barrel feature found:', barrelFeature);
+          console.log('Barrel feature search result:', barrelFeature);
           
           if (barrelFeature) {
+            console.log('Barrel feature options:', barrelFeature.options);
             const tikkaOption = barrelFeature.options?.find(opt => opt.value === 'tikka_proof_sendero');
-            console.log('Auto-select - Tikka option found:', tikkaOption);
+            console.log('Tikka option search result:', tikkaOption);
             
             if (tikkaOption && !features.barrel_inlet) {
-              console.log('Auto-selecting tikka_proof_sendero for barrel_inlet');
+              console.log('*** SETTING TIKKA OPTION ***');
               setFeatures(prev => ({ ...prev, barrel_inlet: 'tikka_proof_sendero' }));
+            } else {
+              console.log('Not setting tikka option. tikkaOption:', !!tikkaOption, 'existing barrel_inlet:', features.barrel_inlet);
             }
+          } else {
+            console.log('*** BARREL FEATURE NOT FOUND ***');
+            console.log('Available feature IDs:', featureDefs.map(f => f.id));
+            // Let's try searching for any feature with "barrel" in the name
+            const barrelFeatures = featureDefs.filter(f => f.id.includes('barrel') || f.name.toLowerCase().includes('barrel'));
+            console.log('Features containing "barrel":', barrelFeatures);
           }
         }
       }
     }
+    console.log('=== End Auto-select Effect Debug ===');
   }, [modelId, featureDefs, modelOptions, features.barrel_inlet]);
 
   const generateOrderId = useCallback(async () => {

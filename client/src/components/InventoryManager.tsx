@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 import { Textarea } from '@/components/ui/textarea';
@@ -13,18 +13,40 @@ import { Plus, Edit, Trash2, Package, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
 
-
+const categories = [
+  'Raw Materials',
+  'Components',
+  'Barrels',
+  'Stocks',
+  'Triggers',
+  'Scopes',
+  'Accessories',
+  'Hardware',
+  'Springs',
+  'Screws',
+  'Bolts',
+  'Nuts',
+  'Washers',
+  'Pins',
+  'Tools',
+  'Lubricants',
+  'Cleaning Supplies',
+  'Safety Equipment',
+  'Finished Goods',
+  'Other'
+];
 
 interface InventoryFormData {
   agPartNumber: string;
   name: string;
+  category: string;
   source: string;
   supplierPartNumber: string;
   costPer: string;
   orderDate: string;
-  notes: string;
   department: string;
   secondarySource: string;
+  notes: string;
 }
 
 export default function InventoryManager() {
@@ -64,13 +86,14 @@ export default function InventoryManager() {
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
     name: '',
+    category: '',
     source: '',
     supplierPartNumber: '',
     costPer: '',
     orderDate: '',
-    notes: '',
     department: '',
-    secondarySource: ''
+    secondarySource: '',
+    notes: ''
   });
 
   // Load inventory items
@@ -126,13 +149,14 @@ export default function InventoryManager() {
     setFormData({
       agPartNumber: '',
       name: '',
+      category: '',
       source: '',
       supplierPartNumber: '',
       costPer: '',
       orderDate: '',
-      notes: '',
       department: '',
-      secondarySource: ''
+      secondarySource: '',
+      notes: ''
     });
   };
 
@@ -161,13 +185,14 @@ export default function InventoryManager() {
     const submitData = {
       agPartNumber: formData.agPartNumber,
       name: formData.name,
+      category: formData.category || null,
       source: formData.source || null,
       supplierPartNumber: formData.supplierPartNumber || null,
       costPer: formData.costPer ? parseFloat(formData.costPer) : null,
       orderDate: formData.orderDate || null,
-      notes: formData.notes || null,
       department: formData.department || null,
       secondarySource: formData.secondarySource || null,
+      notes: formData.notes || null,
     };
 
     if (editingItem) {
@@ -182,13 +207,14 @@ export default function InventoryManager() {
     setFormData({
       agPartNumber: item.agPartNumber,
       name: item.name,
+      category: item.category || '',
       source: item.source || '',
       supplierPartNumber: item.supplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
       orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
-      notes: item.notes || '',
       department: item.department || '',
       secondarySource: item.secondarySource || '',
+      notes: item.notes || '',
     });
     setIsEditOpen(true);
   };
@@ -226,6 +252,25 @@ export default function InventoryManager() {
             required
           />
         </div>
+      </div>
+
+      <div>
+        <Label htmlFor="category">Category</Label>
+        <Select 
+          value={formData.category} 
+          onValueChange={(value) => handleSelectChange('category', value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((category) => (
+              <SelectItem key={category} value={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -390,6 +435,7 @@ export default function InventoryManager() {
                   <tr className="bg-gray-50">
                     <th className="border border-gray-200 px-4 py-2 text-left">AG Part#</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Category</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Source</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Supplier Part #</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Cost per</th>
@@ -403,6 +449,7 @@ export default function InventoryManager() {
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="border border-gray-200 px-4 py-2 font-medium">{item.agPartNumber}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.name}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.category || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.source || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.supplierPartNumber || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>

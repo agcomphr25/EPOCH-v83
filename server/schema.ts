@@ -150,13 +150,14 @@ export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
   agPartNumber: text("ag_part_number").notNull().unique(), // AG Part#
   name: text("name").notNull(), // Name
+  category: text("category"), // Category
   source: text("source"), // Source
   supplierPartNumber: text("supplier_part_number"), // Supplier Part #
   costPer: real("cost_per"), // Cost per
   orderDate: date("order_date"), // Order Date
-  notes: text("notes"), // Notes
   department: text("department"), // Dept.
   secondarySource: text("secondary_source"), // Secondary Source
+  notes: text("notes"), // Notes
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -423,13 +424,14 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems).omit
 }).extend({
   agPartNumber: z.string().min(1, "AG Part# is required"),
   name: z.string().min(1, "Name is required"),
+  category: z.string().optional().nullable(),
   source: z.string().optional().nullable(),
   supplierPartNumber: z.string().optional().nullable(),
   costPer: z.number().min(0).optional().nullable(),
   orderDate: z.coerce.date().optional().nullable(),
-  notes: z.string().optional().nullable(),
   department: z.string().optional().nullable(),
   secondarySource: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
 

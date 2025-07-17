@@ -828,18 +828,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const items = await storage.getAllInventoryItems();
       
-      const csvHeader = "AG Part#,Name,Source,Supplier Part #,Cost per,Order Date,Notes,Dept.,Secondary Source,Active,Created At,Updated At\n";
+      const csvHeader = "AG Part#,Name,Category,Source,Supplier Part #,Cost per,Order Date,Dept.,Secondary Source,Notes,Active,Created At,Updated At\n";
       const csvRows = items.map(item => {
         return [
           item.agPartNumber || '',
           item.name || '',
+          item.category || '',
           item.source || '',
           item.supplierPartNumber || '',
           item.costPer || '',
           item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
-          (item.notes || '').replace(/"/g, '""'),
           item.department || '',
           item.secondarySource || '',
+          (item.notes || '').replace(/"/g, '""'),
           item.isActive ? 'Yes' : 'No',
           item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
           item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : ''

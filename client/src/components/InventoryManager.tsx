@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit, Trash2, Package, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Download, Upload, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
 
@@ -54,6 +54,10 @@ export default function InventoryManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [viewingNotes, setViewingNotes] = useState<string>('');
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
 
 
   // Export CSV functionality
@@ -79,6 +83,51 @@ export default function InventoryManager() {
       console.error('CSV export error:', error);
       toast.error('Failed to export inventory');
     }
+  };
+
+  // Import CSV functionality
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImportFile(file);
+    }
+  };
+
+  const handleImportCSV = async () => {
+    if (!importFile) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    try {
+      const csvData = await importFile.text();
+      const response = await apiRequest('/api/inventory/import/csv', {
+        method: 'POST',
+        body: { csvData }
+      });
+
+      if (response.success) {
+        toast.success(`Successfully imported ${response.importedCount} items`);
+        if (response.errors.length > 0) {
+          console.warn('Import errors:', response.errors);
+          toast.error(`${response.errors.length} rows had errors - check console for details`);
+        }
+        setIsImportDialogOpen(false);
+        setImportFile(null);
+        queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      } else {
+        toast.error('Import failed');
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import CSV file');
+    }
+  };
+
+  // View notes functionality
+  const handleViewNotes = (notes: string) => {
+    setViewingNotes(notes || 'No notes available');
+    setIsNotesDialogOpen(true);
   };
 
 
@@ -393,7 +442,11 @@ export default function InventoryManager() {
             Export CSV
           </Button>
           
-
+          {/* Import Button */}
+          <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
           
           {/* Add Item Button */}
           <Dialog open={isCreateOpen} onOpenChange={(open) => {
@@ -418,6 +471,62 @@ export default function InventoryManager() {
         </div>
       </div>
 
+      {/* Import CSV Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import CSV File</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="csvFile">Select CSV File</Label>
+              <Input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                className="mt-2"
+              />
+            </div>
+            {importFile && (
+              <p className="text-sm text-gray-600">
+                Selected file: {importFile.name}
+              </p>
+            )}
+            <div className="text-sm text-gray-500">
+              Expected columns: AG Part#, Name, Category, Source, Supplier Part #, Cost per, Order Date, Dept., Secondary Source, Notes
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleImportCSV} disabled={!importFile}>
+                Import
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes Viewing Dialog */}
+      <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Item Notes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="max-h-64 overflow-y-auto">
+              <p className="text-sm whitespace-pre-wrap">{viewingNotes}</p>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => setIsNotesDialogOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -440,6 +549,7 @@ export default function InventoryManager() {
                     <th className="border border-gray-200 px-4 py-2 text-left">Supplier Part #</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Cost per</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Dept.</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Secondary Source</th>
                     <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
@@ -454,12 +564,22 @@ export default function InventoryManager() {
                         <td className="border border-gray-200 px-4 py-2">{item.supplierPartNumber || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">{item.department || '-'}</td>
+                        <td className="border border-gray-200 px-4 py-2">{item.secondarySource || '-'}</td>
                         <td className="border border-gray-200 px-4 py-2">
                           <div className="flex space-x-2">
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => handleViewNotes(item.notes || '')}
+                              title="View Notes"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => handleEdit(item)}
+                              title="Edit"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -468,6 +588,7 @@ export default function InventoryManager() {
                               size="sm"
                               onClick={() => handleDelete(item.id)}
                               disabled={deleteMutation.isPending}
+                              title="Delete"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

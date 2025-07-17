@@ -823,6 +823,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Inventory CSV import
+  app.post("/api/inventory/import/csv", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+      
+      if (!csvData || typeof csvData !== 'string') {
+        return res.status(400).json({ error: "CSV data is required" });
+      }
+
+      const lines = csvData.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must contain at least a header and one data row" });
+      }
+
+      const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const importedItems = [];
+      const errors = [];
+
+      // Expected columns
+      const expectedColumns = ['AG Part#', 'Name', 'Category', 'Source', 'Supplier Part #', 'Cost per', 'Order Date', 'Dept.', 'Secondary Source', 'Notes'];
+      
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          
+          if (values.length < 2) continue; // Skip empty rows
+          
+          const itemData: any = {
+            agPartNumber: values[0] || '',
+            name: values[1] || '',
+            category: values[2] || null,
+            source: values[3] || null,
+            supplierPartNumber: values[4] || null,
+            costPer: values[5] ? parseFloat(values[5]) || null : null,
+            orderDate: values[6] || null,
+            department: values[7] || null,
+            secondarySource: values[8] || null,
+            notes: values[9] || null,
+          };
+
+          if (!itemData.agPartNumber || !itemData.name) {
+            errors.push(`Row ${i + 1}: AG Part# and Name are required`);
+            continue;
+          }
+
+          const validatedData = insertInventoryItemSchema.parse(itemData);
+          const item = await storage.createInventoryItem(validatedData);
+          importedItems.push(item);
+        } catch (error) {
+          errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        importedCount: importedItems.length,
+        errors: errors,
+        items: importedItems
+      });
+    } catch (error) {
+      console.error("Import inventory CSV error:", error);
+      res.status(500).json({ error: "Failed to import inventory CSV" });
+    }
+  });
+
   // Inventory CSV export
   app.get("/api/inventory/export/csv", async (req, res) => {
     try {

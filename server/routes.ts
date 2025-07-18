@@ -530,6 +530,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get individual order by orderId
+  app.get("/api/orders/:orderId", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      
+      // Get order by orderId string
+      const order = await storage.getOrderDraft(orderId);
+      
+      if (order) {
+        res.json(order);
+      } else {
+        res.status(404).json({ error: "Order not found" });
+      }
+    } catch (error) {
+      console.error("Get order error:", error);
+      res.status(500).json({ error: "Failed to retrieve order" });
+    }
+  });
+
   app.delete("/api/orders/draft/:orderId", async (req, res) => {
     try {
       const { orderId } = req.params;

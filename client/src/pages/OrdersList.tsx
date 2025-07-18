@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Edit, Eye, Package, CalendarDays, User, FileText, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
+import OrderPricingTooltip from '@/components/OrderPricingTooltip';
 
 interface Order {
   id: number;
@@ -226,7 +227,11 @@ export default function OrdersList() {
                 {orders.map((order) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-medium">
-                      {order.orderId}
+                      <OrderPricingTooltip orderId={order.orderId}>
+                        <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
+                          {order.orderId}
+                        </span>
+                      </OrderPricingTooltip>
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(order.status)}>

@@ -175,6 +175,30 @@ export const inventoryScans = pgTable("inventory_scans", {
   scannedAt: timestamp("scanned_at").defaultNow(),
 });
 
+export const partsRequests = pgTable("parts_requests", {
+  id: serial("id").primaryKey(),
+  partNumber: text("part_number").notNull(),
+  partName: text("part_name").notNull(),
+  requestedBy: text("requested_by").notNull(),
+  department: text("department"),
+  quantity: integer("quantity").notNull(),
+  urgency: text("urgency").notNull(), // LOW, MEDIUM, HIGH, CRITICAL
+  supplier: text("supplier"),
+  estimatedCost: real("estimated_cost"),
+  reason: text("reason"), // Why the part is needed
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, ORDERED, RECEIVED, REJECTED
+  requestDate: timestamp("request_date").defaultNow().notNull(),
+  approvedBy: text("approved_by"),
+  approvedDate: timestamp("approved_date"),
+  orderDate: timestamp("order_date"),
+  expectedDelivery: date("expected_delivery"),
+  actualDelivery: date("actual_delivery"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
   employeeCode: text("employee_code").unique(),
@@ -547,6 +571,31 @@ export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs).omit
   signatureDataURL: z.string().optional().nullable(),
 });
 
+export const insertPartsRequestSchema = createInsertSchema(partsRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  requestDate: true,
+}).extend({
+  partNumber: z.string().min(1, "Part number is required"),
+  partName: z.string().min(1, "Part name is required"),
+  requestedBy: z.string().min(1, "Requested by is required"),
+  department: z.string().optional().nullable(),
+  quantity: z.number().positive("Quantity must be positive"),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  supplier: z.string().optional().nullable(),
+  estimatedCost: z.number().min(0).optional().nullable(),
+  reason: z.string().optional().nullable(),
+  status: z.enum(['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED', 'REJECTED']).default('PENDING'),
+  approvedBy: z.string().optional().nullable(),
+  approvedDate: z.coerce.date().optional().nullable(),
+  orderDate: z.coerce.date().optional().nullable(),
+  expectedDelivery: z.coerce.date().optional().nullable(),
+  actualDelivery: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -593,6 +642,8 @@ export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
+export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
+export type PartsRequest = typeof partsRequests.$inferSelect;
 
 // Module 8: API Integrations & Communications
 export const customers = pgTable("customers", {

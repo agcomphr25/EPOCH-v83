@@ -31,6 +31,7 @@ import {
   insertTimeClockEntrySchema,
   insertChecklistItemSchema,
   insertOnboardingDocSchema,
+  insertPartsRequestSchema,
   insertCustomerSchema,
   insertCustomerAddressSchema,
   insertCommunicationLogSchema,
@@ -996,7 +997,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Parts Requests routes
+  app.get("/api/parts-requests", async (req, res) => {
+    try {
+      const requests = await storage.getAllPartsRequests();
+      res.json(requests);
+    } catch (error) {
+      console.error("Get parts requests error:", error);
+      res.status(500).json({ error: "Failed to get parts requests" });
+    }
+  });
 
+  app.post("/api/parts-requests", async (req, res) => {
+    try {
+      const validatedData = insertPartsRequestSchema.parse(req.body);
+      const request = await storage.createPartsRequest(validatedData);
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Create parts request error:", error);
+      res.status(400).json({ error: "Invalid parts request data" });
+    }
+  });
+
+  app.put("/api/parts-requests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertPartsRequestSchema.partial().parse(req.body);
+      const request = await storage.updatePartsRequest(id, validatedData);
+      res.json(request);
+    } catch (error) {
+      console.error("Update parts request error:", error);
+      res.status(400).json({ error: "Invalid parts request data" });
+    }
+  });
+
+  app.delete("/api/parts-requests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePartsRequest(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete parts request error:", error);
+      res.status(500).json({ error: "Failed to delete parts request" });
+    }
+  });
+
+  // Outstanding Orders route
+  app.get("/api/orders/outstanding", async (req, res) => {
+    try {
+      const orders = await storage.getOutstandingOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Get outstanding orders error:", error);
+      res.status(500).json({ error: "Failed to get outstanding orders" });
+    }
+  });
 
   // Employee routes
   app.get("/api/employees", async (req, res) => {

@@ -1,6 +1,6 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
-  inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
+  inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
@@ -17,6 +17,7 @@ import {
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
   type InventoryScan, type InsertInventoryScan,
+  type PartsRequest, type InsertPartsRequest,
   type Employee, type InsertEmployee,
   type QcDefinition, type InsertQcDefinition,
   type QcSubmission, type InsertQcSubmission,
@@ -137,6 +138,16 @@ export interface IStorage {
   getInventoryScan(id: number): Promise<InventoryScan | undefined>;
   createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan>;
   deleteInventoryScan(id: number): Promise<void>;
+
+  // Parts Requests CRUD
+  getAllPartsRequests(): Promise<PartsRequest[]>;
+  getPartsRequest(id: number): Promise<PartsRequest | undefined>;
+  createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest>;
+  updatePartsRequest(id: number, data: Partial<InsertPartsRequest>): Promise<PartsRequest>;
+  deletePartsRequest(id: number): Promise<void>;
+
+  // Outstanding Orders
+  getOutstandingOrders(): Promise<OrderDraft[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -729,6 +740,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInventoryScan(id: number): Promise<void> {
     await db.delete(inventoryScans).where(eq(inventoryScans.id, id));
+  }
+
+  // Parts Requests CRUD
+  async getAllPartsRequests(): Promise<PartsRequest[]> {
+    return await db.select().from(partsRequests).where(eq(partsRequests.isActive, true)).orderBy(desc(partsRequests.requestDate));
+  }
+
+  async getPartsRequest(id: number): Promise<PartsRequest | undefined> {
+    const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, id));
+    return request || undefined;
+  }
+
+  async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
+    const [request] = await db.insert(partsRequests).values(data).returning();
+    return request;
+  }
+
+  async updatePartsRequest(id: number, data: Partial<InsertPartsRequest>): Promise<PartsRequest> {
+    const [request] = await db.update(partsRequests)
+      .set(data)
+      .where(eq(partsRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async deletePartsRequest(id: number): Promise<void> {
+    await db.delete(partsRequests).where(eq(partsRequests.id, id));
+  }
+
+  // Outstanding Orders
+  async getOutstandingOrders(): Promise<OrderDraft[]> {
+    return await db.select().from(orderDrafts)
+      .where(or(
+        eq(orderDrafts.status, 'PENDING'),
+        eq(orderDrafts.status, 'CONFIRMED'),
+        eq(orderDrafts.status, 'IN_PRODUCTION'),
+        eq(orderDrafts.status, 'READY')
+      ))
+      .orderBy(desc(orderDrafts.dueDate));
   }
 
   // Employees CRUD

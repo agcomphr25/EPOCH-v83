@@ -45,7 +45,7 @@ export default function PersistentDiscountManager() {
   const createMutation = useMutation({
     mutationFn: (data: PersistentDiscountFormData) => apiRequest('/api/persistent-discounts', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/persistent-discounts'] });
@@ -61,7 +61,7 @@ export default function PersistentDiscountManager() {
     mutationFn: ({ id, data }: { id: number; data: Partial<PersistentDiscountFormData> }) => 
       apiRequest(`/api/persistent-discounts/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/persistent-discounts'] });

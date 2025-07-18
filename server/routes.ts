@@ -137,12 +137,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/persistent-discounts/:id", async (req, res) => {
     try {
+      console.log("Updating persistent discount - Raw body:", req.body);
       const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid discount ID" });
+      }
+      
       const result = insertPersistentDiscountSchema.partial().parse(req.body);
+      console.log("Parsed data:", result);
+      
       const discount = await storage.updatePersistentDiscount(id, result);
       res.json(discount);
     } catch (error) {
-      res.status(400).json({ error: "Invalid persistent discount data" });
+      console.error("Persistent discount update error:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      res.status(400).json({ 
+        error: "Invalid persistent discount data", 
+        details: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 

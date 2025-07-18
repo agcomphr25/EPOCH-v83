@@ -124,6 +124,7 @@ export const orderDrafts = pgTable("order_drafts", {
   featureQuantities: jsonb("feature_quantities"),
   discountCode: text("discount_code"),
   shipping: real("shipping").default(0),
+  tikkaOption: text("tikka_option"),
   status: text("status").default("DRAFT"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

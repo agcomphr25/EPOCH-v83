@@ -217,6 +217,7 @@ export default function OrderEntry() {
             setAdditionalItems(draftResponse.additionalItems || []);
             setPayments(draftResponse.payments || []);
             setFeatureQuantities(draftResponse.featureQuantities || {});
+            setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
           }
         } catch (error) {
@@ -416,6 +417,7 @@ export default function OrderEntry() {
         additionalItems,
         payments,
         featureQuantities,
+        tikkaOption,
         status: action === 'save' ? 'DRAFT' : (action === 'confirm' ? 'CONFIRMED' : 'FINALIZED'),
         pricing: calculateTotal()
       };

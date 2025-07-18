@@ -1243,6 +1243,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem> {
+    // Calculate total price if quantity or unitPrice changed
+    if (data.quantity !== undefined || data.unitPrice !== undefined) {
+      const currentItem = await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
+      if (currentItem.length > 0) {
+        const item = currentItem[0];
+        const quantity = data.quantity ?? item.quantity;
+        const unitPrice = data.unitPrice ?? item.unitPrice;
+        data.totalPrice = quantity * unitPrice;
+      }
+    }
+    
     const [item] = await db.update(purchaseOrderItems)
       .set(data)
       .where(eq(purchaseOrderItems.id, id))
@@ -1252,6 +1263,48 @@ export class DatabaseStorage implements IStorage {
 
   async deletePurchaseOrderItem(id: number): Promise<void> {
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
+  }
+
+  // Generate orders from PO items
+  async generateOrdersFromPO(poId: number): Promise<OrderDraft[]> {
+    const items = await this.getPurchaseOrderItems(poId);
+    const po = await this.getPurchaseOrder(poId);
+    
+    if (!po) {
+      throw new Error('Purchase order not found');
+    }
+
+    const orders: OrderDraft[] = [];
+    
+    for (const item of items) {
+      for (let i = 0; i < item.quantity; i++) {
+        const orderId = await this.generateOrderId();
+        const orderData: InsertOrderDraft = {
+          orderId,
+          orderDate: new Date(),
+          dueDate: new Date(po.expectedDelivery),
+          customerId: po.customerId,
+          customerPO: po.poNumber,
+          modelId: item.itemType === 'stock_model' ? item.itemId : undefined,
+          features: item.itemType === 'custom_model' ? item.specifications : undefined,
+          status: 'DRAFT'
+        };
+        
+        const order = await this.createOrderDraft(orderData);
+        orders.push(order);
+      }
+      
+      // Update the item's order count
+      await this.updatePurchaseOrderItem(item.id, { orderCount: item.quantity });
+    }
+    
+    return orders;
+  }
+
+  private async generateOrderId(): Promise<string> {
+    // Generate a unique order ID (this should match your existing order ID generation logic)
+    const timestamp = Date.now().toString();
+    return `P1-${timestamp.slice(-6)}`;
   }
 
 }

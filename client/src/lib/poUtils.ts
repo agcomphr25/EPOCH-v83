@@ -18,9 +18,13 @@ export interface PurchaseOrder {
 export interface PurchaseOrderItem {
   id: number;
   poId: number;
-  modelId: string;
-  modelName: string;
+  itemType: 'stock_model' | 'custom_model' | 'feature_item';
+  itemId: string;
+  itemName: string;
   quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  specifications?: any;
   notes?: string;
   orderCount?: number;
   createdAt: string;
@@ -38,10 +42,35 @@ export interface CreatePurchaseOrderData {
 }
 
 export interface CreatePurchaseOrderItemData {
-  modelId: string;
-  modelName: string;
+  itemType: 'stock_model' | 'custom_model' | 'feature_item';
+  itemId: string;
+  itemName: string;
   quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  specifications?: any;
   notes?: string;
+}
+
+export interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
+  price: number;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface Feature {
+  id: string;
+  name: string;
+  displayName: string;
+  type: string;
+  price: number;
+  category: string;
+  subCategory?: string;
+  isActive: boolean;
+  options?: any[];
 }
 
 // Fetch all POs
@@ -122,6 +151,18 @@ export async function generateOrdersFromPO(poId: number): Promise<void> {
   await apiRequest(`/api/pos/${poId}/generate-orders`, {
     method: 'POST'
   });
+}
+
+// Fetch stock models for PO items
+export async function fetchStockModels(): Promise<StockModel[]> {
+  const response = await apiRequest('/api/stock-models');
+  return response;
+}
+
+// Fetch features for PO items
+export async function fetchFeatures(): Promise<Feature[]> {
+  const response = await apiRequest('/api/features');
+  return response;
 }
 
 // CSV Import functionality would go here

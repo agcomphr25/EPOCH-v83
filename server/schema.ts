@@ -773,9 +773,13 @@ export const purchaseOrders = pgTable('purchase_orders', {
 export const purchaseOrderItems = pgTable('purchase_order_items', {
   id: serial('id').primaryKey(),
   poId: integer('po_id').references(() => purchaseOrders.id).notNull(),
-  modelId: text('model_id').notNull(),
-  modelName: text('model_name').notNull(), // Denormalized for performance
+  itemType: text('item_type').notNull(), // 'stock_model', 'custom_model', 'feature_item'
+  itemId: text('item_id').notNull(), // References stockModels.id, features.id, or custom identifier
+  itemName: text('item_name').notNull(), // Display name for the item
   quantity: integer('quantity').notNull(),
+  unitPrice: real('unit_price').default(0), // Price per unit
+  totalPrice: real('total_price').default(0), // quantity * unitPrice
+  specifications: jsonb('specifications'), // Custom specifications for custom models
   notes: text('notes'),
   orderCount: integer('order_count').default(0), // Number of orders generated from this item
   createdAt: timestamp('created_at').defaultNow(),
@@ -845,9 +849,13 @@ export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderIte
   updatedAt: true,
 }).extend({
   poId: z.number().min(1, "PO ID is required"),
-  modelId: z.string().min(1, "Model ID is required"),
-  modelName: z.string().min(1, "Model Name is required"),
+  itemType: z.enum(['stock_model', 'custom_model', 'feature_item']),
+  itemId: z.string().min(1, "Item ID is required"),
+  itemName: z.string().min(1, "Item Name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
+  unitPrice: z.number().min(0).default(0),
+  totalPrice: z.number().min(0).default(0),
+  specifications: z.any().optional().nullable(),
   notes: z.string().optional().nullable(),
   orderCount: z.number().min(0).default(0),
 });

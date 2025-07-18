@@ -2468,16 +2468,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate orders from PO (placeholder for now)
+  // Generate orders from PO
   app.post("/api/pos/:poId/generate-orders", async (req, res) => {
     try {
       const poId = parseInt(req.params.poId);
-      // This would generate orders based on PO items
-      // For now, return a success response
-      res.json({ success: true, message: "Orders generated from PO" });
+      const orders = await storage.generateOrdersFromPO(poId);
+      res.json({ 
+        success: true, 
+        message: `Generated ${orders.length} orders from PO`, 
+        orders 
+      });
     } catch (error) {
       console.error("Generate orders error:", error);
       res.status(500).json({ error: "Failed to generate orders from PO" });
+    }
+  });
+
+  // Routes for PO item selection data
+  app.get("/api/stock-models", async (req, res) => {
+    try {
+      const models = await storage.getAllStockModels();
+      res.json(models);
+    } catch (error) {
+      console.error("Get stock models error:", error);
+      res.status(500).json({ error: "Failed to fetch stock models" });
+    }
+  });
+
+  app.get("/api/features", async (req, res) => {
+    try {
+      const features = await storage.getAllFeatures();
+      res.json(features);
+    } catch (error) {
+      console.error("Get features error:", error);
+      res.status(500).json({ error: "Failed to fetch features" });
     }
   });
 

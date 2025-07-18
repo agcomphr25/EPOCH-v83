@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, FileText, Package, Truck, Tag, CreditCard } from 'lucide-react';
+import { FileText, Package, Settings, CreditCard, User, Calendar } from 'lucide-react';
 
 interface Order {
   id: number;
@@ -15,6 +15,7 @@ interface Order {
   agrOrderDetails: string;
   modelId: string;
   handedness: string;
+  shankLength: string;
   features: any;
   featureQuantities: any;
   discountCode: string;
@@ -98,108 +99,102 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                 </div>
               )}
 
-              {/* Pricing Summary Labels */}
-              <div className="border-t pt-3">
-                <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                  <DollarSign className="h-4 w-4 text-gray-500" />
-                  <span>Pricing Summary</span>
-                </div>
-                
-                <div className="space-y-2 text-sm ml-6">
-                  {/* Base Price */}
-                  <div className="flex justify-between">
-                    <span>Base Price:</span>
-                    <span className="text-gray-400">***</span>
-                  </div>
-
-                  {/* Features Total */}
-                  <div className="flex justify-between">
-                    <span>Features Total:</span>
-                    <span className="text-gray-400">***</span>
-                  </div>
-
-                  {/* Additional Items */}
-                  <div className="flex justify-between">
-                    <span>Additional Items:</span>
-                    <span className="text-gray-400">***</span>
-                  </div>
-
-                  {/* Shipping */}
-                  <div className="flex justify-between">
-                    <span>Shipping & Handling:</span>
-                    <span className="text-gray-400">***</span>
-                  </div>
-
-                  {/* Discount */}
-                  {order.discountCode && order.discountCode !== 'none' && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount Applied:</span>
-                      <span className="text-gray-400">***</span>
-                    </div>
-                  )}
-
-                  {/* Total */}
-                  <div className="flex justify-between font-bold pt-2 border-t">
-                    <span>Total:</span>
-                    <span className="text-gray-400">***</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Discount Information */}
-              {order.discountCode && order.discountCode !== 'none' && (
-                <div className="border-t pt-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Tag className="h-4 w-4 text-gray-500" />
-                    <span className="font-medium">Discount Code:</span>
-                    <Badge variant="outline" className="text-xs">
-                      {order.discountCode}
-                    </Badge>
-                  </div>
-                </div>
-              )}
-
-              {/* Order Details */}
+              {/* Order Dates */}
               <div className="border-t pt-3">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="font-medium">Order Date:</span>
-                    <div className="text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Order Date:</span>
+                    </div>
+                    <div className="text-gray-600 ml-6">
                       {new Date(order.orderDate).toLocaleDateString()}
                     </div>
                   </div>
                   <div>
-                    <span className="font-medium">Due Date:</span>
-                    <div className="text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">Due Date:</span>
+                    </div>
+                    <div className="text-gray-600 ml-6">
                       {new Date(order.dueDate).toLocaleDateString()}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Model Information */}
+              {/* Product Information */}
               {order.modelId && (
                 <div className="border-t pt-3">
-                  <div className="text-sm">
-                    <span className="font-medium">Model:</span>
-                    <div className="text-gray-600 mt-1">
-                      {order.modelId}
-                      {order.handedness && (
-                        <span className="ml-2 text-gray-500">
-                          ({order.handedness})
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <Package className="h-4 w-4 text-gray-500" />
+                    <span>Product Details</span>
+                  </div>
+                  <div className="text-sm ml-6">
+                    <div className="mb-1">
+                      <span className="font-medium">Model:</span>
+                      <span className="ml-2 text-gray-600">{order.modelId}</span>
                     </div>
+                    {order.handedness && (
+                      <div className="mb-1">
+                        <span className="font-medium">Handedness:</span>
+                        <span className="ml-2 text-gray-600">{order.handedness}</span>
+                      </div>
+                    )}
+                    {order.shankLength && (
+                      <div className="mb-1">
+                        <span className="font-medium">Shank Length:</span>
+                        <span className="ml-2 text-gray-600">{order.shankLength}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Note about pricing */}
-              <div className="border-t pt-3">
-                <div className="text-xs text-gray-500 italic">
-                  * Pricing details hidden for privacy
+              {/* Features/Options */}
+              {order.features && Object.keys(order.features).length > 0 && (
+                <div className="border-t pt-3">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <Settings className="h-4 w-4 text-gray-500" />
+                    <span>Selected Features</span>
+                  </div>
+                  <div className="text-sm ml-6 space-y-1">
+                    {Object.entries(order.features).map(([key, value]) => {
+                      if (!value || value === 'none' || value === '') return null;
+                      
+                      // Format the feature name
+                      const featureName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      return (
+                        <div key={key} className="flex justify-between">
+                          <span className="font-medium">{featureName}:</span>
+                          <span className="text-gray-600 ml-2">{String(value)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Additional Information */}
+              {(order.fbOrderNumber || order.agrOrderDetails) && (
+                <div className="border-t pt-3">
+                  <div className="text-sm space-y-2">
+                    {order.fbOrderNumber && (
+                      <div>
+                        <span className="font-medium">FB Order Number:</span>
+                        <span className="ml-2 text-gray-600">{order.fbOrderNumber}</span>
+                      </div>
+                    )}
+                    {order.agrOrderDetails && (
+                      <div>
+                        <span className="font-medium">AGR Order Details:</span>
+                        <span className="ml-2 text-gray-600">{order.agrOrderDetails}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

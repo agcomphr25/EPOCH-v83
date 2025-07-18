@@ -174,7 +174,16 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                       
                       // Get the display value (label) instead of the raw value
                       let displayValue = String(value);
-                      if (feature?.options && Array.isArray(feature.options)) {
+                      
+                      // Handle special case for paint options (format: "featureId:optionValue")
+                      if (key === 'paint_options_combined' && typeof value === 'string' && value.includes(':')) {
+                        const [paintFeatureId, optionValue] = value.split(':');
+                        const paintFeature = features?.find(f => f.id === paintFeatureId);
+                        if (paintFeature?.options && Array.isArray(paintFeature.options)) {
+                          const option = paintFeature.options.find(opt => opt.value === optionValue);
+                          displayValue = option?.label || optionValue;
+                        }
+                      } else if (feature?.options && Array.isArray(feature.options)) {
                         if (Array.isArray(value)) {
                           // Handle multiselect
                           displayValue = value.map(v => {

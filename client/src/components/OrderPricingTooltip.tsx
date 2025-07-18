@@ -39,6 +39,12 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
     enabled: isOpen && !!orderId,
   });
 
+  // Fetch features to get display names
+  const { data: features } = useQuery<any[]>({
+    queryKey: ['/api/features'],
+    enabled: isOpen && !!orderId,
+  });
+
   // Helper function to get payment status
   const getPaymentStatus = (status: string) => {
     switch (status.toLowerCase()) {
@@ -162,13 +168,30 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                     {Object.entries(order.features).map(([key, value]) => {
                       if (!value || value === 'none' || value === '') return null;
                       
-                      // Format the feature name
-                      const featureName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      // Find the feature definition to get the display name
+                      const feature = features?.find(f => f.id === key);
+                      const featureName = feature?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      // Get the display value (label) instead of the raw value
+                      let displayValue = String(value);
+                      if (feature?.options && Array.isArray(feature.options)) {
+                        if (Array.isArray(value)) {
+                          // Handle multiselect
+                          displayValue = value.map(v => {
+                            const option = feature.options.find(opt => opt.value === v);
+                            return option?.label || v;
+                          }).join(', ');
+                        } else {
+                          // Handle single select
+                          const option = feature.options.find(opt => opt.value === value);
+                          displayValue = option?.label || String(value);
+                        }
+                      }
                       
                       return (
                         <div key={key} className="flex justify-between">
                           <span className="font-medium">{featureName}:</span>
-                          <span className="text-gray-600 ml-2">{String(value)}</span>
+                          <span className="text-gray-600 ml-2">{displayValue}</span>
                         </div>
                       );
                     })}

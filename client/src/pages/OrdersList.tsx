@@ -84,6 +84,8 @@ export default function OrdersList() {
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders/all'],
+      refetchInterval: 30000, // Auto-refresh every 30 seconds
+      refetchOnWindowFocus: true, // Refresh when window regains focus
     });
 
     const { data: customers } = useQuery<Customer[]>({

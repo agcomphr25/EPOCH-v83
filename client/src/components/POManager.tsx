@@ -18,6 +18,17 @@ export default function POManager() {
   const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
 
+  // Form state
+  const [formData, setFormData] = useState({
+    poNumber: '',
+    customerId: '',
+    customerName: '',
+    poDate: '',
+    expectedDelivery: '',
+    status: 'OPEN' as 'OPEN' | 'CLOSED' | 'CANCELED',
+    notes: ''
+  });
+
   const { data: pos = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/pos'],
     queryFn: fetchPOs
@@ -28,8 +39,7 @@ export default function POManager() {
     onSuccess: () => {
       toast.success('Purchase order created successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
-      setIsDialogOpen(false);
-      setEditingPO(null);
+      handleDialogClose();
     },
     onError: () => {
       toast.error('Failed to create purchase order');
@@ -41,8 +51,7 @@ export default function POManager() {
     onSuccess: () => {
       toast.success('Purchase order updated successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
-      setIsDialogOpen(false);
-      setEditingPO(null);
+      handleDialogClose();
     },
     onError: () => {
       toast.error('Failed to update purchase order');
@@ -62,30 +71,21 @@ export default function POManager() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
     
-    const poNumber = formData.get('poNumber') as string;
-    const customerId = formData.get('customerId') as string;
-    const customerName = formData.get('customerName') as string;
-    const poDate = formData.get('poDate') as string;
-    const expectedDelivery = formData.get('expectedDelivery') as string;
-    const status = formData.get('status') as 'OPEN' | 'CLOSED' | 'CANCELED';
-    const notes = formData.get('notes') as string;
-
     // Validate required fields
-    if (!poNumber || !customerId || !customerName || !poDate || !expectedDelivery) {
+    if (!formData.poNumber || !formData.customerId || !formData.customerName || !formData.poDate || !formData.expectedDelivery) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     const data: CreatePurchaseOrderData = {
-      poNumber,
-      customerId,
-      customerName,
-      poDate,
-      expectedDelivery,
-      status: status || 'OPEN',
-      notes: notes || undefined
+      poNumber: formData.poNumber,
+      customerId: formData.customerId,
+      customerName: formData.customerName,
+      poDate: formData.poDate,
+      expectedDelivery: formData.expectedDelivery,
+      status: formData.status,
+      notes: formData.notes || undefined
     };
 
     console.log('Submitting PO data:', data);
@@ -97,9 +97,47 @@ export default function POManager() {
     }
   };
 
+  // Initialize form data on component mount
+  useEffect(() => {
+    if (!editingPO) {
+      setFormData({
+        poNumber: '',
+        customerId: '',
+        customerName: '',
+        poDate: new Date().toISOString().split('T')[0],
+        expectedDelivery: '',
+        status: 'OPEN',
+        notes: ''
+      });
+    }
+  }, [editingPO]);
+
   const handleEdit = (po: PurchaseOrder) => {
     setEditingPO(po);
+    setFormData({
+      poNumber: po.poNumber,
+      customerId: po.customerId,
+      customerName: po.customerName,
+      poDate: po.poDate ? new Date(po.poDate).toISOString().split('T')[0] : '',
+      expectedDelivery: po.expectedDelivery ? new Date(po.expectedDelivery).toISOString().split('T')[0] : '',
+      status: po.status,
+      notes: po.notes || ''
+    });
     setIsDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+    setEditingPO(null);
+    setFormData({
+      poNumber: '',
+      customerId: '',
+      customerName: '',
+      poDate: new Date().toISOString().split('T')[0],
+      expectedDelivery: '',
+      status: 'OPEN',
+      notes: ''
+    });
   };
 
   const handleDelete = (id: number) => {
@@ -126,9 +164,20 @@ export default function POManager() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Purchase Order Management</h2>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
-            <Button onClick={() => setEditingPO(null)}>
+            <Button onClick={() => {
+              setEditingPO(null);
+              setFormData({
+                poNumber: '',
+                customerId: '',
+                customerName: '',
+                poDate: new Date().toISOString().split('T')[0],
+                expectedDelivery: '',
+                status: 'OPEN',
+                notes: ''
+              });
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Add Purchase Order
             </Button>
@@ -146,7 +195,8 @@ export default function POManager() {
                   <Input 
                     id="poNumber" 
                     name="poNumber" 
-                    defaultValue={editingPO?.poNumber || ''}
+                    value={formData.poNumber}
+                    onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
                     required 
                   />
                 </div>
@@ -155,7 +205,8 @@ export default function POManager() {
                   <Input 
                     id="customerId" 
                     name="customerId" 
-                    defaultValue={editingPO?.customerId || ''}
+                    value={formData.customerId}
+                    onChange={(e) => setFormData({...formData, customerId: e.target.value})}
                     required 
                   />
                 </div>
@@ -166,7 +217,8 @@ export default function POManager() {
                 <Input 
                   id="customerName" 
                   name="customerName" 
-                  defaultValue={editingPO?.customerName || ''}
+                  value={formData.customerName}
+                  onChange={(e) => setFormData({...formData, customerName: e.target.value})}
                   required 
                 />
               </div>
@@ -178,7 +230,8 @@ export default function POManager() {
                     id="poDate" 
                     name="poDate" 
                     type="date" 
-                    defaultValue={editingPO?.poDate ? new Date(editingPO.poDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                    value={formData.poDate}
+                    onChange={(e) => setFormData({...formData, poDate: e.target.value})}
                     required 
                   />
                 </div>
@@ -188,7 +241,8 @@ export default function POManager() {
                     id="expectedDelivery" 
                     name="expectedDelivery" 
                     type="date" 
-                    defaultValue={editingPO?.expectedDelivery ? new Date(editingPO.expectedDelivery).toISOString().split('T')[0] : ''}
+                    value={formData.expectedDelivery}
+                    onChange={(e) => setFormData({...formData, expectedDelivery: e.target.value})}
                     required 
                   />
                 </div>
@@ -196,7 +250,7 @@ export default function POManager() {
               
               <div>
                 <Label htmlFor="status">Status</Label>
-                <Select name="status" defaultValue={editingPO?.status || 'OPEN'}>
+                <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value as 'OPEN' | 'CLOSED' | 'CANCELED'})}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -213,13 +267,14 @@ export default function POManager() {
                 <Textarea 
                   id="notes" 
                   name="notes" 
-                  defaultValue={editingPO?.notes || ''}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   rows={3}
                 />
               </div>
               
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={handleDialogClose}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>

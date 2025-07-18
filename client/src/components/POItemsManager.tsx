@@ -5,7 +5,7 @@ import {
   createPOItem, 
   updatePOItem, 
   deletePOItem, 
-  generateOrdersFromPO,
+
   fetchStockModels,
   fetchFeatures,
   type PurchaseOrderItem, 
@@ -22,7 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Edit, Trash2, Package, Settings, ShoppingCart } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface POItemsManagerProps {
@@ -103,16 +103,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     }
   });
 
-  const generateOrdersMutation = useMutation({
-    mutationFn: () => generateOrdersFromPO(poId),
-    onSuccess: (data) => {
-      toast.success(`Generated ${data.orders?.length || 0} orders successfully`);
-      queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
-    },
-    onError: () => {
-      toast.error('Failed to generate orders');
-    }
-  });
+
 
   const resetForm = () => {
     setFormData({
@@ -225,14 +216,6 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
           <p className="text-sm text-gray-600">Customer: {customerId}</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => generateOrdersMutation.mutate()}
-            disabled={generateOrdersMutation.isPending || items.length === 0}
-          >
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            Generate Orders
-          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={resetForm}>

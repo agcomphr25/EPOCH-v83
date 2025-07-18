@@ -146,12 +146,7 @@ export async function deletePOItem(poId: number, itemId: number): Promise<void> 
   });
 }
 
-// Generate orders from PO
-export async function generateOrdersFromPO(poId: number): Promise<void> {
-  await apiRequest(`/api/pos/${poId}/generate-orders`, {
-    method: 'POST'
-  });
-}
+
 
 // Fetch stock models for PO items
 export async function fetchStockModels(): Promise<StockModel[]> {

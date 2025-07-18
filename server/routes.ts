@@ -2468,21 +2468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate orders from PO
-  app.post("/api/pos/:poId/generate-orders", async (req, res) => {
-    try {
-      const poId = parseInt(req.params.poId);
-      const orders = await storage.generateOrdersFromPO(poId);
-      res.json({ 
-        success: true, 
-        message: `Generated ${orders.length} orders from PO`, 
-        orders 
-      });
-    } catch (error) {
-      console.error("Generate orders error:", error);
-      res.status(500).json({ error: "Failed to generate orders from PO" });
-    }
-  });
+
 
   // Routes for PO item selection data
   app.get("/api/stock-models", async (req, res) => {

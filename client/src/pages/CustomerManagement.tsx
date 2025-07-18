@@ -34,8 +34,6 @@ import {
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import AddressInput from '@/components/AddressInput';
-import { type AddressData } from '@/utils/addressUtils';
 
 type Customer = {
   id: number;
@@ -75,8 +73,13 @@ type CustomerFormData = {
   isActive: boolean;
 };
 
-type AddressFormData = AddressData & {
+type AddressFormData = {
   customerId: string;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
   type: 'shipping' | 'billing' | 'both';
   isDefault: boolean;
 };
@@ -120,6 +123,9 @@ export default function CustomerManagement() {
     isDefault: false,
   });
   
+  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  
   // CSV Import states
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -159,9 +165,65 @@ export default function CustomerManagement() {
     return matchesSearch && matchesFilter;
   });
 
-
+  // Address suggestions state
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   
-
+  // Auto-fill address when street, city, state, or zipCode change
+  const handleAddressFieldChange = async (field: string, value: string) => {
+    const updatedAddress = { ...addressFormData, [field]: value };
+    setAddressFormData(updatedAddress);
+    
+    // Trigger validation if we have at least a street address
+    if (updatedAddress.street && updatedAddress.street.length > 3) {
+      setIsValidatingAddress(true);
+      try {
+        const response = await fetch('/api/validate-address', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            street: updatedAddress.street,
+            city: updatedAddress.city,
+            state: updatedAddress.state,
+            zipCode: updatedAddress.zipCode
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+          setAddressSuggestions(data.suggestions);
+          setShowSuggestions(true);
+        }
+      } catch (error) {
+        console.error('Address validation error:', error);
+      } finally {
+        setIsValidatingAddress(false);
+      }
+    } else {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+  
+  // Handle suggestion selection
+  const handleSuggestionSelect = (suggestion: any) => {
+    setAddressFormData(prev => ({
+      ...prev,
+      street: suggestion.street,
+      city: suggestion.city,
+      state: suggestion.state,
+      zipCode: suggestion.zipCode
+    }));
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+    
+    toast({
+      title: "Address Selected",
+      description: "Address has been validated and filled.",
+      duration: 2000
+    });
+  };
 
   // Create customer mutation
   const createCustomerMutation = useMutation({
@@ -545,34 +607,52 @@ export default function CustomerManagement() {
     setIsProcessingCSV(true);
     let successCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
     const errors: string[] = [];
 
     for (const row of csvData) {
       try {
-        // Create customer
-        const customerData = {
-          name: row.Name || row.AddressContact || 'Unknown Customer',
-          email: '',
-          phone: '',
-          company: row.Name || '',
-          customerType: 'standard',
-          notes: `Imported from CSV - Address Type: ${row.AddressType}`,
-          isActive: true
-        };
+        const customerName = row.Name || row.AddressContact || 'Unknown Customer';
+        
+        // Check if customer already exists
+        const existingCustomer = customers.find(c => 
+          c.name.toLowerCase() === customerName.toLowerCase()
+        );
 
-        const customerResponse = await apiRequest('/api/customers', {
-          method: 'POST',
-          body: customerData,
-        });
+        let customerId;
+        
+        if (existingCustomer) {
+          // Use existing customer
+          customerId = existingCustomer.id;
+          skippedCount++;
+        } else {
+          // Create new customer
+          const customerData = {
+            name: customerName,
+            email: '',
+            phone: '',
+            company: row.Name || '',
+            customerType: 'standard',
+            notes: `Imported from CSV - Address Type: ${row.AddressType}`,
+            isActive: true
+          };
 
-        // Create address if customer was created successfully
-        if (customerResponse.id && row.Address && row.City) {
+          const customerResponse = await apiRequest('/api/customers', {
+            method: 'POST',
+            body: customerData,
+          });
+          
+          customerId = customerResponse.id;
+        }
+
+        // Create address if customer ID exists and address data is available
+        if (customerId && row.Address && row.City) {
           // Parse address - handle multi-line addresses
           const addressParts = row.Address.split('\n').filter((part: string) => part.trim());
           const street = addressParts.join(', ');
 
           const addressData = {
-            customerId: customerResponse.id.toString(),
+            customerId: customerId.toString(),
             street: street,
             city: row.City,
             state: row.State || '',
@@ -600,9 +680,24 @@ export default function CustomerManagement() {
     queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
 
     if (successCount > 0) {
+      const newCustomers = successCount - skippedCount;
+      let description = `Successfully processed ${successCount} record(s)`;
+      
+      if (newCustomers > 0) {
+        description += ` (${newCustomers} new customer${newCustomers > 1 ? 's' : ''})`;
+      }
+      
+      if (skippedCount > 0) {
+        description += ` (${skippedCount} existing customer${skippedCount > 1 ? 's' : ''} updated with addresses)`;
+      }
+      
+      if (errorCount > 0) {
+        description += ` with ${errorCount} error(s)`;
+      }
+      
       toast({
         title: "Import Complete",
-        description: `Successfully imported ${successCount} customer(s)${errorCount > 0 ? ` with ${errorCount} error(s)` : ''}`,
+        description: description,
         variant: successCount > errorCount ? "default" : "destructive"
       });
     }
@@ -1308,21 +1403,99 @@ export default function CustomerManagement() {
             <DialogTitle>Add New Address</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <AddressInput
-              label="Address"
-              value={{
-                street: addressFormData.street,
-                city: addressFormData.city,
-                state: addressFormData.state,
-                zipCode: addressFormData.zipCode,
-                country: addressFormData.country
-              }}
-              onChange={(address) => setAddressFormData(prev => ({
-                ...prev,
-                ...address
-              }))}
-              required
-            />
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="street" className="text-right">Street</Label>
+              <div className="col-span-3 relative">
+                <Input
+                  id="street"
+                  ref={addressInputRef}
+                  value={addressFormData.street}
+                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
+                  className="pr-10"
+                  placeholder="123 Main St"
+                />
+                {isValidatingAddress && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                  </div>
+                )}
+                
+                {/* Address Suggestions Dropdown */}
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
+                      Address Suggestions
+                    </div>
+                    {addressSuggestions.map((suggestion, index) => (
+                      <div
+                        key={index}
+                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                        <div className="font-medium text-gray-900">{suggestion.street}</div>
+                        <div className="text-sm text-gray-600">
+                          {suggestion.city}, {suggestion.state} {suggestion.zipCode}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="p-2 text-center">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setShowSuggestions(false)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        Close suggestions
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city" className="text-right">City</Label>
+              <Input
+                id="city"
+                value={addressFormData.city}
+                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
+                className="col-span-3"
+                placeholder="San Francisco"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="state" className="text-right">State</Label>
+              <Input
+                id="state"
+                value={addressFormData.state}
+                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
+                className="col-span-3"
+                placeholder="CA"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="zipCode" className="text-right">ZIP Code</Label>
+              <Input
+                id="zipCode"
+                value={addressFormData.zipCode}
+                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
+                className="col-span-3"
+                placeholder="94101"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="country" className="text-right">Country</Label>
+              <Input
+                id="country"
+                value={addressFormData.country}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
+                className="col-span-3"
+                placeholder="United States"
+              />
+            </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="addressType" className="text-right">Type</Label>
@@ -1376,21 +1549,67 @@ export default function CustomerManagement() {
             <DialogTitle>Edit Address</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <AddressInput
-              label="Address"
-              value={{
-                street: addressFormData.street,
-                city: addressFormData.city,
-                state: addressFormData.state,
-                zipCode: addressFormData.zipCode,
-                country: addressFormData.country
-              }}
-              onChange={(address) => setAddressFormData(prev => ({
-                ...prev,
-                ...address
-              }))}
-              required
-            />
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editStreet" className="text-right">Street</Label>
+              <div className="col-span-3 relative">
+                <Input
+                  id="editStreet"
+                  value={addressFormData.street}
+                  onChange={(e) => handleAddressFieldChange('street', e.target.value)}
+                  className="pr-10"
+                  placeholder="123 Main St"
+                />
+                {isValidatingAddress && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editCity" className="text-right">City</Label>
+              <Input
+                id="editCity"
+                value={addressFormData.city}
+                onChange={(e) => handleAddressFieldChange('city', e.target.value)}
+                className="col-span-3"
+                placeholder="San Francisco"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editState" className="text-right">State</Label>
+              <Input
+                id="editState"
+                value={addressFormData.state}
+                onChange={(e) => handleAddressFieldChange('state', e.target.value)}
+                className="col-span-3"
+                placeholder="CA"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editZipCode" className="text-right">ZIP Code</Label>
+              <Input
+                id="editZipCode"
+                value={addressFormData.zipCode}
+                onChange={(e) => handleAddressFieldChange('zipCode', e.target.value)}
+                className="col-span-3"
+                placeholder="94101"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="editCountry" className="text-right">Country</Label>
+              <Input
+                id="editCountry"
+                value={addressFormData.country}
+                onChange={(e) => setAddressFormData(prev => ({ ...prev, country: e.target.value }))}
+                className="col-span-3"
+                placeholder="United States"
+              />
+            </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="editAddressType" className="text-right">Type</Label>

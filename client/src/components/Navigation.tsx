@@ -249,14 +249,17 @@ export default function Navigation() {
             })}
             
             {/* Forms & Reports Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setFormsReportsExpanded(true)}
+              onMouseLeave={() => setFormsReportsExpanded(false)}
+            >
               <Button
                 variant={isFormsReportsActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isFormsReportsActive && "bg-primary text-white"
                 )}
-                onClick={() => setFormsReportsExpanded(!formsReportsExpanded)}
               >
                 <FormInput className="h-4 w-4" />
                 Forms & Reports
@@ -293,14 +296,17 @@ export default function Navigation() {
             </div>
             
             {/* Inventory Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setInventoryExpanded(true)}
+              onMouseLeave={() => setInventoryExpanded(false)}
+            >
               <Button
                 variant={isInventoryActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isInventoryActive && "bg-primary text-white"
                 )}
-                onClick={() => setInventoryExpanded(!inventoryExpanded)}
               >
                 <Package className="h-4 w-4" />
                 Inventory
@@ -337,14 +343,17 @@ export default function Navigation() {
             </div>
 
             {/* QC & Maintenance Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setQcMaintenanceExpanded(true)}
+              onMouseLeave={() => setQcMaintenanceExpanded(false)}
+            >
               <Button
                 variant={isQcMaintenanceActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isQcMaintenanceActive && "bg-primary text-white"
                 )}
-                onClick={() => setQcMaintenanceExpanded(!qcMaintenanceExpanded)}
               >
                 <Shield className="h-4 w-4" />
                 QC & Maintenance
@@ -381,14 +390,17 @@ export default function Navigation() {
             </div>
 
             {/* Employees Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setEmployeesExpanded(true)}
+              onMouseLeave={() => setEmployeesExpanded(false)}
+            >
               <Button
                 variant={isEmployeesActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isEmployeesActive && "bg-primary text-white"
                 )}
-                onClick={() => setEmployeesExpanded(!employeesExpanded)}
               >
                 <Users className="h-4 w-4" />
                 Employees
@@ -425,14 +437,17 @@ export default function Navigation() {
             </div>
 
             {/* Finance Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setFinanceExpanded(true)}
+              onMouseLeave={() => setFinanceExpanded(false)}
+            >
               <Button
                 variant={isFinanceActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isFinanceActive && "bg-primary text-white"
                 )}
-                onClick={() => setFinanceExpanded(!financeExpanded)}
               >
                 <DollarSign className="h-4 w-4" />
                 Finance
@@ -469,14 +484,17 @@ export default function Navigation() {
             </div>
             
             {/* Verified Modules Dropdown */}
-            <div className="relative">
+            <div 
+              className="relative"
+              onMouseEnter={() => setVerifiedModulesExpanded(true)}
+              onMouseLeave={() => setVerifiedModulesExpanded(false)}
+            >
               <Button
                 variant={isVerifiedModulesActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isVerifiedModulesActive && "bg-primary text-white"
                 )}
-                onClick={() => setVerifiedModulesExpanded(!verifiedModulesExpanded)}
               >
                 <Settings className="h-4 w-4" />
                 Verified Modules

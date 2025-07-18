@@ -1265,7 +1265,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
   }
 
-  // Generate orders from PO items
+  // Generate orders from PO items with customer-based naming
   async generateOrdersFromPO(poId: number): Promise<OrderDraft[]> {
     const items = await this.getPurchaseOrderItems(poId);
     const po = await this.getPurchaseOrder(poId);
@@ -1276,9 +1276,14 @@ export class DatabaseStorage implements IStorage {
 
     const orders: OrderDraft[] = [];
     
+    // Generate base order ID from customer name and PO number
+    const baseOrderId = this.generateBaseOrderId(po.customerName, po.poNumber);
+    let sequentialNumber = 1;
+    
     for (const item of items) {
       for (let i = 0; i < item.quantity; i++) {
-        const orderId = await this.generateOrderId();
+        const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+        
         const orderData: InsertOrderDraft = {
           orderId,
           orderDate: new Date(),
@@ -1286,12 +1291,13 @@ export class DatabaseStorage implements IStorage {
           customerId: po.customerId,
           customerPO: po.poNumber,
           modelId: item.itemType === 'stock_model' ? item.itemId : undefined,
-          features: item.itemType === 'custom_model' ? item.specifications : undefined,
+          features: this.buildOrderFeatures(item),
           status: 'DRAFT'
         };
         
         const order = await this.createOrderDraft(orderData);
         orders.push(order);
+        sequentialNumber++;
       }
       
       // Update the item's order count
@@ -1301,10 +1307,35 @@ export class DatabaseStorage implements IStorage {
     return orders;
   }
 
-  private async generateOrderId(): Promise<string> {
-    // Generate a unique order ID (this should match your existing order ID generation logic)
-    const timestamp = Date.now().toString();
-    return `P1-${timestamp.slice(-6)}`;
+  private generateBaseOrderId(customerName: string, poNumber: string): string {
+    // Extract first 3 letters from customer name (remove spaces and special chars)
+    const customerPrefix = customerName
+      .replace(/[^a-zA-Z]/g, '') // Remove non-alphabetic characters
+      .substring(0, 3)
+      .toUpperCase()
+      .padEnd(3, 'X'); // Pad with X if less than 3 letters
+    
+    // Extract last 5 digits from PO number
+    const poDigits = poNumber.replace(/[^0-9]/g, ''); // Remove non-numeric characters
+    const poSuffix = poDigits.slice(-5).padStart(5, '0'); // Get last 5 digits, pad if needed
+    
+    return `${customerPrefix}${poSuffix}`;
+  }
+
+  private buildOrderFeatures(item: PurchaseOrderItem): any {
+    switch (item.itemType) {
+      case 'stock_model':
+        return {}; // Stock models use modelId, no additional features needed
+      case 'custom_model':
+        return item.specifications || {};
+      case 'feature_item':
+        // For feature items, create a features object with the specific feature
+        return {
+          [item.itemId]: true
+        };
+      default:
+        return {};
+    }
   }
 
 }

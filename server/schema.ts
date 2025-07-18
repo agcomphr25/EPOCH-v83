@@ -388,6 +388,7 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   featureQuantities: z.record(z.any()).optional().nullable(),
   discountCode: z.string().optional().nullable(),
   shipping: z.number().min(0).default(0),
+  tikkaOption: z.string().optional().nullable(),
   status: z.string().default("DRAFT"),
 });
 

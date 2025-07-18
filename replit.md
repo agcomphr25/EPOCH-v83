@@ -129,6 +129,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **Dynamic Product Configuration**: Feature-based product customization
 - **Quality Control Workflows**: Digital signature capture and validation
 - **Inventory Management**: Real-time stock tracking with barcode scanning
+- **Tikka Lug Options**: Set/Loose selection with proper persistence in order drafts
 
 ### Business Process Features
 - **Customer Management**: CRM with communication tracking and SmartyStreets address validation

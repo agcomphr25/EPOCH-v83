@@ -91,18 +91,6 @@ export default function Navigation() {
 
   const formsReportsItems = [
     {
-      path: '/admin/forms',
-      label: 'Form Builder',
-      icon: FormInput,
-      description: 'Build and manage forms'
-    },
-    {
-      path: '/admin/reports',
-      label: 'Reports',
-      icon: PieChart,
-      description: 'View form submissions and reports'
-    },
-    {
       path: '/enhanced-forms',
       label: 'Enhanced Forms',
       icon: FormInput,

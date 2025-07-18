@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Edit, Eye, Package, CalendarDays, User, FileText, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 
 interface Order {
   id: number;
@@ -233,10 +234,15 @@ export default function OrdersList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-gray-400" />
-                        {getCustomerName(order.customerId) || 'N/A'}
-                      </div>
+                      <CustomerDetailsTooltip 
+                        customerId={order.customerId} 
+                        customerName={getCustomerName(order.customerId) || 'N/A'}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          {getCustomerName(order.customerId) || 'N/A'}
+                        </div>
+                      </CustomerDetailsTooltip>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

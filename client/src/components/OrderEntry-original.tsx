@@ -1229,7 +1229,7 @@ export default function OrderEntry() {
 
               {/* Special Instructions */}
               <div className="md:col-span-2 space-y-2">
-                <Label>Special Notes</Label>
+                <Label>Notes</Label>
                 <textarea
                   className="w-full border rounded-md px-3 py-2 min-h-[100px] resize-vertical"
                   placeholder="Any special requirements or notes..."

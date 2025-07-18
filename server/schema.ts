@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -304,6 +304,16 @@ export const insertShortTermSaleSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   isActive: z.number().default(1),
+});
+
+export const featureCategories = pgTable("feature_categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
@@ -929,3 +939,5 @@ export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
+
+export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FINALIZED', 'CANCELLED', 'RESERVED']);

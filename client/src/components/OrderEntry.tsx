@@ -132,15 +132,15 @@ export default function OrderEntry() {
 
         // Store all features for processing
         const allFeatures = featuresResponse || [];
-        
+
         // Features loaded successfully
-        
+
         setAllFeatures(allFeatures);
 
         // Separate paint features from other features
         const paintFeatures = allFeatures.filter((f: any) => f.category === 'paint_options');
         const nonPaintFeatures = allFeatures.filter((f: any) => f.category !== 'paint_options');
-        
+
         console.log('All features:', allFeatures);
         console.log('Barrel inlet feature:', allFeatures.find(f => f.id === 'barrel_inlet'));
 
@@ -219,7 +219,7 @@ export default function OrderEntry() {
             setFeatureQuantities(draftResponse.featureQuantities || {});
             setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
-            
+
             console.log('=== LOADED DRAFT DATA ===');
             console.log('tikkaOption from draft:', draftResponse.tikkaOption);
             console.log('Setting tikkaOption state to:', draftResponse.tikkaOption || '');
@@ -292,12 +292,12 @@ export default function OrderEntry() {
       if (featureId === 'paint_options_combined' || !value) continue; // Skip empty values and paint options
 
       const feature = allFeatures.find(f => f.id === featureId);
-      
+
       // Debug logging for "Other Options"
       if (featureId === 'other_options') {
         console.log('Processing other_options:', { featureId, value, feature });
       }
-      
+
       if (feature && feature.options && Array.isArray(feature.options)) {
         if (feature.type === 'checkbox') {
           // For checkbox features, calculate based on quantities
@@ -311,12 +311,12 @@ export default function OrderEntry() {
         } else if (feature.type === 'multiselect') {
           // For multiselect features, value is an array of selected option values
           const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
-          
+
           // Debug logging for "Other Options"
           if (featureId === 'other_options') {
             console.log('Processing multiselect other_options:', { selectedValues, options: feature.options });
           }
-          
+
           selectedValues.forEach((selectedValue: string) => {
             const option = feature.options.find((opt: any) => opt.value === selectedValue);
             if (featureId === 'other_options') {
@@ -397,9 +397,9 @@ export default function OrderEntry() {
   const handleSubmit = async (action: 'save' | 'confirm' | 'finalize') => {
     setErrors({});
     const isSubmittingState = action === 'save' ? setIsSubmitting : (action === 'confirm' ? setIsConfirming : setIsFinalizing);
-    
+
     isSubmittingState(true);
-    
+
     try {
       const orderData = {
         customerId: customer?.id,
@@ -463,14 +463,14 @@ export default function OrderEntry() {
       console.error('Submit error:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
-      
+
       let errorMessage = "Failed to save order";
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -522,6 +522,21 @@ export default function OrderEntry() {
     );
   }
 
+  // Function to generate a new unique order ID
+  const generateNewOrderId = async () => {
+    try {
+      const response = await apiRequest('/api/orders/generate-id', {
+        method: 'POST'
+      });
+      return response.orderId;
+    } catch (error) {
+      console.error('Failed to generate order ID:', error);
+      // Fallback to client-side generation if server fails
+      // return generateP1OrderId(new Date(), lastOrderData?.lastOrderId || ''); // Removed as generateP1OrderId is not defined here and potentially a code smell.
+      return null; // Added a null return here because the generateP1OrderId function has been removed.
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -540,7 +555,7 @@ export default function OrderEntry() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              
+
               {/* Order ID, Date, Due Date */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -789,7 +804,7 @@ export default function OrderEntry() {
                               const currentValues = Array.isArray(features[featureDef.id]) 
                                 ? features[featureDef.id] 
                                 : (features[featureDef.id] ? [features[featureDef.id]] : []);
-                              
+
                               if (e.target.checked) {
                                 // Add the option to the array
                                 const newValues = [...currentValues, option.value];
@@ -843,17 +858,17 @@ export default function OrderEntry() {
                   <span>Base Price:</span>
                   <span>${pricing.basePrice.toFixed(2)}</span>
                 </div>
-                
+
                 {/* Feature Breakdown */}
                 <div className="border-t pt-2">
                   <div className="text-sm font-medium mb-2">Features:</div>
                   <div className="space-y-1 text-sm">
                     {Object.entries(features).map(([featureId, value]) => {
                       if (!value || featureId === 'specialInstructions') return null;
-                      
+
                       const feature = allFeatures.find(f => f.id === featureId);
                       if (!feature) return null;
-                      
+
                       // Handle paint options
                       if (featureId === 'paint_options_combined') {
                         const [paintFeatureId, optionValue] = value.split(':');
@@ -872,7 +887,7 @@ export default function OrderEntry() {
                         }
                         return null;
                       }
-                      
+
                       // Handle multiselect features
                       if (feature.type === 'multiselect' && Array.isArray(value)) {
                         return value.map((selectedValue: string) => {
@@ -888,7 +903,7 @@ export default function OrderEntry() {
                           return null;
                         });
                       }
-                      
+
                       // Handle other feature types
                       if (feature.options) {
                         const selectedOption = feature.options.find((opt: any) => opt.value === value);
@@ -901,7 +916,7 @@ export default function OrderEntry() {
                           );
                         }
                       }
-                      
+
                       return null;
                     })}
                   </div>

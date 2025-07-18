@@ -50,56 +50,56 @@ export interface IStorage {
   saveCSVData(data: InsertCSVData): Promise<CSVData>;
   getLatestCSVData(): Promise<CSVData | undefined>;
   clearCSVData(): Promise<void>;
-  
+
   // Customer Types CRUD
   getAllCustomerTypes(): Promise<CustomerType[]>;
   getCustomerType(id: number): Promise<CustomerType | undefined>;
   createCustomerType(data: InsertCustomerType): Promise<CustomerType>;
   updateCustomerType(id: number, data: Partial<InsertCustomerType>): Promise<CustomerType>;
   deleteCustomerType(id: number): Promise<void>;
-  
+
   // Persistent Discounts CRUD
   getAllPersistentDiscounts(): Promise<PersistentDiscount[]>;
   getPersistentDiscount(id: number): Promise<PersistentDiscount | undefined>;
   createPersistentDiscount(data: InsertPersistentDiscount): Promise<PersistentDiscount>;
   updatePersistentDiscount(id: number, data: Partial<InsertPersistentDiscount>): Promise<PersistentDiscount>;
   deletePersistentDiscount(id: number): Promise<void>;
-  
+
   // Short Term Sales CRUD
   getAllShortTermSales(): Promise<ShortTermSale[]>;
   getShortTermSale(id: number): Promise<ShortTermSale | undefined>;
   createShortTermSale(data: InsertShortTermSale): Promise<ShortTermSale>;
   updateShortTermSale(id: number, data: Partial<InsertShortTermSale>): Promise<ShortTermSale>;
   deleteShortTermSale(id: number): Promise<void>;
-  
+
   // Feature Categories CRUD
   getAllFeatureCategories(): Promise<FeatureCategory[]>;
   getFeatureCategory(id: string): Promise<FeatureCategory | undefined>;
   createFeatureCategory(data: InsertFeatureCategory): Promise<FeatureCategory>;
   updateFeatureCategory(id: string, data: Partial<InsertFeatureCategory>): Promise<FeatureCategory>;
   deleteFeatureCategory(id: string): Promise<void>;
-  
+
   // Feature Sub-Categories CRUD
   getAllFeatureSubCategories(): Promise<FeatureSubCategory[]>;
   getFeatureSubCategory(id: string): Promise<FeatureSubCategory | undefined>;
   createFeatureSubCategory(data: InsertFeatureSubCategory): Promise<FeatureSubCategory>;
   updateFeatureSubCategory(id: string, data: Partial<InsertFeatureSubCategory>): Promise<FeatureSubCategory>;
   deleteFeatureSubCategory(id: string): Promise<void>;
-  
+
   // Features CRUD
   getAllFeatures(): Promise<Feature[]>;
   getFeature(id: string): Promise<Feature | undefined>;
   createFeature(data: InsertFeature): Promise<Feature>;
   updateFeature(id: string, data: Partial<InsertFeature>): Promise<Feature>;
   deleteFeature(id: string): Promise<void>;
-  
+
   // Stock Models CRUD
   getAllStockModels(): Promise<StockModel[]>;
   getStockModel(id: string): Promise<StockModel | undefined>;
   createStockModel(data: InsertStockModel): Promise<StockModel>;
   updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel>;
   deleteStockModel(id: string): Promise<void>;
-  
+
   // Order Drafts CRUD
   createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft>;
   getOrderDraft(orderId: string): Promise<OrderDraft | undefined>;
@@ -109,20 +109,21 @@ export interface IStorage {
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<OrderDraft[]>;
-  
+  generateNextOrderId(): Promise<string>;
+
   // Forms CRUD
   getAllForms(): Promise<Form[]>;
   getForm(id: number): Promise<Form | undefined>;
   createForm(data: InsertForm): Promise<Form>;
   updateForm(id: number, data: Partial<InsertForm>): Promise<Form>;
   deleteForm(id: number): Promise<void>;
-  
+
   // Form Submissions CRUD
   getAllFormSubmissions(formId?: number): Promise<FormSubmission[]>;
   getFormSubmission(id: number): Promise<FormSubmission | undefined>;
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
-  
+
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
@@ -130,13 +131,13 @@ export interface IStorage {
   createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem>;
   deleteInventoryItem(id: number): Promise<void>;
-  
+
   // Inventory Scans CRUD
   getAllInventoryScans(): Promise<InventoryScan[]>;
   getInventoryScan(id: number): Promise<InventoryScan | undefined>;
   createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan>;
   deleteInventoryScan(id: number): Promise<void>;
-  
+
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
   getEmployee(id: number): Promise<Employee | undefined>;
@@ -144,28 +145,28 @@ export interface IStorage {
   createEmployee(data: InsertEmployee): Promise<Employee>;
   updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
-  
+
   // QC Definitions CRUD
   getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]>;
   getQCDefinition(id: number): Promise<QcDefinition | undefined>;
   createQCDefinition(data: InsertQcDefinition): Promise<QcDefinition>;
   updateQCDefinition(id: number, data: Partial<InsertQcDefinition>): Promise<QcDefinition>;
   deleteQCDefinition(id: number): Promise<void>;
-  
+
   // QC Submissions CRUD
   getQCSubmissions(status?: string): Promise<QcSubmission[]>;
   getQCSubmission(id: number): Promise<QcSubmission | undefined>;
   createQCSubmission(data: InsertQcSubmission): Promise<QcSubmission>;
   updateQCSubmission(id: number, data: Partial<InsertQcSubmission>): Promise<QcSubmission>;
   deleteQCSubmission(id: number): Promise<void>;
-  
+
   // Maintenance Schedules CRUD
   getAllMaintenanceSchedules(): Promise<MaintenanceSchedule[]>;
   getMaintenanceSchedule(id: number): Promise<MaintenanceSchedule | undefined>;
   createMaintenanceSchedule(data: InsertMaintenanceSchedule): Promise<MaintenanceSchedule>;
   updateMaintenanceSchedule(id: number, data: Partial<InsertMaintenanceSchedule>): Promise<MaintenanceSchedule>;
   deleteMaintenanceSchedule(id: number): Promise<void>;
-  
+
   // Maintenance Logs CRUD
   getAllMaintenanceLogs(): Promise<MaintenanceLog[]>;
   getMaintenanceLog(id: number): Promise<MaintenanceLog | undefined>;
@@ -231,7 +232,7 @@ export interface IStorage {
   createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
   updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: number): Promise<void>;
-  
+
   // Production Orders CRUD
   getAllProductionOrders(): Promise<ProductionOrder[]>;
   getProductionOrder(id: number): Promise<ProductionOrder | undefined>;
@@ -399,13 +400,13 @@ export class DatabaseStorage implements IStorage {
     if (relatedFeatures.length > 0) {
       throw new Error(`Cannot delete category. ${relatedFeatures.length} features are still using this category. Please delete or reassign those features first.`);
     }
-    
+
     // Check if any sub-categories are using this category
     const relatedSubCategories = await db.select().from(featureSubCategories).where(eq(featureSubCategories.categoryId, id));
     if (relatedSubCategories.length > 0) {
       throw new Error(`Cannot delete category. ${relatedSubCategories.length} sub-categories are still using this category. Please delete or reassign those sub-categories first.`);
     }
-    
+
     await db.delete(featureCategories).where(eq(featureCategories.id, id));
   }
 
@@ -442,7 +443,7 @@ export class DatabaseStorage implements IStorage {
   // Features CRUD
   async getAllFeatures(): Promise<Feature[]> {
     const rawFeatures = await db.select().from(features).orderBy(features.sortOrder);
-    
+
     // Parse JSON options field if it's a string
     return rawFeatures.map(feature => ({
       ...feature,
@@ -455,7 +456,7 @@ export class DatabaseStorage implements IStorage {
   async getFeature(id: string): Promise<Feature | undefined> {
     const [feature] = await db.select().from(features).where(eq(features.id, id));
     if (!feature) return undefined;
-    
+
     // Parse JSON options field if it's a string
     return {
       ...feature,
@@ -470,7 +471,7 @@ export class DatabaseStorage implements IStorage {
     const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const featureData = { ...data, id };
     const [feature] = await db.insert(features).values(featureData).returning();
-    
+
     // Parse JSON options field if it's a string
     return {
       ...feature,
@@ -485,7 +486,7 @@ export class DatabaseStorage implements IStorage {
       .set(data)
       .where(eq(features.id, id))
       .returning();
-    
+
     // Parse JSON options field if it's a string
     return {
       ...feature,
@@ -498,7 +499,7 @@ export class DatabaseStorage implements IStorage {
   async deleteFeature(id: string): Promise<void> {
     await db.delete(features).where(eq(features.id, id));
   }
-  
+
   // Stock Models CRUD
   async getAllStockModels(): Promise<StockModel[]> {
     return await db.select().from(stockModels).orderBy(stockModels.sortOrder);
@@ -550,11 +551,11 @@ export class DatabaseStorage implements IStorage {
       .set(data)
       .where(eq(orderDrafts.orderId, orderId))
       .returning();
-    
+
     if (!draft) {
       throw new Error(`Draft order with ID ${orderId} not found`);
     }
-    
+
     return draft;
   }
 
@@ -567,9 +568,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLastOrderId(): Promise<string> {
-    // Get the most recent order draft by order ID
-    const [lastOrder] = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.createdAt)).limit(1);
-    return lastOrder?.orderId || '';
+    try {
+      const result = await db
+        .select({ orderId: orderDrafts.orderId })
+        .from(orderDrafts)
+        .orderBy(desc(orderDrafts.id))
+        .limit(1);
+
+      return result.length > 0 ? result[0].orderId : '';
+    } catch (error) {
+      console.error("Error getting last order ID:", error);
+      return '';
+    }
+  }
+
+  async generateNextOrderId(): Promise<string> {
+    // Use a database transaction to ensure atomicity
+    return await db.transaction(async (tx) => {
+      // Get the current last order ID within the transaction
+      const result = await tx
+        .select({ orderId: orderDrafts.orderId })
+        .from(orderDrafts)
+        .orderBy(desc(orderDrafts.id))
+        .limit(1);
+
+      const lastOrderId = result.length > 0 ? result[0].orderId : '';
+      const nextOrderId = generateP1OrderId(new Date(), lastOrderId);
+
+      // Reserve this order ID by creating a placeholder draft
+      // This prevents other concurrent requests from getting the same ID
+      await tx.insert(orderDrafts).values({
+        orderId: nextOrderId,
+        customerId: '', // Will be updated when actual order is created
+        modelId: '',
+        status: 'RESERVED', // Special status to indicate this is just a reservation
+        orderDate: new Date(),
+        features: {},
+        featureQuantities: {},
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      return nextOrderId;
+    });
   }
 
   async getAllOrders(): Promise<OrderDraft[]> {
@@ -702,7 +743,7 @@ export class DatabaseStorage implements IStorage {
     return employee;
   }
 
-  async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
+  async updateEmployee(id: number, data: PartialInsertEmployee>): Promise<Employee> {
     const [employee] = await db.update(employees)
       .set(data)
       .where(eq(employees.id, id))
@@ -719,16 +760,16 @@ export class DatabaseStorage implements IStorage {
   // QC Definitions CRUD
   async getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]> {
     let query = db.select().from(qcDefinitions);
-    
+
     const conditions = [];
     if (line) conditions.push(eq(qcDefinitions.line, line));
     if (department) conditions.push(eq(qcDefinitions.department, department));
     if (final !== undefined) conditions.push(eq(qcDefinitions.final, final));
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
-    
+
     return await query.orderBy(qcDefinitions.sortOrder);
   }
 
@@ -757,11 +798,11 @@ export class DatabaseStorage implements IStorage {
   // QC Submissions CRUD
   async getQCSubmissions(status?: string): Promise<QcSubmission[]> {
     let query = db.select().from(qcSubmissions);
-    
+
     if (status) {
       query = query.where(eq(qcSubmissions.status, status));
     }
-    
+
     return await query.orderBy(desc(qcSubmissions.submittedAt));
   }
 
@@ -854,11 +895,11 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
       .orderBy(desc(timeClockEntries.id))
       .limit(1);
-    
+
     if (!entry) {
       return { status: 'OUT', clockIn: null, clockOut: null };
     }
-    
+
     return {
       status: entry.clockOut ? 'OUT' : 'IN',
       clockIn: entry.clockIn?.toISOString() || null,
@@ -869,7 +910,7 @@ export class DatabaseStorage implements IStorage {
   async clockIn(employeeId: string, timestamp: string): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
     const clockInTime = new Date(timestamp);
-    
+
     // Check if entry already exists for today
     const [existing] = await db
       .select()
@@ -877,7 +918,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
       .orderBy(desc(timeClockEntries.id))
       .limit(1);
-    
+
     if (existing) {
       // Update existing entry
       await db.update(timeClockEntries)
@@ -897,14 +938,14 @@ export class DatabaseStorage implements IStorage {
   async clockOut(employeeId: string, timestamp: string): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
     const clockOutTime = new Date(timestamp);
-    
+
     const [existing] = await db
       .select()
       .from(timeClockEntries)
       .where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, today)))
       .orderBy(desc(timeClockEntries.id))
       .limit(1);
-    
+
     if (existing) {
       await db.update(timeClockEntries)
         .set({ clockOut: clockOutTime })
@@ -914,7 +955,7 @@ export class DatabaseStorage implements IStorage {
 
   async getTimeClockEntries(employeeId?: string, date?: string): Promise<TimeClockEntry[]> {
     let query = db.select().from(timeClockEntries);
-    
+
     if (employeeId && date) {
       query = query.where(and(eq(timeClockEntries.employeeId, employeeId), eq(timeClockEntries.date, date)));
     } else if (employeeId) {
@@ -922,7 +963,7 @@ export class DatabaseStorage implements IStorage {
     } else if (date) {
       query = query.where(eq(timeClockEntries.date, date));
     }
-    
+
     return await query.orderBy(desc(timeClockEntries.date));
   }
 
@@ -942,7 +983,7 @@ export class DatabaseStorage implements IStorage {
       ...data,
       date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString().split('T')[0]
     } : data;
-    
+
     const [entry] = await db.update(timeClockEntries)
       .set(normalizedData)
       .where(eq(timeClockEntries.id, id))
@@ -961,7 +1002,7 @@ export class DatabaseStorage implements IStorage {
       .from(checklistItems)
       .where(and(eq(checklistItems.employeeId, employeeId), eq(checklistItems.date, date)))
       .orderBy(checklistItems.id);
-    
+
     // If no items exist for today, create default checklist items
     if (items.length === 0) {
       const defaultItems = [
@@ -970,7 +1011,7 @@ export class DatabaseStorage implements IStorage {
         { employeeId, date, label: 'Work area cleanliness', type: 'dropdown', options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
         { employeeId, date, label: 'Special notes', type: 'text', required: false }
       ];
-      
+
       const createdItems = [];
       for (const item of defaultItems) {
         const [created] = await db.insert(checklistItems).values(item).returning();
@@ -978,7 +1019,7 @@ export class DatabaseStorage implements IStorage {
       }
       return createdItems;
     }
-    
+
     return items;
   }
 
@@ -1011,7 +1052,7 @@ export class DatabaseStorage implements IStorage {
       .from(onboardingDocs)
       .where(eq(onboardingDocs.employeeId, employeeId))
       .orderBy(onboardingDocs.id);
-    
+
     // If no docs exist, create default onboarding documents
     if (docs.length === 0) {
       const defaultDocs = [
@@ -1020,7 +1061,7 @@ export class DatabaseStorage implements IStorage {
         { employeeId, title: 'Code of Conduct', url: '/docs/code-of-conduct.pdf', signed: false },
         { employeeId, title: 'Emergency Procedures', url: '/docs/emergency-procedures.pdf', signed: false }
       ];
-      
+
       const createdDocs = [];
       for (const doc of defaultDocs) {
         const [created] = await db.insert(onboardingDocs).values(doc).returning();
@@ -1028,7 +1069,7 @@ export class DatabaseStorage implements IStorage {
       }
       return createdDocs;
     }
-    
+
     return docs;
   }
 
@@ -1263,7 +1304,7 @@ export class DatabaseStorage implements IStorage {
         data.totalPrice = quantity * unitPrice;
       }
     }
-    
+
     const [item] = await db.update(purchaseOrderItems)
       .set(data)
       .where(eq(purchaseOrderItems.id, id))
@@ -1348,7 +1389,7 @@ export class DatabaseStorage implements IStorage {
     for (const item of items) {
       for (let i = 0; i < item.quantity; i++) {
         const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
-        
+
         const orderData: InsertProductionOrder = {
           orderId,
           poId: po.id,
@@ -1377,6 +1418,22 @@ export class DatabaseStorage implements IStorage {
     return orders;
   }
 
+}
+
+// Utility function to generate order IDs
+function generateP1OrderId(date: Date, lastOrderId: string): string {
+  const today = date.toISOString().slice(0, 10).replace(/-/g, "");
+  const base = `P1-${today}`;
+
+  if (!lastOrderId || !lastOrderId.startsWith(base)) {
+    return `${base}-0001`;
+  }
+
+  const sequence = parseInt(lastOrderId.slice(14), 10);
+  const nextSequence = sequence + 1;
+  const nextSequenceStr = String(nextSequence).padStart(4, '0');
+
+  return `${base}-${nextSequenceStr}`;
 }
 
 export const storage = new DatabaseStorage();

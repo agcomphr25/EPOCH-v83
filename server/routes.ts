@@ -208,6 +208,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate next unique order ID atomically
+  app.post("/api/orders/generate-id", async (req, res) => {
+    try {
+      const nextOrderId = await storage.generateNextOrderId();
+      res.json({ orderId: nextOrderId });
+    } catch (error) {
+      console.error("Generate order ID error:", error);
+      res.status(500).json({ error: "Failed to generate order ID" });
+    }
+  });
+
   app.get("/api/orders/all", async (req, res) => {
     try {
       const orders = await storage.getAllOrders();
@@ -416,11 +427,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if draft already exists with this orderId (for editing existing orders)
       const existingDraft = await storage.getOrderDraft(result.orderId);
       if (existingDraft) {
-        // Update existing draft instead of creating new one
-        const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
-        res.json(updatedDraft);
+        // If it's a reserved ID, convert it to a real draft
+        if (existingDraft.status === 'RESERVED') {
+          const updatedDraft = await storage.updateOrderDraft(result.orderId, {
+            ...result,
+            status: 'DRAFT' // Convert from RESERVED to DRAFT
+          });
+          res.json(updatedDraft);
+        } else {
+          // Update existing draft
+          const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
+          res.json(updatedDraft);
+        }
       } else {
-        // Generate new unique order ID for new orders
+        // This should not happen if using the new atomic ID generation
+        // But fallback to old behavior for backward compatibility
         const lastOrderId = await storage.getLastOrderId();
         const newOrderId = generateP1OrderId(new Date(), lastOrderId);
         

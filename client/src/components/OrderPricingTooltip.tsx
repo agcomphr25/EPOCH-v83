@@ -45,6 +45,12 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
     enabled: isOpen && !!orderId,
   });
 
+  // Fetch stock models to get display names
+  const { data: stockModels } = useQuery<any[]>({
+    queryKey: ['/api/stock-models'],
+    enabled: isOpen && !!orderId,
+  });
+
   // Helper function to get payment status
   const getPaymentStatus = (status: string) => {
     switch (status.toLowerCase()) {
@@ -139,12 +145,16 @@ export default function OrderPricingTooltip({ orderId, children }: OrderPricingT
                   <div className="text-sm ml-6">
                     <div className="mb-1">
                       <span className="font-medium">Model:</span>
-                      <span className="ml-2 text-gray-600">{order.modelId}</span>
+                      <span className="ml-2 text-gray-600">
+                        {stockModels?.find(m => m.id === order.modelId)?.displayName || order.modelId}
+                      </span>
                     </div>
                     {order.handedness && (
                       <div className="mb-1">
                         <span className="font-medium">Handedness:</span>
-                        <span className="ml-2 text-gray-600">{order.handedness}</span>
+                        <span className="ml-2 text-gray-600">
+                          {order.handedness === 'right' ? 'Right' : order.handedness === 'left' ? 'Left' : order.handedness}
+                        </span>
                       </div>
                     )}
                     {order.shankLength && (

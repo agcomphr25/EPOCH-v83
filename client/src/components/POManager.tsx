@@ -39,7 +39,7 @@ export default function POManager() {
     onSuccess: () => {
       toast.success('Purchase order created successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
-      handleDialogClose();
+      setIsDialogOpen(false);
     },
     onError: () => {
       toast.error('Failed to create purchase order');
@@ -51,7 +51,7 @@ export default function POManager() {
     onSuccess: () => {
       toast.success('Purchase order updated successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
-      handleDialogClose();
+      setIsDialogOpen(false);
     },
     onError: () => {
       toast.error('Failed to update purchase order');
@@ -164,7 +164,7 @@ export default function POManager() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Purchase Order Management</h2>
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => {
               setEditingPO(null);
@@ -177,6 +177,7 @@ export default function POManager() {
                 status: 'OPEN',
                 notes: ''
               });
+              setIsDialogOpen(true);
             }}>
               <Plus className="w-4 h-4 mr-2" />
               Add Purchase Order
@@ -274,7 +275,7 @@ export default function POManager() {
               </div>
               
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={handleDialogClose}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>

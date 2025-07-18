@@ -146,6 +146,7 @@ export default function OrderEntry() {
             setFeatureQuantities(draftResponse.featureQuantities || {});
             setDiscountCode(draftResponse.discountCode || '');
             setShipping(draftResponse.shipping || 36.95);
+            setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
 
             // Set customer object properly - load from database if customerId exists
@@ -600,8 +601,14 @@ export default function OrderEntry() {
         featureQuantities,
         discountCode,
         shipping,
+        tikkaOption,
         status: 'DRAFT'
       };
+
+      console.log('=== SAVE DRAFT PAYLOAD ===');
+      console.log('tikkaOption state:', tikkaOption);
+      console.log('payload.tikkaOption:', payload.tikkaOption);
+      console.log('Full payload:', JSON.stringify(payload, null, 2));
 
       const method = draftId ? 'PUT' : 'POST';
       const url = draftId ? `/api/orders/draft/${orderId}` : '/api/orders/draft';

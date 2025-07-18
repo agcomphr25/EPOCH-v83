@@ -756,6 +756,32 @@ export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
   updatedAt: timestamp('updated_at').defaultNow()
 });
 
+// Purchase Order Management Tables
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: serial('id').primaryKey(),
+  poNumber: text('po_number').notNull().unique(),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(), // Denormalized for performance
+  poDate: date('po_date').notNull(),
+  expectedDelivery: date('expected_delivery').notNull(),
+  status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const purchaseOrderItems = pgTable('purchase_order_items', {
+  id: serial('id').primaryKey(),
+  poId: integer('po_id').references(() => purchaseOrders.id).notNull(),
+  modelId: text('model_id').notNull(),
+  modelName: text('model_name').notNull(), // Denormalized for performance
+  quantity: integer('quantity').notNull(),
+  notes: text('notes'),
+  orderCount: integer('order_count').default(0), // Number of orders generated from this item
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
 // Enhanced Form Insert Schemas
 export const insertEnhancedFormCategorySchema = createInsertSchema(enhancedFormCategories).omit({
   id: true,
@@ -798,6 +824,34 @@ export const insertEnhancedFormSubmissionSchema = createInsertSchema(enhancedFor
   data: z.any(),
 });
 
+// Purchase Order Insert Schemas
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  poNumber: z.string().min(1, "PO Number is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  customerName: z.string().min(1, "Customer Name is required"),
+  poDate: z.coerce.date(),
+  expectedDelivery: z.coerce.date(),
+  status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
+  notes: z.string().optional().nullable(),
+});
+
+export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  poId: z.number().min(1, "PO ID is required"),
+  modelId: z.string().min(1, "Model ID is required"),
+  modelName: z.string().min(1, "Model Name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  notes: z.string().optional().nullable(),
+  orderCount: z.number().min(0).default(0),
+});
+
 // Enhanced Form Types
 export type InsertEnhancedFormCategory = z.infer<typeof insertEnhancedFormCategorySchema>;
 export type EnhancedFormCategory = typeof enhancedFormCategories.$inferSelect;
@@ -807,3 +861,9 @@ export type InsertEnhancedFormVersion = z.infer<typeof insertEnhancedFormVersion
 export type EnhancedFormVersion = typeof enhancedFormVersions.$inferSelect;
 export type InsertEnhancedFormSubmission = z.infer<typeof insertEnhancedFormSubmissionSchema>;
 export type EnhancedFormSubmission = typeof enhancedFormSubmissions.$inferSelect;
+
+// Purchase Order Types
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;

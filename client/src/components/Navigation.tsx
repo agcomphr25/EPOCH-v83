@@ -45,6 +45,12 @@ export default function Navigation() {
       label: 'Customer Management',
       icon: Users,
       description: 'Manage customer database'
+    },
+    {
+      path: '/purchase-orders',
+      label: 'Purchase Orders',
+      icon: ClipboardList,
+      description: 'Module 12: Customer PO management'
     }
     // Documentation button disabled per user request - was causing problems
     // {

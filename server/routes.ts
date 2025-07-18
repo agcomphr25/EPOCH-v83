@@ -34,7 +34,9 @@ import {
   insertCustomerSchema,
   insertCustomerAddressSchema,
   insertCommunicationLogSchema,
-  insertPdfDocumentSchema
+  insertPdfDocumentSchema,
+  insertPurchaseOrderSchema,
+  insertPurchaseOrderItemSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2345,6 +2347,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+
+  // Module 12: Purchase Orders routes
+  app.get("/api/pos", async (req, res) => {
+    try {
+      const pos = await storage.getAllPurchaseOrders();
+      res.json(pos);
+    } catch (error) {
+      console.error("Get POs error:", error);
+      res.status(500).json({ error: "Failed to fetch purchase orders" });
+    }
+  });
+
+  app.get("/api/pos/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const includeItems = req.query.includeItems === 'true';
+      const includeOrderCount = req.query.includeOrderCount === 'true';
+      
+      const po = await storage.getPurchaseOrder(id, { includeItems, includeOrderCount });
+      if (!po) {
+        return res.status(404).json({ error: "Purchase order not found" });
+      }
+      res.json(po);
+    } catch (error) {
+      console.error("Get PO error:", error);
+      res.status(500).json({ error: "Failed to fetch purchase order" });
+    }
+  });
+
+  app.post("/api/pos", async (req, res) => {
+    try {
+      const result = insertPurchaseOrderSchema.parse(req.body);
+      const po = await storage.createPurchaseOrder(result);
+      res.json(po);
+    } catch (error) {
+      console.error("Create PO error:", error);
+      res.status(400).json({ error: "Invalid purchase order data" });
+    }
+  });
+
+  app.put("/api/pos/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertPurchaseOrderSchema.partial().parse(req.body);
+      const po = await storage.updatePurchaseOrder(id, result);
+      res.json(po);
+    } catch (error) {
+      console.error("Update PO error:", error);
+      res.status(400).json({ error: "Invalid purchase order data" });
+    }
+  });
+
+  app.delete("/api/pos/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePurchaseOrder(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete PO error:", error);
+      res.status(500).json({ error: "Failed to delete purchase order" });
+    }
+  });
+
+  // Purchase Order Items routes
+  app.get("/api/pos/:poId/items", async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      const items = await storage.getPurchaseOrderItems(poId);
+      res.json(items);
+    } catch (error) {
+      console.error("Get PO items error:", error);
+      res.status(500).json({ error: "Failed to fetch purchase order items" });
+    }
+  });
+
+  app.post("/api/pos/:poId/items", async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      const result = insertPurchaseOrderItemSchema.parse({
+        ...req.body,
+        poId
+      });
+      const item = await storage.createPurchaseOrderItem(result);
+      res.json(item);
+    } catch (error) {
+      console.error("Create PO item error:", error);
+      res.status(400).json({ error: "Invalid purchase order item data" });
+    }
+  });
+
+  app.put("/api/pos/:poId/items/:itemId", async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.itemId);
+      const result = insertPurchaseOrderItemSchema.partial().parse(req.body);
+      const item = await storage.updatePurchaseOrderItem(itemId, result);
+      res.json(item);
+    } catch (error) {
+      console.error("Update PO item error:", error);
+      res.status(400).json({ error: "Invalid purchase order item data" });
+    }
+  });
+
+  app.delete("/api/pos/:poId/items/:itemId", async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.itemId);
+      await storage.deletePurchaseOrderItem(itemId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete PO item error:", error);
+      res.status(500).json({ error: "Failed to delete purchase order item" });
+    }
+  });
+
+  // Generate orders from PO (placeholder for now)
+  app.post("/api/pos/:poId/generate-orders", async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      // This would generate orders based on PO items
+      // For now, return a success response
+      res.json({ success: true, message: "Orders generated from PO" });
+    } catch (error) {
+      console.error("Generate orders error:", error);
+      res.status(500).json({ error: "Failed to generate orders from PO" });
+    }
+  });
 
   // Documentation endpoint
   app.get("/api/documentation", async (req, res) => {

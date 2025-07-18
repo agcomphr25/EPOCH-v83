@@ -306,16 +306,6 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
-export const featureCategories = pgTable("feature_categories", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  displayName: text("display_name").notNull(),
-  sortOrder: integer("sort_order").default(0),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
   updatedAt: true,

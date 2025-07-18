@@ -38,6 +38,7 @@ import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import ProductionTracking from "./pages/ProductionTracking";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
@@ -81,6 +82,7 @@ function App() {
                   <Route path="/documentation" component={DocumentationPageNew} />
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/purchase-orders" component={PurchaseOrders} />
+                  <Route path="/production-tracking" component={ProductionTracking} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

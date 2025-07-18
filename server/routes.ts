@@ -36,7 +36,8 @@ import {
   insertCommunicationLogSchema,
   insertPdfDocumentSchema,
   insertPurchaseOrderSchema,
-  insertPurchaseOrderItemSchema
+  insertPurchaseOrderItemSchema,
+  insertProductionOrderSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2469,6 +2470,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+
+  // Generate production orders from PO
+  app.post("/api/pos/:poId/generate-production-orders", async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      const orders = await storage.generateProductionOrders(poId);
+      res.json({ 
+        success: true, 
+        message: `Generated ${orders.length} production orders from PO`, 
+        orders 
+      });
+    } catch (error) {
+      console.error("Generate production orders error:", error);
+      res.status(500).json({ error: "Failed to generate production orders from PO" });
+    }
+  });
+
+  // Production Orders API
+  app.get("/api/production-orders", async (req, res) => {
+    try {
+      const orders = await storage.getAllProductionOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Get production orders error:", error);
+      res.status(500).json({ error: "Failed to fetch production orders" });
+    }
+  });
+
+  app.get("/api/production-orders/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const order = await storage.getProductionOrder(id);
+      if (!order) {
+        return res.status(404).json({ error: "Production order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Get production order error:", error);
+      res.status(500).json({ error: "Failed to fetch production order" });
+    }
+  });
+
+  app.put("/api/production-orders/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertProductionOrderSchema.partial().parse(req.body);
+      const order = await storage.updateProductionOrder(id, result);
+      res.json(order);
+    } catch (error) {
+      console.error("Update production order error:", error);
+      res.status(400).json({ error: "Invalid production order data" });
+    }
+  });
+
+  app.delete("/api/production-orders/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteProductionOrder(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete production order error:", error);
+      res.status(500).json({ error: "Failed to delete production order" });
+    }
+  });
 
   // Routes for PO item selection data
   app.get("/api/stock-models", async (req, res) => {

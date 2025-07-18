@@ -3,7 +3,7 @@ import {
   inventoryItems, inventoryScans, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
-  purchaseOrders, purchaseOrderItems,
+  purchaseOrders, purchaseOrderItems, productionOrders,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -34,7 +34,8 @@ import {
   type EnhancedFormVersion, type InsertEnhancedFormVersion,
   type EnhancedFormSubmission, type InsertEnhancedFormSubmission,
   type PurchaseOrder, type InsertPurchaseOrder,
-  type PurchaseOrderItem, type InsertPurchaseOrderItem
+  type PurchaseOrderItem, type InsertPurchaseOrderItem,
+  type ProductionOrder, type InsertProductionOrder
 } from "./schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike } from "drizzle-orm";
@@ -230,6 +231,15 @@ export interface IStorage {
   createPurchaseOrderItem(data: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
   updatePurchaseOrderItem(id: number, data: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: number): Promise<void>;
+  
+  // Production Orders CRUD
+  getAllProductionOrders(): Promise<ProductionOrder[]>;
+  getProductionOrder(id: number): Promise<ProductionOrder | undefined>;
+  getProductionOrderByOrderId(orderId: string): Promise<ProductionOrder | undefined>;
+  createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder>;
+  updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder>;
+  deleteProductionOrder(id: number): Promise<void>;
+  generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
 
 }
 
@@ -1265,7 +1275,107 @@ export class DatabaseStorage implements IStorage {
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
   }
 
+  // Production Orders CRUD
+  async getAllProductionOrders(): Promise<ProductionOrder[]> {
+    return await db
+      .select()
+      .from(productionOrders)
+      .orderBy(desc(productionOrders.createdAt));
+  }
 
+  async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(productionOrders)
+      .where(eq(productionOrders.id, id))
+      .limit(1);
+    return order;
+  }
+
+  async getProductionOrderByOrderId(orderId: string): Promise<ProductionOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(productionOrders)
+      .where(eq(productionOrders.orderId, orderId))
+      .limit(1);
+    return order;
+  }
+
+  async createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder> {
+    const [order] = await db.insert(productionOrders).values(data).returning();
+    return order;
+  }
+
+  async updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder> {
+    const [order] = await db
+      .update(productionOrders)
+      .set(data)
+      .where(eq(productionOrders.id, id))
+      .returning();
+    return order;
+  }
+
+  async deleteProductionOrder(id: number): Promise<void> {
+    await db.delete(productionOrders).where(eq(productionOrders.id, id));
+  }
+
+  // Generate production orders from PO
+  async generateProductionOrders(poId: number): Promise<ProductionOrder[]> {
+    const po = await this.getPurchaseOrder(poId);
+    if (!po) {
+      throw new Error('Purchase order not found');
+    }
+
+    const customer = await this.getCustomer(parseInt(po.customerId));
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+
+    const items = await this.getPurchaseOrderItems(poId);
+    if (items.length === 0) {
+      throw new Error('No items found in purchase order');
+    }
+
+    // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
+    const customerPrefix = customer.name.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
+    const poNumberDigits = po.poNumber.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
+    const baseOrderId = `${customerPrefix}${poNumberDigits}`;
+
+    const orders: ProductionOrder[] = [];
+    let sequentialNumber = 1;
+
+    // Create production orders for each item based on quantity
+    for (const item of items) {
+      for (let i = 0; i < item.quantity; i++) {
+        const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+        
+        const orderData: InsertProductionOrder = {
+          orderId,
+          poId: po.id,
+          poItemId: item.id,
+          customerId: po.customerId,
+          customerName: po.customerName,
+          poNumber: po.poNumber,
+          itemType: item.itemType,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          specifications: item.specifications,
+          orderDate: new Date(),
+          dueDate: new Date(po.expectedDelivery),
+          productionStatus: 'PENDING'
+        };
+
+        const order = await this.createProductionOrder(orderData);
+        orders.push(order);
+        sequentialNumber++;
+      }
+
+      // Update the PO item's order count
+      await this.updatePurchaseOrderItem(item.id, { orderCount: item.quantity });
+    }
+
+    return orders;
+  }
 
 }
 

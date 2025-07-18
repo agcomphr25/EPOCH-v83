@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPOs, createPO, updatePO, deletePO, type PurchaseOrder, type CreatePurchaseOrderData } from '@/lib/poUtils';
+import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, Plus, Eye, Package, Search } from 'lucide-react';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import POItemsManager from './POItemsManager';
 
@@ -69,6 +70,17 @@ export default function POManager() {
     },
     onError: () => {
       toast.error('Failed to delete purchase order');
+    }
+  });
+
+  const generateProductionOrdersMutation = useMutation({
+    mutationFn: generateProductionOrdersFromPO,
+    onSuccess: (data) => {
+      toast.success(`Generated ${data.orders.length} production orders`);
+      queryClient.invalidateQueries({ queryKey: ['/api/production-orders'] });
+    },
+    onError: () => {
+      toast.error('Failed to generate production orders');
     }
   });
 
@@ -155,6 +167,12 @@ export default function POManager() {
   const handleDelete = (id: number) => {
     if (window.confirm('Are you sure you want to delete this purchase order?')) {
       deleteMutation.mutate(id);
+    }
+  };
+
+  const handleGenerateProductionOrders = (po: PurchaseOrder) => {
+    if (window.confirm(`Generate production orders for PO ${po.poNumber}? This will create individual production orders for each item.`)) {
+      generateProductionOrdersMutation.mutate(po.id);
     }
   };
 
@@ -380,6 +398,15 @@ export default function POManager() {
                             title="View Items"
                           >
                             <Package className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleGenerateProductionOrders(po)}
+                            title="Generate Production Orders"
+                            disabled={generateProductionOrdersMutation.isPending}
+                          >
+                            <TrendingUp className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"

@@ -51,6 +51,12 @@ export default function Navigation() {
       label: 'Purchase Orders',
       icon: ClipboardList,
       description: 'Module 12: Customer PO management'
+    },
+    {
+      path: '/production-tracking',
+      label: 'Production Tracking',
+      icon: TrendingUp,
+      description: 'Track production orders from POs'
     }
     // Documentation button disabled per user request - was causing problems
     // {

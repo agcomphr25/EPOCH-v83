@@ -786,6 +786,30 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   updatedAt: timestamp('updated_at').defaultNow()
 });
 
+// Production Orders - separate from regular orders for PO tracking
+export const productionOrders = pgTable('production_orders', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().unique(), // Customer-based format: ABC00199-0001
+  poId: integer('po_id').references(() => purchaseOrders.id, { onDelete: 'cascade' }).notNull(),
+  poItemId: integer('po_item_id').references(() => purchaseOrderItems.id, { onDelete: 'cascade' }).notNull(),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  poNumber: text('po_number').notNull(),
+  itemType: text('item_type').notNull(), // 'stock_model', 'custom_model', 'feature_item'
+  itemId: text('item_id').notNull(),
+  itemName: text('item_name').notNull(),
+  specifications: jsonb('specifications'), // Product specifications
+  orderDate: timestamp('order_date').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  // Production tracking fields
+  productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, LAID_UP, SHIPPED
+  laidUpAt: timestamp('laid_up_at'),
+  shippedAt: timestamp('shipped_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
 // Enhanced Form Insert Schemas
 export const insertEnhancedFormCategorySchema = createInsertSchema(enhancedFormCategories).omit({
   id: true,
@@ -860,6 +884,30 @@ export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderIte
   orderCount: z.number().min(0).default(0),
 });
 
+// Production Order Schema
+export const insertProductionOrderSchema = createInsertSchema(productionOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  poId: z.number().min(1, "PO ID is required"),
+  poItemId: z.number().min(1, "PO Item ID is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  customerName: z.string().min(1, "Customer Name is required"),
+  poNumber: z.string().min(1, "PO Number is required"),
+  itemType: z.enum(['stock_model', 'custom_model', 'feature_item']),
+  itemId: z.string().min(1, "Item ID is required"),
+  itemName: z.string().min(1, "Item Name is required"),
+  specifications: z.any().optional().nullable(),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  productionStatus: z.enum(['PENDING', 'LAID_UP', 'SHIPPED']).default('PENDING'),
+  laidUpAt: z.coerce.date().optional().nullable(),
+  shippedAt: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
 // Enhanced Form Types
 export type InsertEnhancedFormCategory = z.infer<typeof insertEnhancedFormCategorySchema>;
 export type EnhancedFormCategory = typeof enhancedFormCategories.$inferSelect;
@@ -875,3 +923,7 @@ export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+
+// Production Order Types
+export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
+export type ProductionOrder = typeof productionOrders.$inferSelect;

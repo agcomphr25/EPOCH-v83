@@ -532,8 +532,17 @@ export class DatabaseStorage implements IStorage {
 
   // Order Drafts CRUD
   async createOrderDraft(data: InsertOrderDraft): Promise<OrderDraft> {
-    const [draft] = await db.insert(orderDrafts).values(data).returning();
-    return draft;
+    try {
+      console.log('=== CREATING ORDER DRAFT ===');
+      console.log('Data:', JSON.stringify(data, null, 2));
+      
+      const [draft] = await db.insert(orderDrafts).values(data).returning();
+      console.log('Created draft:', draft.id);
+      return draft;
+    } catch (error) {
+      console.error('Database error creating order draft:', error);
+      throw new Error(`Failed to create order draft: ${error.message}`);
+    }
   }
 
   async getOrderDraft(orderId: string): Promise<OrderDraft | undefined> {

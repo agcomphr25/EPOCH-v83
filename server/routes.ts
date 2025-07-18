@@ -422,35 +422,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Order Drafts API
   app.post("/api/orders/draft", async (req, res) => {
     try {
+      console.log('=== DRAFT CREATION REQUEST ===');
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
       const result = insertOrderDraftSchema.parse(req.body);
+      console.log('Parsed result:', JSON.stringify(result, null, 2));
       
       // Check if draft already exists with this orderId (for editing existing orders)
       const existingDraft = await storage.getOrderDraft(result.orderId);
+      console.log('Existing draft found:', existingDraft ? 'Yes' : 'No');
+      
       if (existingDraft) {
+        console.log('Existing draft status:', existingDraft.status);
         // If it's a reserved ID, convert it to a real draft
         if (existingDraft.status === 'RESERVED') {
           const updatedDraft = await storage.updateOrderDraft(result.orderId, {
             ...result,
             status: 'DRAFT' // Convert from RESERVED to DRAFT
           });
+          console.log('Updated reserved draft to DRAFT');
           res.json(updatedDraft);
         } else {
           // Update existing draft
           const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
+          console.log('Updated existing draft');
           res.json(updatedDraft);
         }
       } else {
-        // This should not happen if using the new atomic ID generation
-        // But fallback to old behavior for backward compatibility
-        const lastOrderId = await storage.getLastOrderId();
-        const newOrderId = generateP1OrderId(new Date(), lastOrderId);
-        
-        const draft = await storage.createOrderDraft({ ...result, orderId: newOrderId });
+        // Create new draft with the provided order ID
+        console.log('Creating new draft with order ID:', result.orderId);
+        const draft = await storage.createOrderDraft(result);
+        console.log('Created new draft:', draft.id);
         res.json(draft);
       }
     } catch (error) {
       console.error("Order draft creation error:", error);
-      res.status(400).json({ error: "Invalid order draft data" });
+      console.error("Error details:", error.message);
+      
+      let errorMessage = "Invalid order draft data";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.issues && error.issues.length > 0) {
+        errorMessage = error.issues[0].message;
+      }
+      
+      res.status(400).json({ error: errorMessage });
     }
   });
 

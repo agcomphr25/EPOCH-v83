@@ -239,28 +239,25 @@ export default function OrderEntry() {
 
   // Generate order ID when needed
   useEffect(() => {
-    if (!orderId && lastOrderId) {
+    if (!orderId && !draftId) {
       generateOrderId();
     }
-  }, [lastOrderId]);
-
-
+  }, [draftId]);
 
   const generateOrderId = useCallback(async () => {
     try {
       const response = await apiRequest('/api/orders/generate-id', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          date: orderDate.toISOString(), 
-          lastId: lastOrderId 
-        })
+        method: 'POST'
       });
       setOrderId(response.orderId);
+      console.log('Generated order ID:', response.orderId);
     } catch (error) {
       console.error('Failed to generate order ID:', error);
+      // Fallback to timestamp-based ID if atomic generation fails
+      const fallbackId = `AG${Date.now().toString().slice(-6)}`;
+      setOrderId(fallbackId);
     }
-  }, [orderDate, lastOrderId]);
+  }, []);
 
   // Calculate total price
   const calculateTotal = useCallback(() => {
@@ -401,33 +398,45 @@ export default function OrderEntry() {
     isSubmittingState(true);
 
     try {
+      // Validate required fields for draft saving
+      if (!orderId) {
+        await generateOrderId();
+        // Wait a moment for the order ID to be set
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (!orderId) {
+        throw new Error('Order ID is required but could not be generated');
+      }
+
       const orderData = {
-        customerId: customer?.id,
-        modelId,
-        features,
+        customerId: customer?.id?.toString() || '',
+        modelId: modelId || '',
+        features: features || {},
         orderDate: orderDate.toISOString(),
         dueDate: dueDate.toISOString(),
         orderId,
         hasCustomerPO,
-        customerPO,
-        fbOrderNumber,
+        customerPO: customerPO || '',
+        fbOrderNumber: fbOrderNumber || '',
         hasAgrOrder,
-        agrOrderDetails,
-        handedness,
-        shankLength,
-        discountCode,
-        shipping,
-        markAsPaid,
-        additionalItems,
-        payments,
-        featureQuantities,
-        tikkaOption,
+        agrOrderDetails: agrOrderDetails || '',
+        handedness: handedness || '',
+        shankLength: shankLength || '',
+        discountCode: discountCode || '',
+        shipping: shipping || 0,
+        markAsPaid: markAsPaid || false,
+        additionalItems: additionalItems || [],
+        payments: payments || [],
+        featureQuantities: featureQuantities || {},
+        tikkaOption: tikkaOption || '',
         status: action === 'save' ? 'DRAFT' : (action === 'confirm' ? 'CONFIRMED' : 'FINALIZED'),
         pricing: calculateTotal()
       };
 
       console.log('=== FRONTEND ORDER DATA ===');
-      console.log('tikkaOption state:', tikkaOption);
+      console.log('Order ID:', orderId);
+      console.log('Customer ID:', orderData.customerId);
       console.log('Full orderData:', JSON.stringify(orderData, null, 2));
 
       const endpoint = action === 'save' ? '/api/orders/draft' : '/api/orders';
@@ -471,11 +480,24 @@ export default function OrderEntry() {
         errorMessage = error.message;
       }
 
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      // If it's an order ID conflict, try generating a new one
+      if (errorMessage.includes('order ID') || errorMessage.includes('duplicate')) {
+        try {
+          await generateOrderId();
+          toast({
+            title: "Info",
+            description: "Order ID conflict detected. Please try saving again.",
+          });
+        } catch (genError) {
+          console.error('Failed to generate new order ID:', genError);
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       isSubmittingState(false);
     }

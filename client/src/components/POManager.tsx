@@ -72,8 +72,17 @@ export default function POManager() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
+    console.log('Form submitted with formData:', formData);
+    
     // Validate required fields
     if (!formData.poNumber || !formData.customerId || !formData.customerName || !formData.poDate || !formData.expectedDelivery) {
+      console.log('Validation failed - missing fields:', {
+        poNumber: !formData.poNumber,
+        customerId: !formData.customerId,
+        customerName: !formData.customerName,
+        poDate: !formData.poDate,
+        expectedDelivery: !formData.expectedDelivery
+      });
       toast.error('Please fill in all required fields');
       return;
     }

@@ -47,7 +47,7 @@ export interface CreatePurchaseOrderItemData {
 // Fetch all POs
 export async function fetchPOs(): Promise<PurchaseOrder[]> {
   const response = await apiRequest('/api/pos');
-  return response.data;
+  return response;
 }
 
 // Fetch single PO (optionally with items/order count)
@@ -57,25 +57,26 @@ export async function fetchPO(id: number, options?: { includeItems?: boolean; in
   if (options?.includeOrderCount) params.append('includeOrderCount', 'true');
   
   const response = await apiRequest(`/api/pos/${id}?${params.toString()}`);
-  return response.data;
+  return response;
 }
 
 // Create PO
 export async function createPO(data: CreatePurchaseOrderData): Promise<PurchaseOrder> {
+  console.log('createPO called with data:', data);
   const response = await apiRequest('/api/pos', {
     method: 'POST',
-    data
+    body: data
   });
-  return response.data;
+  return response;
 }
 
 // Update PO
 export async function updatePO(id: number, data: Partial<CreatePurchaseOrderData>): Promise<PurchaseOrder> {
   const response = await apiRequest(`/api/pos/${id}`, {
     method: 'PUT',
-    data
+    body: data
   });
-  return response.data;
+  return response;
 }
 
 // Delete PO
@@ -88,25 +89,25 @@ export async function deletePO(id: number): Promise<void> {
 // Fetch items for a PO
 export async function fetchPOItems(poId: number): Promise<PurchaseOrderItem[]> {
   const response = await apiRequest(`/api/pos/${poId}/items`);
-  return response.data;
+  return response;
 }
 
 // Create PO item
 export async function createPOItem(poId: number, data: CreatePurchaseOrderItemData): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items`, {
     method: 'POST',
-    data
+    body: data
   });
-  return response.data;
+  return response;
 }
 
 // Update PO item
 export async function updatePOItem(poId: number, itemId: number, data: Partial<CreatePurchaseOrderItemData>): Promise<PurchaseOrderItem> {
   const response = await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
     method: 'PUT',
-    data
+    body: data
   });
-  return response.data;
+  return response;
 }
 
 // Delete PO item

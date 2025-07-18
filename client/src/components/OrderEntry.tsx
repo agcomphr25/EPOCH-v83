@@ -219,6 +219,10 @@ export default function OrderEntry() {
             setFeatureQuantities(draftResponse.featureQuantities || {});
             setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
+            
+            console.log('=== LOADED DRAFT DATA ===');
+            console.log('tikkaOption from draft:', draftResponse.tikkaOption);
+            console.log('Setting tikkaOption state to:', draftResponse.tikkaOption || '');
           }
         } catch (error) {
           console.error('Failed to load draft data:', error);
@@ -421,6 +425,10 @@ export default function OrderEntry() {
         status: action === 'save' ? 'DRAFT' : (action === 'confirm' ? 'CONFIRMED' : 'FINALIZED'),
         pricing: calculateTotal()
       };
+
+      console.log('=== FRONTEND ORDER DATA ===');
+      console.log('tikkaOption state:', tikkaOption);
+      console.log('Full orderData:', JSON.stringify(orderData, null, 2));
 
       const endpoint = action === 'save' ? '/api/orders/draft' : '/api/orders';
       const method = draftId && action === 'save' ? 'PUT' : 'POST';

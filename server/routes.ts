@@ -2378,11 +2378,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/pos", async (req, res) => {
     try {
+      console.log("PO creation request body:", req.body);
       const result = insertPurchaseOrderSchema.parse(req.body);
       const po = await storage.createPurchaseOrder(result);
       res.json(po);
     } catch (error) {
       console.error("Create PO error:", error);
+      if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
+        return res.status(400).json({ 
+          error: "Invalid purchase order data", 
+          details: error.errors 
+        });
+      }
       res.status(400).json({ error: "Invalid purchase order data" });
     }
   });

@@ -64,15 +64,31 @@ export default function POManager() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const poNumber = formData.get('poNumber') as string;
+    const customerId = formData.get('customerId') as string;
+    const customerName = formData.get('customerName') as string;
+    const poDate = formData.get('poDate') as string;
+    const expectedDelivery = formData.get('expectedDelivery') as string;
+    const status = formData.get('status') as 'OPEN' | 'CLOSED' | 'CANCELED';
+    const notes = formData.get('notes') as string;
+
+    // Validate required fields
+    if (!poNumber || !customerId || !customerName || !poDate || !expectedDelivery) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     const data: CreatePurchaseOrderData = {
-      poNumber: formData.get('poNumber') as string,
-      customerId: formData.get('customerId') as string,
-      customerName: formData.get('customerName') as string,
-      poDate: formData.get('poDate') as string,
-      expectedDelivery: formData.get('expectedDelivery') as string,
-      status: formData.get('status') as 'OPEN' | 'CLOSED' | 'CANCELED',
-      notes: formData.get('notes') as string || undefined
+      poNumber,
+      customerId,
+      customerName,
+      poDate,
+      expectedDelivery,
+      status: status || 'OPEN',
+      notes: notes || undefined
     };
+
+    console.log('Submitting PO data:', data);
 
     if (editingPO) {
       updateMutation.mutate({ id: editingPO.id, data });
@@ -162,7 +178,7 @@ export default function POManager() {
                     id="poDate" 
                     name="poDate" 
                     type="date" 
-                    defaultValue={editingPO?.poDate || ''}
+                    defaultValue={editingPO?.poDate ? new Date(editingPO.poDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
                     required 
                   />
                 </div>
@@ -172,7 +188,7 @@ export default function POManager() {
                     id="expectedDelivery" 
                     name="expectedDelivery" 
                     type="date" 
-                    defaultValue={editingPO?.expectedDelivery || ''}
+                    defaultValue={editingPO?.expectedDelivery ? new Date(editingPO.expectedDelivery).toISOString().split('T')[0] : ''}
                     required 
                   />
                 </div>

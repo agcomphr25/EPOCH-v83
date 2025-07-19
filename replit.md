@@ -134,7 +134,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 
 ### Business Process Features
 - **Customer Management**: CRM with communication tracking and SmartyStreets address validation
-- **Enhanced Discount System**: Persistent and temporary discount management with targeted application (stock model vs total order)
+- **Enhanced Discount System**: Persistent and temporary discount management with targeted application (stock model vs total order), plus flexible Custom discount option for ad-hoc percentage or fixed dollar amount discounts
 - **Employee Portal**: Time tracking, onboarding, and task management
 - **Reporting System**: Multi-format export capabilities (PDF, CSV, JSON)
 - **Address Management**: Real-time address autocomplete and validation via SmartyStreets API

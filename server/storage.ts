@@ -1426,7 +1426,17 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Purchase order not found');
     }
 
-    const customer = await this.getCustomer(parseInt(po.customerId));
+    // Handle both string and numeric customer IDs
+    let customer;
+    const customerIdNum = parseInt(po.customerId);
+    if (!isNaN(customerIdNum)) {
+      customer = await this.getCustomer(customerIdNum);
+    } else {
+      // If customerId is not a number, try to find customer by name or other identifier
+      // For now, we'll use the customerName from the PO
+      customer = { id: 0, name: po.customerName };
+    }
+    
     if (!customer) {
       throw new Error('Customer not found');
     }

@@ -48,25 +48,40 @@ export default function OrderPlacementCard() {
 
   // Extract unique suppliers from inventory items
   const availableSuppliers = useMemo(() => {
+    console.log('Processing inventory items:', inventoryItems.length, 'items');
     const suppliers = new Set<string>();
+    let sourceCount = 0;
+    let secondaryCount = 0;
+    
     inventoryItems.forEach((item: any) => {
       if (item.source && item.source.trim()) {
         suppliers.add(item.source.trim());
+        sourceCount++;
       }
       if (item.secondarySource && item.secondarySource.trim()) {
         suppliers.add(item.secondarySource.trim());
+        secondaryCount++;
       }
     });
+    
+    console.log('Found suppliers:', Array.from(suppliers));
+    console.log('Items with source:', sourceCount, 'Items with secondarySource:', secondaryCount);
     return Array.from(suppliers).sort();
   }, [inventoryItems]);
 
   // Get items for selected supplier
   const supplierItems = useMemo(() => {
-    if (!formData.supplierName || !inventoryItems.length) return [];
+    if (!formData.supplierName || !inventoryItems.length) {
+      console.log('No supplier selected or no inventory items');
+      return [];
+    }
     
-    return inventoryItems.filter((item: any) => 
+    console.log('Filtering items for supplier:', formData.supplierName);
+    const filtered = inventoryItems.filter((item: any) => 
       item.source === formData.supplierName || item.secondarySource === formData.supplierName
     );
+    console.log('Found items for supplier:', filtered.length);
+    return filtered;
   }, [inventoryItems, formData.supplierName]);
 
   // Create order mutation

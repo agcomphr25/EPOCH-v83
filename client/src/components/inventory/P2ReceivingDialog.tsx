@@ -26,13 +26,20 @@ interface P2ReceivingDialogProps {
   item: any;
 }
 
-// Generate a 39-character barcode (Code 39 compatible)
+// Generate a Code 39 compatible barcode (using valid characters only)
 function generateBarcode(): string {
+  // Code 39 valid characters: 0-9, A-Z, space, and symbols - . $ / + %
+  // For simplicity, we'll use alphanumeric only for P2 products
   const characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let result = "";
-  for (let i = 0; i < 39; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substr(2, 8).toUpperCase();
+  
+  // Create a 20-character barcode with timestamp + random + P2 prefix
+  let result = "P2" + timestamp + random;
+  
+  // Pad or trim to exactly 20 characters for consistent length
+  result = result.substr(0, 20).padEnd(20, '0');
+  
   return result;
 }
 
@@ -123,23 +130,33 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           <head>
             <title>P2 Product Barcode - ${formData.itemCode}</title>
             <style>
+              @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39:wght@400&display=swap');
+              
               body { font-family: Arial, sans-serif; margin: 20px; }
               .barcode-label { 
                 border: 2px solid #000; 
                 padding: 15px; 
                 margin: 10px 0; 
-                width: 300px; 
+                width: 350px; 
                 text-align: center;
                 page-break-inside: avoid;
               }
               .barcode { 
-                font-family: 'Courier New', monospace; 
-                font-size: 14px; 
-                font-weight: bold; 
-                letter-spacing: 2px; 
-                margin: 10px 0;
+                font-family: 'Libre Barcode 39', 'Courier New', monospace; 
+                font-size: 48px; 
+                font-weight: normal; 
+                letter-spacing: 0px; 
+                margin: 15px 0;
+                line-height: 1;
+                word-break: break-all;
               }
-              .item-info { font-size: 12px; margin: 5px 0; }
+              .barcode-text {
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                margin: 5px 0;
+                letter-spacing: 1px;
+              }
+              .item-info { font-size: 12px; margin: 5px 0; font-weight: bold; }
               .dates { font-size: 10px; color: #666; }
               @media print {
                 body { margin: 0; }
@@ -150,28 +167,31 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           <body>
             ${Array.from({ length: 5 }, (_, i) => `
               <div class="barcode-label">
-                <div class="item-info"><strong>${formData.itemCode}</strong></div>
-                <div class="item-info">${item?.name || 'P2 Product'}</div>
-                <div class="barcode">*${barcodeDisplay}*</div>
+                <div class="item-info">${formData.itemCode} - ${item?.name || 'P2 Product'}</div>
+                <div class="barcode">*${formData.barcode}*</div>
+                <div class="barcode-text">${formData.barcode}</div>
                 <div class="dates">
-                  <div>Batch: ${formData.batchNumber}</div>
-                  <div>Lot: ${formData.lotNumber}</div>
-                  <div>Heat: ${formData.aluminumHeatNumber}</div>
-                  <div>Mfg: ${formData.manufactureDate}</div>
-                  <div>Exp: ${formData.expirationDate}</div>
+                  <div><strong>Batch:</strong> ${formData.batchNumber} | <strong>Lot:</strong> ${formData.lotNumber}</div>
+                  <div><strong>Heat#:</strong> ${formData.aluminumHeatNumber}</div>
+                  <div><strong>Mfg:</strong> ${formData.manufactureDate} | <strong>Exp:</strong> ${formData.expirationDate}</div>
+                  <div><strong>Received:</strong> ${formData.receivingDate}</div>
                 </div>
               </div>
             `).join('')}
+            <script>
+              // Auto-print when page loads
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                }, 500);
+              }
+            </script>
           </body>
         </html>
       `);
       
       printWindow.document.close();
       printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 250);
     }
   };
 
@@ -197,14 +217,22 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           {/* Barcode Generation Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Generated Barcode</CardTitle>
-              <CardDescription>39-character barcode for this P2 product</CardDescription>
+              <CardTitle className="text-base">Generated Scannable Barcode</CardTitle>
+              <CardDescription>Code 39 compatible barcode for P2 product tracking - readable by barcode scanners</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
                 <div className="flex-1">
-                  <div className="font-mono text-sm bg-gray-100 dark:bg-gray-800 p-3 rounded border">
-                    *{formatBarcodeDisplay(formData.barcode)}*
+                  <div className="text-center">
+                    <div className="font-mono text-2xl bg-gray-100 dark:bg-gray-800 p-4 rounded border mb-2" style={{fontFamily: "'Libre Barcode 39', 'Courier New', monospace"}}>
+                      *{formData.barcode}*
+                    </div>
+                    <div className="font-mono text-xs text-gray-600 dark:text-gray-400">
+                      {formatBarcodeDisplay(formData.barcode)}
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">
+                      ✓ Scanner Compatible
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2">

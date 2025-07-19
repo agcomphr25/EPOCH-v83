@@ -54,6 +54,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **Employee Management**: Time tracking, onboarding, QC workflows
 - **Enhanced Forms**: Advanced form builder with versioning
 - **Inventory Management**: Restructured with AG Part#, Name, Source, Supplier Part#, Cost per, Order Date, Dept., Secondary Source, Notes fields with CSV import/export capabilities
+- **P2 Product Receiving**: Specialized workflow for P2 products with Code 39 barcode generation, detailed tracking (manufacturing date, expiration date, batch number, lot number, aluminum heat number), and multi-label printing capability
 
 ## Data Flow
 

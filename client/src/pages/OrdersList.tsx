@@ -19,6 +19,7 @@ interface Order {
   customerPO: string;
   fbOrderNumber: string;
   agrOrderDetails: string;
+  isCustomOrder: string | null;
   modelId: string;
   handedness: string;
   features: any;

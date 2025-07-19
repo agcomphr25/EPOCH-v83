@@ -60,23 +60,26 @@ export default function OrderPlacementCard() {
     return Array.from(suppliers).sort();
   }, [inventoryItems]);
 
-  // Get items for selected supplier
-  const supplierItems = useMemo(() => {
-    if (!formData.supplierName || !inventoryItems || inventoryItems.length === 0) {
+  // Get all inventory items (not filtered by supplier)
+  const availableItems = useMemo(() => {
+    if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
     
-    return inventoryItems.filter((item: any) => 
-      item?.source === formData.supplierName || item?.secondarySource === formData.supplierName
-    );
-  }, [inventoryItems, formData.supplierName]);
+    // Return all inventory items, sorted by part number
+    return inventoryItems.sort((a: any, b: any) => {
+      const aPartNumber = a.agPartNumber || '';
+      const bPartNumber = b.agPartNumber || '';
+      return aPartNumber.localeCompare(bPartNumber);
+    });
+  }, [inventoryItems]);
 
   // Get selected items details
   const selectedItems = useMemo(() => {
     return formData.selectedItemIds.map(id => 
-      supplierItems.find(item => item.id === id)
+      availableItems.find(item => item.id === id)
     ).filter(Boolean);
-  }, [supplierItems, formData.selectedItemIds]);
+  }, [availableItems, formData.selectedItemIds]);
 
   // Create order mutation
   const createOrderMutation = useMutation({
@@ -111,10 +114,10 @@ export default function OrderPlacementCard() {
   };
 
   const handleSelectAll = () => {
-    const allItemIds = supplierItems.map(item => item.id);
+    const allItemIds = availableItems.map(item => item.id);
     setFormData(prev => ({
       ...prev,
-      selectedItemIds: prev.selectedItemIds.length === supplierItems.length ? [] : allItemIds
+      selectedItemIds: prev.selectedItemIds.length === availableItems.length ? [] : allItemIds
     }));
   };
 
@@ -171,15 +174,16 @@ export default function OrderPlacementCard() {
       </div>
 
       <div className="space-y-6">
-        {/* Step 1: Select Supplier */}
+        {/* Step 1: Select Supplier for Order */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">1. Select Supplier</CardTitle>
+            <CardTitle className="text-base">1. Select Supplier for this Order</CardTitle>
+            <CardDescription>Choose which supplier you want to place this order with</CardDescription>
           </CardHeader>
           <CardContent>
             <Select 
               value={formData.supplierName} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, supplierName: value, selectedItemIds: [] }))}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, supplierName: value }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Choose a supplier..." />
@@ -195,13 +199,13 @@ export default function OrderPlacementCard() {
           </CardContent>
         </Card>
 
-        {/* Step 2: Multi-select Items */}
-        {formData.supplierName && supplierItems.length > 0 && (
+        {/* Step 2: Multi-select Items from ALL inventory */}
+        {formData.supplierName && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">2. Select Items from {formData.supplierName}</CardTitle>
+              <CardTitle className="text-base">2. Select Items to Order from {formData.supplierName}</CardTitle>
               <CardDescription>
-                {supplierItems.length} items available • {formData.selectedItemIds.length} selected
+                All {availableItems.length} inventory items available • {formData.selectedItemIds.length} selected
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -214,12 +218,12 @@ export default function OrderPlacementCard() {
                     onClick={handleSelectAll}
                   >
                     <CheckCircle2 className="h-4 w-4 mr-1" />
-                    {formData.selectedItemIds.length === supplierItems.length ? 'Deselect All' : 'Select All'}
+                    {formData.selectedItemIds.length === availableItems.length ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
 
                 <div className="max-h-80 overflow-y-auto border rounded-lg">
-                  {supplierItems.map((item: any) => (
+                  {availableItems.map((item: any) => (
                     <div key={item.id} className="flex items-center gap-3 p-3 border-b hover:bg-gray-50 dark:hover:bg-gray-800">
                       <Checkbox
                         checked={formData.selectedItemIds.includes(item.id)}
@@ -230,6 +234,7 @@ export default function OrderPlacementCard() {
                         <div className="text-sm text-gray-600 dark:text-gray-400">{item.name}</div>
                         <div className="flex gap-4 text-xs text-gray-500">
                           {item.costPer && <span className="text-green-600 font-medium">${item.costPer}</span>}
+                          {item.source && <span>Supplier: {item.source}</span>}
                           {item.department && <span>Dept: {item.department}</span>}
                         </div>
                       </div>
@@ -310,16 +315,8 @@ export default function OrderPlacementCard() {
         {!formData.supplierName && availableSuppliers.length > 0 && (
           <div className="text-center py-8 text-gray-500">
             <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>Select a supplier to view available items</p>
-          </div>
-        )}
-
-        {/* No items for supplier */}
-        {formData.supplierName && supplierItems.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No items available from {formData.supplierName}</p>
-            <p className="text-sm">Try selecting a different supplier</p>
+            <p>Select a supplier to start ordering items</p>
+            <p className="text-sm">All {availableItems.length} inventory items will be available to order</p>
           </div>
         )}
       </div>

@@ -2291,6 +2291,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User permissions route
+  app.get("/api/user/permissions", async (req, res) => {
+    try {
+      // For now, return mock permissions. In a real app, this would check the authenticated user
+      // You can manually set this to true to test the price override functionality
+      res.json({ 
+        canOverridePrices: true  // Set to true for testing - you can change this later
+      });
+    } catch (error) {
+      console.error("User permissions error:", error);
+      res.status(500).json({ error: "Failed to fetch user permissions" });
+    }
+  });
+
   app.get("/api/enhanced-forms/submissions", async (req, res) => {
     try {
       const { formId } = req.query;

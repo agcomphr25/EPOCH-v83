@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Package, Users, ChevronDown, Send, CheckCircle } from 'lucide-react';
+import { Package, Users, ChevronDown, Send, CheckCircle, DollarSign, Edit } from 'lucide-react';
 import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
@@ -103,6 +103,11 @@ export default function OrderEntry() {
   const [persistentDiscounts, setPersistentDiscounts] = useState<any[]>([]);
   const [customerTypes, setCustomerTypes] = useState<any[]>([]);
   const [subCategories, setSubCategories] = useState<any[]>([]);
+  
+  // Price override functionality
+  const [canOverridePrices, setCanOverridePrices] = useState(false);
+  const [priceOverride, setPriceOverride] = useState<number | null>(null);
+  const [showPriceOverride, setShowPriceOverride] = useState(false);
 
   // Load initial data on mount
   useEffect(() => {
@@ -114,13 +119,14 @@ export default function OrderEntry() {
         }
 
         // Load all data in parallel
-        const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse, subCategoriesResponse] = await Promise.all([
+        const [lastIdResponse, featuresResponse, salesResponse, discountsResponse, typesResponse, subCategoriesResponse, userPermissionsResponse] = await Promise.all([
           apiRequest('/api/orders/last-id'),
           apiRequest('/api/features'),
           apiRequest('/api/short-term-sales'),
           apiRequest('/api/persistent-discounts'),
           apiRequest('/api/customer-types'),
-          apiRequest('/api/feature-sub-categories')
+          apiRequest('/api/feature-sub-categories'),
+          apiRequest('/api/user/permissions') // Check if current user can override prices
         ]);
 
         // Load customer options first
@@ -152,6 +158,8 @@ export default function OrderEntry() {
             setShipping(draftResponse.shipping || 36.95);
             setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
+            setPriceOverride(draftResponse.priceOverride || null);
+            setShowPriceOverride(!!draftResponse.priceOverride);
 
             // Set customer object properly - load from database if customerId exists
             if (draftResponse.customerId) {
@@ -186,6 +194,7 @@ export default function OrderEntry() {
         setPersistentDiscounts(discountsResponse);
         setCustomerTypes(typesResponse);
         setSubCategories(subCategoriesResponse);
+        setCanOverridePrices(userPermissionsResponse.canOverridePrices || false);
 
         // Debug logging to check percentage values
         console.log('Short-term sales:', salesResponse);
@@ -257,7 +266,8 @@ export default function OrderEntry() {
   // Calculate order totals
   const calculateTotals = () => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
-    const basePrice = selectedModel?.price || 0;
+    // Use price override if available, otherwise use default model price
+    const basePrice = priceOverride !== null ? priceOverride : (selectedModel?.price || 0);
 
     // Calculate feature costs - includes both individual feature prices and paint sub-category pricing
     let featureCost = 0;
@@ -509,6 +519,8 @@ export default function OrderEntry() {
       setHandedness('');
       setHasCustomerPO(false);
       setHasAgrOrder(false);
+      setPriceOverride(null);
+      setShowPriceOverride(false);
 
     } catch (error: any) {
       if (error.response?.data?.errors) {
@@ -615,6 +627,7 @@ export default function OrderEntry() {
         discountCode,
         customDiscountType,
         customDiscountValue,
+        priceOverride,
         shipping,
         tikkaOption,
         status: 'DRAFT'
@@ -853,6 +866,58 @@ export default function OrderEntry() {
                 </Popover>
                 {errors.modelId && <p className="text-red-500 text-sm">{errors.modelId}</p>}
               </div>
+
+              {/* Price Override - Only show if user has permission */}
+              {canOverridePrices && (
+                <div className="space-y-2 p-4 border-2 border-yellow-200 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2 text-yellow-800 font-medium">
+                      <DollarSign className="h-4 w-4" />
+                      Price Override
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowPriceOverride(!showPriceOverride);
+                        if (!showPriceOverride) {
+                          // Initialize with current model price
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          setPriceOverride(selectedModel?.price || 0);
+                        } else {
+                          setPriceOverride(null);
+                        }
+                      }}
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      {showPriceOverride ? 'Cancel' : 'Override Price'}
+                    </Button>
+                  </div>
+                  {showPriceOverride && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-gray-500" />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Enter custom price"
+                          value={priceOverride || ''}
+                          onChange={(e) => setPriceOverride(parseFloat(e.target.value) || 0)}
+                          className="flex-1"
+                        />
+                      </div>
+                      <div className="text-xs text-yellow-700">
+                        Original price: ${(() => {
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          return selectedModel?.price?.toFixed(2) || '0.00';
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Handedness */}
               <div className="space-y-2">
@@ -1297,9 +1362,14 @@ export default function OrderEntry() {
                       </span>
                     </div>
                     <div className="w-16 text-right ml-2">
-                      <span className="font-medium text-blue-600">
-                        {modelId ? `$${(modelOptions.find(m => m.id === modelId)?.price || 0).toFixed(2)}` : '$0.00'}
+                      <span className={`font-medium ${priceOverride !== null ? 'text-orange-600' : 'text-blue-600'}`}>
+                        {modelId ? `$${(priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0)).toFixed(2)}` : '$0.00'}
                       </span>
+                      {priceOverride !== null && (
+                        <div className="text-xs text-orange-500">
+                          Override
+                        </div>
+                      )}
                     </div>
                   </div>
 

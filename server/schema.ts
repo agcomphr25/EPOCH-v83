@@ -6,6 +6,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  canOverridePrices: boolean("can_override_prices").default(false),
 });
 
 export const orders = pgTable("orders", {
@@ -108,6 +109,18 @@ export const stockModels = pgTable("stock_models", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Customer-specific pricing overrides (for future use)
+export const customerStockModelPrices = pgTable("customer_stock_model_prices", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id").notNull(), // Customer identifier
+  stockModelId: text("stock_model_id").references(() => stockModels.id).notNull(),
+  customPrice: real("custom_price").notNull(),
+  notes: text("notes"), // Optional notes about why this customer has special pricing
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const orderDrafts = pgTable("order_drafts", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull(),
@@ -126,6 +139,7 @@ export const orderDrafts = pgTable("order_drafts", {
   customDiscountType: text("custom_discount_type").default("percent"),
   customDiscountValue: real("custom_discount_value").default(0),
   showCustomDiscount: boolean("show_custom_discount").default(false),
+  priceOverride: real("price_override"), // Manual price override for stock model
   shipping: real("shipping").default(0),
   tikkaOption: text("tikka_option"),
   status: text("status").default("DRAFT"),

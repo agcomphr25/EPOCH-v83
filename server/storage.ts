@@ -1426,17 +1426,23 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Purchase order not found');
     }
 
-    // Handle both string and numeric customer IDs
-    let customer;
+    // Check if production orders already exist for this PO
+    const existingOrders = await db
+      .select()
+      .from(productionOrders)
+      .where(eq(productionOrders.poId, poId));
+    
+    if (existingOrders.length > 0) {
+      throw new Error('Production orders have already been generated for this Purchase Order');
+    }
+
+    // Get customer from the main customers table
     const customerIdNum = parseInt(po.customerId);
-    if (!isNaN(customerIdNum)) {
-      customer = await this.getCustomer(customerIdNum);
-    } else {
-      // If customerId is not a number, try to find customer by name or other identifier
-      // For now, we'll use the customerName from the PO
-      customer = { id: 0, name: po.customerName };
+    if (isNaN(customerIdNum)) {
+      throw new Error('Invalid customer ID in purchase order');
     }
     
+    const customer = await this.getCustomer(customerIdNum);
     if (!customer) {
       throw new Error('Customer not found');
     }

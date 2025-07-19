@@ -779,37 +779,6 @@ export default function OrderEntry() {
                 {errors.customerPO && <p className="text-red-500 text-sm">{errors.customerPO}</p>}
               </div>
 
-              {/* Custom Order */}
-              <div className="space-y-2">
-                <Label>Custom Order</Label>
-                <div className="flex space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="custom-order-yes"
-                      name="custom-order"
-                      value="yes"
-                      checked={isCustomOrder === 'yes'}
-                      onChange={(e) => setIsCustomOrder(e.target.value as 'yes')}
-                      className="rounded border-gray-300"
-                    />
-                    <Label htmlFor="custom-order-yes">Yes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="custom-order-no"
-                      name="custom-order"
-                      value="no"
-                      checked={isCustomOrder === 'no'}
-                      onChange={(e) => setIsCustomOrder(e.target.value as 'no')}
-                      className="rounded border-gray-300"
-                    />
-                    <Label htmlFor="custom-order-no">No</Label>
-                  </div>
-                </div>
-              </div>
-
               {/* FB Order # Field */}
               <div className="space-y-2">
                 <Label htmlFor="fbOrderNumber">FB Order #</Label>
@@ -1344,13 +1313,36 @@ export default function OrderEntry() {
                 </div>
               )}
 
-              {/* Debug: Show current action value */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
-                  Debug: Action value = "{features.action || 'none'}"
-                  {features.action === 'bartlein_#3b' && ' (Shank Length should be visible)'}
+              {/* Custom Order */}
+              <div className="space-y-2">
+                <Label>Custom Order</Label>
+                <div className="flex space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="custom-order-yes"
+                      name="custom-order"
+                      value="yes"
+                      checked={isCustomOrder === 'yes'}
+                      onChange={(e) => setIsCustomOrder(e.target.value as 'yes')}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="custom-order-yes">Yes</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="custom-order-no"
+                      name="custom-order"
+                      value="no"
+                      checked={isCustomOrder === 'no'}
+                      onChange={(e) => setIsCustomOrder(e.target.value as 'no')}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="custom-order-no">No</Label>
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* Special Instructions */}
               <div className="md:col-span-2 space-y-2">

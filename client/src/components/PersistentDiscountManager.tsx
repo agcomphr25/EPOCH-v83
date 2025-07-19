@@ -20,9 +20,21 @@ import { z } from "zod";
 const persistentDiscountFormSchema = insertPersistentDiscountSchema.extend({
   customerTypeId: z.number().min(1, "Customer type is required"),
   name: z.string().min(1, "Name is required"),
-  percent: z.number().min(0).max(100, "Percent must be between 0 and 100"),
+  percent: z.number().min(0).max(100, "Percent must be between 0 and 100").optional(),
+  fixedAmount: z.number().min(0).optional(),
   appliesTo: z.string().default("stock_model"),
-});
+}).refine(
+  (data) => {
+    // For Custom discount, we don't require preset values
+    if (data.name === "Custom") return true;
+    // For other discounts, require either percent or fixedAmount
+    return data.percent !== undefined || data.fixedAmount !== undefined;
+  },
+  {
+    message: "Either percent or fixed amount is required for non-custom discounts",
+    path: ["percent"],
+  }
+);
 
 type PersistentDiscountFormData = z.infer<typeof persistentDiscountFormSchema>;
 
@@ -220,9 +232,40 @@ export default function PersistentDiscountManager() {
                             {...field} 
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
                             placeholder="e.g., 10" 
+                            disabled={createForm.watch("name") === "Custom"}
                           />
                         </FormControl>
                         <FormMessage />
+                        {createForm.watch("name") === "Custom" && (
+                          <div className="text-sm text-muted-foreground">
+                            Custom discounts allow ad-hoc percentage or amount during order entry
+                          </div>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={createForm.control}
+                    name="fixedAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fixed Amount (in cents)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            {...field} 
+                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            placeholder="e.g., 5000 for $50.00" 
+                            disabled={createForm.watch("name") === "Custom"}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                        {createForm.watch("name") === "Custom" && (
+                          <div className="text-sm text-muted-foreground">
+                            Custom discounts allow ad-hoc percentage or amount during order entry
+                          </div>
+                        )}
                       </FormItem>
                     )}
                   />
@@ -316,7 +359,13 @@ export default function PersistentDiscountManager() {
                   <TableCell className="font-medium">{getCustomerTypeName(discount.customerTypeId)}</TableCell>
                   <TableCell className="font-semibold">{discount.name}</TableCell>
                   <TableCell>
-                    {discount.fixedAmount ? `$${(discount.fixedAmount / 100).toFixed(2)}` : `${discount.percent}%`}
+                    {discount.name === "Custom" ? (
+                      <span className="text-blue-600 font-medium">Ad-hoc Entry</span>
+                    ) : discount.fixedAmount ? (
+                      `$${(discount.fixedAmount / 100).toFixed(2)}`
+                    ) : (
+                      `${discount.percent}%`
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-gray-600">{discount.description || "-"}</TableCell>
                   <TableCell>
@@ -412,9 +461,40 @@ export default function PersistentDiscountManager() {
                         {...field} 
                         onChange={(e) => field.onChange(parseInt(e.target.value))}
                         placeholder="e.g., 10" 
+                        disabled={editForm.watch("name") === "Custom"}
                       />
                     </FormControl>
                     <FormMessage />
+                    {editForm.watch("name") === "Custom" && (
+                      <div className="text-sm text-muted-foreground">
+                        Custom discounts allow ad-hoc percentage or amount during order entry
+                      </div>
+                    )}
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="fixedAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fixed Amount (in cents)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        placeholder="e.g., 5000 for $50.00" 
+                        disabled={editForm.watch("name") === "Custom"}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    {editForm.watch("name") === "Custom" && (
+                      <div className="text-sm text-muted-foreground">
+                        Custom discounts allow ad-hoc percentage or amount during order entry
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />

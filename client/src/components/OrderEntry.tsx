@@ -81,6 +81,9 @@ export default function OrderEntry() {
 
   // Order summary data
   const [discountCode, setDiscountCode] = useState('');
+  const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
+  const [showCustomDiscount, setShowCustomDiscount] = useState(false);
   const [shipping, setShipping] = useState(36.95);
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const [additionalItems, setAdditionalItems] = useState<any[]>([]);
@@ -212,6 +215,9 @@ export default function OrderEntry() {
             setHandedness(draftResponse.handedness || '');
             setShankLength(draftResponse.shankLength || '');
             setDiscountCode(draftResponse.discountCode || '');
+            setCustomDiscountType(draftResponse.customDiscountType || 'percent');
+            setCustomDiscountValue(draftResponse.customDiscountValue || 0);
+            setShowCustomDiscount(draftResponse.showCustomDiscount || false);
             setShipping(draftResponse.shipping || 36.95);
             setMarkAsPaid(draftResponse.markAsPaid || false);
             setAdditionalItems(draftResponse.additionalItems || []);
@@ -371,7 +377,17 @@ export default function OrderEntry() {
       }
     }
 
-    const totalDiscount = discountAmount + customerTypeDiscount + persistentDiscount;
+    // Calculate custom discount (ad-hoc discount entry)
+    let customDiscount = 0;
+    if (showCustomDiscount && customDiscountValue > 0) {
+      if (customDiscountType === 'percent') {
+        customDiscount = (basePrice + featureCost) * (customDiscountValue / 100);
+      } else {
+        customDiscount = customDiscountValue;
+      }
+    }
+
+    const totalDiscount = discountAmount + customerTypeDiscount + persistentDiscount + customDiscount;
     const subtotal = basePrice + featureCost + additionalItemsCost - totalDiscount;
     const total = subtotal + shipping;
 
@@ -382,12 +398,13 @@ export default function OrderEntry() {
       discountAmount,
       customerTypeDiscount,
       persistentDiscount,
+      customDiscount,
       totalDiscount,
       subtotal,
       shipping,
       total
     };
-  }, [modelId, modelOptions, features, additionalItems, discountCode, shipping, shortTermSales, customer, customerTypes, persistentDiscounts, paintFeatures, subCategories, allFeatures, featureQuantities]);
+  }, [modelId, modelOptions, features, additionalItems, discountCode, shipping, shortTermSales, customer, customerTypes, persistentDiscounts, paintFeatures, subCategories, allFeatures, featureQuantities, showCustomDiscount, customDiscountType, customDiscountValue]);
 
   const pricing = calculateTotal();
 
@@ -424,6 +441,9 @@ export default function OrderEntry() {
         handedness: handedness || '',
         shankLength: shankLength || '',
         discountCode: discountCode || '',
+        customDiscountType: customDiscountType || 'percent',
+        customDiscountValue: customDiscountValue || 0,
+        showCustomDiscount: showCustomDiscount || false,
         shipping: shipping || 0,
         markAsPaid: markAsPaid || false,
         additionalItems: additionalItems || [],
@@ -955,6 +975,53 @@ export default function OrderEntry() {
                   <span>Shipping:</span>
                   <span>${pricing.shipping.toFixed(2)}</span>
                 </div>
+                {/* Custom Discount Section */}
+                <div className="border-t pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Custom Discount</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowCustomDiscount(!showCustomDiscount);
+                        if (showCustomDiscount) {
+                          setCustomDiscountValue(0);
+                        }
+                      }}
+                    >
+                      {showCustomDiscount ? 'Remove' : 'Add Custom'}
+                    </Button>
+                  </div>
+                  
+                  {showCustomDiscount && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Select value={customDiscountType} onValueChange={(value: 'percent' | 'amount') => setCustomDiscountType(value)}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">%</SelectItem>
+                            <SelectItem value="amount">$</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          placeholder={customDiscountType === 'percent' ? '5' : '50.00'}
+                          value={customDiscountValue || ''}
+                          onChange={(e) => setCustomDiscountValue(parseFloat(e.target.value) || 0)}
+                          className="flex-1"
+                        />
+                      </div>
+                      {pricing.customDiscount > 0 && (
+                        <div className="text-sm text-green-600">
+                          Applied: -${pricing.customDiscount.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {pricing.totalDiscount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Total Discount:</span>

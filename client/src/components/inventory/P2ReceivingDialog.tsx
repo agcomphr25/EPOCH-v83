@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,16 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
     aluminumHeatNumber: '',
     barcode: generateBarcode()
   });
+
+  // Update item code when item changes
+  useEffect(() => {
+    if (item?.agPartNumber) {
+      setFormData(prev => ({
+        ...prev,
+        itemCode: item.agPartNumber
+      }));
+    }
+  }, [item]);
 
   const queryClient = useQueryClient();
 
@@ -214,11 +224,12 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           {/* Basic Information */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="itemCode">Item Code</Label>
+              <Label htmlFor="itemCode">Item Code (Auto-filled)</Label>
               <Input
                 id="itemCode"
                 value={formData.itemCode}
-                onChange={(e) => setFormData(prev => ({ ...prev, itemCode: e.target.value }))}
+                readOnly
+                className="bg-gray-50 dark:bg-gray-800"
                 placeholder="AG Part Number"
               />
             </div>

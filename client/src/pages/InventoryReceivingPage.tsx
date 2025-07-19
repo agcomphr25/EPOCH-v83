@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, Scan, Plus, Check, Clock, AlertCircle, Search } from "lucide-react";
+import { Package, Scan, Plus, Check, Clock, AlertCircle, Search, QrCode } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
+import P2ReceivingDialog from "@/components/inventory/P2ReceivingDialog";
 
 interface ReceivingItem {
   id?: number;
@@ -25,9 +26,27 @@ interface ReceivingItem {
   receivedBy?: string;
 }
 
+// Function to detect if an item is a P2 product
+function isP2Product(item: any): boolean {
+  if (!item) return false;
+  
+  // Check if the AG Part Number or name contains P2 indicators
+  const partNumber = (item.agPartNumber || '').toLowerCase();
+  const name = (item.name || '').toLowerCase();
+  
+  return partNumber.includes('p2') || 
+         name.includes('p2') || 
+         name.includes('production line 2') ||
+         partNumber.startsWith('p2-') ||
+         // Add other P2 detection criteria as needed
+         false;
+}
+
 export default function InventoryReceivingPage() {
   const [scanMode, setScanMode] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
+  const [p2DialogOpen, setP2DialogOpen] = useState(false);
+  const [selectedP2Item, setSelectedP2Item] = useState<any>(null);
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
     agPartNumber: '',
     name: '',
@@ -51,6 +70,15 @@ export default function InventoryReceivingPage() {
     },
     {
       id: 2,
+      agPartNumber: "P2-ALU-001", 
+      name: "P2 Aluminum Tubing - Special Grade",
+      expectedQuantity: 25,
+      receivedQuantity: 0,
+      status: 'pending',
+      notes: "P2 Production Line - Requires detailed tracking"
+    },
+    {
+      id: 3,
       agPartNumber: "AG002", 
       name: "Aluminum Sheet - 6x8",
       expectedQuantity: 25,
@@ -59,7 +87,16 @@ export default function InventoryReceivingPage() {
       lotNumber: "LOT-2024-001"
     },
     {
-      id: 3,
+      id: 4,
+      agPartNumber: "P2-STEEL-002",
+      name: "P2 Heat-Treated Steel Components",
+      expectedQuantity: 15,
+      receivedQuantity: 0,
+      status: 'pending',
+      notes: "P2 Manufacturing - Critical batch tracking required"
+    },
+    {
+      id: 5,
       agPartNumber: "AG003",
       name: "Precision Screws - M4",
       expectedQuantity: 100,
@@ -120,7 +157,14 @@ export default function InventoryReceivingPage() {
       return;
     }
 
-    // Add to inventory as master record
+    // Check if this is a P2 product
+    if (isP2Product(receivingData)) {
+      setSelectedP2Item(receivingData);
+      setP2DialogOpen(true);
+      return;
+    }
+
+    // Regular receiving for non-P2 products
     const inventoryData = {
       agPartNumber: receivingData.agPartNumber,
       name: receivingData.name,
@@ -130,6 +174,18 @@ export default function InventoryReceivingPage() {
     };
 
     createInventoryMutation.mutate(inventoryData);
+  };
+
+  const handleReceiveFromPending = (item: ReceivingItem) => {
+    // Check if this is a P2 product
+    if (isP2Product(item)) {
+      setSelectedP2Item(item);
+      setP2DialogOpen(true);
+      return;
+    }
+
+    // For non-P2 products, load into the form
+    setReceivingData(item);
   };
 
   const resetForm = () => {
@@ -304,11 +360,16 @@ export default function InventoryReceivingPage() {
                 <div className="flex gap-2">
                   <Button 
                     onClick={handleReceive} 
-                    className="flex-1"
+                    className={`flex-1 ${isP2Product(receivingData) ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
                     disabled={createInventoryMutation.isPending}
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {createInventoryMutation.isPending ? 'Receiving...' : 'Receive Item'}
+                    {isP2Product(receivingData) ? (
+                      <QrCode className="w-4 h-4 mr-2" />
+                    ) : (
+                      <Plus className="w-4 h-4 mr-2" />
+                    )}
+                    {createInventoryMutation.isPending ? 'Receiving...' : 
+                     isP2Product(receivingData) ? 'P2 Receive' : 'Receive Item'}
                   </Button>
                   <Button onClick={resetForm} variant="outline">
                     Clear
@@ -334,6 +395,12 @@ export default function InventoryReceivingPage() {
                         <span className="font-medium">{item.agPartNumber}</span>
                         <span className="text-muted-foreground">-</span>
                         <span>{item.name}</span>
+                        {isP2Product(item) && (
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
+                            <QrCode className="w-3 h-3 mr-1" />
+                            P2
+                          </Badge>
+                        )}
                         {getStatusBadge(item.status)}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -345,8 +412,10 @@ export default function InventoryReceivingPage() {
                     </div>
                     <Button 
                       size="sm"
-                      onClick={() => setReceivingData(item)}
+                      onClick={() => handleReceiveFromPending(item)}
+                      className={isP2Product(item) ? "bg-orange-500 hover:bg-orange-600" : ""}
                     >
+                      {isP2Product(item) && <QrCode className="w-4 h-4 mr-1" />}
                       Receive
                     </Button>
                   </div>
@@ -389,6 +458,13 @@ export default function InventoryReceivingPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* P2 Receiving Dialog */}
+      <P2ReceivingDialog
+        open={p2DialogOpen}
+        onOpenChange={setP2DialogOpen}
+        item={selectedP2Item}
+      />
     </div>
   );
 }

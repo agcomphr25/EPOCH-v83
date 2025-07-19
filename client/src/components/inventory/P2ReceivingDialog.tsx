@@ -1,0 +1,327 @@
+import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { QrCode, Printer, Save, Calendar } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
+
+interface P2ReceivingData {
+  itemCode: string;
+  quantity: number;
+  receivingDate: string;
+  manufactureDate: string;
+  expirationDate: string;
+  batchNumber: string;
+  lotNumber: string;
+  aluminumHeatNumber: string;
+  barcode: string;
+}
+
+interface P2ReceivingDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  item: any;
+}
+
+// Generate a 39-character barcode (Code 39 compatible)
+function generateBarcode(): string {
+  const characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let result = "";
+  for (let i = 0; i < 39; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
+// Format barcode for display with dashes every 4 characters
+function formatBarcodeDisplay(barcode: string): string {
+  return barcode.match(/.{1,4}/g)?.join("-") || barcode;
+}
+
+export default function P2ReceivingDialog({ open, onOpenChange, item }: P2ReceivingDialogProps) {
+  const [formData, setFormData] = useState<P2ReceivingData>({
+    itemCode: item?.agPartNumber || '',
+    quantity: 1,
+    receivingDate: new Date().toISOString().split('T')[0],
+    manufactureDate: '',
+    expirationDate: '',
+    batchNumber: '',
+    lotNumber: '',
+    aluminumHeatNumber: '',
+    barcode: generateBarcode()
+  });
+
+  const queryClient = useQueryClient();
+
+  const createScanMutation = useMutation({
+    mutationFn: async (data: P2ReceivingData) => {
+      const response = await fetch('/api/inventory/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) throw new Error('Failed to create scan record');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/scans'] });
+      toast.success('P2 receiving record created successfully');
+      handleClose();
+    },
+    onError: () => {
+      toast.error('Failed to create receiving record');
+    }
+  });
+
+  const handleSave = () => {
+    if (!formData.manufactureDate || !formData.expirationDate || !formData.batchNumber || 
+        !formData.lotNumber || !formData.aluminumHeatNumber) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    createScanMutation.mutate(formData);
+  };
+
+  const handleClose = () => {
+    onOpenChange(false);
+    // Reset form data
+    setFormData({
+      itemCode: item?.agPartNumber || '',
+      quantity: 1,
+      receivingDate: new Date().toISOString().split('T')[0],
+      manufactureDate: '',
+      expirationDate: '',
+      batchNumber: '',
+      lotNumber: '',
+      aluminumHeatNumber: '',
+      barcode: generateBarcode()
+    });
+  };
+
+  const handlePrintBarcode = () => {
+    // Generate print window with multiple copies
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const barcodeDisplay = formatBarcodeDisplay(formData.barcode);
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>P2 Product Barcode - ${formData.itemCode}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .barcode-label { 
+                border: 2px solid #000; 
+                padding: 15px; 
+                margin: 10px 0; 
+                width: 300px; 
+                text-align: center;
+                page-break-inside: avoid;
+              }
+              .barcode { 
+                font-family: 'Courier New', monospace; 
+                font-size: 14px; 
+                font-weight: bold; 
+                letter-spacing: 2px; 
+                margin: 10px 0;
+              }
+              .item-info { font-size: 12px; margin: 5px 0; }
+              .dates { font-size: 10px; color: #666; }
+              @media print {
+                body { margin: 0; }
+                .barcode-label { margin: 5px; }
+              }
+            </style>
+          </head>
+          <body>
+            ${Array.from({ length: 5 }, (_, i) => `
+              <div class="barcode-label">
+                <div class="item-info"><strong>${formData.itemCode}</strong></div>
+                <div class="item-info">${item?.name || 'P2 Product'}</div>
+                <div class="barcode">*${barcodeDisplay}*</div>
+                <div class="dates">
+                  <div>Batch: ${formData.batchNumber}</div>
+                  <div>Lot: ${formData.lotNumber}</div>
+                  <div>Heat: ${formData.aluminumHeatNumber}</div>
+                  <div>Mfg: ${formData.manufactureDate}</div>
+                  <div>Exp: ${formData.expirationDate}</div>
+                </div>
+              </div>
+            `).join('')}
+          </body>
+        </html>
+      `);
+      
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+  };
+
+  const regenerateBarcode = () => {
+    setFormData(prev => ({ ...prev, barcode: generateBarcode() }));
+    toast.success('New barcode generated');
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            P2 Product Receiving - {item?.agPartNumber}
+          </DialogTitle>
+          <DialogDescription>
+            Enter detailed information for P2 product receiving and barcode generation
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Barcode Generation Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Generated Barcode</CardTitle>
+              <CardDescription>39-character barcode for this P2 product</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="font-mono text-sm bg-gray-100 dark:bg-gray-800 p-3 rounded border">
+                    *{formatBarcodeDisplay(formData.barcode)}*
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={regenerateBarcode} variant="outline" size="sm">
+                    <QrCode className="h-4 w-4 mr-1" />
+                    New Code
+                  </Button>
+                  <Button onClick={handlePrintBarcode} variant="outline" size="sm">
+                    <Printer className="h-4 w-4 mr-1" />
+                    Print (5x)
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Basic Information */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="itemCode">Item Code</Label>
+              <Input
+                id="itemCode"
+                value={formData.itemCode}
+                onChange={(e) => setFormData(prev => ({ ...prev, itemCode: e.target.value }))}
+                placeholder="AG Part Number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="quantity">Quantity</Label>
+              <Input
+                id="quantity"
+                type="number"
+                value={formData.quantity}
+                onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                min="1"
+              />
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="receivingDate">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Receiving Date *
+              </Label>
+              <Input
+                id="receivingDate"
+                type="date"
+                value={formData.receivingDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, receivingDate: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="manufactureDate">Manufacturing Date *</Label>
+              <Input
+                id="manufactureDate"
+                type="date"
+                value={formData.manufactureDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, manufactureDate: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="expirationDate">Expiration Date *</Label>
+              <Input
+                id="expirationDate"
+                type="date"
+                value={formData.expirationDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, expirationDate: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Batch and Lot Information */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="batchNumber">Batch Number *</Label>
+              <Input
+                id="batchNumber"
+                value={formData.batchNumber}
+                onChange={(e) => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
+                placeholder="Enter batch number"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="lotNumber">Lot Number *</Label>
+              <Input
+                id="lotNumber"
+                value={formData.lotNumber}
+                onChange={(e) => setFormData(prev => ({ ...prev, lotNumber: e.target.value }))}
+                placeholder="Enter lot number"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Aluminum Heat Number */}
+          <div>
+            <Label htmlFor="aluminumHeatNumber">Aluminum Heat Number *</Label>
+            <Input
+              id="aluminumHeatNumber"
+              value={formData.aluminumHeatNumber}
+              onChange={(e) => setFormData(prev => ({ ...prev, aluminumHeatNumber: e.target.value }))}
+              placeholder="Enter aluminum heat number"
+              required
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={handleClose} variant="outline">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={createScanMutation.isPending}
+            className="ml-2"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {createScanMutation.isPending ? 'Saving...' : 'Save P2 Record'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

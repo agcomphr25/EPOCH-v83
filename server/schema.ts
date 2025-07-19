@@ -171,6 +171,9 @@ export const inventoryScans = pgTable("inventory_scans", {
   manufactureDate: date("manufacture_date"),
   lotNumber: text("lot_number"),
   batchNumber: text("batch_number"),
+  aluminumHeatNumber: text("aluminum_heat_number"), // New field for P2 products
+  barcode: text("barcode").unique(), // 39-line barcode for P2 products
+  receivingDate: date("receiving_date"), // Date when received
   technicianId: text("technician_id"),
   scannedAt: timestamp("scanned_at").defaultNow(),
 });
@@ -469,6 +472,9 @@ export const insertInventoryScanSchema = createInsertSchema(inventoryScans).omit
   manufactureDate: z.coerce.date().optional().nullable(),
   lotNumber: z.string().optional().nullable(),
   batchNumber: z.string().optional().nullable(),
+  aluminumHeatNumber: z.string().optional().nullable(),
+  barcode: z.string().optional().nullable(),
+  receivingDate: z.coerce.date().optional().nullable(),
   technicianId: z.string().optional().nullable(),
 });
 

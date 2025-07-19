@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo } from 'react';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,26 @@ export default function OrderPlacementCard() {
     notes: '',
     items: [{ partNumber: '', description: '', quantity: 1, unitCost: 0 }]
   });
+
+  // Get inventory items to extract suppliers
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ['/api/inventory'],
+    enabled: true
+  });
+
+  // Extract unique suppliers from inventory items
+  const availableSuppliers = useMemo(() => {
+    const suppliers = new Set<string>();
+    inventoryItems.forEach((item: any) => {
+      if (item.source && item.source.trim()) {
+        suppliers.add(item.source.trim());
+      }
+      if (item.secondarySource && item.secondarySource.trim()) {
+        suppliers.add(item.secondarySource.trim());
+      }
+    });
+    return Array.from(suppliers).sort();
+  }, [inventoryItems]);
 
   // Create order mutation
   const createOrderMutation = useMutation({
@@ -183,14 +203,24 @@ export default function OrderPlacementCard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="supplierName">Supplier Name *</Label>
-                <Input
-                  id="supplierName"
-                  name="supplierName"
-                  value={formData.supplierName}
-                  onChange={handleChange}
-                  placeholder="Enter supplier name"
-                  required
-                />
+                <Select value={formData.supplierName} onValueChange={(value) => handleSelectChange('supplierName', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier from inventory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSuppliers.length > 0 ? (
+                      availableSuppliers.map((supplier) => (
+                        <SelectItem key={supplier} value={supplier}>
+                          {supplier}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No suppliers found in inventory
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="orderType">Order Type</Label>

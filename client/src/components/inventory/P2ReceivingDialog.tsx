@@ -169,7 +169,6 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               <div class="barcode-label">
                 <div class="item-info">${formData.itemCode} - ${item?.name || 'P2 Product'}</div>
                 <div class="barcode">*${formData.barcode}*</div>
-                <div class="barcode-text">${formData.barcode}</div>
                 <div class="dates">
                   <div><strong>Batch:</strong> ${formData.batchNumber} | <strong>Lot:</strong> ${formData.lotNumber}</div>
                   <div><strong>Heat#:</strong> ${formData.aluminumHeatNumber}</div>

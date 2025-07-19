@@ -130,6 +130,7 @@ export const orderDrafts = pgTable("order_drafts", {
   customerPO: text("customer_po"),
   fbOrderNumber: text("fb_order_number"),
   agrOrderDetails: text("agr_order_details"),
+  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
   modelId: text("model_id"),
   handedness: text("handedness"),
   shankLength: text("shank_length"),

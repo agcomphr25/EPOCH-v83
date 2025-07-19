@@ -108,6 +108,9 @@ export default function OrderEntry() {
   const [canOverridePrices, setCanOverridePrices] = useState(false);
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [showPriceOverride, setShowPriceOverride] = useState(false);
+  
+  // Custom Order functionality
+  const [isCustomOrder, setIsCustomOrder] = useState<'yes' | 'no' | ''>('');
 
   // Load initial data on mount
   useEffect(() => {
@@ -160,6 +163,7 @@ export default function OrderEntry() {
             setOrderStatus(draftResponse.status || 'DRAFT');
             setPriceOverride(draftResponse.priceOverride || null);
             setShowPriceOverride(!!draftResponse.priceOverride);
+            setIsCustomOrder(draftResponse.isCustomOrder || '');
 
             // Set customer object properly - load from database if customerId exists
             if (draftResponse.customerId) {
@@ -484,6 +488,7 @@ export default function OrderEntry() {
         customerPO: hasCustomerPO ? customerPO : null,
         fbOrderNumber: fbOrderNumber || null,
         agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
+        isCustomOrder: isCustomOrder || null,
         modelId,
         handedness,
         shankLength,
@@ -521,6 +526,7 @@ export default function OrderEntry() {
       setHasAgrOrder(false);
       setPriceOverride(null);
       setShowPriceOverride(false);
+      setIsCustomOrder('');
 
     } catch (error: any) {
       if (error.response?.data?.errors) {
@@ -619,6 +625,7 @@ export default function OrderEntry() {
         customerPO: hasCustomerPO ? customerPO : null,
         fbOrderNumber: fbOrderNumber || null,
         agrOrderDetails: hasAgrOrder ? agrOrderDetails : null,
+        isCustomOrder: isCustomOrder || null,
         modelId,
         handedness,
         shankLength,
@@ -770,6 +777,37 @@ export default function OrderEntry() {
                   />
                 )}
                 {errors.customerPO && <p className="text-red-500 text-sm">{errors.customerPO}</p>}
+              </div>
+
+              {/* Custom Order */}
+              <div className="space-y-2">
+                <Label>Custom Order</Label>
+                <div className="flex space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="custom-order-yes"
+                      name="custom-order"
+                      value="yes"
+                      checked={isCustomOrder === 'yes'}
+                      onChange={(e) => setIsCustomOrder(e.target.value as 'yes')}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="custom-order-yes">Yes</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="custom-order-no"
+                      name="custom-order"
+                      value="no"
+                      checked={isCustomOrder === 'no'}
+                      onChange={(e) => setIsCustomOrder(e.target.value as 'no')}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="custom-order-no">No</Label>
+                  </div>
+                </div>
               </div>
 
               {/* FB Order # Field */}

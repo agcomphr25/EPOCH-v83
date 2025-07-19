@@ -1568,7 +1568,6 @@ export default function OrderEntry() {
                   <SelectItem value="check">Check</SelectItem>
                   <SelectItem value="credit_card">Credit Card</SelectItem>
                   <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="paypal">PayPal</SelectItem>
                   <SelectItem value="agr">AGR</SelectItem>
                 </SelectContent>
               </Select>

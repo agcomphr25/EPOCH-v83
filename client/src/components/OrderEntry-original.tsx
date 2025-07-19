@@ -1317,32 +1317,15 @@ export default function OrderEntry() {
 
               {/* Custom Order */}
               <div className="space-y-2">
-                <Label>Custom Order</Label>
-                <div className="flex space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="custom-order-yes"
-                      name="custom-order"
-                      value="yes"
-                      checked={isCustomOrder === 'yes'}
-                      onChange={(e) => setIsCustomOrder(e.target.value as 'yes')}
-                      className="rounded border-gray-300"
-                    />
-                    <Label htmlFor="custom-order-yes">Yes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="custom-order-no"
-                      name="custom-order"
-                      value="no"
-                      checked={isCustomOrder === 'no'}
-                      onChange={(e) => setIsCustomOrder(e.target.value as 'no')}
-                      className="rounded border-gray-300"
-                    />
-                    <Label htmlFor="custom-order-no">No</Label>
-                  </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="custom-order"
+                    checked={isCustomOrder === 'yes'}
+                    onChange={(e) => setIsCustomOrder(e.target.checked ? 'yes' : '')}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="custom-order">Custom Order</Label>
                 </div>
               </div>
 

@@ -241,7 +241,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orders = await storage.getAllOrders();
       res.json(orders);
     } catch (error) {
-      res.status(500).json({ error: "Failed to retrieve orders" });
+      console.error('Error retrieving orders:', error);
+      res.status(500).json({ error: "Failed to retrieve orders", details: error.message });
     }
   });
 

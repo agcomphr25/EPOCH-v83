@@ -87,6 +87,8 @@ export default function OrderEntry() {
 
   // Order summary data
   const [discountCode, setDiscountCode] = useState('');
+  const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [shipping, setShipping] = useState(36.95);
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const [additionalItems, setAdditionalItems] = useState<any[]>([]);
@@ -145,6 +147,8 @@ export default function OrderEntry() {
             setFeatures(draftResponse.features || {});
             setFeatureQuantities(draftResponse.featureQuantities || {});
             setDiscountCode(draftResponse.discountCode || '');
+            setCustomDiscountType(draftResponse.customDiscountType || 'percent');
+            setCustomDiscountValue(draftResponse.customDiscountValue || 0);
             setShipping(draftResponse.shipping || 36.95);
             setTikkaOption(draftResponse.tikkaOption || '');
             setOrderStatus(draftResponse.status || 'DRAFT');
@@ -324,7 +328,16 @@ export default function OrderEntry() {
     // Apply discount if selected
     let discountAmount = 0;
     if (discountCode && discountCode !== 'none') {
-      if (discountCode.startsWith('sale-')) {
+      if (discountCode === 'custom') {
+        // Custom discount calculation
+        if (customDiscountValue > 0) {
+          if (customDiscountType === 'percent') {
+            discountAmount = (subtotal * customDiscountValue) / 100;
+          } else {
+            discountAmount = customDiscountValue;
+          }
+        }
+      } else if (discountCode.startsWith('sale-')) {
         const saleId = parseInt(discountCode.replace('sale-', ''));
         const sale = shortTermSales.find(s => s.id === saleId);
         if (sale) {
@@ -600,6 +613,8 @@ export default function OrderEntry() {
         features,
         featureQuantities,
         discountCode,
+        customDiscountType,
+        customDiscountValue,
         shipping,
         tikkaOption,
         status: 'DRAFT'
@@ -1374,8 +1389,39 @@ export default function OrderEntry() {
                         </SelectItem>
                       );
                     })}
+
+                    {/* Custom Discount Option */}
+                    <SelectItem value="custom">Custom (Ad-hoc Entry)</SelectItem>
                   </SelectContent>
                 </Select>
+
+                {/* Custom Discount Controls */}
+                {discountCode === 'custom' && (
+                  <div className="space-y-3 p-3 border rounded bg-blue-50">
+                    <Label className="text-sm font-medium text-blue-700">Custom Discount Details</Label>
+                    <div className="flex gap-2">
+                      <Select value={customDiscountType} onValueChange={(value: 'percent' | 'amount') => setCustomDiscountType(value)}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="amount">$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder={customDiscountType === 'percent' ? '10' : '25.00'}
+                        value={customDiscountValue || ''}
+                        onChange={(e) => setCustomDiscountValue(parseFloat(e.target.value) || 0)}
+                        className="flex-1"
+                      />
+                    </div>
+                    <div className="text-xs text-blue-600">
+                      Enter the discount amount. Use % for percentage discounts or $ for fixed dollar amounts.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Shipping */}

@@ -753,6 +753,7 @@ export default function OrderEntry() {
 
               {/* Customer PO */}
               <div className="space-y-2">
+                <Label>Customer PO</Label>
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -766,7 +767,7 @@ export default function OrderEntry() {
                     }}
                     className="rounded border-gray-300"
                   />
-                  <Label htmlFor="hasCustomerPO">Customer PO</Label>
+                  <label htmlFor="hasCustomerPO" className="text-sm">Enable Customer PO</label>
                 </div>
                 {hasCustomerPO && (
                   <Input
@@ -794,6 +795,7 @@ export default function OrderEntry() {
 
               {/* AGR Order Field */}
               <div className="space-y-2">
+                <Label>AGR Order</Label>
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -807,7 +809,7 @@ export default function OrderEntry() {
                     }}
                     className="rounded border-gray-300"
                   />
-                  <Label htmlFor="hasAgrOrder">AGR Order?</Label>
+                  <label htmlFor="hasAgrOrder" className="text-sm">Enable AGR Order</label>
                 </div>
                 {hasAgrOrder && (
                   <Input

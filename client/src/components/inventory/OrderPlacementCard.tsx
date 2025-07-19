@@ -57,6 +57,15 @@ export default function OrderPlacementCard() {
     return Array.from(suppliers).sort();
   }, [inventoryItems]);
 
+  // Get items for selected supplier
+  const supplierItems = useMemo(() => {
+    if (!formData.supplierName || !inventoryItems.length) return [];
+    
+    return inventoryItems.filter((item: any) => 
+      item.source === formData.supplierName || item.secondarySource === formData.supplierName
+    );
+  }, [inventoryItems, formData.supplierName]);
+
   // Create order mutation
   const createOrderMutation = useMutation({
     mutationFn: (data: any) => apiRequest('/api/purchase-orders', {
@@ -104,6 +113,22 @@ export default function OrderPlacementCard() {
       ...prev,
       items: [...prev.items, { partNumber: '', description: '', quantity: 1, unitCost: 0 }]
     }));
+  };
+
+  const addItemFromInventory = (inventoryItem: any) => {
+    const newItem: OrderItem = {
+      partNumber: inventoryItem.agPartNumber,
+      description: inventoryItem.name,
+      quantity: 1,
+      unitCost: inventoryItem.costPer || 0
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, newItem]
+    }));
+    
+    toast.success(`Added ${inventoryItem.name} to order`);
   };
 
   const removeItem = (index: number) => {
@@ -264,6 +289,58 @@ export default function OrderPlacementCard() {
                 />
               </div>
             </div>
+
+            {/* Supplier Items Selection */}
+            {formData.supplierName && supplierItems.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Label className="text-base font-medium">Available Items from {formData.supplierName}</Label>
+                  <div className="text-sm text-gray-500">{supplierItems.length} items available</div>
+                </div>
+                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                  <div className="grid grid-cols-1 gap-2 p-4">
+                    {supplierItems.map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{item.agPartNumber}</span>
+                            <span className="text-gray-400">-</span>
+                            <span className="text-sm">{item.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1">
+                            {item.costPer && (
+                              <span className="text-xs text-gray-500">Cost: ${item.costPer}</span>
+                            )}
+                            {item.department && (
+                              <span className="text-xs text-gray-500">Dept: {item.department}</span>
+                            )}
+                            {item.supplierPartNumber && (
+                              <span className="text-xs text-gray-500">Supplier P/N: {item.supplierPartNumber}</span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => addItemFromInventory(item)}
+                          className="ml-2"
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formData.supplierName && supplierItems.length === 0 && (
+              <div className="p-4 border rounded-lg bg-gray-50 text-center">
+                <p className="text-sm text-gray-500">No items found for supplier "{formData.supplierName}" in inventory</p>
+              </div>
+            )}
 
             {/* Order Items */}
             <div className="space-y-4">

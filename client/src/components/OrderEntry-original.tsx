@@ -873,7 +873,7 @@ export default function OrderEntry() {
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-yellow-800 font-medium">
                       <DollarSign className="h-4 w-4" />
-                      Price Override
+                      Alamo Price Override
                     </Label>
                     <Button
                       type="button"

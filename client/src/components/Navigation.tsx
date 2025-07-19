@@ -86,6 +86,12 @@ export default function Navigation() {
       label: 'Inventory Manager',
       icon: Package,
       description: 'Manage inventory items'
+    },
+    {
+      path: '/inventory/receiving',
+      label: 'Receiving',
+      icon: Receipt,
+      description: 'Receive incoming inventory'
     }
   ];
 

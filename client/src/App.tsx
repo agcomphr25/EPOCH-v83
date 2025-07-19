@@ -23,6 +23,7 @@ import ReportPage from "./pages/ReportPage";
 import InventoryScannerPage from "./pages/InventoryScannerPage";
 import InventoryDashboardPage from "./pages/InventoryDashboardPage";
 import InventoryManagerPage from "./pages/InventoryManagerPage";
+import InventoryReceivingPage from "./pages/InventoryReceivingPage";
 import QCPage from "./pages/QCPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
@@ -67,6 +68,7 @@ function App() {
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
+                  <Route path="/inventory/receiving" component={InventoryReceivingPage} />
                   <Route path="/qc" component={QCPage} />
                   <Route path="/maintenance" component={MaintenancePage} />
                   <Route path="/employee-portal" component={EmployeePortalPage} />

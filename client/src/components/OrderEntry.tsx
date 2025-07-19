@@ -666,6 +666,67 @@ export default function OrderEntry() {
                 </div>
               )}
 
+              {/* Discount Section */}
+              <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">Discount Code</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowCustomDiscount(!showCustomDiscount);
+                      if (showCustomDiscount) {
+                        setCustomDiscountValue(0);
+                      }
+                    }}
+                  >
+                    {showCustomDiscount ? 'Remove Custom' : 'Add Custom'}
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  <Input
+                    id="discountCode"
+                    value={discountCode}
+                    onChange={(e) => setDiscountCode(e.target.value)}
+                    placeholder="Enter discount code (e.g., SALE20)"
+                  />
+                </div>
+
+                {/* Custom Discount Section */}
+                {showCustomDiscount && (
+                  <div className="space-y-3 border-t pt-3">
+                    <Label className="text-sm font-medium text-blue-600">Custom Discount (Ad-hoc Entry)</Label>
+                    <div className="flex gap-2">
+                      <Select value={customDiscountType} onValueChange={(value: 'percent' | 'amount') => setCustomDiscountType(value)}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="amount">$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder={customDiscountType === 'percent' ? '10' : '25.00'}
+                        value={customDiscountValue || ''}
+                        onChange={(e) => setCustomDiscountValue(parseFloat(e.target.value) || 0)}
+                        className="flex-1"
+                      />
+                    </div>
+                    {pricing.customDiscount > 0 && (
+                      <div className="text-sm text-green-600 font-medium">
+                        Custom discount applied: -${pricing.customDiscount.toFixed(2)}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-600">
+                      Custom discounts allow you to apply ad-hoc percentage or dollar amount discounts not covered by standard discount codes.
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Stock Model Selection */}
               <div className="space-y-2">
                 <Label>Stock Model</Label>
@@ -975,53 +1036,6 @@ export default function OrderEntry() {
                   <span>Shipping:</span>
                   <span>${pricing.shipping.toFixed(2)}</span>
                 </div>
-                {/* Custom Discount Section */}
-                <div className="border-t pt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Custom Discount</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setShowCustomDiscount(!showCustomDiscount);
-                        if (showCustomDiscount) {
-                          setCustomDiscountValue(0);
-                        }
-                      }}
-                    >
-                      {showCustomDiscount ? 'Remove' : 'Add Custom'}
-                    </Button>
-                  </div>
-                  
-                  {showCustomDiscount && (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Select value={customDiscountType} onValueChange={(value: 'percent' | 'amount') => setCustomDiscountType(value)}>
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percent">%</SelectItem>
-                            <SelectItem value="amount">$</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          placeholder={customDiscountType === 'percent' ? '5' : '50.00'}
-                          value={customDiscountValue || ''}
-                          onChange={(e) => setCustomDiscountValue(parseFloat(e.target.value) || 0)}
-                          className="flex-1"
-                        />
-                      </div>
-                      {pricing.customDiscount > 0 && (
-                        <div className="text-sm text-green-600">
-                          Applied: -${pricing.customDiscount.toFixed(2)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
                 {pricing.totalDiscount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Total Discount:</span>

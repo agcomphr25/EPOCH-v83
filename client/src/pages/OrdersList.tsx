@@ -227,7 +227,10 @@ export default function OrdersList() {
               </TableHeader>
               <TableBody>
                 {orders.map((order) => (
-                  <TableRow key={order.id}>
+                  <TableRow 
+                    key={order.id}
+                    className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
+                  >
                     <TableCell className="font-medium">
                       <OrderPricingTooltip orderId={order.orderId}>
                         <span className="text-blue-600 hover:text-blue-800 cursor-pointer">

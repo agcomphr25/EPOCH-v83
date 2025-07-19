@@ -31,20 +31,29 @@ export default function OrderPlacementCard() {
     enabled: true
   });
 
-  // Extract unique suppliers from inventory items
+  // Extract unique suppliers from inventory items (excluding department codes)
   const availableSuppliers = useMemo(() => {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
     
     const suppliers = new Set<string>();
+    const departmentCodes = ['PL1', 'PL2', 'PL3', 'SHOP', 'OFFICE']; // Add known department codes to exclude
     
     inventoryItems.forEach((item: any) => {
       if (item?.source && typeof item.source === 'string' && item.source.trim()) {
-        suppliers.add(item.source.trim());
+        const source = item.source.trim();
+        // Only add if it's not a department code
+        if (!departmentCodes.includes(source.toUpperCase())) {
+          suppliers.add(source);
+        }
       }
       if (item?.secondarySource && typeof item.secondarySource === 'string' && item.secondarySource.trim()) {
-        suppliers.add(item.secondarySource.trim());
+        const secondarySource = item.secondarySource.trim();
+        // Only add if it's not a department code
+        if (!departmentCodes.includes(secondarySource.toUpperCase())) {
+          suppliers.add(secondarySource);
+        }
       }
     });
     

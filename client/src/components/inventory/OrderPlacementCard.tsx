@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ShoppingCart, Package, Calendar } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, ShoppingCart, Package, Calendar, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface OrderFormData {
@@ -36,6 +37,8 @@ export default function OrderPlacementCard() {
     notes: '',
     items: [{ partNumber: '', description: '', quantity: 1, unitCost: 0 }]
   });
+  
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
 
   // Get inventory items to extract suppliers
   const { data: inventoryItems = [] } = useQuery({
@@ -100,6 +103,10 @@ export default function OrderPlacementCard() {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear selected items when supplier changes
+    if (name === 'supplierName') {
+      setSelectedItems(new Set());
+    }
   };
 
   const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
@@ -129,6 +136,51 @@ export default function OrderPlacementCard() {
     }));
     
     toast.success(`Added ${inventoryItem.name} to order`);
+  };
+
+  const toggleItemSelection = (itemId: number) => {
+    setSelectedItems(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(itemId)) {
+        newSelection.delete(itemId);
+      } else {
+        newSelection.add(itemId);
+      }
+      return newSelection;
+    });
+  };
+
+  const addSelectedItems = () => {
+    const itemsToAdd = supplierItems.filter((item: any) => selectedItems.has(item.id));
+    
+    if (itemsToAdd.length === 0) {
+      toast.error('Please select items to add');
+      return;
+    }
+
+    const newItems: OrderItem[] = itemsToAdd.map((item: any) => ({
+      partNumber: item.agPartNumber,
+      description: item.name,
+      quantity: 1,
+      unitCost: item.costPer || 0
+    }));
+
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, ...newItems]
+    }));
+
+    setSelectedItems(new Set());
+    toast.success(`Added ${itemsToAdd.length} items to order`);
+  };
+
+  const selectAllItems = () => {
+    const allItemIds = supplierItems.map((item: any) => item.id);
+    setSelectedItems(new Set(allItemIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedItems(new Set());
   };
 
   const removeItem = (index: number) => {
@@ -295,12 +347,56 @@ export default function OrderPlacementCard() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <Label className="text-base font-medium">Available Items from {formData.supplierName}</Label>
-                  <div className="text-sm text-gray-500">{supplierItems.length} items available</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-gray-500">{selectedItems.size}/{supplierItems.length} selected</div>
+                    {selectedItems.size > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={addSelectedItems}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Add Selected ({selectedItems.size})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={selectAllItems}
+                  >
+                    Select All
+                  </Button>
+                  {selectedItems.size > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={clearSelection}
+                    >
+                      Clear Selection
+                    </Button>
+                  )}
                 </div>
                 <div className="border rounded-lg max-h-64 overflow-y-auto">
                   <div className="grid grid-cols-1 gap-2 p-4">
                     {supplierItems.map((item: any) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                      <div 
+                        key={item.id} 
+                        className={`flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer ${
+                          selectedItems.has(item.id) ? 'bg-blue-50 border-blue-200' : ''
+                        }`}
+                        onClick={() => toggleItemSelection(item.id)}
+                      >
+                        <Checkbox
+                          checked={selectedItems.has(item.id)}
+                          onCheckedChange={() => toggleItemSelection(item.id)}
+                          className="mr-3"
+                        />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">{item.agPartNumber}</span>
@@ -323,11 +419,14 @@ export default function OrderPlacementCard() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => addItemFromInventory(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addItemFromInventory(item);
+                          }}
                           className="ml-2"
                         >
                           <Plus className="h-3 w-3 mr-1" />
-                          Add
+                          Add Single
                         </Button>
                       </div>
                     ))}

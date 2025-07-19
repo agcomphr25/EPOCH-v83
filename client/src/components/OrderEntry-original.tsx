@@ -887,7 +887,7 @@ export default function OrderEntry() {
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
+                      size="xs"
                       onClick={() => {
                         setShowPriceOverride(!showPriceOverride);
                         if (!showPriceOverride) {

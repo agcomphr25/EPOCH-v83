@@ -668,29 +668,35 @@ export default function OrderEntry() {
 
               {/* Discount Section */}
               <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">Discount Code</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setShowCustomDiscount(!showCustomDiscount);
-                      if (showCustomDiscount) {
+                <Label className="text-base font-medium">Discount Code</Label>
+                
+                <div className="space-y-2">
+                  <Select 
+                    value={discountCode === 'CUSTOM' ? 'CUSTOM' : discountCode} 
+                    onValueChange={(value) => {
+                      if (value === 'CUSTOM') {
+                        setDiscountCode('');
+                        setShowCustomDiscount(true);
+                      } else {
+                        setDiscountCode(value);
+                        setShowCustomDiscount(false);
                         setCustomDiscountValue(0);
                       }
                     }}
                   >
-                    {showCustomDiscount ? 'Remove Custom' : 'Add Custom'}
-                  </Button>
-                </div>
-                
-                <div className="space-y-2">
-                  <Input
-                    id="discountCode"
-                    value={discountCode}
-                    onChange={(e) => setDiscountCode(e.target.value)}
-                    placeholder="Enter discount code (e.g., SALE20)"
-                  />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select discount code or Custom" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No Discount</SelectItem>
+                      {shortTermSales.map((sale) => (
+                        <SelectItem key={sale.id} value={sale.name}>
+                          {sale.name} ({sale.percent}% off)
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="CUSTOM">Custom (Ad-hoc Entry)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Custom Discount Section */}

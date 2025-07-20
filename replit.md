@@ -57,6 +57,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **P2 Product Receiving**: Specialized workflow for P2 products with Code 39 barcode generation, detailed tracking (manufacturing date, expiration date, batch number, lot number, aluminum heat number), and multi-label printing capability
 - **OEM Production Orders**: Separate production order system for OEM customers generating stock orders from Purchase Orders, tracked independently from regular P1 orders with duplicate prevention and unified customer database integration
 - **P1 Order Barcode System**: Comprehensive barcode generation and scanning system for all P1 orders with unique Code 39 barcodes (format: P1-{OrderID}), automated barcode generation for new orders, barcode scanner interface for viewing order pricing summaries with hidden pricing details for security, payment status tracking, line item breakdown without pricing visibility, and integrated barcode display/printing functionality in order management
+- **Avery Label Printing**: Professional barcode label printing system for Avery 5160 labels (2.625" x 1") with customized format including Action Length + Stock Model, actual scannable barcode image, combined paint options, customer name, and due date. Labels are optimized for high-quality printing with proper barcode resolution and spacing.
 
 ## Data Flow
 

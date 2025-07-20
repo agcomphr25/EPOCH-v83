@@ -125,22 +125,35 @@ export default function OrdersList() {
   };
 
   const getPaintOption = (features: any) => {
-    if (!features || typeof features !== 'object') return '';
+    if (!features || typeof features !== 'object') return 'Standard';
     
-    // Look for paint-related features in the features object
-    const paintKeys = ['cerakote_color', 'paint_finish', 'coating', 'finish'];
+    const paintOptions = [];
+    
+    // Collect all paint/coating related features
+    const paintKeys = [
+      'cerakote_color', 
+      'paint_finish', 
+      'coating', 
+      'finish',
+      'protective_coatings',
+      'surface_treatment',
+      'anodizing',
+      'powder_coating'
+    ];
+    
     for (const key of paintKeys) {
-      if (features[key] && features[key] !== '') {
-        return features[key];
+      if (features[key] && features[key] !== '' && features[key] !== 'none') {
+        paintOptions.push(features[key]);
       }
     }
     
-    // Check for protective coatings category
-    if (features.protective_coatings) {
-      return features.protective_coatings;
+    // If no paint options found, return Standard
+    if (paintOptions.length === 0) {
+      return 'Standard';
     }
     
-    return 'Standard';
+    // Combine all paint options into a single line
+    return paintOptions.join(' + ');
   };
 
   if (isLoading) {

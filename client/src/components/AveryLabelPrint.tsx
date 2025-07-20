@@ -161,13 +161,14 @@ export function AveryLabelPrint({
                 }
                 
                 .paint-option {
-                  font-size: 6pt;
+                  font-size: 5.5pt;
                   font-weight: bold;
                   color: #333;
                   margin: 1px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
+                  max-width: 100%;
                 }
                 
                 .customer-name {
@@ -273,7 +274,12 @@ export function AveryLabelPrint({
                   </div>
                 )}
               </div>
-              <div className="text-xs font-bold">{paintOption || 'Standard'}</div>
+              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={paintOption || 'Standard'}>
+                {(paintOption || 'Standard').length > 25 ? 
+                  `${(paintOption || 'Standard').substring(0, 25)}...` : 
+                  (paintOption || 'Standard')
+                }
+              </div>
               <div className="text-xs">{customerName || 'N/A'}</div>
               <div className="text-xs font-bold">{dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>

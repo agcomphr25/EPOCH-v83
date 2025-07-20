@@ -289,9 +289,9 @@ export interface IStorage {
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
-  progressOrder(orderId: string, nextDepartment?: string): Promise<Order>;
-  scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<Order>;
-  createReplacementOrder(scrapOrderId: string): Promise<Order>;
+  progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft>;
+  scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
+  createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
 
 }
 
@@ -1717,20 +1717,20 @@ export class DatabaseStorage implements IStorage {
   // Department Progression Methods
   async getPipelineCounts(): Promise<Record<string, number>> {
     try {
-      // Use GROUP BY to count orders by current department
+      // Use GROUP BY to count orders by current department from orderDrafts
       const results = await db
         .select({ 
-          department: orders.currentDepartment, 
+          department: orderDrafts.currentDepartment, 
           count: sql<number>`count(*)::integer`
         })
-        .from(orders)
+        .from(orderDrafts)
         .where(
           and(
-            ne(orders.status, 'SCRAPPED'), // Only count active orders
-            isNull(orders.scrapDate)       // Exclude scrapped orders
+            ne(orderDrafts.status, 'SCRAPPED'), // Only count active orders
+            isNull(orderDrafts.scrapDate)       // Exclude scrapped orders
           )
         )
-        .groupBy(orders.currentDepartment);
+        .groupBy(orderDrafts.currentDepartment);
 
       // Convert to object format
       const counts: Record<string, number> = {};
@@ -1747,13 +1747,13 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async progressOrder(orderId: string, nextDepartment?: string): Promise<Order> {
+  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft> {
     try {
       // Find the current order
       const [currentOrder] = await db
         .select()
-        .from(orders)
-        .where(eq(orders.orderId, orderId));
+        .from(orderDrafts)
+        .where(eq(orderDrafts.orderId, orderId));
 
       if (!currentOrder) {
         throw new Error(`Order ${orderId} not found`);
@@ -1790,13 +1790,13 @@ export class DatabaseStorage implements IStorage {
 
       // Update the order
       const [updatedOrder] = await db
-        .update(orders)
+        .update(orderDrafts)
         .set({
           currentDepartment: nextDept,
           ...completionUpdates,
           updatedAt: now
         })
-        .where(eq(orders.orderId, orderId))
+        .where(eq(orderDrafts.orderId, orderId))
         .returning();
 
       return updatedOrder;
@@ -1806,10 +1806,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<Order> {
+  async scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft> {
     try {
       const [updatedOrder] = await db
-        .update(orders)
+        .update(orderDrafts)
         .set({
           scrapDate: scrapData.scrapDate,
           scrapReason: scrapData.reason,
@@ -1818,7 +1818,7 @@ export class DatabaseStorage implements IStorage {
           status: 'SCRAPPED',
           updatedAt: new Date()
         })
-        .where(eq(orders.orderId, orderId))
+        .where(eq(orderDrafts.orderId, orderId))
         .returning();
 
       if (!updatedOrder) {
@@ -1832,13 +1832,13 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createReplacementOrder(scrapOrderId: string): Promise<Order> {
+  async createReplacementOrder(scrapOrderId: string): Promise<OrderDraft> {
     try {
       // Find the scrapped order
       const [scrapOrder] = await db
         .select()
-        .from(orders)
-        .where(eq(orders.orderId, scrapOrderId));
+        .from(orderDrafts)
+        .where(eq(orderDrafts.orderId, scrapOrderId));
 
       if (!scrapOrder) {
         throw new Error(`Scrapped order ${scrapOrderId} not found`);
@@ -1849,20 +1849,21 @@ export class DatabaseStorage implements IStorage {
 
       // Create replacement order with same details but new ID
       const [replacementOrder] = await db
-        .insert(orders)
+        .insert(orderDrafts)
         .values({
           orderId: newOrderId,
-          customer: scrapOrder.customer,
-          product: scrapOrder.product,
-          quantity: scrapOrder.quantity,
-          status: 'ACTIVE',
-          date: new Date(),
-          currentDepartment: 'Layup', // Reset to start of pipeline
-          isOnSchedule: true,
-          priorityScore: scrapOrder.priorityScore,
-          rushTier: scrapOrder.rushTier,
-          poId: scrapOrder.poId,
+          orderDate: new Date(),
           dueDate: scrapOrder.dueDate,
+          customerId: scrapOrder.customerId,
+          customerPO: scrapOrder.customerPO,
+          fbOrderNumber: scrapOrder.fbOrderNumber,
+          agrOrderDetails: scrapOrder.agrOrderDetails,
+          modelId: scrapOrder.modelId,
+          handedness: scrapOrder.handedness,
+          features: scrapOrder.features,
+          featureQuantities: scrapOrder.featureQuantities,
+          status: 'ACTIVE',
+          currentDepartment: 'Layup', // Reset to start of pipeline
           isReplacement: true,
           replacedOrderId: scrapOrderId,
           createdAt: new Date(),

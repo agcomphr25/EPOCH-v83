@@ -170,6 +170,28 @@ export const orderDrafts = pgTable("order_drafts", {
   tikkaOption: text("tikka_option"),
   status: text("status").default("DRAFT"),
   barcode: text("barcode").unique(), // Code 39 barcode for order identification
+  // Department Progression Fields
+  currentDepartment: text("current_department").default("Layup"),
+  departmentHistory: jsonb("department_history").default('[]'),
+  scrappedQuantity: integer("scrapped_quantity").default(0),
+  totalProduced: integer("total_produced").default(0),
+  // Department Completion Timestamps
+  layupCompletedAt: timestamp("layup_completed_at"),
+  pluggingCompletedAt: timestamp("plugging_completed_at"),
+  cncCompletedAt: timestamp("cnc_completed_at"),
+  finishCompletedAt: timestamp("finish_completed_at"),
+  gunsmithCompletedAt: timestamp("gunsmith_completed_at"),
+  paintCompletedAt: timestamp("paint_completed_at"),
+  qcCompletedAt: timestamp("qc_completed_at"),
+  shippingCompletedAt: timestamp("shipping_completed_at"),
+  // Scrap Information
+  scrapDate: timestamp("scrap_date"),
+  scrapReason: text("scrap_reason"),
+  scrapDisposition: text("scrap_disposition"),
+  scrapAuthorization: text("scrap_authorization"),
+  // Replacement Information
+  isReplacement: boolean("is_replacement").default(false),
+  replacedOrderId: text("replaced_order_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,0 +1,321 @@
+import { useEffect, useRef } from 'react';
+import JsBarcode from 'jsbarcode';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Printer, Package, Calendar, User } from 'lucide-react';
+
+interface AveryLabelPrintProps {
+  orderId: string;
+  barcode: string;
+  customerName?: string;
+  orderDate?: string;
+  productInfo?: string;
+  status?: string;
+  labelType?: 'basic' | 'detailed';
+  copies?: number;
+}
+
+export function AveryLabelPrint({ 
+  orderId, 
+  barcode, 
+  customerName,
+  orderDate,
+  productInfo,
+  status,
+  labelType = 'detailed',
+  copies = 6 
+}: AveryLabelPrintProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current && barcode) {
+      try {
+        JsBarcode(canvasRef.current, barcode, {
+          format: "CODE39",
+          width: 1.5,
+          height: 30,
+          displayValue: true,
+          fontSize: 8,
+          textAlign: "center",
+          textPosition: "bottom",
+          textMargin: 1,
+          fontOptions: "",
+          font: "monospace",
+          background: "#ffffff",
+          lineColor: "#000000",
+          margin: 2,
+        });
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+      }
+    }
+  }, [barcode]);
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: '2-digit'
+    });
+  };
+
+  const handlePrintLabels = () => {
+    if (canvasRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const canvas = canvasRef.current;
+        const img = canvas.toDataURL();
+        const currentDate = new Date().toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: '2-digit'
+        });
+        
+        const generateLabelContent = () => {
+          if (labelType === 'basic') {
+            return `
+              <div class="order-header">P1 ORDER</div>
+              <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
+              <div class="order-details">
+                <div class="order-id">${orderId}</div>
+                <div class="date-info">Printed: ${currentDate}</div>
+              </div>
+            `;
+          } else {
+            return `
+              <div class="order-header">
+                <div class="company-name">AMERICAN GUNCRAFT</div>
+                <div class="order-type">P1 ORDER</div>
+              </div>
+              <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
+              <div class="order-details">
+                <div class="order-id">${orderId}</div>
+                ${customerName ? `<div class="customer">Customer: ${customerName.substring(0, 20)}</div>` : ''}
+                ${orderDate ? `<div class="order-date">Date: ${formatDate(orderDate)}</div>` : ''}
+                ${status ? `<div class="status">Status: ${status}</div>` : ''}
+                <div class="date-info">Printed: ${currentDate}</div>
+              </div>
+            `;
+          }
+        };
+        
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Avery Labels - ${orderId}</title>
+              <style>
+                body {
+                  margin: 0;
+                  padding: 0;
+                  font-family: Arial, sans-serif;
+                }
+                
+                /* Avery 5160 Label Dimensions: 2.625" x 1" (30 labels per sheet) */
+                .avery-label {
+                  width: 2.625in;
+                  height: 1in;
+                  border: 1px solid #ddd;
+                  margin: 0;
+                  padding: 0.03in;
+                  display: inline-block;
+                  vertical-align: top;
+                  box-sizing: border-box;
+                  page-break-inside: avoid;
+                  background: white;
+                  position: relative;
+                }
+                
+                .label-content {
+                  height: 100%;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: space-between;
+                  text-align: center;
+                  font-size: 7pt;
+                  line-height: 1;
+                }
+                
+                .order-header {
+                  margin-bottom: 1px;
+                }
+                
+                .company-name {
+                  font-size: 6pt;
+                  font-weight: bold;
+                  color: #333;
+                  margin-bottom: 1px;
+                }
+                
+                .order-type {
+                  font-size: 7pt;
+                  font-weight: bold;
+                  color: #000;
+                }
+                
+                .barcode-img {
+                  max-width: 95%;
+                  max-height: 0.4in;
+                  height: auto;
+                  margin: 1px auto;
+                }
+                
+                .order-details {
+                  font-size: 5.5pt;
+                  line-height: 1.1;
+                  color: #333;
+                }
+                
+                .order-id {
+                  font-weight: bold;
+                  font-size: 6pt;
+                  margin-bottom: 1px;
+                }
+                
+                .customer, .order-date, .status {
+                  font-size: 5pt;
+                  margin: 0.5px 0;
+                  text-overflow: ellipsis;
+                  overflow: hidden;
+                  white-space: nowrap;
+                }
+                
+                .date-info {
+                  font-size: 4pt;
+                  color: #666;
+                  margin-top: 1px;
+                }
+                
+                @media print {
+                  body { margin: 0; }
+                  .avery-label { 
+                    border: none; 
+                    margin: 0;
+                    width: 2.625in;
+                    height: 1in;
+                  }
+                  
+                  /* Ensure exact positioning for Avery 5160 */
+                  @page {
+                    size: 8.5in 11in;
+                    margin: 0.5in 0.1875in;
+                  }
+                }
+                
+                .labels-container {
+                  display: flex;
+                  flex-wrap: wrap;
+                  justify-content: flex-start;
+                  width: 8.5in;
+                }
+                
+                /* Preview styles */
+                .preview-label {
+                  border: 2px solid #007bff;
+                  background: #f8f9fa;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="labels-container">
+                ${Array(copies).fill().map((_, i) => `
+                  <div class="avery-label ${i === 0 ? 'preview-label' : ''}">
+                    <div class="label-content">
+                      ${generateLabelContent()}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Avery Label Print - {orderId}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Hidden canvas for barcode generation */}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          
+          {/* Label Preview */}
+          <div className="border border-gray-300 bg-gray-50 p-4 rounded">
+            <div className="text-sm font-semibold mb-2">Label Preview:</div>
+            <div 
+              className="bg-white border border-gray-400 p-2 text-center"
+              style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
+            >
+              <div className="font-bold text-xs">AMERICAN GUNCRAFT</div>
+              <div className="font-bold">P1 ORDER</div>
+              <div className="my-1 text-xs">{barcode}</div>
+              <div className="text-xs font-bold">{orderId}</div>
+              {customerName && <div className="text-xs">{customerName.substring(0, 20)}</div>}
+              {orderDate && <div className="text-xs">Date: {formatDate(orderDate)}</div>}
+              {status && <div className="text-xs">Status: {status}</div>}
+            </div>
+          </div>
+
+          {/* Label Information */}
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <strong>Order ID:</strong> {orderId}
+            </div>
+            <div>
+              <strong>Barcode:</strong> {barcode}
+            </div>
+            {customerName && (
+              <div>
+                <strong>Customer:</strong> {customerName}
+              </div>
+            )}
+            {orderDate && (
+              <div>
+                <strong>Order Date:</strong> {formatDate(orderDate)}
+              </div>
+            )}
+            {status && (
+              <div>
+                <strong>Status:</strong> {status}
+              </div>
+            )}
+            <div>
+              <strong>Label Type:</strong> {labelType === 'basic' ? 'Basic' : 'Detailed'}
+            </div>
+            <div>
+              <strong>Copies:</strong> {copies}
+            </div>
+          </div>
+
+          {/* Print Button */}
+          <Button 
+            onClick={handlePrintLabels}
+            className="w-full"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print {copies} Avery Labels (5160)
+          </Button>
+          
+          <div className="text-xs text-gray-600 mt-2">
+            <p><strong>Compatible with:</strong> Avery 5160 labels (2.625" x 1", 30 labels per sheet)</p>
+            <p><strong>Note:</strong> Ensure your printer is set to actual size (100% scale) for proper alignment</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

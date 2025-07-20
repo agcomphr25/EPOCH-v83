@@ -300,7 +300,7 @@ export default function OrdersList() {
                               <QrCode className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-lg">
+                          <DialogContent className="max-w-4xl">
                             <DialogHeader>
                               <DialogTitle>Order Barcode</DialogTitle>
                             </DialogHeader>
@@ -309,6 +309,9 @@ export default function OrdersList() {
                                 orderId={selectedOrderBarcode.orderId}
                                 barcode={selectedOrderBarcode.barcode}
                                 showTitle={false}
+                                customerName={getCustomerName(order.customerId)}
+                                orderDate={order.orderDate}
+                                status={order.status}
                               />
                             )}
                           </DialogContent>

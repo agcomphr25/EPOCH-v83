@@ -2715,6 +2715,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Barcode API routes
+  app.get("/api/orders/:orderId/barcode", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const order = await storage.getOrderDraft(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      
+      res.json({ 
+        orderId: order.orderId,
+        barcode: order.barcode || `P1-${order.orderId}`
+      });
+    } catch (error) {
+      console.error("Get order barcode error:", error);
+      res.status(500).json({ error: "Failed to fetch order barcode" });
+    }
+  });
+
+  app.get("/api/barcode/scan/:barcode", async (req, res) => {
+    try {
+      const { barcode } = req.params;
+      
+      // Find order by barcode
+      const orders = await storage.getAllOrderDrafts();
+      const order = orders.find(o => o.barcode === barcode);
+      
+      if (!order) {
+        return res.status(404).json({ error: "Order not found for this barcode" });
+      }
+
+      // Get customer info
+      const customers = await storage.getAllCustomers();
+      const customer = customers.find(c => c.id.toString() === order.customerId);
+
+      // Get model info
+      const models = await storage.getAllStockModels();
+      const model = models.find(m => m.id === order.modelId);
+
+      // Get features for pricing calculation
+      const allFeatures = await storage.getAllFeatures();
+      const selectedFeatures = order.features ? Object.entries(order.features as Record<string, any>) : [];
+      
+      // Calculate line items with prices
+      const lineItems = [];
+      
+      // Base model price
+      if (model) {
+        lineItems.push({
+          type: 'model',
+          name: model.name,
+          description: 'Base Model',
+          price: model.price || 0,
+          quantity: 1
+        });
+      }
+
+      // Feature prices
+      for (const [featureId, featureValue] of selectedFeatures) {
+        const feature = allFeatures.find(f => f.id === featureId);
+        if (feature && featureValue && feature.price) {
+          lineItems.push({
+            type: 'feature',
+            name: feature.displayName || feature.name,
+            description: `Feature: ${featureValue}`,
+            price: feature.price,
+            quantity: order.featureQuantities?.[featureId] || 1
+          });
+        }
+      }
+
+      // Shipping
+      if (order.shipping && order.shipping > 0) {
+        lineItems.push({
+          type: 'shipping',
+          name: 'Shipping',
+          description: 'Shipping & Handling',
+          price: order.shipping,
+          quantity: 1
+        });
+      }
+
+      // Calculate totals
+      const subtotal = lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const total = order.priceOverride || subtotal;
+
+      // Determine payment status (simplified logic)
+      const paymentStatus = order.status === 'COMPLETED' ? 'PAID' : 
+                           order.status === 'PROCESSING' ? 'PENDING' : 'UNPAID';
+
+      res.json({
+        orderId: order.orderId,
+        orderDate: order.orderDate,
+        customer: customer ? {
+          name: customer.name,
+          email: customer.email
+        } : null,
+        lineItems,
+        pricing: {
+          subtotal: Math.round(subtotal * 100) / 100,
+          total: Math.round(total * 100) / 100,
+          override: order.priceOverride ? true : false
+        },
+        paymentStatus,
+        status: order.status
+      });
+    } catch (error) {
+      console.error("Barcode scan error:", error);
+      res.status(500).json({ error: "Failed to process barcode scan" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -144,6 +144,7 @@ export const orderDrafts = pgTable("order_drafts", {
   shipping: real("shipping").default(0),
   tikkaOption: text("tikka_option"),
   status: text("status").default("DRAFT"),
+  barcode: text("barcode").unique(), // Code 39 barcode for order identification
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

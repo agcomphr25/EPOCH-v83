@@ -56,6 +56,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **Inventory Management**: Restructured with AG Part#, Name, Source, Supplier Part#, Cost per, Order Date, Dept., Secondary Source, Notes fields with CSV import/export capabilities
 - **P2 Product Receiving**: Specialized workflow for P2 products with Code 39 barcode generation, detailed tracking (manufacturing date, expiration date, batch number, lot number, aluminum heat number), and multi-label printing capability
 - **OEM Production Orders**: Separate production order system for OEM customers generating stock orders from Purchase Orders, tracked independently from regular P1 orders with duplicate prevention and unified customer database integration
+- **P1 Order Barcode System**: Comprehensive barcode generation and scanning system for all P1 orders with unique Code 39 barcodes (format: P1-{OrderID}), automated barcode generation for new orders, barcode scanner interface for viewing order pricing summaries with hidden pricing details for security, payment status tracking, line item breakdown without pricing visibility, and integrated barcode display/printing functionality in order management
 
 ## Data Flow
 

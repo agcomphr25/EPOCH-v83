@@ -57,6 +57,12 @@ export default function Navigation() {
       label: 'Production Tracking',
       icon: TrendingUp,
       description: 'Track production orders from POs'
+    },
+    {
+      path: '/barcode-scanner',
+      label: 'Barcode Scanner',
+      icon: Scan,
+      description: 'Scan order barcodes to view pricing summary and payment status'
     }
     // Documentation button disabled per user request - was causing problems
     // {

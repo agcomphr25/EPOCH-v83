@@ -547,7 +547,13 @@ export class DatabaseStorage implements IStorage {
       console.log('=== CREATING ORDER DRAFT ===');
       console.log('Data:', JSON.stringify(data, null, 2));
       
-      const [draft] = await db.insert(orderDrafts).values(data).returning();
+      // Generate barcode if not provided
+      const dataWithBarcode = {
+        ...data,
+        barcode: data.barcode || `P1-${data.orderId}`
+      };
+      
+      const [draft] = await db.insert(orderDrafts).values(dataWithBarcode).returning();
       console.log('Created draft:', draft.id);
       return draft;
     } catch (error) {

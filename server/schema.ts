@@ -670,6 +670,126 @@ export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 
+// Layup Scheduler Tables
+export const molds = pgTable("molds", {
+  id: serial("id").primaryKey(),
+  moldId: text("mold_id").notNull().unique(),
+  modelName: text("model_name").notNull(),
+  instanceNumber: integer("instance_number").notNull(),
+  enabled: boolean("enabled").default(true),
+  multiplier: integer("multiplier").default(1).notNull(), // Daily capacity multiplier
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const employeeLayupSettings = pgTable("employee_layup_settings", {
+  id: serial("id").primaryKey(),
+  employeeId: text("employee_id").references(() => employees.employeeCode).notNull(),
+  rate: real("rate").default(1).notNull(), // Molds per hour
+  hours: real("hours").default(8).notNull(), // Working hours per day
+  department: text("department").default("Layup").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const layupOrders = pgTable("layup_orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  priorityScore: integer("priority_score").notNull(), // Lower numbers = higher priority
+  department: text("department").default("Layup").notNull(),
+  status: text("status").default("FINALIZED").notNull(),
+  customer: text("customer").notNull(),
+  product: text("product").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const layupSchedule = pgTable("layup_schedule", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").references(() => layupOrders.orderId).notNull(),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  moldId: text("mold_id").references(() => molds.moldId).notNull(),
+  employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
+  isOverride: boolean("is_override").default(false), // Manual override flag
+  overriddenAt: timestamp("overridden_at"),
+  overriddenBy: text("overridden_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for Layup Scheduler
+export const insertMoldSchema = createInsertSchema(molds).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  moldId: z.string().min(1, "Mold ID is required"),
+  modelName: z.string().min(1, "Model name is required"),
+  instanceNumber: z.number().min(1, "Instance number must be positive"),
+  enabled: z.boolean().default(true),
+  multiplier: z.number().min(1, "Multiplier must be at least 1"),
+  isActive: z.boolean().default(true),
+});
+
+export const insertEmployeeLayupSettingsSchema = createInsertSchema(employeeLayupSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.string().min(1, "Employee ID is required"),
+  rate: z.number().min(0, "Rate must be positive"),
+  hours: z.number().min(0, "Hours must be positive"),
+  department: z.string().default("Layup"),
+  isActive: z.boolean().default(true),
+});
+
+export const insertLayupOrderSchema = createInsertSchema(layupOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  orderDate: z.coerce.date(),
+  dueDate: z.coerce.date(),
+  priorityScore: z.number().min(1, "Priority score must be positive"),
+  department: z.string().default("Layup"),
+  status: z.string().default("FINALIZED"),
+  customer: z.string().min(1, "Customer is required"),
+  product: z.string().min(1, "Product is required"),
+  isActive: z.boolean().default(true),
+});
+
+export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  scheduledDate: z.coerce.date(),
+  moldId: z.string().min(1, "Mold ID is required"),
+  employeeAssignments: z.array(z.object({
+    employeeId: z.string(),
+    workload: z.number().min(0),
+  })).default([]),
+  isOverride: z.boolean().default(false),
+  overriddenBy: z.string().optional().nullable(),
+});
+
+// Type exports for Layup Scheduler
+export type InsertMold = z.infer<typeof insertMoldSchema>;
+export type Mold = typeof molds.$inferSelect;
+export type InsertEmployeeLayupSettings = z.infer<typeof insertEmployeeLayupSettingsSchema>;
+export type EmployeeLayupSettings = typeof employeeLayupSettings.$inferSelect;
+export type InsertLayupOrder = z.infer<typeof insertLayupOrderSchema>;
+export type LayupOrder = typeof layupOrders.$inferSelect;
+export type InsertLayupSchedule = z.infer<typeof insertLayupScheduleSchema>;
+export type LayupSchedule = typeof layupSchedule.$inferSelect;
+
 // Module 8: API Integrations & Communications
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),

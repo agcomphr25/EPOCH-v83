@@ -41,6 +41,7 @@ import CustomerManagement from "./pages/CustomerManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
+import LayupSchedulerPage from "./pages/LayupSchedulerPage";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
@@ -87,6 +88,7 @@ function App() {
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
+                  <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

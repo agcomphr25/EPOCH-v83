@@ -38,7 +38,11 @@ import {
   insertPdfDocumentSchema,
   insertPurchaseOrderSchema,
   insertPurchaseOrderItemSchema,
-  insertProductionOrderSchema
+  insertProductionOrderSchema,
+  insertMoldSchema,
+  insertEmployeeLayupSettingsSchema,
+  insertLayupOrderSchema,
+  insertLayupScheduleSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2893,6 +2897,248 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Barcode scan error:", error);
       res.status(500).json({ error: "Failed to process barcode scan" });
+    }
+  });
+
+  // Layup Scheduler API Routes
+
+  // Molds CRUD
+  app.get("/api/molds", async (req, res) => {
+    try {
+      const molds = await storage.getAllMolds();
+      res.json(molds);
+    } catch (error) {
+      console.error("Molds fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch molds" });
+    }
+  });
+
+  app.get("/api/molds/:moldId", async (req, res) => {
+    try {
+      const mold = await storage.getMold(req.params.moldId);
+      if (mold) {
+        res.json(mold);
+      } else {
+        res.status(404).json({ error: "Mold not found" });
+      }
+    } catch (error) {
+      console.error("Mold fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch mold" });
+    }
+  });
+
+  app.post("/api/molds", async (req, res) => {
+    try {
+      const result = insertMoldSchema.parse(req.body);
+      const mold = await storage.createMold(result);
+      res.json(mold);
+    } catch (error) {
+      console.error("Mold creation error:", error);
+      res.status(400).json({ error: "Invalid mold data" });
+    }
+  });
+
+  app.put("/api/molds/:moldId", async (req, res) => {
+    try {
+      const mold = await storage.updateMold(req.params.moldId, req.body);
+      res.json(mold);
+    } catch (error) {
+      console.error("Mold update error:", error);
+      res.status(400).json({ error: "Failed to update mold" });
+    }
+  });
+
+  app.delete("/api/molds/:moldId", async (req, res) => {
+    try {
+      await storage.deleteMold(req.params.moldId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mold deletion error:", error);
+      res.status(500).json({ error: "Failed to delete mold" });
+    }
+  });
+
+  // Employee Layup Settings CRUD
+  app.get("/api/employees/layup-settings", async (req, res) => {
+    try {
+      const settings = await storage.getAllEmployeeLayupSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Employee layup settings fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch employee layup settings" });
+    }
+  });
+
+  app.get("/api/employees/layup-settings/:employeeId", async (req, res) => {
+    try {
+      const settings = await storage.getEmployeeLayupSettings(req.params.employeeId);
+      if (settings) {
+        res.json(settings);
+      } else {
+        res.status(404).json({ error: "Employee layup settings not found" });
+      }
+    } catch (error) {
+      console.error("Employee layup settings fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch employee layup settings" });
+    }
+  });
+
+  app.post("/api/employees/layup-settings", async (req, res) => {
+    try {
+      const result = insertEmployeeLayupSettingsSchema.parse(req.body);
+      const settings = await storage.createEmployeeLayupSettings(result);
+      res.json(settings);
+    } catch (error) {
+      console.error("Employee layup settings creation error:", error);
+      res.status(400).json({ error: "Invalid employee layup settings data" });
+    }
+  });
+
+  app.put("/api/employees/layup-settings/:employeeId", async (req, res) => {
+    try {
+      const settings = await storage.updateEmployeeLayupSettings(req.params.employeeId, req.body);
+      res.json(settings);
+    } catch (error) {
+      console.error("Employee layup settings update error:", error);
+      res.status(400).json({ error: "Failed to update employee layup settings" });
+    }
+  });
+
+  app.delete("/api/employees/layup-settings/:employeeId", async (req, res) => {
+    try {
+      await storage.deleteEmployeeLayupSettings(req.params.employeeId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Employee layup settings deletion error:", error);
+      res.status(500).json({ error: "Failed to delete employee layup settings" });
+    }
+  });
+
+  // Layup Orders CRUD
+  app.get("/api/layup-orders", async (req, res) => {
+    try {
+      const { status, department } = req.query;
+      const filters = {
+        status: status as string,
+        department: department as string,
+      };
+      const orders = await storage.getAllLayupOrders(filters);
+      res.json(orders);
+    } catch (error) {
+      console.error("Layup orders fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch layup orders" });
+    }
+  });
+
+  app.get("/api/layup-orders/:orderId", async (req, res) => {
+    try {
+      const order = await storage.getLayupOrder(req.params.orderId);
+      if (order) {
+        res.json(order);
+      } else {
+        res.status(404).json({ error: "Layup order not found" });
+      }
+    } catch (error) {
+      console.error("Layup order fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch layup order" });
+    }
+  });
+
+  app.post("/api/layup-orders", async (req, res) => {
+    try {
+      const result = insertLayupOrderSchema.parse(req.body);
+      const order = await storage.createLayupOrder(result);
+      res.json(order);
+    } catch (error) {
+      console.error("Layup order creation error:", error);
+      res.status(400).json({ error: "Invalid layup order data" });
+    }
+  });
+
+  app.put("/api/layup-orders/:orderId", async (req, res) => {
+    try {
+      const order = await storage.updateLayupOrder(req.params.orderId, req.body);
+      res.json(order);
+    } catch (error) {
+      console.error("Layup order update error:", error);
+      res.status(400).json({ error: "Failed to update layup order" });
+    }
+  });
+
+  app.delete("/api/layup-orders/:orderId", async (req, res) => {
+    try {
+      await storage.deleteLayupOrder(req.params.orderId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Layup order deletion error:", error);
+      res.status(500).json({ error: "Failed to delete layup order" });
+    }
+  });
+
+  // Order Override Endpoint
+  app.post("/api/layup-orders/:orderId/override", async (req, res) => {
+    try {
+      const { newDate, moldId } = req.body;
+      const schedule = await storage.overrideOrderSchedule(
+        req.params.orderId,
+        new Date(newDate),
+        moldId,
+        'system' // or req.user?.id if you have authentication
+      );
+      res.json(schedule);
+    } catch (error) {
+      console.error("Order override error:", error);
+      res.status(400).json({ error: "Failed to override order schedule" });
+    }
+  });
+
+  // Layup Schedule CRUD
+  app.get("/api/layup-schedule", async (req, res) => {
+    try {
+      const { orderId } = req.query;
+      if (orderId) {
+        const schedule = await storage.getLayupScheduleByOrder(orderId as string);
+        res.json(schedule);
+      } else {
+        const schedule = await storage.getAllLayupSchedule();
+        res.json(schedule);
+      }
+    } catch (error) {
+      console.error("Layup schedule fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch layup schedule" });
+    }
+  });
+
+  app.post("/api/layup-schedule", async (req, res) => {
+    try {
+      const result = insertLayupScheduleSchema.parse(req.body);
+      const schedule = await storage.createLayupSchedule(result);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Layup schedule creation error:", error);
+      res.status(400).json({ error: "Invalid layup schedule data" });
+    }
+  });
+
+  app.put("/api/layup-schedule/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const schedule = await storage.updateLayupSchedule(id, req.body);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Layup schedule update error:", error);
+      res.status(400).json({ error: "Failed to update layup schedule" });
+    }
+  });
+
+  app.delete("/api/layup-schedule/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteLayupSchedule(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Layup schedule deletion error:", error);
+      res.status(500).json({ error: "Failed to delete layup schedule" });
     }
   });
 

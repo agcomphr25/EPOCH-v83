@@ -4,6 +4,7 @@ import {
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
+  molds, employeeLayupSettings, layupOrders, layupSchedule,
   type User, type InsertUser, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -36,7 +37,11 @@ import {
   type EnhancedFormSubmission, type InsertEnhancedFormSubmission,
   type PurchaseOrder, type InsertPurchaseOrder,
   type PurchaseOrderItem, type InsertPurchaseOrderItem,
-  type ProductionOrder, type InsertProductionOrder
+  type ProductionOrder, type InsertProductionOrder,
+  type Mold, type InsertMold,
+  type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
+  type LayupOrder, type InsertLayupOrder,
+  type LayupSchedule, type InsertLayupSchedule
 } from "./schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike } from "drizzle-orm";
@@ -252,6 +257,35 @@ export interface IStorage {
   updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder>;
   deleteProductionOrder(id: number): Promise<void>;
   generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
+
+  // Layup Scheduler: Molds CRUD
+  getAllMolds(): Promise<Mold[]>;
+  getMold(moldId: string): Promise<Mold | undefined>;
+  createMold(data: InsertMold): Promise<Mold>;
+  updateMold(moldId: string, data: Partial<InsertMold>): Promise<Mold>;
+  deleteMold(moldId: string): Promise<void>;
+
+  // Layup Scheduler: Employee Settings CRUD
+  getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]>;
+  getEmployeeLayupSettings(employeeId: string): Promise<EmployeeLayupSettings | undefined>;
+  createEmployeeLayupSettings(data: InsertEmployeeLayupSettings): Promise<EmployeeLayupSettings>;
+  updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings>;
+  deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
+
+  // Layup Scheduler: Orders CRUD
+  getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]>;
+  getLayupOrder(orderId: string): Promise<LayupOrder | undefined>;
+  createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder>;
+  updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder>;
+  deleteLayupOrder(orderId: string): Promise<void>;
+
+  // Layup Scheduler: Schedule CRUD
+  getAllLayupSchedule(): Promise<LayupSchedule[]>;
+  getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]>;
+  createLayupSchedule(data: InsertLayupSchedule): Promise<LayupSchedule>;
+  updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule>;
+  deleteLayupSchedule(id: number): Promise<void>;
+  overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
 
 }
 
@@ -1497,6 +1531,179 @@ export class DatabaseStorage implements IStorage {
     }
 
     return orders;
+  }
+
+  // Layup Scheduler: Molds CRUD
+  async getAllMolds(): Promise<Mold[]> {
+    return await db.select().from(molds).orderBy(molds.modelName, molds.instanceNumber);
+  }
+
+  async getMold(moldId: string): Promise<Mold | undefined> {
+    const [result] = await db.select().from(molds).where(eq(molds.moldId, moldId));
+    return result || undefined;
+  }
+
+  async createMold(data: InsertMold): Promise<Mold> {
+    const [result] = await db.insert(molds).values(data).returning();
+    return result;
+  }
+
+  async updateMold(moldId: string, data: Partial<InsertMold>): Promise<Mold> {
+    const [result] = await db
+      .update(molds)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(molds.moldId, moldId))
+      .returning();
+    return result;
+  }
+
+  async deleteMold(moldId: string): Promise<void> {
+    await db.delete(molds).where(eq(molds.moldId, moldId));
+  }
+
+  // Layup Scheduler: Employee Settings CRUD
+  async getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]> {
+    const result = await db
+      .select({
+        id: employeeLayupSettings.id,
+        employeeId: employeeLayupSettings.employeeId,
+        rate: employeeLayupSettings.rate,
+        hours: employeeLayupSettings.hours,
+        department: employeeLayupSettings.department,
+        isActive: employeeLayupSettings.isActive,
+        createdAt: employeeLayupSettings.createdAt,
+        updatedAt: employeeLayupSettings.updatedAt,
+        name: employees.name,
+      })
+      .from(employeeLayupSettings)
+      .leftJoin(employees, eq(employeeLayupSettings.employeeId, employees.employeeCode))
+      .where(eq(employeeLayupSettings.isActive, true))
+      .orderBy(employees.name);
+    
+    return result.map(r => ({
+      ...r,
+      name: r.name || r.employeeId
+    }));
+  }
+
+  async getEmployeeLayupSettings(employeeId: string): Promise<EmployeeLayupSettings | undefined> {
+    const [result] = await db
+      .select()
+      .from(employeeLayupSettings)
+      .where(eq(employeeLayupSettings.employeeId, employeeId));
+    return result || undefined;
+  }
+
+  async createEmployeeLayupSettings(data: InsertEmployeeLayupSettings): Promise<EmployeeLayupSettings> {
+    const [result] = await db.insert(employeeLayupSettings).values(data).returning();
+    return result;
+  }
+
+  async updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings> {
+    const [result] = await db
+      .update(employeeLayupSettings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(employeeLayupSettings.employeeId, employeeId))
+      .returning();
+    return result;
+  }
+
+  async deleteEmployeeLayupSettings(employeeId: string): Promise<void> {
+    await db.delete(employeeLayupSettings).where(eq(employeeLayupSettings.employeeId, employeeId));
+  }
+
+  // Layup Scheduler: Orders CRUD
+  async getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]> {
+    let query = db.select().from(layupOrders);
+    
+    const conditions = [];
+    if (filters?.status) {
+      conditions.push(eq(layupOrders.status, filters.status));
+    }
+    if (filters?.department) {
+      conditions.push(eq(layupOrders.department, filters.department));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    return await query.orderBy(layupOrders.priorityScore, layupOrders.orderDate);
+  }
+
+  async getLayupOrder(orderId: string): Promise<LayupOrder | undefined> {
+    const [result] = await db.select().from(layupOrders).where(eq(layupOrders.orderId, orderId));
+    return result || undefined;
+  }
+
+  async createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder> {
+    const [result] = await db.insert(layupOrders).values(data).returning();
+    return result;
+  }
+
+  async updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder> {
+    const [result] = await db
+      .update(layupOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(layupOrders.orderId, orderId))
+      .returning();
+    return result;
+  }
+
+  async deleteLayupOrder(orderId: string): Promise<void> {
+    await db.delete(layupOrders).where(eq(layupOrders.orderId, orderId));
+  }
+
+  // Layup Scheduler: Schedule CRUD
+  async getAllLayupSchedule(): Promise<LayupSchedule[]> {
+    return await db.select().from(layupSchedule).orderBy(layupSchedule.scheduledDate);
+  }
+
+  async getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]> {
+    return await db.select().from(layupSchedule).where(eq(layupSchedule.orderId, orderId));
+  }
+
+  async createLayupSchedule(data: InsertLayupSchedule): Promise<LayupSchedule> {
+    const [result] = await db.insert(layupSchedule).values(data).returning();
+    return result;
+  }
+
+  async updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule> {
+    const [result] = await db
+      .update(layupSchedule)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(layupSchedule.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteLayupSchedule(id: number): Promise<void> {
+    await db.delete(layupSchedule).where(eq(layupSchedule.id, id));
+  }
+
+  async overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule> {
+    // First, mark any existing schedule entries as overridden
+    await db
+      .update(layupSchedule)
+      .set({ 
+        isOverride: true, 
+        overriddenAt: new Date(), 
+        overriddenBy 
+      })
+      .where(eq(layupSchedule.orderId, orderId));
+
+    // Create new schedule entry
+    const data: InsertLayupSchedule = {
+      orderId,
+      scheduledDate: newDate,
+      moldId,
+      employeeAssignments: [], // This would be filled by the scheduler algorithm
+      isOverride: true,
+      overriddenBy
+    };
+
+    const [result] = await db.insert(layupSchedule).values(data).returning();
+    return result;
   }
 
 }

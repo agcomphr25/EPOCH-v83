@@ -8,6 +8,17 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed specifically for s
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (July 2025)
+
+**July 20, 2025 - Completed P1 Order Barcode Label System**
+- ✅ Implemented exact 5-line Avery label format as specified
+- ✅ Fixed action length extraction from features.action_length field instead of shank_length
+- ✅ Added proper action length abbreviations: Long→LA, Medium→MA, Short→SA
+- ✅ Enhanced paint option extraction to show subcategory values only (no prefix)
+- ✅ Verified actual scannable Code 39 barcode images on labels
+- ✅ Confirmed proper label formatting: "SA CF Chalkbranch" format on first line
+- ✅ Successfully tested complete barcode system functionality
+
 ## System Architecture
 
 ### Overall Architecture Pattern
@@ -57,7 +68,7 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 - **P2 Product Receiving**: Specialized workflow for P2 products with Code 39 barcode generation, detailed tracking (manufacturing date, expiration date, batch number, lot number, aluminum heat number), and multi-label printing capability
 - **OEM Production Orders**: Separate production order system for OEM customers generating stock orders from Purchase Orders, tracked independently from regular P1 orders with duplicate prevention and unified customer database integration
 - **P1 Order Barcode System**: Comprehensive barcode generation and scanning system for all P1 orders with unique Code 39 barcodes (format: P1-{OrderID}), automated barcode generation for new orders, barcode scanner interface for viewing order pricing summaries with hidden pricing details for security, payment status tracking, line item breakdown without pricing visibility, and integrated barcode display/printing functionality in order management
-- **Avery Label Printing**: Professional barcode label printing system for Avery 5160 labels (2.625" x 1") with customized format including Action Length + Stock Model, actual scannable barcode image, combined paint options, customer name, and due date. Labels are optimized for high-quality printing with proper barcode resolution and spacing.
+- **Avery Label Printing**: Professional barcode label printing system for Avery 5160 labels (2.625" x 1") with exact 5-line format: (1) Action Length abbreviation + Stock Model (e.g., "SA CF Chalkbranch"), (2) Scannable Code 39 barcode image, (3) Paint subcategory only (e.g., "Carbon Black Camo"), (4) Customer Name, (5) Due Date. Action length extraction from features.action_length field with LA/MA/SA abbreviations. Labels optimized for high-quality printing with proper barcode resolution and spacing.
 
 ## Data Flow
 

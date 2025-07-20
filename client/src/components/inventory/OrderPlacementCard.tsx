@@ -60,19 +60,33 @@ export default function OrderPlacementCard() {
     return Array.from(suppliers).sort();
   }, [inventoryItems]);
 
-  // Get all inventory items (not filtered by supplier)
+  // Get inventory items filtered by selected supplier
   const availableItems = useMemo(() => {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
     
-    // Return all inventory items, sorted by part number
-    return inventoryItems.sort((a: any, b: any) => {
+    // If no supplier selected, return empty array to force supplier selection first
+    if (!formData.supplierName) {
+      return [];
+    }
+    
+    // Filter items by selected supplier (matching source or secondarySource)
+    const filteredItems = inventoryItems.filter((item: any) => {
+      const itemSource = item?.source?.trim();
+      const itemSecondarySource = item?.secondarySource?.trim();
+      const selectedSupplier = formData.supplierName.trim();
+      
+      return (itemSource === selectedSupplier) || (itemSecondarySource === selectedSupplier);
+    });
+    
+    // Sort by part number
+    return filteredItems.sort((a: any, b: any) => {
       const aPartNumber = a.agPartNumber || '';
       const bPartNumber = b.agPartNumber || '';
       return aPartNumber.localeCompare(bPartNumber);
     });
-  }, [inventoryItems]);
+  }, [inventoryItems, formData.supplierName]);
 
   // Get selected items details
   const selectedItems = useMemo(() => {
@@ -183,7 +197,11 @@ export default function OrderPlacementCard() {
           <CardContent>
             <Select 
               value={formData.supplierName} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, supplierName: value }))}
+              onValueChange={(value) => setFormData(prev => ({ 
+                ...prev, 
+                supplierName: value,
+                selectedItemIds: [] // Clear selected items when supplier changes
+              }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Choose a supplier..." />
@@ -205,7 +223,7 @@ export default function OrderPlacementCard() {
             <CardHeader>
               <CardTitle className="text-base">2. Select Items to Order from {formData.supplierName}</CardTitle>
               <CardDescription>
-                All {availableItems.length} inventory items available • {formData.selectedItemIds.length} selected
+                {availableItems.length} items available from {formData.supplierName} • {formData.selectedItemIds.length} selected
               </CardDescription>
             </CardHeader>
             <CardContent>

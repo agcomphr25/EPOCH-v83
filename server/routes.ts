@@ -2739,9 +2739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { barcode } = req.params;
       
-      // Find order by barcode
+      // Find order by barcode (case insensitive)
       const orders = await storage.getAllOrderDrafts();
-      const order = orders.find(o => o.barcode === barcode);
+      const order = orders.find(o => o.barcode?.toLowerCase() === barcode.toLowerCase());
       
       if (!order) {
         return res.status(404).json({ error: "Order not found for this barcode" });
@@ -2757,7 +2757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get features for pricing calculation and display
       const allFeatures = await storage.getAllFeatures();
-      const subCategories = await storage.getAllSubCategories();
+      const subCategories = await storage.getAllFeatureSubCategories();
       const selectedFeatures = order.features ? Object.entries(order.features as Record<string, any>) : [];
       
       // Build detailed features list for display

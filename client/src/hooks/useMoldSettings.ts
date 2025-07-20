@@ -32,27 +32,21 @@ export default function useMoldSettings() {
         // Update existing mold
         const response = await apiRequest(`/api/molds/${updatedMold.moldId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedMold),
+          body: updatedMold,
         });
         
-        if (response.ok) {
-          setMolds(ms =>
-            ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
-          );
-        }
+        setMolds(ms =>
+          ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
+        );
       } else {
         // Create new mold
         const response = await apiRequest('/api/molds', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedMold),
+          body: updatedMold,
         });
         
-        if (response.ok) {
-          const newMold = await response.json();
-          setMolds(ms => [...ms, newMold]);
-        }
+        const newMold = await response;
+        setMolds(ms => [...ms, newMold]);
       }
     } catch (error) {
       console.error('Failed to save mold:', error);

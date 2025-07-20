@@ -32,27 +32,21 @@ export default function useEmployeeSettings() {
         // Update existing employee
         const response = await apiRequest(`/api/employees/layup-settings/${updatedEmp.employeeId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedEmp),
+          body: updatedEmp,
         });
         
-        if (response.ok) {
-          setEmployees(es =>
-            es.map(e => (e.employeeId === updatedEmp.employeeId ? { ...e, ...updatedEmp } : e))
-          );
-        }
+        setEmployees(es =>
+          es.map(e => (e.employeeId === updatedEmp.employeeId ? { ...e, ...updatedEmp } : e))
+        );
       } else {
         // Create new employee
         const response = await apiRequest('/api/employees/layup-settings', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedEmp),
+          body: updatedEmp,
         });
         
-        if (response.ok) {
-          const newEmployee = await response.json();
-          setEmployees(es => [...es, newEmployee]);
-        }
+        const newEmployee = await response;
+        setEmployees(es => [...es, newEmployee]);
       }
     } catch (error) {
       console.error('Failed to save employee settings:', error);

@@ -144,6 +144,7 @@ export default function AllOrdersList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Order ID</TableHead>
+                <TableHead>Order Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Current Department</TableHead>
@@ -161,6 +162,9 @@ export default function AllOrdersList() {
                 return (
                   <TableRow key={order.orderId}>
                     <TableCell className="font-medium">{order.orderId}</TableCell>
+                    <TableCell>
+                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
+                    </TableCell>
                     <TableCell>{order.customer || order.customerId}</TableCell>
                     <TableCell>{order.product || order.modelId}</TableCell>
                     <TableCell>

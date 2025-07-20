@@ -25,19 +25,37 @@ export default function useEmployeeSettings() {
 
   const saveEmployee = async (updatedEmp: Partial<EmployeeLayupSettings> & { employeeId: string }) => {
     try {
-      const response = await apiRequest(`/api/employees/layup-settings/${updatedEmp.employeeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedEmp),
-      });
+      // Check if employee exists
+      const existingEmployee = employees.find(e => e.employeeId === updatedEmp.employeeId);
       
-      if (response.ok) {
-        setEmployees(es =>
-          es.map(e => (e.employeeId === updatedEmp.employeeId ? { ...e, ...updatedEmp } : e))
-        );
+      if (existingEmployee) {
+        // Update existing employee
+        const response = await apiRequest(`/api/employees/layup-settings/${updatedEmp.employeeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedEmp),
+        });
+        
+        if (response.ok) {
+          setEmployees(es =>
+            es.map(e => (e.employeeId === updatedEmp.employeeId ? { ...e, ...updatedEmp } : e))
+          );
+        }
+      } else {
+        // Create new employee
+        const response = await apiRequest('/api/employees/layup-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedEmp),
+        });
+        
+        if (response.ok) {
+          const newEmployee = await response.json();
+          setEmployees(es => [...es, newEmployee]);
+        }
       }
     } catch (error) {
-      console.error('Failed to update employee settings:', error);
+      console.error('Failed to save employee settings:', error);
     }
   };
 

@@ -25,19 +25,37 @@ export default function useMoldSettings() {
 
   const saveMold = async (updatedMold: Partial<Mold> & { moldId: string }) => {
     try {
-      const response = await apiRequest(`/api/molds/${updatedMold.moldId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedMold),
-      });
+      // Check if mold exists
+      const existingMold = molds.find(m => m.moldId === updatedMold.moldId);
       
-      if (response.ok) {
-        setMolds(ms =>
-          ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
-        );
+      if (existingMold) {
+        // Update existing mold
+        const response = await apiRequest(`/api/molds/${updatedMold.moldId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedMold),
+        });
+        
+        if (response.ok) {
+          setMolds(ms =>
+            ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
+          );
+        }
+      } else {
+        // Create new mold
+        const response = await apiRequest('/api/molds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedMold),
+        });
+        
+        if (response.ok) {
+          const newMold = await response.json();
+          setMolds(ms => [...ms, newMold]);
+        }
       }
     } catch (error) {
-      console.error('Failed to update mold:', error);
+      console.error('Failed to save mold:', error);
     }
   };
 

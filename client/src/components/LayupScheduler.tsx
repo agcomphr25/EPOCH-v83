@@ -108,7 +108,7 @@ export default function LayupScheduler() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ modelName: '', instanceNumber: 1, multiplier: 2 });
-  const [newEmployee, setNewEmployee] = useState({ employeeId: '', name: '', rate: 1.5, hours: 8 });
+  const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
 
   const { molds, saveMold, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, loading: employeesLoading } = useEmployeeSettings();
@@ -209,17 +209,16 @@ export default function LayupScheduler() {
   };
 
   const handleAddEmployee = async () => {
-    if (!newEmployee.employeeId.trim() || !newEmployee.name.trim()) return;
+    if (!newEmployee.employeeId.trim()) return;
     
     await saveEmployee({
       employeeId: newEmployee.employeeId,
-      name: newEmployee.name,
       rate: newEmployee.rate,
       hours: newEmployee.hours,
       department: 'Layup',
       isActive: true
     });
-    setNewEmployee({ employeeId: '', name: '', rate: 1.5, hours: 8 });
+    setNewEmployee({ employeeId: '', rate: 1.5, hours: 8 });
   };
 
   if (moldsLoading || employeesLoading || ordersLoading) {
@@ -374,16 +373,11 @@ export default function LayupScheduler() {
                       <Plus className="w-4 h-4 mr-2" />
                       <span className="font-medium">Add New Employee</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="mb-3">
                       <Input
                         placeholder="Employee ID (e.g., EMP004)"
                         value={newEmployee.employeeId}
                         onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                      />
-                      <Input
-                        placeholder="Full Name"
-                        value={newEmployee.name}
-                        onChange={(e) => setNewEmployee(prev => ({...prev, name: e.target.value}))}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -418,7 +412,7 @@ export default function LayupScheduler() {
                       onClick={handleAddEmployee} 
                       className="mt-3" 
                       size="sm"
-                      disabled={!newEmployee.employeeId.trim() || !newEmployee.name.trim()}
+                      disabled={!newEmployee.employeeId.trim()}
                     >
                       Add Employee
                     </Button>

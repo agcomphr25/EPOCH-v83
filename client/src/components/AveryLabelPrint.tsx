@@ -84,11 +84,14 @@ export function AveryLabelPrint({
         });
         
         const generateLabelContent = () => {
-          const actionLengthModel = `${actionLength || ''} ${stockModel || ''}`.trim();
+          // Format: "SA CF Chalkbranch" (Action Length + Stock Model)
+          const actionLengthModel = actionLength && stockModel ? 
+            `${actionLength} ${stockModel}` : 
+            (actionLength || stockModel || orderId);
           
           return `
             <div class="label-content">
-              <div class="line1">${actionLengthModel || orderId}</div>
+              <div class="line1">${actionLengthModel}</div>
               <div class="line2">
                 <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
               </div>
@@ -267,7 +270,12 @@ export function AveryLabelPrint({
               className="bg-white border border-gray-400 p-2 text-center flex flex-col justify-between"
               style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
             >
-              <div className="font-bold text-xs">{`${actionLength || ''} ${stockModel || ''}`.trim() || orderId}</div>
+              <div className="font-bold text-xs">
+                {actionLength && stockModel ? 
+                  `${actionLength} ${stockModel}` : 
+                  (actionLength || stockModel || orderId)
+                }
+              </div>
               <div className="my-1 flex justify-center">
                 {barcodeGenerated && canvasRef.current && (
                   <img 

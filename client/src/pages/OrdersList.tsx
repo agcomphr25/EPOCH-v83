@@ -124,10 +124,13 @@ export default function OrdersList() {
     return stockModel ? stockModel.displayName : '';
   };
 
-  const getActionLengthAbbreviation = (shankLength: string | null) => {
-    if (!shankLength) return '';
+  const getActionLengthAbbreviation = (features: any) => {
+    if (!features || typeof features !== 'object') return '';
     
-    switch (shankLength.toLowerCase()) {
+    const actionLength = features.action_length;
+    if (!actionLength) return '';
+    
+    switch (actionLength.toLowerCase()) {
       case 'long':
         return 'LA';
       case 'medium':
@@ -135,7 +138,7 @@ export default function OrdersList() {
       case 'short':
         return 'SA';
       default:
-        return shankLength.toUpperCase().substring(0, 2);
+        return actionLength.toUpperCase().substring(0, 2);
     }
   };
 
@@ -397,7 +400,7 @@ export default function OrdersList() {
                                 orderDate={order.orderDate}
                                 dueDate={order.dueDate}
                                 status={order.status}
-                                actionLength={getActionLengthAbbreviation(order.shankLength)}
+                                actionLength={getActionLengthAbbreviation(order.features)}
                                 stockModel={getStockModelName(order.modelId)}
                                 paintOption={getPaintOption(order.features)}
                               />

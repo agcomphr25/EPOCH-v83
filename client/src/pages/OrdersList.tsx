@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderPricingTooltip from '@/components/OrderPricingTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
-import { queryClient, apiRequest } from '@lib/queryClient';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 import toast from 'react-hot-toast';
 
 interface Order {
@@ -227,7 +227,7 @@ export default function OrdersList() {
     for (const key of paintKeys) {
       if (features[key] && features[key] !== '' && features[key] !== 'none') {
         // Convert underscore format to display format
-        const displayValue = features[key].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const displayValue = features[key].replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
         paintOptions.push(displayValue);
       }
     }

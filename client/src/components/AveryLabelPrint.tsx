@@ -85,16 +85,17 @@ export function AveryLabelPrint({
         
         const generateLabelContent = () => {
           const actionLengthModel = `${actionLength || ''} ${stockModel || ''}`.trim();
+          const paintOptionFormatted = `Paint Option: ${paintOption || 'Standard'}`;
           
           return `
             <div class="label-content">
-              <div class="action-length-model">${actionLengthModel || orderId}</div>
-              <div class="barcode-container">
+              <div class="line1">${actionLengthModel || orderId}</div>
+              <div class="line2">
                 <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
               </div>
-              <div class="paint-option">${paintOption || 'Standard'}</div>
-              <div class="customer-name">${customerName || 'N/A'}</div>
-              <div class="due-date">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
+              <div class="line3">${paintOptionFormatted}</div>
+              <div class="line4">${customerName || 'N/A'}</div>
+              <div class="line5">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>
           `;
         };
@@ -135,7 +136,8 @@ export function AveryLabelPrint({
                   box-sizing: border-box;
                 }
                 
-                .action-length-model {
+                /* Line 1: Action Length + Stock Model */
+                .line1 {
                   font-size: 8pt;
                   font-weight: bold;
                   color: #000;
@@ -143,48 +145,55 @@ export function AveryLabelPrint({
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
+                  text-align: center;
                 }
                 
-                .barcode-container {
+                /* Line 2: Barcode */
+                .line2 {
                   display: flex;
                   justify-content: center;
                   align-items: center;
                   margin: 2px 0;
-                  min-height: 0.35in;
+                  min-height: 0.3in;
                 }
                 
                 .barcode-img {
                   max-width: 100%;
-                  max-height: 0.35in;
+                  max-height: 0.3in;
                   height: auto;
                   display: block;
                 }
                 
-                .paint-option {
+                /* Line 3: Paint Option */
+                .line3 {
                   font-size: 5.5pt;
                   font-weight: bold;
-                  color: #333;
+                  color: #000;
                   margin: 1px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
-                  max-width: 100%;
+                  text-align: center;
                 }
                 
-                .customer-name {
+                /* Line 4: Customer Name */
+                .line4 {
                   font-size: 6pt;
                   color: #000;
                   margin: 1px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
+                  text-align: center;
                 }
                 
-                .due-date {
+                /* Line 5: Due Date */
+                .line5 {
                   font-size: 6pt;
                   font-weight: bold;
                   color: #000;
                   margin-top: 1px;
+                  text-align: center;
                 }
                 
                 @media print {
@@ -274,9 +283,9 @@ export function AveryLabelPrint({
                   </div>
                 )}
               </div>
-              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={paintOption || 'Standard'}>
-                {(paintOption || 'Standard').length > 25 ? 
-                  `${(paintOption || 'Standard').substring(0, 25)}...` : 
+              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`Paint Option: ${paintOption || 'Standard'}`}>
+                Paint Option: {(paintOption || 'Standard').length > 15 ? 
+                  `${(paintOption || 'Standard').substring(0, 15)}...` : 
                   (paintOption || 'Standard')
                 }
               </div>

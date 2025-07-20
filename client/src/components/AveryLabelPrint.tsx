@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,27 +34,30 @@ export function AveryLabelPrint({
   copies = 6 
 }: AveryLabelPrintProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [barcodeGenerated, setBarcodeGenerated] = useState(false);
 
   useEffect(() => {
     if (canvasRef.current && barcode) {
       try {
         JsBarcode(canvasRef.current, barcode, {
           format: "CODE39",
-          width: 1.5,
-          height: 30,
-          displayValue: true,
-          fontSize: 8,
+          width: 2,
+          height: 40,
+          displayValue: false, // Hide text to save space on label
+          fontSize: 10,
           textAlign: "center",
           textPosition: "bottom",
-          textMargin: 1,
+          textMargin: 2,
           fontOptions: "",
           font: "monospace",
           background: "#ffffff",
           lineColor: "#000000",
-          margin: 2,
+          margin: 5,
         });
+        setBarcodeGenerated(true);
       } catch (error) {
         console.error('Error generating barcode:', error);
+        setBarcodeGenerated(false);
       }
     }
   }, [barcode]);
@@ -73,7 +76,7 @@ export function AveryLabelPrint({
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         const canvas = canvasRef.current;
-        const img = canvas.toDataURL();
+        const img = canvas.toDataURL('image/png', 1.0); // High quality PNG
         const currentDate = new Date().toLocaleDateString('en-US', {
           month: '2-digit',
           day: '2-digit',
@@ -86,7 +89,9 @@ export function AveryLabelPrint({
           return `
             <div class="label-content">
               <div class="action-length-model">${actionLengthModel || orderId}</div>
-              <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
+              <div class="barcode-container">
+                <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
+              </div>
               <div class="paint-option">${paintOption || 'Standard'}</div>
               <div class="customer-name">${customerName || 'N/A'}</div>
               <div class="due-date">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
@@ -140,11 +145,19 @@ export function AveryLabelPrint({
                   white-space: nowrap;
                 }
                 
+                .barcode-container {
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  margin: 2px 0;
+                  min-height: 0.35in;
+                }
+                
                 .barcode-img {
                   max-width: 100%;
                   max-height: 0.35in;
                   height: auto;
-                  margin: 2px 0;
+                  display: block;
                 }
                 
                 .paint-option {
@@ -246,7 +259,20 @@ export function AveryLabelPrint({
               style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
             >
               <div className="font-bold text-xs">{`${actionLength || ''} ${stockModel || ''}`.trim() || orderId}</div>
-              <div className="my-1 text-xs">{barcode}</div>
+              <div className="my-1 flex justify-center">
+                {barcodeGenerated && canvasRef.current && (
+                  <img 
+                    src={canvasRef.current.toDataURL()} 
+                    alt="Barcode preview"
+                    style={{ maxHeight: '0.3in', maxWidth: '100%' }}
+                  />
+                )}
+                {!barcodeGenerated && (
+                  <div style={{ height: '0.3in' }} className="flex items-center">
+                    <span className="text-xs text-gray-500">{barcode}</span>
+                  </div>
+                )}
+              </div>
               <div className="text-xs font-bold">{paintOption || 'Standard'}</div>
               <div className="text-xs">{customerName || 'N/A'}</div>
               <div className="text-xs font-bold">{dueDate ? formatDate(dueDate) : 'TBD'}</div>

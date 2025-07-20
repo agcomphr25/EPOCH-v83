@@ -33,7 +33,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 // Draggable Order Item Component
 function DraggableOrderItem({ order, priority }: { order: any, priority: number }) {
@@ -270,6 +271,96 @@ export default function LayupScheduler() {
       <main className="flex-1 p-4 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Mold Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Mold Configuration</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {molds.map(mold => (
+                    <div key={mold.moldId} className="flex items-center space-x-4 p-3 border rounded">
+                      <Checkbox
+                        checked={mold.enabled ?? true}
+                        onCheckedChange={(checked) => 
+                          saveMold({ ...mold, enabled: !!checked })
+                        }
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium">
+                          {mold.modelName} #{mold.instanceNumber}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm">Multiplier:</label>
+                        <Input
+                          type="number"
+                          value={mold.multiplier}
+                          min={1}
+                          onChange={(e) =>
+                            saveMold({ ...mold, multiplier: +e.target.value })
+                          }
+                          className="w-20"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Users className="w-4 h-4 mr-2" />
+                  Employee Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Employee Configuration</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {employees.map(emp => (
+                    <div key={emp.employeeId} className="p-3 border rounded">
+                      <div className="font-medium mb-2">{emp.name}</div>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm">Rate:</label>
+                          <Input
+                            type="number"
+                            value={emp.rate}
+                            onChange={(e) =>
+                              saveEmployee({ ...emp, rate: +e.target.value })
+                            }
+                            className="w-20"
+                          />
+                          <span className="text-sm">molds/hr</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm">Hours:</label>
+                          <Input
+                            type="number"
+                            value={emp.hours}
+                            onChange={(e) =>
+                              saveEmployee({ ...emp, hours: +e.target.value })
+                            }
+                            className="w-20"
+                          />
+                          <span className="text-sm">hrs/day</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
               size="sm"

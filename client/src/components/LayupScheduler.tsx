@@ -60,10 +60,20 @@ function DraggableOrderItem({ order, priority }: { order: any, priority: number 
       style={style}
       {...attributes}
       {...listeners}
-      className="mb-1 p-2 bg-blue-50 dark:bg-blue-900/30 rounded border shadow-sm text-xs cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50"
+      className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border shadow-sm cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
     >
-      <div className="font-medium">{order.orderId}</div>
-      <div className="text-gray-600 dark:text-gray-400">#{priority}</div>
+      <div className="font-medium text-blue-900 dark:text-blue-100 text-sm">
+        {order.orderId}
+      </div>
+      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+        {order.customerName || 'Unknown Customer'}
+      </div>
+      <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+        Due: {new Date(order.dueDate).toLocaleDateString()}
+      </div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        Priority: #{priority} • {order.status}
+      </div>
     </div>
   );
 }
@@ -232,19 +242,33 @@ export default function LayupScheduler() {
   return (
     <div className="flex h-full">
       {/* Sidebar for Order Queue */}
-      <aside className="w-1/4 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+      <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Order Queue</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Order Queue</CardTitle>
+              <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
+                {orders.length} orders
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {orders.map((order, index) => (
-              <DraggableOrderItem
-                key={order.orderId}
-                order={order}
-                priority={index + 1}
-              />
-            ))}
+          <CardContent>
+            {orders.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="text-sm">No orders in queue</div>
+                <div className="text-xs mt-1">Orders will appear here when available</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {orders.map((order, index) => (
+                  <DraggableOrderItem
+                    key={order.orderId}
+                    order={order}
+                    priority={index + 1}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </aside>

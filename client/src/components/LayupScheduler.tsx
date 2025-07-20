@@ -201,67 +201,19 @@ export default function LayupScheduler() {
 
   return (
     <div className="flex h-full">
-      {/* Sidebar */}
-      <aside className="w-1/4 p-4 space-y-6 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+      {/* Sidebar for Order Queue */}
+      <aside className="w-1/4 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Mold Settings</CardTitle>
+            <CardTitle className="text-lg">Order Queue</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {molds.map(mold => (
-              <div key={mold.moldId} className="flex items-center space-x-2">
-                <Checkbox
-                  checked={mold.enabled ?? true}
-                  onCheckedChange={(checked) => 
-                    saveMold({ ...mold, enabled: !!checked })
-                  }
-                />
-                <span className="flex-1 text-sm">
-                  {mold.modelName} #{mold.instanceNumber}
-                </span>
-                <Input
-                  type="number"
-                  value={mold.multiplier}
-                  min={1}
-                  onChange={(e) =>
-                    saveMold({ ...mold, multiplier: +e.target.value })
-                  }
-                  className="w-16 h-8"
-                />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Employee Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {employees.map(emp => (
-              <div key={emp.employeeId} className="space-y-2">
-                <div className="font-medium text-sm">{emp.name}</div>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="number"
-                    value={emp.rate}
-                    onChange={(e) =>
-                      saveEmployee({ ...emp, rate: +e.target.value })
-                    }
-                    className="w-16 h-8"
-                  />
-                  <span className="text-xs">molds/hr</span>
-                  <Input
-                    type="number"
-                    value={emp.hours}
-                    onChange={(e) =>
-                      saveEmployee({ ...emp, hours: +e.target.value })
-                    }
-                    className="w-16 h-8"
-                  />
-                  <span className="text-xs">hrs</span>
-                </div>
-              </div>
+          <CardContent className="space-y-2">
+            {orders.map((order, index) => (
+              <DraggableOrderItem
+                key={order.orderId}
+                order={order}
+                priority={index + 1}
+              />
             ))}
           </CardContent>
         </Card>
@@ -283,33 +235,49 @@ export default function LayupScheduler() {
                   <DialogTitle>Mold Configuration</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {molds.map(mold => (
-                    <div key={mold.moldId} className="flex items-center space-x-4 p-3 border rounded">
-                      <Checkbox
-                        checked={mold.enabled ?? true}
-                        onCheckedChange={(checked) => 
-                          saveMold({ ...mold, enabled: !!checked })
-                        }
-                      />
-                      <div className="flex-1">
-                        <span className="font-medium">
-                          {mold.modelName} #{mold.instanceNumber}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Multiplier:</label>
-                        <Input
-                          type="number"
-                          value={mold.multiplier}
-                          min={1}
-                          onChange={(e) =>
-                            saveMold({ ...mold, multiplier: +e.target.value })
-                          }
-                          className="w-20"
-                        />
-                      </div>
+                  {molds.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No molds configured. Add molds to begin scheduling.
                     </div>
-                  ))}
+                  ) : (
+                    molds.map(mold => (
+                      <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                        <Checkbox
+                          checked={mold.enabled ?? true}
+                          onCheckedChange={(checked) => 
+                            saveMold({ ...mold, enabled: !!checked })
+                          }
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-base">
+                            {mold.modelName} #{mold.instanceNumber}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Mold ID: {mold.moldId}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm font-medium">Daily Capacity:</label>
+                          <Input
+                            type="number"
+                            value={mold.multiplier}
+                            min={1}
+                            onChange={(e) =>
+                              saveMold({ ...mold, multiplier: +e.target.value })
+                            }
+                            className="w-24"
+                          />
+                          <span className="text-sm text-gray-600">units/day</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
+                      Adjust daily capacity to reflect each mold's production capability.
+                    </p>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
@@ -326,37 +294,63 @@ export default function LayupScheduler() {
                   <DialogTitle>Employee Configuration</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {employees.map(emp => (
-                    <div key={emp.employeeId} className="p-3 border rounded">
-                      <div className="font-medium mb-2">{emp.name}</div>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          <label className="text-sm">Rate:</label>
-                          <Input
-                            type="number"
-                            value={emp.rate}
-                            onChange={(e) =>
-                              saveEmployee({ ...emp, rate: +e.target.value })
-                            }
-                            className="w-20"
-                          />
-                          <span className="text-sm">molds/hr</span>
+                  {employees.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No employees configured for layup department.
+                    </div>
+                  ) : (
+                    employees.map(emp => (
+                      <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="font-medium text-base">{emp.name}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              Employee ID: {emp.employeeId} | Department: {emp.department}
+                            </div>
+                          </div>
+                          <Badge variant={emp.isActive ? "default" : "secondary"}>
+                            {emp.isActive ? "Active" : "Inactive"}
+                          </Badge>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="text-sm">Hours:</label>
-                          <Input
-                            type="number"
-                            value={emp.hours}
-                            onChange={(e) =>
-                              saveEmployee({ ...emp, hours: +e.target.value })
-                            }
-                            className="w-20"
-                          />
-                          <span className="text-sm">hrs/day</span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex items-center space-x-2">
+                            <label className="text-sm font-medium">Production Rate:</label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={emp.rate}
+                              onChange={(e) =>
+                                saveEmployee({ ...emp, rate: +e.target.value })
+                              }
+                              className="w-24"
+                            />
+                            <span className="text-sm text-gray-600">units/hr</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <label className="text-sm font-medium">Daily Hours:</label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={emp.hours}
+                              min={1}
+                              max={12}
+                              onChange={(e) =>
+                                saveEmployee({ ...emp, hours: +e.target.value })
+                              }
+                              className="w-24"
+                            />
+                            <span className="text-sm text-gray-600">hrs/day</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
+                  <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
+                      The system will automatically distribute work based on these settings.
+                    </p>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>

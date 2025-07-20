@@ -118,6 +118,31 @@ export default function OrdersList() {
     return model ? model.displayName : modelId;
   };
 
+  const getStockModelName = (modelId: string | null) => {
+    if (!modelId) return '';
+    const stockModel = stockModels?.find(sm => sm.id === modelId);
+    return stockModel ? stockModel.displayName : '';
+  };
+
+  const getPaintOption = (features: any) => {
+    if (!features || typeof features !== 'object') return '';
+    
+    // Look for paint-related features in the features object
+    const paintKeys = ['cerakote_color', 'paint_finish', 'coating', 'finish'];
+    for (const key of paintKeys) {
+      if (features[key] && features[key] !== '') {
+        return features[key];
+      }
+    }
+    
+    // Check for protective coatings category
+    if (features.protective_coatings) {
+      return features.protective_coatings;
+    }
+    
+    return 'Standard';
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -311,7 +336,11 @@ export default function OrdersList() {
                                 showTitle={false}
                                 customerName={getCustomerName(order.customerId)}
                                 orderDate={order.orderDate}
+                                dueDate={order.dueDate}
                                 status={order.status}
+                                actionLength={order.shankLength}
+                                stockModel={getStockModelName(order.modelId)}
+                                paintOption={getPaintOption(order.features)}
                               />
                             )}
                           </DialogContent>

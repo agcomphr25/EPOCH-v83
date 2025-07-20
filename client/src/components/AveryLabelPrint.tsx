@@ -9,8 +9,12 @@ interface AveryLabelPrintProps {
   barcode: string;
   customerName?: string;
   orderDate?: string;
+  dueDate?: string;
   productInfo?: string;
   status?: string;
+  actionLength?: string;
+  stockModel?: string;
+  paintOption?: string;
   labelType?: 'basic' | 'detailed';
   copies?: number;
 }
@@ -20,8 +24,12 @@ export function AveryLabelPrint({
   barcode, 
   customerName,
   orderDate,
+  dueDate,
   productInfo,
   status,
+  actionLength,
+  stockModel,
+  paintOption,
   labelType = 'detailed',
   copies = 6 
 }: AveryLabelPrintProps) {
@@ -73,31 +81,17 @@ export function AveryLabelPrint({
         });
         
         const generateLabelContent = () => {
-          if (labelType === 'basic') {
-            return `
-              <div class="order-header">P1 ORDER</div>
+          const actionLengthModel = `${actionLength || ''} ${stockModel || ''}`.trim();
+          
+          return `
+            <div class="label-content">
+              <div class="action-length-model">${actionLengthModel || orderId}</div>
               <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
-              <div class="order-details">
-                <div class="order-id">${orderId}</div>
-                <div class="date-info">Printed: ${currentDate}</div>
-              </div>
-            `;
-          } else {
-            return `
-              <div class="order-header">
-                <div class="company-name">AMERICAN GUNCRAFT</div>
-                <div class="order-type">P1 ORDER</div>
-              </div>
-              <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
-              <div class="order-details">
-                <div class="order-id">${orderId}</div>
-                ${customerName ? `<div class="customer">Customer: ${customerName.substring(0, 20)}</div>` : ''}
-                ${orderDate ? `<div class="order-date">Date: ${formatDate(orderDate)}</div>` : ''}
-                ${status ? `<div class="status">Status: ${status}</div>` : ''}
-                <div class="date-info">Printed: ${currentDate}</div>
-              </div>
-            `;
-          }
+              <div class="paint-option">${paintOption || 'Standard'}</div>
+              <div class="customer-name">${customerName || 'N/A'}</div>
+              <div class="due-date">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
+            </div>
+          `;
         };
         
         printWindow.document.write(`
@@ -132,57 +126,50 @@ export function AveryLabelPrint({
                   flex-direction: column;
                   justify-content: space-between;
                   text-align: center;
-                  font-size: 7pt;
-                  line-height: 1;
+                  padding: 2px;
+                  box-sizing: border-box;
                 }
                 
-                .order-header {
-                  margin-bottom: 1px;
-                }
-                
-                .company-name {
-                  font-size: 6pt;
-                  font-weight: bold;
-                  color: #333;
-                  margin-bottom: 1px;
-                }
-                
-                .order-type {
-                  font-size: 7pt;
+                .action-length-model {
+                  font-size: 8pt;
                   font-weight: bold;
                   color: #000;
-                }
-                
-                .barcode-img {
-                  max-width: 95%;
-                  max-height: 0.4in;
-                  height: auto;
-                  margin: 1px auto;
-                }
-                
-                .order-details {
-                  font-size: 5.5pt;
-                  line-height: 1.1;
-                  color: #333;
-                }
-                
-                .order-id {
-                  font-weight: bold;
-                  font-size: 6pt;
-                  margin-bottom: 1px;
-                }
-                
-                .customer, .order-date, .status {
-                  font-size: 5pt;
-                  margin: 0.5px 0;
+                  margin-bottom: 2px;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
                 }
                 
-                .date-info {
-                  font-size: 4pt;
-                  color: #666;
+                .barcode-img {
+                  max-width: 100%;
+                  max-height: 0.35in;
+                  height: auto;
+                  margin: 2px 0;
+                }
+                
+                .paint-option {
+                  font-size: 6pt;
+                  font-weight: bold;
+                  color: #333;
+                  margin: 1px 0;
+                  text-overflow: ellipsis;
+                  overflow: hidden;
+                  white-space: nowrap;
+                }
+                
+                .customer-name {
+                  font-size: 6pt;
+                  color: #000;
+                  margin: 1px 0;
+                  text-overflow: ellipsis;
+                  overflow: hidden;
+                  white-space: nowrap;
+                }
+                
+                .due-date {
+                  font-size: 6pt;
+                  font-weight: bold;
+                  color: #000;
                   margin-top: 1px;
                 }
                 
@@ -220,9 +207,7 @@ export function AveryLabelPrint({
               <div class="labels-container">
                 ${Array(copies).fill().map((_, i) => `
                   <div class="avery-label ${i === 0 ? 'preview-label' : ''}">
-                    <div class="label-content">
-                      ${generateLabelContent()}
-                    </div>
+                    ${generateLabelContent()}
                   </div>
                 `).join('')}
               </div>
@@ -257,16 +242,14 @@ export function AveryLabelPrint({
           <div className="border border-gray-300 bg-gray-50 p-4 rounded">
             <div className="text-sm font-semibold mb-2">Label Preview:</div>
             <div 
-              className="bg-white border border-gray-400 p-2 text-center"
+              className="bg-white border border-gray-400 p-2 text-center flex flex-col justify-between"
               style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
             >
-              <div className="font-bold text-xs">AMERICAN GUNCRAFT</div>
-              <div className="font-bold">P1 ORDER</div>
+              <div className="font-bold text-xs">{`${actionLength || ''} ${stockModel || ''}`.trim() || orderId}</div>
               <div className="my-1 text-xs">{barcode}</div>
-              <div className="text-xs font-bold">{orderId}</div>
-              {customerName && <div className="text-xs">{customerName.substring(0, 20)}</div>}
-              {orderDate && <div className="text-xs">Date: {formatDate(orderDate)}</div>}
-              {status && <div className="text-xs">Status: {status}</div>}
+              <div className="text-xs font-bold">{paintOption || 'Standard'}</div>
+              <div className="text-xs">{customerName || 'N/A'}</div>
+              <div className="text-xs font-bold">{dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>
           </div>
 

@@ -13,10 +13,14 @@ interface BarcodeDisplayProps {
   size?: 'small' | 'medium' | 'large';
   customerName?: string;
   orderDate?: string;
+  dueDate?: string;
   status?: string;
+  actionLength?: string;
+  stockModel?: string;
+  paintOption?: string;
 }
 
-export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, status }: BarcodeDisplayProps) {
+export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption }: BarcodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showAveryDialog, setShowAveryDialog] = useState(false);
 
@@ -244,7 +248,11 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   barcode={barcode}
                   customerName={customerName}
                   orderDate={orderDate}
+                  dueDate={dueDate}
                   status={status}
+                  actionLength={actionLength}
+                  stockModel={stockModel}
+                  paintOption={paintOption}
                   labelType="detailed"
                   copies={6}
                 />

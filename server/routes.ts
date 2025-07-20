@@ -2755,9 +2755,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const models = await storage.getAllStockModels();
       const model = models.find(m => m.id === order.modelId);
 
-      // Get features for pricing calculation
+      // Get features for pricing calculation and display
       const allFeatures = await storage.getAllFeatures();
+      const subCategories = await storage.getAllSubCategories();
       const selectedFeatures = order.features ? Object.entries(order.features as Record<string, any>) : [];
+      
+      // Build detailed features list for display
+      const orderFeatures = [];
+      for (const [featureId, featureValue] of selectedFeatures) {
+        if (!featureValue) continue;
+        
+        const feature = allFeatures.find(f => f.id === featureId);
+        if (feature) {
+          let displayValue = featureValue;
+          
+          // Handle paint options with subcategory lookup
+          if (featureId === 'paint_options_combined' && typeof featureValue === 'string' && featureValue.includes(':')) {
+            const [paintFeatureId, optionValue] = featureValue.split(':');
+            const paintFeature = allFeatures.find(f => f.id === paintFeatureId);
+            if (paintFeature && paintFeature.subCategory) {
+              const subCategory = subCategories.find(sc => sc.id === paintFeature.subCategory);
+              displayValue = subCategory?.name || optionValue;
+            } else {
+              displayValue = optionValue;
+            }
+          }
+          
+          // Handle multiselect arrays
+          if (Array.isArray(featureValue)) {
+            displayValue = featureValue.join(', ');
+          }
+          
+          orderFeatures.push({
+            id: featureId,
+            name: feature.displayName || feature.name,
+            value: displayValue,
+            type: feature.type
+          });
+        }
+      }
       
       // Calculate line items with prices
       const lineItems = [];
@@ -2800,7 +2836,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate totals
       const subtotal = lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const total = order.priceOverride || subtotal;
+      
+      // Apply discounts if present
+      let discountAmount = 0;
+      let discountDetails = [];
+      
+      if (order.discounts && Array.isArray(order.discounts)) {
+        for (const discount of order.discounts) {
+          let amount = 0;
+          if (discount.type === 'PERCENTAGE') {
+            amount = subtotal * (discount.value / 100);
+          } else if (discount.type === 'FIXED') {
+            amount = discount.value;
+          }
+          discountAmount += amount;
+          discountDetails.push({
+            name: discount.name || 'Discount',
+            type: discount.type,
+            value: discount.value,
+            amount: Math.round(amount * 100) / 100
+          });
+        }
+      }
+      
+      const afterDiscounts = subtotal - discountAmount;
+      const total = order.priceOverride || afterDiscounts;
 
       // Determine payment status (simplified logic)
       const paymentStatus = order.status === 'COMPLETED' ? 'PAID' : 
@@ -2813,9 +2873,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: customer.name,
           email: customer.email
         } : null,
+        baseModel: model ? {
+          name: model.name,
+          id: model.id
+        } : null,
+        features: orderFeatures,
         lineItems,
         pricing: {
           subtotal: Math.round(subtotal * 100) / 100,
+          discounts: discountDetails,
+          discountTotal: Math.round(discountAmount * 100) / 100,
+          afterDiscounts: Math.round(afterDiscounts * 100) / 100,
           total: Math.round(total * 100) / 100,
           override: order.priceOverride ? true : false
         },

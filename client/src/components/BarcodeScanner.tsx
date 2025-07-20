@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Scan, Package, User, Calendar, DollarSign, CreditCard } from 'lucide-react';
+import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
@@ -24,6 +24,13 @@ interface DiscountDetail {
   amount: number;
 }
 
+interface OrderFeature {
+  id: string;
+  name: string;
+  value: string;
+  type: string;
+}
+
 interface OrderSummary {
   orderId: string;
   orderDate: string;
@@ -31,6 +38,11 @@ interface OrderSummary {
     name: string;
     email: string;
   } | null;
+  baseModel: {
+    name: string;
+    id: string;
+  } | null;
+  features: OrderFeature[];
   lineItems: LineItem[];
   pricing: {
     subtotal: number;
@@ -191,6 +203,51 @@ export function BarcodeScanner() {
                     <User className="h-4 w-4 text-gray-500" />
                     <span className="text-sm text-gray-600">Customer:</span>
                     <span className="font-medium">{orderSummary.customer.name}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Base Model & Features */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Product Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {/* Base Model */}
+                {orderSummary.baseModel && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="font-semibold text-blue-900">Base Model</div>
+                    <div className="text-lg font-medium">{orderSummary.baseModel.name}</div>
+                  </div>
+                )}
+                
+                {/* Features */}
+                {orderSummary.features && orderSummary.features.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="font-semibold text-gray-700 border-b pb-1">Selected Features</div>
+                    {orderSummary.features.map((feature, index) => (
+                      <div key={index} className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{feature.name}</div>
+                          <div className="text-sm text-gray-600">{feature.value}</div>
+                        </div>
+                        <Badge variant="outline" className="text-xs ml-2">
+                          {feature.type}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {(!orderSummary.features || orderSummary.features.length === 0) && (
+                  <div className="text-center text-gray-500 py-4">
+                    No custom features selected
                   </div>
                 )}
               </div>

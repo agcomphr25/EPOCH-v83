@@ -41,6 +41,7 @@ export default function OrderPlacementCard() {
     if (trimmed.toLowerCase() === 'lowes') return "Lowe's";
     if (trimmed.toLowerCase() === 'homedepot' || trimmed.toLowerCase() === 'home depot') return "Home Depot";
     if (trimmed.toLowerCase() === 'walmart') return "Walmart";
+    if (trimmed.toLowerCase() === 'machining resource') return "Machining Resources";
     
     return trimmed;
   };

@@ -129,9 +129,38 @@ export default function OrdersList() {
     
     const paintOptions = [];
     
-    // Collect all paint/coating related features
+    // Check for paint_options_combined first (newer format)
+    if (features.paint_options_combined) {
+      const combined = features.paint_options_combined;
+      if (typeof combined === 'string') {
+        // Parse format like "camo_patterns:canyon_rogue" or "cerakote_colors:carbon_black"
+        const parts = combined.split(':');
+        if (parts.length === 2) {
+          const [category, value] = parts;
+          // Convert underscore format to display format with proper casing
+          let displayValue = value.replace(/_/g, ' ');
+          
+          // Handle special cases and proper capitalization
+          displayValue = displayValue.replace(/\b\w/g, l => l.toUpperCase());
+          
+          // Fix common formatting issues
+          displayValue = displayValue
+            .replace(/Rogue/g, 'Rogue')
+            .replace(/Camo/g, 'Camo')
+            .replace(/Web/g, 'Web')
+            .replace(/Desert Night/g, 'Desert Night')
+            .replace(/Carbon/g, 'Carbon');
+            
+          paintOptions.push(displayValue);
+        }
+      }
+    }
+    
+    // Check for individual paint/coating features
     const paintKeys = [
       'cerakote_color', 
+      'cerakote_colors',
+      'camo_patterns',
       'paint_finish', 
       'coating', 
       'finish',
@@ -143,7 +172,9 @@ export default function OrdersList() {
     
     for (const key of paintKeys) {
       if (features[key] && features[key] !== '' && features[key] !== 'none') {
-        paintOptions.push(features[key]);
+        // Convert underscore format to display format
+        const displayValue = features[key].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        paintOptions.push(displayValue);
       }
     }
     

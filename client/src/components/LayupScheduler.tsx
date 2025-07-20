@@ -33,8 +33,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 // Draggable Order Item Component
 function DraggableOrderItem({ order, priority }: { order: any, priority: number }) {
@@ -106,6 +107,8 @@ export default function LayupScheduler() {
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [newMold, setNewMold] = useState({ modelName: '', instanceNumber: 1, multiplier: 2 });
+  const [newEmployee, setNewEmployee] = useState({ employeeId: '', name: '', rate: 1.5, hours: 8 });
 
   const { molds, saveMold, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, loading: employeesLoading } = useEmployeeSettings();
@@ -191,6 +194,34 @@ export default function LayupScheduler() {
     setActiveId(event.active.id);
   };
 
+  const handleAddMold = async () => {
+    if (!newMold.modelName.trim()) return;
+    
+    const moldId = `${newMold.modelName}-${newMold.instanceNumber}`;
+    await saveMold({
+      moldId,
+      modelName: newMold.modelName,
+      instanceNumber: newMold.instanceNumber,
+      multiplier: newMold.multiplier,
+      enabled: true
+    });
+    setNewMold({ modelName: '', instanceNumber: 1, multiplier: 2 });
+  };
+
+  const handleAddEmployee = async () => {
+    if (!newEmployee.employeeId.trim() || !newEmployee.name.trim()) return;
+    
+    await saveEmployee({
+      employeeId: newEmployee.employeeId,
+      name: newEmployee.name,
+      rate: newEmployee.rate,
+      hours: newEmployee.hours,
+      department: 'Layup',
+      isActive: true
+    });
+    setNewEmployee({ employeeId: '', name: '', rate: 1.5, hours: 8 });
+  };
+
   if (moldsLoading || employeesLoading || ordersLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -235,9 +266,49 @@ export default function LayupScheduler() {
                   <DialogTitle>Mold Configuration</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {/* Add New Mold Form */}
+                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <Plus className="w-4 h-4 mr-2" />
+                      <span className="font-medium">Add New Mold</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Input
+                        placeholder="Model Name (e.g., M001)"
+                        value={newMold.modelName}
+                        onChange={(e) => setNewMold(prev => ({...prev, modelName: e.target.value}))}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Instance #"
+                        value={newMold.instanceNumber}
+                        min={1}
+                        onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Daily Capacity"
+                        value={newMold.multiplier}
+                        min={1}
+                        onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
+                      />
+                    </div>
+                    <Button 
+                      onClick={handleAddMold} 
+                      className="mt-3" 
+                      size="sm"
+                      disabled={!newMold.modelName.trim()}
+                    >
+                      Add Mold
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  {/* Existing Molds */}
                   {molds.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      No molds configured. Add molds to begin scheduling.
+                      No molds configured yet. Use the form above to add your first mold.
                     </div>
                   ) : (
                     molds.map(mold => (
@@ -272,12 +343,15 @@ export default function LayupScheduler() {
                       </div>
                     ))
                   )}
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                      <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
-                      Adjust daily capacity to reflect each mold's production capability.
-                    </p>
-                  </div>
+                  
+                  {molds.length > 0 && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
+                        Adjust daily capacity to reflect each mold's production capability.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
@@ -294,9 +368,68 @@ export default function LayupScheduler() {
                   <DialogTitle>Employee Configuration</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {/* Add New Employee Form */}
+                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <Plus className="w-4 h-4 mr-2" />
+                      <span className="font-medium">Add New Employee</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <Input
+                        placeholder="Employee ID (e.g., EMP004)"
+                        value={newEmployee.employeeId}
+                        onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
+                      />
+                      <Input
+                        placeholder="Full Name"
+                        value={newEmployee.name}
+                        onChange={(e) => setNewEmployee(prev => ({...prev, name: e.target.value}))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm">Rate:</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="1.5"
+                          value={newEmployee.rate}
+                          onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
+                          className="w-20"
+                        />
+                        <span className="text-xs">units/hr</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm">Hours:</label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="8"
+                          value={newEmployee.hours}
+                          min={1}
+                          max={12}
+                          onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
+                          className="w-20"
+                        />
+                        <span className="text-xs">hrs/day</span>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleAddEmployee} 
+                      className="mt-3" 
+                      size="sm"
+                      disabled={!newEmployee.employeeId.trim() || !newEmployee.name.trim()}
+                    >
+                      Add Employee
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  {/* Existing Employees */}
                   {employees.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      No employees configured for layup department.
+                      No employees configured yet. Use the form above to add your first employee.
                     </div>
                   ) : (
                     employees.map(emp => (
@@ -345,12 +478,15 @@ export default function LayupScheduler() {
                       </div>
                     ))
                   )}
-                  <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <p className="text-sm text-green-700 dark:text-green-300">
-                      <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
-                      The system will automatically distribute work based on these settings.
-                    </p>
-                  </div>
+                  
+                  {employees.length > 0 && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
+                        The system will automatically distribute work based on these settings.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>

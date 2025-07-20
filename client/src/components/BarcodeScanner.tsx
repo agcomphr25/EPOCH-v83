@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Scan, Package, User, Calendar, DollarSign, CreditCard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 
 interface LineItem {
   type: string;
@@ -34,8 +35,21 @@ interface OrderSummary {
 }
 
 export function BarcodeScanner() {
+  const [location] = useLocation();
   const [barcode, setBarcode] = useState('');
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+
+  // Check for URL parameter and auto-scan
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const scanParam = searchParams.get('scan');
+    if (scanParam) {
+      setBarcode(scanParam);
+      setScannedBarcode(scanParam);
+      // Clear the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [location]);
 
   const { data: orderSummary, isLoading, error } = useQuery({
     queryKey: ['/api/barcode/scan', scannedBarcode],

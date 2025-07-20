@@ -30,11 +30,22 @@ export default function InventoryScanner() {
     queryFn: () => apiRequest('/api/employees?role=Receiving'),
   });
 
-  // Auto-fill code on scan
+  // Auto-fill code on scan or redirect to order scanner for P1 barcodes
   useEffect(() => {
     if (scannedCode) {
-      setFormData(fd => ({ ...fd, itemCode: scannedCode }));
-      toast.success(`Scanned: ${scannedCode}`);
+      // Check if this is a P1 order barcode
+      if (scannedCode.startsWith('P1-')) {
+        toast.success(`P1 Order barcode detected: ${scannedCode}`);
+        toast('Redirecting to Order Scanner...', { icon: '🔄' });
+        // Redirect to barcode scanner page with the scanned code
+        setTimeout(() => {
+          window.location.href = `/barcode-scanner?scan=${encodeURIComponent(scannedCode)}`;
+        }, 1000);
+      } else {
+        // Regular inventory item
+        setFormData(fd => ({ ...fd, itemCode: scannedCode }));
+        toast.success(`Inventory item scanned: ${scannedCode}`);
+      }
     }
   }, [scannedCode]);
 

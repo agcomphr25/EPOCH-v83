@@ -16,8 +16,8 @@ export default function useScanner() {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        // Simulate scanning a barcode
-        const mockBarcodes = ['PART001', 'PART002', 'PART003'];
+        // Simulate scanning a barcode (mix of inventory parts and P1 orders)
+        const mockBarcodes = ['PART001', 'PART002', 'PART003', 'P1-AG185', 'P1-AN001', 'P1-AP001'];
         const randomBarcode = mockBarcodes[Math.floor(Math.random() * mockBarcodes.length)];
         setScannedData(randomBarcode);
       }

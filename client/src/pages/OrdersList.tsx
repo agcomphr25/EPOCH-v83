@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderPricingTooltip from '@/components/OrderPricingTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
+import { queryClient, apiRequest } from '@lib/queryClient';
+import toast from 'react-hot-toast';
 
 interface Order {
   id: number;
@@ -63,6 +65,39 @@ interface StockModel {
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{orderId: string, barcode: string} | null>(null);
+
+  // Department progression functions
+  const getNextDepartment = (currentDepartment: string) => {
+    const departmentFlow = [
+      'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+    ];
+    const currentIndex = departmentFlow.indexOf(currentDepartment);
+    if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
+      return departmentFlow[currentIndex + 1];
+    }
+    return null;
+  };
+
+  // Progress order mutation
+  const progressOrderMutation = useMutation({
+    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
+      return apiRequest(`/api/orders/${orderId}/progress`, {
+        method: 'POST',
+        body: JSON.stringify({ nextDepartment })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      toast.success('Order progressed successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to progress order');
+    }
+  });
+
+  const handleProgressOrder = (orderId: string, nextDepartment: string) => {
+    progressOrderMutation.mutate({ orderId, nextDepartment });
+  };
   
   const handleExportCSV = async () => {
     try {
@@ -381,13 +416,25 @@ export default function OrdersList() {
                         <Button variant="outline" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => window.location.href = `/all-orders-progression`}
-                        >
-                          Department Progression
-                        </Button>
+                        {(() => {
+                          const nextDept = getNextDepartment(order.currentDepartment || '');
+                          const isComplete = order.currentDepartment === 'Shipping';
+                          const isScrapped = order.status === 'SCRAPPED';
+                          
+                          if (!isScrapped && !isComplete && nextDept) {
+                            return (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                disabled={progressOrderMutation.isPending}
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                {nextDept}
+                              </Button>
+                            );
+                          }
+                          return null;
+                        })()}
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 

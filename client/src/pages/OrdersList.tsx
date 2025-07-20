@@ -29,6 +29,7 @@ interface Order {
   discountCode: string;
   shipping: number;
   status: string;
+  currentDepartment?: string;
   barcode?: string;
   createdAt: string;
   updatedAt: string;
@@ -310,6 +311,7 @@ export default function OrdersList() {
                 <TableRow>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Current Department</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Order Date</TableHead>
@@ -333,6 +335,11 @@ export default function OrdersList() {
                     <TableCell>
                       <Badge className={getStatusColor(order.status)}>
                         {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {order.currentDepartment || 'Not Set'}
                       </Badge>
                     </TableCell>
                     <TableCell>

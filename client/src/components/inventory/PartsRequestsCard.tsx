@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,30 @@ export default function PartsRequestsCard() {
     queryKey: ['/api/parts-requests'],
     queryFn: () => apiRequest('/api/parts-requests'),
   });
+
+  // Group requests by department
+  const requestsByDepartment = useMemo(() => {
+    const grouped = requests.reduce((acc, request) => {
+      const dept = request.department || 'No Department';
+      if (!acc[dept]) {
+        acc[dept] = [];
+      }
+      acc[dept].push(request);
+      return acc;
+    }, {} as Record<string, PartsRequest[]>);
+    
+    // Sort departments alphabetically, with "No Department" last
+    const sortedDepartments = Object.keys(grouped).sort((a, b) => {
+      if (a === 'No Department') return 1;
+      if (b === 'No Department') return -1;
+      return a.localeCompare(b);
+    });
+    
+    return sortedDepartments.reduce((acc, dept) => {
+      acc[dept] = grouped[dept];
+      return acc;
+    }, {} as Record<string, PartsRequest[]>);
+  }, [requests]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -400,73 +424,97 @@ export default function PartsRequestsCard() {
         </Dialog>
       </div>
 
-      {/* Parts Requests Grid */}
+      {/* Parts Requests by Department */}
       {isLoading ? (
         <div className="text-center py-8">Loading parts requests...</div>
+      ) : Object.keys(requestsByDepartment).length === 0 ? (
+        <div className="text-center py-8 text-gray-500">No parts requests found</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {requests.map((request) => (
-            <div key={request.id} className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium">{request.partName}</h4>
-                  <p className="text-sm text-gray-600">Part: {request.partNumber}</p>
-                </div>
-                <div className="flex space-x-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(request)}
-                    title="Edit"
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(request.id)}
-                    disabled={deleteMutation.isPending}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+        <div className="space-y-6">
+          {Object.entries(requestsByDepartment).map(([department, deptRequests]) => (
+            <div key={department} className="space-y-4">
+              {/* Department Header */}
+              <div className="bg-gray-50 px-4 py-3 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-semibold text-gray-800">{department}</h4>
+                  <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                    {deptRequests.length} request{deptRequests.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Badge className={getStatusBadgeColor(request.status)}>
-                  {request.status}
-                </Badge>
-                <Badge className={getUrgencyBadgeColor(request.urgency)}>
-                  {request.urgency}
-                </Badge>
-              </div>
+              {/* Department Requests Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
+                {deptRequests.map((request) => (
+                  <div key={request.id} className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h5 className="font-medium">{request.partName}</h5>
+                        <p className="text-sm text-gray-600">Part: {request.partNumber}</p>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(request)}
+                          title="Edit"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(request.id)}
+                          disabled={deleteMutation.isPending}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-gray-400" />
-                  <span>{request.requestedBy}</span>
-                  {request.department && <span className="text-gray-500">({request.department})</span>}
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-gray-400" />
-                  <span>Qty: {request.quantity}</span>
-                  {request.estimatedCost && <span className="text-gray-500">• ${request.estimatedCost.toFixed(2)}</span>}
-                </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusBadgeColor(request.status)}>
+                        {request.status}
+                      </Badge>
+                      <Badge className={getUrgencyBadgeColor(request.urgency)}>
+                        {request.urgency}
+                      </Badge>
+                    </div>
 
-                {request.expectedDelivery && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                    <span>Expected: {new Date(request.expectedDelivery).toLocaleDateString()}</span>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-gray-400" />
+                        <span>{request.requestedBy}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-gray-400" />
+                        <span>Qty: {request.quantity}</span>
+                        {request.estimatedCost && <span className="text-gray-500">• ${request.estimatedCost.toFixed(2)}</span>}
+                      </div>
+
+                      {request.supplier && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Supplier: {request.supplier}</span>
+                        </div>
+                      )}
+
+                      {request.expectedDelivery && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>Expected: {new Date(request.expectedDelivery).toLocaleDateString()}</span>
+                        </div>
+                      )}
+
+                      {request.reason && (
+                        <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                          {request.reason}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-
-                {request.reason && (
-                  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                    {request.reason}
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           ))}

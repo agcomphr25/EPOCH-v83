@@ -17,6 +17,13 @@ interface LineItem {
   quantity: number;
 }
 
+interface DiscountDetail {
+  name: string;
+  type: string;
+  value: number;
+  amount: number;
+}
+
 interface OrderSummary {
   orderId: string;
   orderDate: string;
@@ -27,6 +34,9 @@ interface OrderSummary {
   lineItems: LineItem[];
   pricing: {
     subtotal: number;
+    discounts: DiscountDetail[];
+    discountTotal: number;
+    afterDiscounts: number;
     total: number;
     override: boolean;
   };
@@ -187,12 +197,12 @@ export function BarcodeScanner() {
             </CardContent>
           </Card>
 
-          {/* Line Items */}
+          {/* Order Line Items */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Order Summary
+                <Package className="h-5 w-5" />
+                Order Contents
                 <span className="text-sm font-normal text-gray-500 ml-2">
                   (Pricing hidden for security)
                 </span>
@@ -201,14 +211,14 @@ export function BarcodeScanner() {
             <CardContent>
               <div className="space-y-3">
                 {orderSummary.lineItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-2">
+                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                     <div className="flex-1">
                       <div className="font-medium">{item.name}</div>
                       <div className="text-sm text-gray-600">{item.description}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs mt-1">
                         {item.type}
                       </Badge>
                     </div>
@@ -217,21 +227,21 @@ export function BarcodeScanner() {
                 
                 <Separator />
                 
-                <div className="space-y-2 pt-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="line-through text-gray-400">Hidden</span>
+                <div className="space-y-2 pt-2 text-center text-gray-500">
+                  <div className="flex items-center justify-center gap-2">
+                    <span>💰</span>
+                    <span>Pricing information is hidden for security</span>
                   </div>
-                  {orderSummary.pricing.override && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Price Override Applied:</span>
-                      <Badge variant="secondary" className="text-xs">Yes</Badge>
+                  {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
+                    <div className="text-sm text-blue-600">
+                      ✅ {orderSummary.pricing.discounts.length} discount(s) applied
                     </div>
                   )}
-                  <div className="flex justify-between font-semibold text-lg border-t pt-2">
-                    <span>Total:</span>
-                    <span className="line-through text-gray-400">Hidden</span>
-                  </div>
+                  {orderSummary.pricing.override && (
+                    <div className="text-sm text-orange-600">
+                      ⚠️ Custom pricing override applied
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

@@ -32,6 +32,19 @@ export default function OrderPlacementCard() {
   });
 
   // Extract unique suppliers from inventory items (excluding department codes)
+  // Function to normalize supplier names for consistency
+  const normalizeSupplierName = (name: string): string => {
+    if (!name) return name;
+    const trimmed = name.trim();
+    
+    // Handle common variations
+    if (trimmed.toLowerCase() === 'lowes') return "Lowe's";
+    if (trimmed.toLowerCase() === 'homedepot' || trimmed.toLowerCase() === 'home depot') return "Home Depot";
+    if (trimmed.toLowerCase() === 'walmart') return "Walmart";
+    
+    return trimmed;
+  };
+
   const availableSuppliers = useMemo(() => {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
@@ -42,14 +55,14 @@ export default function OrderPlacementCard() {
     
     inventoryItems.forEach((item: any) => {
       if (item?.source && typeof item.source === 'string' && item.source.trim()) {
-        const source = item.source.trim();
+        const source = normalizeSupplierName(item.source);
         // Only add if it's not a department code
         if (!departmentCodes.includes(source.toUpperCase())) {
           suppliers.add(source);
         }
       }
       if (item?.secondarySource && typeof item.secondarySource === 'string' && item.secondarySource.trim()) {
-        const secondarySource = item.secondarySource.trim();
+        const secondarySource = normalizeSupplierName(item.secondarySource);
         // Only add if it's not a department code
         if (!departmentCodes.includes(secondarySource.toUpperCase())) {
           suppliers.add(secondarySource);
@@ -73,9 +86,9 @@ export default function OrderPlacementCard() {
     
     // Filter items by selected supplier (matching source or secondarySource)
     const filteredItems = inventoryItems.filter((item: any) => {
-      const itemSource = item?.source?.trim();
-      const itemSecondarySource = item?.secondarySource?.trim();
-      const selectedSupplier = formData.supplierName.trim();
+      const itemSource = normalizeSupplierName(item?.source || '');
+      const itemSecondarySource = normalizeSupplierName(item?.secondarySource || '');
+      const selectedSupplier = normalizeSupplierName(formData.supplierName);
       
       return (itemSource === selectedSupplier) || (itemSecondarySource === selectedSupplier);
     });

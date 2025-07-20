@@ -1,0 +1,118 @@
+Department Progression & Pipeline Visualization**
+
+Generate a React + Tailwind + plain‑JS solution with these files:
+
+---
+
+### 1. Update “AllOrdersList” (`src/components/AllOrdersList.jsx`)
+
+- **Modify** existing table to:
+  - **Remove** the “Status” column
+  - **Add** a “Department” column displaying a badge:
+    - Badge color:  
+      - Green if `isOnSchedule === true`  
+      - Orange if `isOnSchedule === false`
+  - **Add** two action buttons per row:
+    1. **Complete {Current Department}**  
+       - Hidden when `currentDepartment === 'Shipping'`  
+       - On click, calls `completeDepartment(orderId)` (imported from `orderProgressUtils`)  
+         - For CNC, opens a modal to choose next department (Finish or Gunsmith)  
+    2. **Scrap Order**  
+       - Always visible  
+       - On click, opens `<ScrapOrderModal orderId={orderId} onComplete={reloadList} />`
+- **Enable** sorting & filtering by the “Department” column.
+
+---
+
+### 2. ScrapOrderModal (`src/components/ScrapOrderModal.jsx`)
+
+- **Props**: `{ orderId, onComplete }`
+- **Render** a Headless UI `<Dialog>` with:
+  - **Textarea** for scrap reason
+  - **Dropdown** for Disposition (`['Repair','Use-As-Is','Scrap']`)
+  - **Dropdown** for Authorization (`['Customer','AG','Matt','Glenn','Laurie']`)
+  - **Date** auto‑filled to `today` (read‑only)
+  - **Buttons**: “Cancel” & “Confirm Scrap”
+- **On Confirm**:
+  1. `POST /api/orders/{orderId}/scrap` with `{ reason, disposition, authorization, scrapDate }`  
+  2. `POST /api/orders/{orderId}/reload-replacement` → creates replacement order inheriting `priorityScore`, `rushTier`, and `poId`  
+  3. Close modal & call `onComplete()`, toast success.
+
+---
+
+### 3. orderProgressUtils (`src/utils/orderProgressUtils.js`)
+
+- **Export**:
+  ```js
+  async function completeDepartment(orderId, nextDept?) {
+    // If nextDept provided (for CNC), include it; otherwise backend uses the model’s default path.
+    return axios.post(`/api/orders/${orderId}/progress`, { nextDepartment: nextDept });
+  }
+  async function scrapOrder(orderId, payload) {
+    return axios.post(`/api/orders/${orderId}/scrap`, payload);
+  }
+  async function fetchAllOrders() {
+    return axios.get('/api/orders?view=all&includeDept&includeScheduleFlag');
+  }
+Use axios for calls; include inline comments.
+
+4. PipelineVisualization (src/components/PipelineVisualization.jsx)
+Imports:
+
+js
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+State: { counts: { [deptName]: number } }
+
+On mount:
+
+GET /api/orders/pipeline-counts → { Layup: 23, Plugging: 12, … Shipping: 5 }
+
+Render a horizontal “pipeline”:
+
+jsx
+Copy
+Edit
+<div className="flex space-x-2">
+  {['Layup','Plugging','CNC','Finish','Gunsmith','Paint','QC','Shipping'].map(dept => (
+    <div key={dept} className="flex-1 p-2 text-center border rounded">
+      <div className="font-semibold">{dept}</div>
+      <div
+        className={`mt-1 w-full h-4 rounded ${
+          counts[dept] <= expectedPerDept[dept] ? 'bg-green-500' : 'bg-orange-500'
+        }`}
+      />
+      <div className="mt-1 text-sm">{counts[dept]}</div>
+    </div>
+  ))}
+</div>
+expectedPerDept can be a constant map (e.g. non‑Adj model lead times breakdown).
+
+5. Dependencies
+bash
+Copy
+Edit
+npm install axios react-hot-toast @headlessui/react react-beautiful-dnd date-fns
+Usage Snippets
+
+All Orders Page (src/pages/AllOrdersPage.jsx):
+
+jsx
+Copy
+Edit
+import React from 'react';
+import AllOrdersList from '../components/AllOrdersList';
+import PipelineVisualization from '../components/PipelineVisualization';
+
+export default function AllOrdersPage() {
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">All Orders</h1>
+      <PipelineVisualization />
+      <AllOrdersList />
+    </div>
+  );
+}
+Paste this prompt into your code‑gen model to scaffold the department‑progression UI, scrap workflow, and pipeline overview. 

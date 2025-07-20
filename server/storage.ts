@@ -1,11 +1,11 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orderDrafts, forms, formSubmissions,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
   molds, employeeLayupSettings, layupOrders, layupSchedule,
-  type User, type InsertUser, type CSVData, type InsertCSVData,
+  type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
   type ShortTermSale, type InsertShortTermSale,
@@ -44,7 +44,7 @@ import {
   type LayupSchedule, type InsertLayupSchedule
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike } from "drizzle-orm";
+import { eq, desc, and, or, ilike, isNull, sql, ne } from "drizzle-orm";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -286,6 +286,12 @@ export interface IStorage {
   updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule>;
   deleteLayupSchedule(id: number): Promise<void>;
   overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
+
+  // Department Progression Methods
+  getPipelineCounts(): Promise<Record<string, number>>;
+  progressOrder(orderId: string, nextDepartment?: string): Promise<Order>;
+  scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<Order>;
+  createReplacementOrder(scrapOrderId: string): Promise<Order>;
 
 }
 
@@ -674,6 +680,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<OrderDraft[]> {
+    // For now, return from orderDrafts table as it has the order data
+    // In the future, this could be changed to use the main orders table
     return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
   }
 
@@ -1704,6 +1712,169 @@ export class DatabaseStorage implements IStorage {
 
     const [result] = await db.insert(layupSchedule).values(data).returning();
     return result;
+  }
+
+  // Department Progression Methods
+  async getPipelineCounts(): Promise<Record<string, number>> {
+    try {
+      // Use GROUP BY to count orders by current department
+      const results = await db
+        .select({ 
+          department: orders.currentDepartment, 
+          count: sql<number>`count(*)::integer`
+        })
+        .from(orders)
+        .where(
+          and(
+            ne(orders.status, 'SCRAPPED'), // Only count active orders
+            isNull(orders.scrapDate)       // Exclude scrapped orders
+          )
+        )
+        .groupBy(orders.currentDepartment);
+
+      // Convert to object format
+      const counts: Record<string, number> = {};
+      results.forEach(result => {
+        if (result.department) {
+          counts[result.department] = result.count;
+        }
+      });
+
+      return counts;
+    } catch (error) {
+      console.error('Error getting pipeline counts:', error);
+      return {};
+    }
+  }
+
+  async progressOrder(orderId: string, nextDepartment?: string): Promise<Order> {
+    try {
+      // Find the current order
+      const [currentOrder] = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.orderId, orderId));
+
+      if (!currentOrder) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      // Department progression logic
+      const departmentFlow = [
+        'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+      ];
+
+      let nextDept = nextDepartment;
+      if (!nextDept) {
+        const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment);
+        if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
+          throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+        }
+        nextDept = departmentFlow[currentIndex + 1];
+      }
+
+      // Prepare completion timestamp update based on current department
+      const completionUpdates: any = {};
+      const now = new Date();
+      
+      switch (currentOrder.currentDepartment) {
+        case 'Layup': completionUpdates.layupCompletedAt = now; break;
+        case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
+        case 'CNC': completionUpdates.cncCompletedAt = now; break;
+        case 'Finish': completionUpdates.finishCompletedAt = now; break;
+        case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+        case 'Paint': completionUpdates.paintCompletedAt = now; break;
+        case 'QC': completionUpdates.qcCompletedAt = now; break;
+        case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
+      }
+
+      // Update the order
+      const [updatedOrder] = await db
+        .update(orders)
+        .set({
+          currentDepartment: nextDept,
+          ...completionUpdates,
+          updatedAt: now
+        })
+        .where(eq(orders.orderId, orderId))
+        .returning();
+
+      return updatedOrder;
+    } catch (error) {
+      console.error('Error progressing order:', error);
+      throw error;
+    }
+  }
+
+  async scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<Order> {
+    try {
+      const [updatedOrder] = await db
+        .update(orders)
+        .set({
+          scrapDate: scrapData.scrapDate,
+          scrapReason: scrapData.reason,
+          scrapDisposition: scrapData.disposition,
+          scrapAuthorization: scrapData.authorization,
+          status: 'SCRAPPED',
+          updatedAt: new Date()
+        })
+        .where(eq(orders.orderId, orderId))
+        .returning();
+
+      if (!updatedOrder) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      return updatedOrder;
+    } catch (error) {
+      console.error('Error scrapping order:', error);
+      throw error;
+    }
+  }
+
+  async createReplacementOrder(scrapOrderId: string): Promise<Order> {
+    try {
+      // Find the scrapped order
+      const [scrapOrder] = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.orderId, scrapOrderId));
+
+      if (!scrapOrder) {
+        throw new Error(`Scrapped order ${scrapOrderId} not found`);
+      }
+
+      // Generate new order ID for replacement
+      const newOrderId = await this.generateNextOrderId();
+
+      // Create replacement order with same details but new ID
+      const [replacementOrder] = await db
+        .insert(orders)
+        .values({
+          orderId: newOrderId,
+          customer: scrapOrder.customer,
+          product: scrapOrder.product,
+          quantity: scrapOrder.quantity,
+          status: 'ACTIVE',
+          date: new Date(),
+          currentDepartment: 'Layup', // Reset to start of pipeline
+          isOnSchedule: true,
+          priorityScore: scrapOrder.priorityScore,
+          rushTier: scrapOrder.rushTier,
+          poId: scrapOrder.poId,
+          dueDate: scrapOrder.dueDate,
+          isReplacement: true,
+          replacedOrderId: scrapOrderId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      return replacementOrder;
+    } catch (error) {
+      console.error('Error creating replacement order:', error);
+      throw error;
+    }
   }
 
 }

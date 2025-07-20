@@ -42,7 +42,8 @@ import {
   insertMoldSchema,
   insertEmployeeLayupSettingsSchema,
   insertLayupOrderSchema,
-  insertLayupScheduleSchema
+  insertLayupScheduleSchema,
+  insertOrderSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -3139,6 +3140,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Layup schedule deletion error:", error);
       res.status(500).json({ error: "Failed to delete layup schedule" });
+    }
+  });
+
+  // Department Progression API Routes
+  
+  // Get all orders with department information
+  app.get("/api/orders", async (req, res) => {
+    try {
+      const { view, includeDept, includeScheduleFlag } = req.query;
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Orders fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  // Get pipeline counts for all departments
+  app.get("/api/orders/pipeline-counts", async (req, res) => {
+    try {
+      const counts = await storage.getPipelineCounts();
+      res.json(counts);
+    } catch (error) {
+      console.error("Pipeline counts fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch pipeline counts" });
+    }
+  });
+
+  // Progress an order to the next department
+  app.post("/api/orders/:orderId/progress", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { nextDepartment } = req.body;
+      const result = await storage.progressOrder(orderId, nextDepartment);
+      res.json(result);
+    } catch (error) {
+      console.error("Order progress error:", error);
+      res.status(500).json({ error: "Failed to progress order" });
+    }
+  });
+
+  // Scrap an order
+  app.post("/api/orders/:orderId/scrap", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { reason, disposition, authorization, scrapDate } = req.body;
+      const result = await storage.scrapOrder(orderId, {
+        reason,
+        disposition,
+        authorization,
+        scrapDate: new Date(scrapDate)
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Order scrap error:", error);
+      res.status(500).json({ error: "Failed to scrap order" });
+    }
+  });
+
+  // Create replacement order after scrapping
+  app.post("/api/orders/:orderId/reload-replacement", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const result = await storage.createReplacementOrder(orderId);
+      res.json(result);
+    } catch (error) {
+      console.error("Replacement order error:", error);
+      res.status(500).json({ error: "Failed to create replacement order" });
     }
   });
 

@@ -17,6 +17,31 @@ export const orders = pgTable("orders", {
   quantity: integer("quantity").notNull(),
   status: text("status").notNull(),
   date: timestamp("date").notNull(),
+  // Department progression fields
+  currentDepartment: text("current_department").default("Layup").notNull(),
+  isOnSchedule: boolean("is_on_schedule").default(true),
+  priorityScore: integer("priority_score").default(50), // Lower = higher priority
+  rushTier: text("rush_tier"), // e.g., "STANDARD", "RUSH", "EXPEDITE"
+  poId: text("po_id"), // Reference to purchase order
+  dueDate: timestamp("due_date"),
+  // Track department completion timestamps
+  layupCompletedAt: timestamp("layup_completed_at"),
+  pluggingCompletedAt: timestamp("plugging_completed_at"),
+  cncCompletedAt: timestamp("cnc_completed_at"),
+  finishCompletedAt: timestamp("finish_completed_at"),
+  gunsmithCompletedAt: timestamp("gunsmith_completed_at"),
+  paintCompletedAt: timestamp("paint_completed_at"),
+  qcCompletedAt: timestamp("qc_completed_at"),
+  shippingCompletedAt: timestamp("shipping_completed_at"),
+  // Scrapping fields
+  scrapDate: timestamp("scrap_date"),
+  scrapReason: text("scrap_reason"),
+  scrapDisposition: text("scrap_disposition"), // REPAIR, USE_AS_IS, SCRAP
+  scrapAuthorization: text("scrap_authorization"), // CUSTOMER, AG, MATT, GLENN, LAURIE
+  isReplacement: boolean("is_replacement").default(false),
+  replacedOrderId: text("replaced_order_id"), // Reference to original order if this is a replacement
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const csvData = pgTable("csv_data", {
@@ -322,6 +347,21 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  customer: z.string().min(1, "Customer is required"),
+  product: z.string().min(1, "Product is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  status: z.string().min(1, "Status is required"),
+  date: z.coerce.date(),
+  currentDepartment: z.string().default("Layup"),
+  isOnSchedule: z.boolean().default(true),
+  priorityScore: z.number().default(50),
+  rushTier: z.string().optional().nullable(),
+  poId: z.string().optional().nullable(),
+  dueDate: z.coerce.date().optional().nullable(),
 });
 
 export const insertCSVDataSchema = createInsertSchema(csvData).omit({

@@ -381,6 +381,13 @@ export default function OrdersList() {
                         <Button variant="outline" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => window.location.href = `/all-orders-progression`}
+                        >
+                          Department Progression
+                        </Button>
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 

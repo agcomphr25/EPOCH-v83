@@ -1,0 +1,461 @@
+Layup Scheduler 🔨🤖🔧
+
+1. Project Structure
+
+css
+Copy
+Edit
+src/
+├── components/
+│   └── LayupScheduler.jsx
+├── hooks/
+│   ├── useEmployeeSettings.js
+│   ├── useLayupOrders.js
+│   └── useMoldSettings.js
+└── utils/
+    └── schedulerUtils.js
+You’ll also need to install dependencies:
+
+bash
+Copy
+Edit
+npm install axios react-beautiful-dnd date-fns
+2. Scheduler Utilities (src/utils/schedulerUtils.js)
+
+js
+Copy
+Edit
+// src/utils/schedulerUtils.js
+export function generateLayupSchedule(orders, moldSettings, employeeSettings) {
+  // 1. Compute capacities
+  const enabledMolds = moldSettings.filter(m => m.enabled);
+  const totalDailyMoldCapacity = enabledMolds.reduce((sum, m) => sum + m.multiplier, 0);
+
+  const employeeDailyCapacities = employeeSettings.reduce((map, emp) => {
+    map[emp.employeeId] = emp.rate * emp.hours;
+    return map;
+  }, {});
+  const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
+
+  // 2. Sort orders by priorityScore ascending
+  const sortedOrders = [...orders].sort((a, b) => a.priorityScore - b.priorityScore);
+
+  // 3. Track usage per date
+  const dateMoldUsage = {};       // { 'YYYY-MM-DD': { [moldId]: count, totalUsed } }
+  const dateEmployeeUsage = {};   // { 'YYYY-MM-DD': { [empId]: used } }
+
+  // Helper to format date key
+  const toKey = d => d.toISOString().slice(0, 10);
+
+  // 4. Allocate
+  const result = sortedOrders.map(order => {
+    let dt = new Date(order.orderDate);
+    while (true) {
+      const key = toKey(dt);
+      // initialize if needed
+      if (!dateMoldUsage[key]) {
+        dateMoldUsage[key] = { totalUsed: 0 };
+        enabledMolds.forEach(m => dateMoldUsage[key][m.moldId] = 0);
+      }
+      if (!dateEmployeeUsage[key]) {
+        dateEmployeeUsage[key] = {};
+        employeeSettings.forEach(emp => dateEmployeeUsage[key][emp.employeeId] = 0);
+      }
+
+      const moldSlot = enabledMolds.find(m =>
+        dateMoldUsage[key][m.moldId] < m.multiplier
+      );
+
+      const hasMoldCapacity = dateMoldUsage[key].totalUsed < totalDailyMoldCapacity && !!moldSlot;
+      const hasEmpCapacity = Object.values(dateEmployeeUsage[key]).reduce((a,b) => a+b, 0) < totalDailyEmployeeCapacity;
+
+      if (hasMoldCapacity && hasEmpCapacity) {
+        // assign to moldSlot
+        dateMoldUsage[key][moldSlot.moldId]++;
+        dateMoldUsage[key].totalUsed++;
+
+        // assign to first available employee
+        const emp = employeeSettings.find(e =>
+          dateEmployeeUsage[key][e.employeeId] < employeeDailyCapacities[e.employeeId]
+        );
+        dateEmployeeUsage[key][emp.employeeId]++;
+
+        return {
+          orderId: order.orderId,
+          scheduledDate: new Date(dt),
+          moldId: moldSlot.moldId,
+          employeeAssignments: [
+            { employeeId: emp.employeeId, workload: 1 }
+          ]
+        };
+      }
+
+      // move to next day
+      dt.setDate(dt.getDate() + 1);
+    }
+  });
+
+  return result;
+}
+3. Settings & Data Hooks
+
+All hooks use Axios under the hood and expose both data and “save/update” functions.
+
+src/hooks/useMoldSettings.js
+
+js
+Copy
+Edit
+// src/hooks/useMoldSettings.js
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+export default function useMoldSettings() {
+  const [molds, setMolds] = useState([]);
+
+  const fetchMolds = async () => {
+    const { data } = await axios.get('/api/molds');
+    setMolds(data);
+  };
+
+  useEffect(() => {
+    fetchMolds();
+  }, []);
+
+  const saveMold = async (updatedMold) => {
+    await axios.put(`/api/molds/${updatedMold.moldId}`, updatedMold);
+    setMolds(ms =>
+      ms.map(m => (m.moldId === updatedMold.moldId ? updatedMold : m))
+    );
+  };
+
+  return { molds, saveMold };
+}
+src/hooks/useEmployeeSettings.js
+
+js
+Copy
+Edit
+// src/hooks/useEmployeeSettings.js
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+export default function useEmployeeSettings() {
+  const [employees, setEmployees] = useState([]);
+
+  const fetchEmployees = async () => {
+    const { data } = await axios.get('/api/employees?dept=Layup');
+    setEmployees(data);
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const saveEmployee = async (updatedEmp) => {
+    await axios.put(`/api/employees/${updatedEmp.employeeId}/settings`, updatedEmp);
+    setEmployees(es =>
+      es.map(e => (e.employeeId === updatedEmp.employeeId ? updatedEmp : e))
+    );
+  };
+
+  return { employees, saveEmployee };
+}
+src/hooks/useLayupOrders.js
+
+js
+Copy
+Edit
+// src/hooks/useLayupOrders.js
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+export default function useLayupOrders() {
+  const [orders, setOrders] = useState([]);
+
+  const fetchOrders = async () => {
+    const { data } = await axios.get('/api/orders?status=FINALIZED&dept=Layup');
+    setOrders(data);
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  return { orders, reloadOrders: fetchOrders };
+}
+4. LayupScheduler Component (src/components/LayupScheduler.jsx)
+
+jsx
+Copy
+Edit
+// src/components/LayupScheduler.jsx
+import React, { useState, useMemo } from 'react';
+import { generateLayupSchedule } from '../utils/schedulerUtils';
+import useMoldSettings from '../hooks/useMoldSettings';
+import useEmployeeSettings from '../hooks/useEmployeeSettings';
+import useLayupOrders from '../hooks/useLayupOrders';
+import axios from 'axios';
+import {
+  DragDropContext,
+  Droppable,
+  Draggable
+} from 'react-beautiful-dnd';
+import {
+  addDays,
+  format,
+  isSameDay,
+  startOfWeek,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval
+} from 'date-fns';
+
+export default function LayupScheduler() {
+  const [viewType, setViewType] = useState('week'); // 'day' | 'week' | 'month'
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const { molds, saveMold } = useMoldSettings();
+  const { employees, saveEmployee } = useEmployeeSettings();
+  const { orders, reloadOrders } = useLayupOrders();
+
+  const schedule = useMemo(
+    () => generateLayupSchedule(orders, molds, employees),
+    [orders, molds, employees]
+  );
+
+  // Build date columns
+  const dates = useMemo(() => {
+    if (viewType === 'day') return [currentDate];
+    if (viewType === 'week') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      return eachDayOfInterval({ start, end: addDays(start, 6) });
+    }
+    // month
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    return eachDayOfInterval({ start, end });
+  }, [viewType, currentDate]);
+
+  const numCols = dates.length;
+
+  function onDragEnd(result) {
+    const { draggableId: orderId, destination } = result;
+    if (!destination) return;
+
+    const [moldId, dateIso] = destination.droppableId.split('|');
+    const newDate = new Date(dateIso);
+
+    axios
+      .post(`/api/orders/${orderId}/override`, {
+        newDate: newDate.toISOString(),
+        moldId
+      })
+      .then(() => {
+        reloadOrders();
+      })
+      .catch(err => {
+        console.error('Override failed', err);
+      });
+  }
+
+  return (
+    <div className="flex h-full">
+      {/* Sidebar */}
+      <aside className="w-1/4 p-4 space-y-6 border-r overflow-auto">
+        <h2 className="text-lg font-semibold">Mold Settings</h2>
+        {molds.map(m => (
+          <div key={m.moldId} className="flex items-center space-x-2">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={m.enabled}
+                onChange={() => saveMold({ ...m, enabled: !m.enabled })}
+              />
+              <span className="ml-1">{m.modelName} #{m.instanceNumber}</span>
+            </label>
+            <input
+              type="number"
+              value={m.multiplier}
+              min={1}
+              onChange={e =>
+                saveMold({ ...m, multiplier: +e.target.value })
+              }
+              className="w-12 border rounded px-1"
+            />
+          </div>
+        ))}
+
+        <h2 className="text-lg font-semibold">Employee Settings</h2>
+        {employees.map(emp => (
+          <div key={emp.employeeId} className="space-y-1">
+            <div className="font-medium">{emp.name}</div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                value={emp.rate}
+                onChange={e =>
+                  saveEmployee({ ...emp, rate: +e.target.value })
+                }
+                className="w-16 border rounded px-1"
+              />
+              <span>molds/hr</span>
+              <input
+                type="number"
+                value={emp.hours}
+                onChange={e =>
+                  saveEmployee({ ...emp, hours: +e.target.value })
+                }
+                className="w-16 border rounded px-1"
+              />
+              <span>hrs</span>
+            </div>
+          </div>
+        ))}
+      </aside>
+
+      {/* Calendar */}
+      <main className="flex-1 p-4 overflow-auto">
+        <div className="flex justify-between items-center mb-4">
+          <div className="space-x-2">
+            <button
+              className="px-2 py-1 border rounded"
+              onClick={() => setViewType('day')}
+            >
+              Day
+            </button>
+            <button
+              className="px-2 py-1 border rounded"
+              onClick={() => setViewType('week')}
+            >
+              Week
+            </button>
+            <button
+              className="px-2 py-1 border rounded"
+              onClick={() => setViewType('month')}
+            >
+              Month
+            </button>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              className="px-2 py-1 border rounded"
+              onClick={() =>
+                setCurrentDate(prev => addDays(prev, -1))
+              }
+            >
+              ‹
+            </button>
+            <span className="px-2">
+              {format(
+                currentDate,
+                viewType === 'week' ? 'MM/dd/yyyy' : 'MMMM yyyy'
+              )}
+            </span>
+            <button
+              className="px-2 py-1 border rounded"
+              onClick={() =>
+                setCurrentDate(prev => addDays(prev, 1))
+              }
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div
+            className="grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${numCols}, 1fr)` }}
+          >
+            {/* Header */}
+            {dates.map(date => (
+              <div
+                key={date.toISOString()}
+                className="p-2 border bg-gray-100 text-center font-semibold"
+              >
+                {format(date, 'MM/dd')}
+              </div>
+            ))}
+
+            {/* Rows */}
+            {molds.map(mold => (
+              <React.Fragment key={mold.moldId}>
+                {dates.map(date => {
+                  const cellOrders = schedule.filter(s =>
+                    s.moldId === mold.moldId &&
+                    isSameDay(s.scheduledDate, date)
+                  );
+                  const dropId = `${mold.moldId}|${date.toISOString()}`;
+
+                  return (
+                    <Droppable droppableId={dropId} key={dropId}>
+                      {provided => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className="min-h-[80px] border p-1 bg-white"
+                        >
+                          {cellOrders.map((s, idx) => (
+                            <Draggable
+                              key={s.orderId}
+                              draggableId={s.orderId}
+                              index={idx}
+                            >
+                              {prov => (
+                                <div
+                                  ref={prov.innerRef}
+                                  {...prov.draggableProps}
+                                  {...prov.dragHandleProps}
+                                  className="mb-1 p-1 bg-blue-50 rounded shadow text-sm"
+                                >
+                                  {s.orderId} (#{s.priorityScore})
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </DragDropContext>
+      </main>
+    </div>
+  );
+}
+5. Routing
+
+In your main router (e.g. App.jsx):
+
+jsx
+Copy
+Edit
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import LayupScheduler from './components/LayupScheduler';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* ...other routes */}
+        <Route path="/layup-scheduler" element={<LayupScheduler />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+You now have a fully interactive layup scheduler with:
+
+📦 Mold & employee settings in sidebar
+
+📅 Day/Week/Month calendar grid
+
+🔀 Drag-and-drop reordering that writes back overrides
+
+⚙️ Core scheduling logic in one reusable utility

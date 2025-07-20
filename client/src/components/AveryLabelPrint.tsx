@@ -85,7 +85,6 @@ export function AveryLabelPrint({
         
         const generateLabelContent = () => {
           const actionLengthModel = `${actionLength || ''} ${stockModel || ''}`.trim();
-          const paintOptionFormatted = `Paint Option: ${paintOption || 'Standard'}`;
           
           return `
             <div class="label-content">
@@ -93,7 +92,7 @@ export function AveryLabelPrint({
               <div class="line2">
                 <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
               </div>
-              <div class="line3">${paintOptionFormatted}</div>
+              <div class="line3">${paintOption || 'Standard'}</div>
               <div class="line4">${customerName || 'N/A'}</div>
               <div class="line5">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>
@@ -283,9 +282,9 @@ export function AveryLabelPrint({
                   </div>
                 )}
               </div>
-              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`Paint Option: ${paintOption || 'Standard'}`}>
-                Paint Option: {(paintOption || 'Standard').length > 15 ? 
-                  `${(paintOption || 'Standard').substring(0, 15)}...` : 
+              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={paintOption || 'Standard'}>
+                {(paintOption || 'Standard').length > 20 ? 
+                  `${(paintOption || 'Standard').substring(0, 20)}...` : 
                   (paintOption || 'Standard')
                 }
               </div>

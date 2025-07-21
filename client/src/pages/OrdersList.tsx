@@ -83,7 +83,7 @@ export default function OrdersList() {
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
-        body: JSON.stringify({ nextDepartment })
+        body: { nextDepartment }
       });
     },
     onSuccess: () => {

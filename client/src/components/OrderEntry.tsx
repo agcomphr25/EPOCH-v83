@@ -287,37 +287,57 @@ export default function OrderEntry() {
               </div>
 
               {/* Customer Selection */}
-              <div>
-                <Label>Customer</Label>
-                <CustomerSearchInput
-                  value={customer}
-                  onValueChange={setCustomer}
-                  placeholder="Search customer..."
-                  error={errors.customer}
-                />
-                {hasCustomerPO && (
-                  <div className="mt-2">
-                    <Label htmlFor="customerPO">Customer PO</Label>
-                    <Input
-                      id="customerPO"
-                      value={customerPO}
-                      onChange={(e) => setCustomerPO(e.target.value)}
-                      placeholder="Enable Customer PO"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* FB Order and Custom Order */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="fbOrder">FB Order #</Label>
-                  <Input
-                    id="fbOrder"
-                    value={fbOrderNumber}
-                    onChange={(e) => setFbOrderNumber(e.target.value)}
-                    placeholder="Enter FB Order #"
+                  <Label>Customer</Label>
+                  <CustomerSearchInput
+                    value={customer}
+                    onValueChange={setCustomer}
+                    placeholder="Search customer..."
+                    error={errors.customer}
                   />
+                </div>
+                <div>
+                  <Label>Customer PO</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      value={customerPO}
+                      onChange={(e) => setCustomerPO(e.target.value)}
+                      placeholder=""
+                      disabled={!hasCustomerPO}
+                    />
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setHasCustomerPO(!hasCustomerPO)}
+                      className="text-blue-600 p-0 h-auto"
+                    >
+                      Enable Customer PO
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* FB Order and AGR Order */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>FB Order #</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      value={fbOrderNumber}
+                      onChange={(e) => setFbOrderNumber(e.target.value)}
+                      placeholder="Enter FB Order #"
+                    />
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="text-blue-600 p-0 h-auto"
+                    >
+                      Enable AGR Order
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center space-x-2 pt-6">
                   <Checkbox
@@ -332,208 +352,214 @@ export default function OrderEntry() {
               {/* Stock Model Selection */}
               <div>
                 <Label>Stock Model</Label>
-                <Popover open={modelOpen} onOpenChange={setModelOpen}>
-                  <PopoverTrigger asChild>
+                <Select value={modelId} onValueChange={setModelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select or search model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelOptions.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedModel && (
+                  <div className="mt-2 flex gap-2">
                     <Button
+                      type="button"
                       variant="outline"
-                      role="combobox"
-                      aria-expanded={modelOpen}
-                      className="w-full justify-between"
+                      size="sm"
+                      className="text-yellow-600 border-yellow-600"
                     >
-                      {selectedModel ? selectedModel.displayName : "Select stock model..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      📍 Alamo Pine Premium
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search stock models..." />
-                      <CommandEmpty>No stock model found.</CommandEmpty>
-                      <CommandList>
-                        <CommandGroup>
-                          {modelOptions.map((model) => (
-                            <CommandItem
-                              key={model.id}
-                              value={model.displayName}
-                              onSelect={() => {
-                                setModelId(model.id);
-                                setModelOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${
-                                  modelId === model.id ? "opacity-100" : "opacity-0"
-                                }`}
-                              />
-                              <div className="flex items-center justify-between w-full">
-                                <span>{model.displayName}</span>
-                                <Badge variant="secondary">${model.price}</Badge>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                    <Button
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      className="text-blue-600 border-blue-600"
+                    >
+                      💧 Overcast Pine
+                    </Button>
+                  </div>
+                )}
                 {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}
               </div>
 
-              {/* Product Features */}
-              <div className="space-y-4">
-                {/* Handedness */}
-                <div>
-                  <Label>Handedness</Label>
-                  <Select value={handedness} onValueChange={setHandedness}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select handedness..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="right">Right</SelectItem>
-                      <SelectItem value="left">Left</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Product Features - Two Column Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  {/* Handedness */}
+                  <div>
+                    <Label>Handedness</Label>
+                    <Select value={handedness} onValueChange={setHandedness}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select handedness..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="right">Right</SelectItem>
+                        <SelectItem value="left">Left</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Action Inlet */}
+                  <div>
+                    <Label>Action Inlet</Label>
+                    <Input
+                      value={features.action_inlet || ''}
+                      onChange={(e) => setFeatures(prev => ({ ...prev, action_inlet: e.target.value }))}
+                      placeholder="Select..."
+                    />
+                  </div>
+
+                  {/* Barrel Inlet */}
+                  <div>
+                    <Label>Barrel Inlet</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="heavy">Heavy</SelectItem>
+                        <SelectItem value="bull">Bull</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* LOP Length Of Pull */}
+                  <div>
+                    <Label>LOP Length Of Pull</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Texture */}
+                  <div>
+                    <Label>Texture</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="heavy">Heavy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Other Options */}
+                  <div>
+                    <Label>Other Options</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select or search..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None selected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {/* Action Length */}
-                <div>
-                  <Label>Action Length</Label>
-                  <Select value={actionLength} onValueChange={setActionLength}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Short" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="short">Short</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="long">Long</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Right Column */}
+                <div className="space-y-4">
+                  {/* Action Length */}
+                  <div>
+                    <Label>Action Length</Label>
+                    <Select value={actionLength} onValueChange={setActionLength}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Short" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">Short</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="long">Long</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Action Inlet */}
-                <div>
-                  <Label>Action Inlet</Label>
-                  <Input
-                    value={features.action_inlet || ''}
-                    onChange={(e) => setFeatures(prev => ({ ...prev, action_inlet: e.target.value }))}
-                    placeholder="Select..."
-                  />
-                </div>
+                  {/* Bottom Metal */}
+                  <div>
+                    <Label>Bottom Metal</Label>
+                    <Input
+                      value={bottomMetal}
+                      onChange={(e) => setBottomMetal(e.target.value)}
+                      placeholder=""
+                    />
+                  </div>
 
-                {/* Barrel Inlet */}
-                <div>
-                  <Label>Barrel Inlet</Label>
-                  <Input
-                    value={barrelInlet}
-                    onChange={(e) => setBarrelInlet(e.target.value)}
-                    placeholder="Select..."
-                  />
-                </div>
+                  {/* QD Quick Detach Cups */}
+                  <div>
+                    <Label>QD Quick Detach Cups</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="front">Front</SelectItem>
+                        <SelectItem value="rear">Rear</SelectItem>
+                        <SelectItem value="both">Both</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Bottom Metal */}
-                <div>
-                  <Label>Bottom Metal</Label>
-                  <Input
-                    value={bottomMetal}
-                    onChange={(e) => setBottomMetal(e.target.value)}
-                    placeholder=""
-                  />
-                </div>
+                  {/* Rails */}
+                  <div>
+                    <Label>Rails</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select options..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="picatinny">Picatinny Rail</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* QD Quick Detach Cups */}
-                <div>
-                  <Label>QD Quick Detach Cups</Label>
-                  <Input
-                    value={qdQuickDetach}
-                    onChange={(e) => setQdQuickDetach(e.target.value)}
-                    placeholder="Select..."
-                  />
-                </div>
+                  {/* Swivel Studs */}
+                  <div>
+                    <Label>Swivel Studs</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="qd">QD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* LOP Length Of Pull */}
-                <div>
-                  <Label>LOP Length Of Pull</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">Standard</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Rails */}
-                <div>
-                  <Label>Rails</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select options..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="picatinny">Picatinny Rail</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Texture */}
-                <div>
-                  <Label>Texture</Label>
-                  <Select value={texture} onValueChange={setTexture}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="heavy">Heavy</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Swivel Studs */}
-                <div>
-                  <Label>Swivel Studs</Label>
-                  <Select value={swivelStuds} onValueChange={setSwivelStuds}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="standard">Standard</SelectItem>
-                      <SelectItem value="qd">QD</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Other Options */}
-                <div>
-                  <Label>Other Options</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select or search..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None selected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Paint Options */}
-                <div>
-                  <Label>Paint Options</Label>
-                  <Select value={paintOptions} onValueChange={setPaintOptions}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select or search..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="primer">Primer Only</SelectItem>
-                      <SelectItem value="custom">Custom Paint</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Paint Options */}
+                  <div>
+                    <Label>Paint Options</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select or search..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="primer">Primer Only</SelectItem>
+                        <SelectItem value="custom">Custom Paint</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 

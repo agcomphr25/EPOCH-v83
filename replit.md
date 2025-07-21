@@ -10,6 +10,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 21, 2025 - Fixed Order Entry Page Database Errors and Restored Correct Form Layout**
+- ✅ Fixed NaN database errors in draft order route by adding proper ID validation
+- ✅ Restored Order Entry form to clean, working state matching the original screenshot
+- ✅ Implemented proper 2-column layout for product features section
+- ✅ Added correct Customer PO and FB Order field functionality with enable/disable toggles
+- ✅ Fixed Stock Model selection with proper dropdown and model buttons
+- ✅ Organized form fields in correct order: Handedness, Action Length, Action Inlet, Bottom Metal, etc.
+- ✅ Maintained clean Order Summary section with detailed pricing breakdown
+- ✅ Resolved backend route parsing issues that were causing 500 errors
+- ✅ Application working correctly with proper form validation and submission
+
 **July 21, 2025 - Fixed Order Entry Page Internal Server Error**
 - ✅ Resolved internal server error when refreshing order entry page
 - ✅ Fixed order ID generation API endpoints (/api/orders/last-id and /api/orders/generate-id)

@@ -159,8 +159,17 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               .part-info { font-size: 8px; margin: 1px 0; font-weight: bold; line-height: 1.1; }
               .expiration { font-size: 6px; margin: 1px 0; color: #333; line-height: 1; }
               @media print {
-                body { margin: 0; }
-                .barcode-label { margin: 5px; }
+                body { margin: 0; padding: 0; }
+                .barcode-label { 
+                  margin: 1px; 
+                  width: 2.625in; 
+                  height: 1in;
+                  border: 1px solid #000;
+                }
+                @page {
+                  size: 2.625in 1in;
+                  margin: 0;
+                }
               }
             </style>
           </head>

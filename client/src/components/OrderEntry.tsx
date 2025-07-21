@@ -408,6 +408,38 @@ export default function OrderEntry() {
 
   const pricing = calculateTotal();
 
+  // Reset form to initial state
+  const resetForm = () => {
+    setCustomer(null);
+    setModelId('');
+    setFeatures({});
+    setOrderDate(new Date());
+    setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    setOrderId('');
+    setHasCustomerPO(false);
+    setCustomerPO('');
+    setFbOrderNumber('');
+    setHasAgrOrder(false);
+    setAgrOrderDetails('');
+    setHandedness('');
+    setShankLength('');
+    setDiscountCode('');
+    setCustomDiscountType('percent');
+    setCustomDiscountValue(0);
+    setShowCustomDiscount(false);
+    setShipping(36.95);
+    setMarkAsPaid(false);
+    setAdditionalItems([]);
+    setPayments([]);
+    setFeatureQuantities({});
+    setTikkaOption('');
+    setOrderStatus('DRAFT');
+    setErrors({});
+    
+    // Generate new order ID for next order
+    generateOrderId();
+  };
+
   const handleSubmit = async (action: 'save' | 'confirm' | 'finalize') => {
     setErrors({});
     const isSubmittingState = action === 'save' ? setIsSubmitting : (action === 'confirm' ? setIsConfirming : setIsFinalizing);
@@ -474,18 +506,27 @@ export default function OrderEntry() {
           title: "Success",
           description: "Order saved as draft",
         });
+        // Don't reset form for draft saves
       } else if (action === 'confirm') {
         toast({
           title: "Success", 
           description: "Order confirmed successfully",
         });
         setOrderStatus('CONFIRMED');
+        // Reset form after confirming order
+        setTimeout(() => {
+          resetForm();
+        }, 1500); // Small delay to show success message
       } else {
         toast({
           title: "Success",
           description: "Order finalized successfully",
         });
         setOrderStatus('FINALIZED');
+        // Reset form after finalizing order
+        setTimeout(() => {
+          resetForm();
+        }, 1500); // Small delay to show success message
       }
 
     } catch (error: any) {
@@ -1074,6 +1115,18 @@ export default function OrderEntry() {
                 >
                   {isFinalizing ? 'Finalizing...' : 'Finalize Order'}
                 </Button>
+                
+                {/* Create New Order Button */}
+                <div className="pt-2 border-t">
+                  <Button
+                    onClick={resetForm}
+                    variant="secondary"
+                    className="w-full"
+                    disabled={isSubmitting || isConfirming || isFinalizing}
+                  >
+                    Create New Order
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

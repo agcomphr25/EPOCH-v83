@@ -143,7 +143,13 @@ export default function OrderEntry() {
 
   const pricing = calculateTotal();
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      console.log('Form data entries:', Array.from(formData.entries()));
+    }
+    
     setErrors({});
     setIsSubmitting(true);
 
@@ -254,12 +260,14 @@ export default function OrderEntry() {
               <p className="text-sm text-muted-foreground">Create new stock order</p>
             </CardHeader>
             <CardContent className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
               {/* Order ID and Dates */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="orderId">Order ID</Label>
                   <Input
                     id="orderId"
+                    name="orderId"
                     value={orderId}
                     onChange={(e) => setOrderId(e.target.value)}
                     placeholder="AG200"
@@ -270,6 +278,7 @@ export default function OrderEntry() {
                   <Label htmlFor="orderDate">Order Date</Label>
                   <Input
                     id="orderDate"
+                    name="orderDate"
                     type="date"
                     value={orderDate.toISOString().split('T')[0]}
                     onChange={(e) => setOrderDate(new Date(e.target.value))}
@@ -279,6 +288,7 @@ export default function OrderEntry() {
                   <Label htmlFor="dueDate">Estimated Completion Date</Label>
                   <Input
                     id="dueDate"
+                    name="dueDate"
                     type="date"
                     value={dueDate.toISOString().split('T')[0]}
                     onChange={(e) => setDueDate(new Date(e.target.value))}
@@ -301,6 +311,7 @@ export default function OrderEntry() {
                   <Label>Customer PO</Label>
                   <div className="flex items-center space-x-2">
                     <Input
+                      name="customerPO"
                       value={customerPO}
                       onChange={(e) => setCustomerPO(e.target.value)}
                       placeholder=""
@@ -325,6 +336,7 @@ export default function OrderEntry() {
                   <Label>FB Order #</Label>
                   <div className="flex items-center space-x-2">
                     <Input
+                      name="fbOrderNumber"
                       value={fbOrderNumber}
                       onChange={(e) => setFbOrderNumber(e.target.value)}
                       placeholder="Enter FB Order #"
@@ -409,6 +421,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Action Inlet</Label>
                     <Input
+                      name="actionInlet"
                       value={features.action_inlet || ''}
                       onChange={(e) => setFeatures(prev => ({ ...prev, action_inlet: e.target.value }))}
                       placeholder="Select..."
@@ -495,6 +508,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Bottom Metal</Label>
                     <Input
+                      name="bottomMetal"
                       value={bottomMetal}
                       onChange={(e) => setBottomMetal(e.target.value)}
                       placeholder=""
@@ -568,12 +582,33 @@ export default function OrderEntry() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
+                  name="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add special instructions or notes..."
                   rows={3}
                 />
               </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Saving..." : "Save as Draft"}
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  variant="default"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Processing..." : "Create Order"}
+                </Button>
+              </div>
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -687,24 +722,7 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-4">
-                <Button
-                  onClick={() => handleSubmit()}
-                  className="w-full"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Saving..." : "Save as Draft"}
-                </Button>
-                <Button
-                  onClick={() => handleSubmit()}
-                  className="w-full"
-                  variant="default"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Processing..." : "Confirm Order"}
-                </Button>
-              </div>
+
             </CardContent>
           </Card>
         </div>

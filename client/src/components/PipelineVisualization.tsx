@@ -5,14 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
 const departments = [
-  { name: 'Layup', color: 'bg-blue-500' },
-  { name: 'Plugging', color: 'bg-orange-500' },
+  { name: 'Layup', color: 'bg-green-500' },
+  { name: 'Plugging', color: 'bg-green-500' },
   { name: 'CNC', color: 'bg-green-500' },
-  { name: 'Finish', color: 'bg-yellow-500' },
-  { name: 'Gunsmith', color: 'bg-purple-500' },
-  { name: 'Paint', color: 'bg-pink-500' },
-  { name: 'QC', color: 'bg-indigo-500' },
-  { name: 'Shipping', color: 'bg-gray-500' }
+  { name: 'Finish', color: 'bg-green-500' },
+  { name: 'Gunsmith', color: 'bg-green-500' },
+  { name: 'Paint', color: 'bg-green-500' },
+  { name: 'QC', color: 'bg-green-500' },
+  { name: 'Shipping', color: 'bg-green-500' }
 ];
 
 export default function PipelineVisualization() {

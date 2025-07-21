@@ -416,7 +416,7 @@ export default function OrderEntry() {
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
-                          .find(f => f.name === 'lop' || f.id === 'lop')
+                          .find(f => f.id === 'lop')
                           ?.options?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}

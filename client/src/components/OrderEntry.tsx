@@ -579,14 +579,34 @@ export default function OrderEntry() {
                   {/* Swivel Studs */}
                   <div>
                     <Label>Swivel Studs</Label>
-                    <Select>
+                    <Select 
+                      value={features.swivel_studs || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, swivel_studs: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="qd">QD</SelectItem>
+                        {(() => {
+                          const swivelFeature = featureDefs.find(f => 
+                            f.id === 'swivel_studs' || 
+                            f.name === 'swivel_studs' || 
+                            f.id?.toLowerCase().includes('swivel') ||
+                            f.name?.toLowerCase().includes('swivel') ||
+                            f.displayName?.toLowerCase().includes('swivel') ||
+                            f.displayName?.toLowerCase().includes('stud')
+                          );
+                          
+                          if (!swivelFeature || !swivelFeature.options) {
+                            return null;
+                          }
+                          
+                          return swivelFeature.options.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>

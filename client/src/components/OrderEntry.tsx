@@ -457,12 +457,23 @@ export default function OrderEntry() {
                   {/* Bottom Metal */}
                   <div>
                     <Label>Bottom Metal</Label>
-                    <Input
-                      name="bottomMetal"
-                      value={bottomMetal}
-                      onChange={(e) => setBottomMetal(e.target.value)}
-                      placeholder=""
-                    />
+                    <Select 
+                      value={bottomMetal} 
+                      onValueChange={setBottomMetal}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {featureDefs
+                          .find(f => f.name === 'bottom_metal' || f.id === 'bottom_metal')
+                          ?.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          )) || []}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* QD Quick Detach Cups */}

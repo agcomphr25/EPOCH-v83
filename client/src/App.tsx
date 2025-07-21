@@ -90,7 +90,6 @@ function App() {
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
-                  <Route path="/all-orders-progression" component={AllOrdersPage} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

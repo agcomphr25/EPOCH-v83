@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -146,8 +147,6 @@ export default function OrderEntry() {
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) {
       e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      console.log('Form data entries:', Array.from(formData.entries()));
     }
     
     setErrors({});

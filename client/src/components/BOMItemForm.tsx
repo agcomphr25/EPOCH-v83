@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { toast } from "react-hot-toast";
+import type { InventoryItem } from '@shared/schema';
 
 const bomItemSchema = z.object({
   partName: z.string().min(1, "Part name is required"),
@@ -92,6 +93,11 @@ const commonCategories = [
 export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormProps) {
   const isEditing = !!item;
 
+  // Fetch inventory items
+  const { data: inventoryItems, isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory'],
+  });
+
   const form = useForm<BomItemFormData>({
     resolver: zodResolver(bomItemSchema),
     defaultValues: {
@@ -137,15 +143,23 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
           name="partName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Part Name *</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="e.g., Aluminum Chassis" 
-                  {...field} 
-                />
-              </FormControl>
+              <FormLabel>Select Inventory Item *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingInventory ? "Loading inventory..." : "Select an inventory item"} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {inventoryItems?.filter(item => item.isActive).map((item) => (
+                    <SelectItem key={item.id} value={item.name}>
+                      {item.agPartNumber} - {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormDescription>
-                Descriptive name of the component
+                Choose from existing inventory items
               </FormDescription>
               <FormMessage />
             </FormItem>

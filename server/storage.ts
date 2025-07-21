@@ -1,6 +1,6 @@
 import { 
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, forms, formSubmissions,
-  inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs, additionalStocks,
+  inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
@@ -42,7 +42,7 @@ import {
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
   type LayupOrder, type InsertLayupOrder,
   type LayupSchedule, type InsertLayupSchedule,
-  type AdditionalStock, type InsertAdditionalStock
+
 } from "./schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike, isNull, sql, ne } from "drizzle-orm";
@@ -295,12 +295,8 @@ export interface IStorage {
   scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
 
-  // Additional Stocks Methods
-  getAdditionalStocks(orderDraftId: number): Promise<AdditionalStock[]>;
-  addAdditionalStock(orderDraftId: number, stockData: InsertAdditionalStock): Promise<AdditionalStock>;
-  updateAdditionalStock(stockId: number, stockData: Partial<InsertAdditionalStock>): Promise<AdditionalStock>;
-  deleteAdditionalStock(stockId: number): Promise<void>;
-  progressAdditionalStock(stockId: number, nextDepartment?: string): Promise<AdditionalStock>;
+
+
 
 }
 
@@ -2018,131 +2014,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Additional Stocks Implementation
-  async getAdditionalStocks(orderDraftId: number): Promise<AdditionalStock[]> {
-    try {
-      const stocks = await db
-        .select()
-        .from(additionalStocks)
-        .where(eq(additionalStocks.orderDraftId, orderDraftId))
-        .orderBy(additionalStocks.stockNumber);
 
-      return stocks;
-    } catch (error) {
-      console.error('Error getting additional stocks:', error);
-      throw error;
-    }
-  }
-
-  async addAdditionalStock(orderDraftId: number, stockData: InsertAdditionalStock): Promise<AdditionalStock> {
-    try {
-      // Get the next stock number for this order
-      const existingStocks = await this.getAdditionalStocks(orderDraftId);
-      const nextStockNumber = existingStocks.length + 2; // Primary stock is 1, so additional starts at 2
-
-      const [newStock] = await db
-        .insert(additionalStocks)
-        .values({
-          ...stockData,
-          orderDraftId,
-          stockNumber: nextStockNumber,
-          updatedAt: new Date()
-        })
-        .returning();
-
-      return newStock;
-    } catch (error) {
-      console.error('Error adding additional stock:', error);
-      throw error;
-    }
-  }
-
-  async updateAdditionalStock(stockId: number, stockData: Partial<InsertAdditionalStock>): Promise<AdditionalStock> {
-    try {
-      const [updatedStock] = await db
-        .update(additionalStocks)
-        .set({
-          ...stockData,
-          updatedAt: new Date()
-        })
-        .where(eq(additionalStocks.id, stockId))
-        .returning();
-
-      if (!updatedStock) {
-        throw new Error(`Additional stock ${stockId} not found`);
-      }
-
-      return updatedStock;
-    } catch (error) {
-      console.error('Error updating additional stock:', error);
-      throw error;
-    }
-  }
-
-  async deleteAdditionalStock(stockId: number): Promise<void> {
-    try {
-      await db
-        .delete(additionalStocks)
-        .where(eq(additionalStocks.id, stockId));
-    } catch (error) {
-      console.error('Error deleting additional stock:', error);
-      throw error;
-    }
-  }
-
-  async progressAdditionalStock(stockId: number, nextDepartment?: string): Promise<AdditionalStock> {
-    try {
-      // Get current stock
-      const [currentStock] = await db
-        .select()
-        .from(additionalStocks)
-        .where(eq(additionalStocks.id, stockId));
-
-      if (!currentStock) {
-        throw new Error(`Additional stock ${stockId} not found`);
-      }
-
-      // Determine next department
-      const departmentOrder = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
-      const currentIndex = departmentOrder.indexOf(currentStock.currentDepartment || 'Layup');
-      const nextDept = nextDepartment || departmentOrder[currentIndex + 1];
-
-      if (!nextDept || currentIndex === -1) {
-        throw new Error(`Invalid department progression from ${currentStock.currentDepartment}`);
-      }
-
-      // Prepare completion timestamp update
-      const completionUpdates: any = {};
-      const now = new Date();
-      
-      switch (currentStock.currentDepartment) {
-        case 'Layup': completionUpdates.layupCompletedAt = now; break;
-        case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
-        case 'CNC': completionUpdates.cncCompletedAt = now; break;
-        case 'Finish': completionUpdates.finishCompletedAt = now; break;
-        case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
-        case 'Paint': completionUpdates.paintCompletedAt = now; break;
-        case 'QC': completionUpdates.qcCompletedAt = now; break;
-        case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
-      }
-
-      // Update the additional stock
-      const [updatedStock] = await db
-        .update(additionalStocks)
-        .set({
-          currentDepartment: nextDept,
-          ...completionUpdates,
-          updatedAt: now
-        })
-        .where(eq(additionalStocks.id, stockId))
-        .returning();
-
-      return updatedStock;
-    } catch (error) {
-      console.error('Error progressing additional stock:', error);
-      throw error;
-    }
-  }
 
 }
 

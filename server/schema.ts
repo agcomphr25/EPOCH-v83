@@ -196,40 +196,7 @@ export const orderDrafts = pgTable("order_drafts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Additional stocks for multi-stock orders
-export const additionalStocks = pgTable("additional_stocks", {
-  id: serial("id").primaryKey(),
-  orderDraftId: integer("order_draft_id").references(() => orderDrafts.id).notNull(),
-  stockNumber: integer("stock_number").notNull(), // 2, 3, 4, etc. (primary stock is 1)
-  modelId: text("model_id"),
-  handedness: text("handedness"),
-  shankLength: text("shank_length"),
-  features: jsonb("features"),
-  featureQuantities: jsonb("feature_quantities"),
-  tikkaOption: text("tikka_option"),
-  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
-  priceOverride: real("price_override"), // Manual price override for this stock
-  // Department tracking for this specific stock
-  currentDepartment: text("current_department").default("Layup"),
-  departmentHistory: jsonb("department_history").default('[]'),
-  // Department completion timestamps for this stock
-  layupCompletedAt: timestamp("layup_completed_at"),
-  pluggingCompletedAt: timestamp("plugging_completed_at"),
-  cncCompletedAt: timestamp("cnc_completed_at"),
-  finishCompletedAt: timestamp("finish_completed_at"),
-  gunsmithCompletedAt: timestamp("gunsmith_completed_at"),
-  paintCompletedAt: timestamp("paint_completed_at"),
-  qcCompletedAt: timestamp("qc_completed_at"),
-  shippingCompletedAt: timestamp("shipping_completed_at"),
-  // Stock-specific status
-  status: text("status").default("ACTIVE"), // ACTIVE, SCRAPPED, COMPLETED
-  scrapDate: timestamp("scrap_date"),
-  scrapReason: text("scrap_reason"),
-  scrapDisposition: text("scrap_disposition"),
-  scrapAuthorization: text("scrap_authorization"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+
 
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
@@ -718,25 +685,7 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests).omit({
   isActive: z.boolean().default(true),
 });
 
-export const insertAdditionalStockSchema = createInsertSchema(additionalStocks).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  orderDraftId: z.number().positive("Order draft ID is required"),
-  stockNumber: z.number().positive("Stock number is required"),
-  modelId: z.string().optional().nullable(),
-  handedness: z.string().optional().nullable(),
-  shankLength: z.string().optional().nullable(),
-  features: z.record(z.any()).optional().nullable(),
-  featureQuantities: z.record(z.number()).optional().nullable(),
-  tikkaOption: z.string().optional().nullable(),
-  isCustomOrder: z.string().optional().nullable(),
-  priceOverride: z.number().optional().nullable(),
-  currentDepartment: z.string().default("Layup"),
-  departmentHistory: z.array(z.any()).default([]),
-  status: z.string().default("ACTIVE"),
-});
+
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -744,8 +693,7 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertCSVData = z.infer<typeof insertCSVDataSchema>;
 export type CSVData = typeof csvData.$inferSelect;
-export type InsertAdditionalStock = z.infer<typeof insertAdditionalStockSchema>;
-export type AdditionalStock = typeof additionalStocks.$inferSelect;
+
 export type InsertCustomerType = z.infer<typeof insertCustomerTypeSchema>;
 export type CustomerType = typeof customerTypes.$inferSelect;
 export type InsertPersistentDiscount = z.infer<typeof insertPersistentDiscountSchema>;

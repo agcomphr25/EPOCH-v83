@@ -626,10 +626,13 @@ export default function OrderEntry() {
                           const paintFeature = featureDefs.find(f => 
                             f.id === 'paint_options' || 
                             f.name === 'paint_options' || 
+                            f.id === 'metallic_finishes' ||
+                            f.name === 'metallic_finishes' ||
                             f.id?.toLowerCase().includes('paint') ||
                             f.name?.toLowerCase().includes('paint') ||
                             f.displayName?.toLowerCase().includes('paint') ||
-                            f.displayName?.toLowerCase().includes('finish')
+                            f.displayName?.toLowerCase().includes('finish') ||
+                            f.displayName?.toLowerCase().includes('metallic')
                           );
                           
                           if (!paintFeature || !paintFeature.options) {

@@ -5,14 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
 const departments = [
-  { name: 'Layup', color: 'bg-green-500' },
-  { name: 'Plugging', color: 'bg-green-500' },
-  { name: 'CNC', color: 'bg-green-500' },
-  { name: 'Finish', color: 'bg-green-500' },
-  { name: 'Gunsmith', color: 'bg-green-500' },
-  { name: 'Paint', color: 'bg-green-500' },
-  { name: 'QC', color: 'bg-green-500' },
-  { name: 'Shipping', color: 'bg-green-500' }
+  { name: 'Layup', color: 'bg-[#7BAFD4]' },
+  { name: 'Plugging', color: 'bg-[#7BAFD4]' },
+  { name: 'CNC', color: 'bg-[#7BAFD4]' },
+  { name: 'Finish', color: 'bg-[#7BAFD4]' },
+  { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
+  { name: 'Paint', color: 'bg-[#7BAFD4]' },
+  { name: 'QC', color: 'bg-[#7BAFD4]' },
+  { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
 
 type ScheduleStatus = 'on-schedule' | 'at-risk' | 'behind';

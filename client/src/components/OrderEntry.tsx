@@ -1,385 +1,732 @@
-import React, { useState, FormEvent } from "react";
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { apiRequest } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
+import debounce from 'lodash.debounce';
+import { useLocation, useRoute } from 'wouter';
+import CustomerSearchInput from '@/components/CustomerSearchInput';
+import type { Customer } from '@shared/schema';
 
-interface FeatureSelection {
-  label: string;
-  value: string;
+interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
   price: number;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
 }
 
-export default function OrderEntryPage() {
+interface FeatureDefinition {
+  id: string;
+  name: string;
+  displayName: string;
+  type: 'dropdown' | 'search' | 'text' | 'multiselect' | 'checkbox';
+  options?: { value: string; label: string; price?: number }[];
+  category?: string;
+  subcategory?: string;
+}
+
+export default function OrderEntry() {
+  const { toast } = useToast();
+
   // Form state
-  const [orderId] = useState("AG200");
-  const [orderDate, setOrderDate] = useState("2025-07-21");
-  const [dueDate, setDueDate] = useState("2025-08-20");
-  const [customer, setCustomer] = useState("");
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [modelOptions, setModelOptions] = useState<StockModel[]>([]);
+  const [modelId, setModelId] = useState('');
+  const [modelOpen, setModelOpen] = useState(false);
+  const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
+  const [features, setFeatures] = useState<Record<string, any>>({});
+
+  const [orderDate, setOrderDate] = useState(new Date());
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
+  const [orderId, setOrderId] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
-  const [fbOrderNumber, setFbOrderNumber] = useState("");
-  const [hasAgrOrder, setHasAgrOrder] = useState(false);
-  const [stockModel, setStockModel] = useState("");
-  const [overridePrice, setOverridePrice] = useState(false);
-  const [handedness, setHandedness] = useState("");
-  const [actionLength, setActionLength] = useState("");
-  const [actionInlet, setActionInlet] = useState("");
-  const [bottomMetal, setBottomMetal] = useState("");
-  const [barrelInlet, setBarrelInlet] = useState("");
-  const [qds, setQds] = useState("");
-  const [lop, setLop] = useState("");
-  const [rails, setRails] = useState("");
-  const [texture, setTexture] = useState("");
-  const [swivelStuds, setSwivelStuds] = useState("");
-  const [otherOptions, setOtherOptions] = useState("");
-  const [paintOptions, setPaintOptions] = useState("");
-  const [customOrder, setCustomOrder] = useState(false);
-  const [notes, setNotes] = useState("");
+  const [customerPO, setCustomerPO] = useState('');
+  const [fbOrderNumber, setFbOrderNumber] = useState('');
+  const [handedness, setHandedness] = useState('');
+  const [actionLength, setActionLength] = useState('');
+  const [bottomMetal, setBottomMetal] = useState('');
+  const [barrelInlet, setBarrelInlet] = useState('');
+  const [qdQuickDetach, setQdQuickDetach] = useState('');
+  const [swivelStuds, setSwivelStuds] = useState('');
+  const [texture, setTexture] = useState('');
+  const [paintOptions, setPaintOptions] = useState('');
+  const [otherOptions, setOtherOptions] = useState<string[]>([]);
+  const [railAccessory, setRailAccessory] = useState<string[]>([]);
+
+  // Discount and pricing
+  const [discountCode, setDiscountCode] = useState('');
+  const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
+  const [showCustomDiscount, setShowCustomDiscount] = useState(false);
   const [shipping, setShipping] = useState(36.95);
 
-  // Summary computation
-  const featureSelections: FeatureSelection[] = [
-    { label: "Stock Model", value: stockModel, price: 0 },
-    { label: "Handedness", value: handedness, price: 0 },
-    { label: "Action Length", value: actionLength, price: 0 },
-    { label: "Action Inlet", value: actionInlet, price: 0 },
-    { label: "Bottom Metal", value: bottomMetal, price: 0 },
-    { label: "Barrel Inlet", value: barrelInlet, price: 0 },
-    { label: "QDs (Quick Detach Cups)", value: qds, price: 0 },
-    { label: "LOP (Length of Pull)", value: lop, price: 0 },
-    { label: "Rails", value: rails, price: 0 },
-    { label: "Texture", value: texture, price: 0 },
-    { label: "Swivel Studs", value: swivelStuds, price: 0 },
-    { label: "Other Options", value: otherOptions, price: 0 },
-    { label: "Paint Options", value: paintOptions, price: 0 },
-  ];
-  const itemCount = 1;
-  const subtotal = featureSelections.reduce((sum, f) => sum + f.price, 0);
-  const total = subtotal + shipping;
+  // Additional fields
+  const [isCustomOrder, setIsCustomOrder] = useState(false);
+  const [notes, setNotes] = useState('');
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget as HTMLFormElement);
-    // TODO: send form to API
-    console.log(Object.fromEntries(form.entries()));
-  }
+  // Load initial data
+  useEffect(() => {
+    loadStockModels();
+    loadFeatures();
+    generateOrderId();
+  }, []);
 
-  // Nav links
-  const navLinks = [
-    { name: "Order Entry", href: "/order-entry" },
-    { name: "All Orders", href: "/orders-list" },
-    { name: "Draft Orders", href: "/draft-orders" },
-    { name: "Module 8 Test", href: "/module8-test" },
-    { name: "Customer Management", href: "/customers" },
-    { name: "Purchase Orders", href: "/purchase-orders" },
-    { name: "Production Tracking", href: "/production-tracking" },
-    { name: "Barcode Scanner", href: "/barcode-scanner" },
-    { name: "Layup Scheduler", href: "/layup-scheduler" },
-    { name: "Forms & Reports", href: "/module/forms-reports" },
-    { name: "Inventory", href: "/inventory" },
-    { name: "QC & Maintenance", href: "/qc-maintenance" },
-    { name: "Employees", href: "/employees" },
-    { name: "Finance", href: "/finance" },
-  ];
+  const loadStockModels = async () => {
+    try {
+      const models = await apiRequest('/api/stock-models');
+      setModelOptions(models.filter((m: StockModel) => m.isActive));
+    } catch (error) {
+      console.error('Failed to load stock models:', error);
+    }
+  };
+
+  const loadFeatures = async () => {
+    try {
+      const features = await apiRequest('/api/features');
+      setFeatureDefs(features);
+    } catch (error) {
+      console.error('Failed to load features:', error);
+    }
+  };
+
+  const generateOrderId = async () => {
+    try {
+      const response = await apiRequest('/api/orders/generate-id', {
+        method: 'POST'
+      });
+      setOrderId(response.orderId);
+    } catch (error) {
+      console.error('Failed to generate order ID:', error);
+    }
+  };
+
+  // Calculate order total
+  const calculateTotal = useCallback(() => {
+    const selectedModel = modelOptions.find(m => m.id === modelId);
+    const basePrice = selectedModel?.price || 0;
+    
+    let featureCost = 0;
+    Object.entries(features).forEach(([featureId, value]) => {
+      const feature = featureDefs.find(f => f.id === featureId);
+      if (feature?.options) {
+        const option = feature.options.find(opt => opt.value === value);
+        featureCost += option?.price || 0;
+      }
+    });
+
+    const subtotal = basePrice + featureCost;
+    const total = subtotal + shipping;
+
+    return {
+      basePrice,
+      featureCost,
+      subtotal,
+      shipping,
+      total
+    };
+  }, [modelId, modelOptions, features, featureDefs, shipping]);
+
+  const pricing = calculateTotal();
+
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      console.log('Form data entries:', Array.from(formData.entries()));
+    }
+    
+    setErrors({});
+    setIsSubmitting(true);
+
+    try {
+      if (!customer) {
+        setErrors(prev => ({ ...prev, customer: 'Customer is required' }));
+        return;
+      }
+
+      if (!modelId) {
+        setErrors(prev => ({ ...prev, modelId: 'Stock model is required' }));
+        return;
+      }
+
+      if (!orderId) {
+        setErrors(prev => ({ ...prev, orderId: 'Order ID is required' }));
+        return;
+      }
+
+      const orderData = {
+        customerId: customer.id.toString(),
+        modelId,
+        features,
+        orderDate: orderDate.toISOString(),
+        dueDate: dueDate.toISOString(),
+        orderId,
+        customerPO: hasCustomerPO ? customerPO : '',
+        fbOrderNumber,
+        handedness,
+        shipping,
+        status: 'DRAFT',
+        isCustomOrder,
+        notes,
+        discountCode,
+        customDiscountType,
+        customDiscountValue,
+        showCustomDiscount
+      };
+
+      const response = await apiRequest('/api/orders/draft', {
+        method: 'POST',
+        body: orderData
+      });
+
+      toast({
+        title: "Success",
+        description: "Order saved as draft",
+      });
+
+      // Reset form
+      resetForm();
+
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save order",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setCustomer(null);
+    setModelId('');
+    setFeatures({});
+    setOrderDate(new Date());
+    setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    setHasCustomerPO(false);
+    setCustomerPO('');
+    setFbOrderNumber('');
+    setHandedness('');
+    setActionLength('');
+    setBottomMetal('');
+    setBarrelInlet('');
+    setQdQuickDetach('');
+    setSwivelStuds('');
+    setTexture('');
+    setPaintOptions('');
+    setOtherOptions([]);
+    setRailAccessory([]);
+    setDiscountCode('');
+    setCustomDiscountType('percent');
+    setCustomDiscountValue(0);
+    setShowCustomDiscount(false);
+    setShipping(36.95);
+    setIsCustomOrder(false);
+    setNotes('');
+    setErrors({});
+    generateOrderId();
+  };
+
+  const selectedModel = modelOptions.find(m => m.id === modelId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header & Nav */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
-            <nav className="space-x-2 overflow-x-auto">
-              {navLinks.map((link) => (
-                <a key={link.href} href={link.href}>
-                  <button
-                    className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
-                      link.name === "Order Entry"
-                        ? "bg-primary text-white"
-                        : "hover:bg-gray-100"
-                    }`}
-                  >
-                    {link.name}
-                  </button>
-                </a>
-              ))}
-            </nav>
-            <div className="text-sm text-gray-600">Manufacturing ERP System</div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Form Section */}
-          <form
-            onSubmit={handleSubmit}
-            className="col-span-2 space-y-8"
-          >
-            <div className="bg-white rounded-lg border shadow-sm p-6 space-y-4">
-              <h2 className="text-2xl font-semibold">Order Entry</h2>
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Order Form */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Order Entry
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Create new stock order</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Order ID and Dates */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Order ID */}
                 <div>
-                  <label htmlFor="orderId" className="block text-sm font-medium">
-                    Order ID
-                  </label>
-                  <input
-                    type="text"
+                  <Label htmlFor="orderId">Order ID</Label>
+                  <Input
                     id="orderId"
                     name="orderId"
-                    readOnly
                     value={orderId}
-                    className="mt-1 w-full rounded-md border-gray-300 bg-gray-50"
+                    onChange={(e) => setOrderId(e.target.value)}
+                    placeholder="AG200"
                   />
+                  {errors.orderId && <p className="text-sm text-red-500">{errors.orderId}</p>}
                 </div>
-                {/* Order Date */}
                 <div>
-                  <label htmlFor="orderDate" className="block text-sm font-medium">
-                    Order Date
-                  </label>
-                  <input
-                    type="date"
+                  <Label htmlFor="orderDate">Order Date</Label>
+                  <Input
                     id="orderDate"
                     name="orderDate"
-                    value={orderDate}
-                    onChange={(e) => setOrderDate(e.target.value)}
-                    className="mt-1 w-full rounded-md border-gray-300"
+                    type="date"
+                    value={orderDate.toISOString().split('T')[0]}
+                    onChange={(e) => setOrderDate(new Date(e.target.value))}
                   />
                 </div>
-                {/* Estimated Completion Date */}
                 <div>
-                  <label htmlFor="dueDate" className="block text-sm font-medium">
-                    Estimated Completion Date
-                  </label>
-                  <input
-                    type="date"
+                  <Label htmlFor="dueDate">Estimated Completion Date</Label>
+                  <Input
                     id="dueDate"
                     name="dueDate"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="mt-1 w-full rounded-md border-gray-300"
+                    type="date"
+                    value={dueDate.toISOString().split('T')[0]}
+                    onChange={(e) => setDueDate(new Date(e.target.value))}
                   />
                 </div>
               </div>
 
-              {/* Second Row */}
+              {/* Customer Selection */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="customer" className="block text-sm font-medium">
-                    Customer
-                  </label>
-                  <input
-                    type="text"
-                    id="customer"
-                    name="customer"
-                    placeholder="Search customer..."
+                  <Label>Customer</Label>
+                  <CustomerSearchInput
                     value={customer}
-                    onChange={(e) => setCustomer(e.target.value)}
-                    className="mt-1 w-full rounded-md border-gray-300"
+                    onValueChange={setCustomer}
+                    placeholder="Search customer..."
+                    error={errors.customer}
                   />
-                </div>
-                <div className="flex items-center space-x-2 mt-6">
-                  <input
-                    id="hasCustomerPO"
-                    name="hasCustomerPO"
-                    type="checkbox"
-                    checked={hasCustomerPO}
-                    onChange={() => setHasCustomerPO(!hasCustomerPO)}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="hasCustomerPO" className="text-sm">
-                    Enable Customer PO
-                  </label>
                 </div>
                 <div>
-                  <label htmlFor="fbOrderNumber" className="block text-sm font-medium">
-                    FB Order #
-                  </label>
-                  <input
-                    type="text"
-                    id="fbOrderNumber"
-                    name="fbOrderNumber"
-                    placeholder="Enter FB Order #..."
-                    value={fbOrderNumber}
-                    onChange={(e) => setFbOrderNumber(e.target.value)}
-                    className="mt-1 w-full rounded-md border-gray-300"
-                  />
-                </div>
-                <div className="flex items-center space-x-2 mt-6">
-                  <input
-                    id="hasAgrOrder"
-                    name="hasAgrOrder"
-                    type="checkbox"
-                    checked={hasAgrOrder}
-                    onChange={() => setHasAgrOrder(!hasAgrOrder)}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="hasAgrOrder" className="text-sm">
-                    Enable AGR Order
-                  </label>
-                </div>
-              </div>
-
-              {/* Feature Fields Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Map each feature into a select */}
-                {[
-                  { id: "stockModel", label: "Stock Model", state: stockModel, setter: setStockModel },
-                  { id: "handedness", label: "Handedness", state: handedness, setter: setHandedness },
-                  { id: "actionLength", label: "Action Length", state: actionLength, setter: setActionLength },
-                  { id: "actionInlet", label: "Action Inlet", state: actionInlet, setter: setActionInlet },
-                  { id: "bottomMetal", label: "Bottom Metal", state: bottomMetal, setter: setBottomMetal },
-                  { id: "barrelInlet", label: "Barrel Inlet", state: barrelInlet, setter: setBarrelInlet },
-                  { id: "qds", label: "QDs (Quick Detach Cups)", state: qds, setter: setQds },
-                  { id: "lop", label: "LOP (Length of Pull)", state: lop, setter: setLop },
-                  { id: "rails", label: "Rails", state: rails, setter: setRails },
-                  { id: "texture", label: "Texture", state: texture, setter: setTexture },
-                  { id: "swivelStuds", label: "Swivel Studs", state: swivelStuds, setter: setSwivelStuds },
-                  { id: "otherOptions", label: "Other Options", state: otherOptions, setter: setOtherOptions },
-                  { id: "paintOptions", label: "Paint Options", state: paintOptions, setter: setPaintOptions },
-                ].map((field) => (
-                  <div key={field.id} className="space-y-2">
-                    <label htmlFor={field.id} className="block text-sm font-medium">
-                      {field.label}
-                    </label>
-                    <select
-                      id={field.id}
-                      name={field.id}
-                      value={field.state}
-                      onChange={(e) => field.setter(e.target.value)}
-                      className="mt-1 w-full rounded-md border-gray-300"
+                  <Label>Customer PO</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      name="customerPO"
+                      value={customerPO}
+                      onChange={(e) => setCustomerPO(e.target.value)}
+                      placeholder=""
+                      disabled={!hasCustomerPO}
+                    />
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setHasCustomerPO(!hasCustomerPO)}
+                      className="text-blue-600 p-0 h-auto"
                     >
-                      <option value="" disabled>Select…</option>
-                      {/* TODO: populate with real options */}
-                    </select>
+                      Enable Customer PO
+                    </Button>
                   </div>
-                ))}
+                </div>
+              </div>
 
-                {/* Custom Order Checkbox */}
-                <div className="flex items-center space-x-2 mt-4">
-                  <input
+              {/* FB Order and AGR Order */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>FB Order #</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      name="fbOrderNumber"
+                      value={fbOrderNumber}
+                      onChange={(e) => setFbOrderNumber(e.target.value)}
+                      placeholder="Enter FB Order #"
+                    />
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="text-blue-600 p-0 h-auto"
+                    >
+                      Enable AGR Order
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 pt-6">
+                  <Checkbox
                     id="customOrder"
-                    name="customOrder"
-                    type="checkbox"
-                    checked={customOrder}
-                    onChange={() => setCustomOrder(!customOrder)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    checked={isCustomOrder}
+                    onCheckedChange={(checked) => setIsCustomOrder(!!checked)}
                   />
-                  <label htmlFor="customOrder" className="text-sm">
-                    Custom Order
-                  </label>
-                </div>
-
-                {/* Notes */}
-                <div className="mt-4 md:col-span-2">
-                  <label htmlFor="notes" className="block text-sm font-medium">
-                    Notes
-                  </label>
-                  <textarea
-                    id="notes"
-                    name="notes"
-                    rows={4}
-                    placeholder="Any special requirements or notes..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="mt-1 w-full rounded-md border-gray-300"
-                  />
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="mt-6 md:col-span-2 flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-md border"
-                  >
-                    Save as Draft
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-md bg-primary text-white"
-                  >
-                    Create Order
-                  </button>
+                  <Label htmlFor="customOrder">Custom Order</Label>
                 </div>
               </div>
-            </div>
-          </form>
 
-          {/* Summary Section */}
-          <aside className="space-y-6">
-            <div className="bg-white rounded-lg border shadow-sm p-6 sticky top-8">
-              <h2 className="text-xl font-semibold">Order Summary</h2>
-              <div className="flex justify-between items-center mt-4">
-                <span className="text-2xl font-bold">{itemCount}</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  ${total.toFixed(2)}
-                </span>
-              </div>
-
-              <div className="mt-6 space-y-2 text-sm">
-                <h4 className="font-medium">Feature Selections</h4>
-                {featureSelections.map((f) => (
-                  <div key={f.label} className="flex justify-between">
-                    <span>{f.label}:</span>
-                    <span className="flex space-x-2">
-                      <span className={f.value ? "" : "text-gray-400"}>
-                        {f.value || 'Not selected'}
-                      </span>
-                      <span>${f.price.toFixed(2)}</span>
-                    </span>
+              {/* Stock Model Selection */}
+              <div>
+                <Label>Stock Model</Label>
+                <Select value={modelId} onValueChange={setModelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select or search model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelOptions.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedModel && (
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-yellow-600 border-yellow-600"
+                    >
+                      📍 Alamo Pine Premium
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      className="text-blue-600 border-blue-600"
+                    >
+                      💧 Overcast Pine
+                    </Button>
                   </div>
-                ))}
+                )}
+                {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}
               </div>
 
-              <div className="mt-6 space-y-1 text-sm">
-                <label htmlFor="shipping" className="block">
-                  Shipping &amp; Handling
-                </label>
-                <input
-                  id="shipping"
-                  name="shipping"
-                  type="number"
-                  step="0.01"
-                  value={shipping}
-                  onChange={(e) => setShipping(parseFloat(e.target.value))}
-                  className="mt-1 w-full rounded-md border-gray-300"
+              {/* Product Features - Two Column Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  {/* Handedness */}
+                  <div>
+                    <Label>Handedness</Label>
+                    <Select value={handedness} onValueChange={setHandedness}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select handedness..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="right">Right</SelectItem>
+                        <SelectItem value="left">Left</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Action Inlet */}
+                  <div>
+                    <Label>Action Inlet</Label>
+                    <Input
+                      name="actionInlet"
+                      value={features.action_inlet || ''}
+                      onChange={(e) => setFeatures(prev => ({ ...prev, action_inlet: e.target.value }))}
+                      placeholder="Select..."
+                    />
+                  </div>
+
+                  {/* Barrel Inlet */}
+                  <div>
+                    <Label>Barrel Inlet</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="heavy">Heavy</SelectItem>
+                        <SelectItem value="bull">Bull</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* LOP Length Of Pull */}
+                  <div>
+                    <Label>LOP Length Of Pull</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Texture */}
+                  <div>
+                    <Label>Texture</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="heavy">Heavy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Other Options */}
+                  <div>
+                    <Label>Other Options</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select or search..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None selected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-4">
+                  {/* Action Length */}
+                  <div>
+                    <Label>Action Length</Label>
+                    <Select value={actionLength} onValueChange={setActionLength}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Short" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">Short</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="long">Long</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Bottom Metal */}
+                  <div>
+                    <Label>Bottom Metal</Label>
+                    <Input
+                      name="bottomMetal"
+                      value={bottomMetal}
+                      onChange={(e) => setBottomMetal(e.target.value)}
+                      placeholder=""
+                    />
+                  </div>
+
+                  {/* QD Quick Detach Cups */}
+                  <div>
+                    <Label>QD Quick Detach Cups</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="front">Front</SelectItem>
+                        <SelectItem value="rear">Rear</SelectItem>
+                        <SelectItem value="both">Both</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Rails */}
+                  <div>
+                    <Label>Rails</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select options..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="picatinny">Picatinny Rail</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Swivel Studs */}
+                  <div>
+                    <Label>Swivel Studs</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="qd">QD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Paint Options */}
+                  <div>
+                    <Label>Paint Options</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select or search..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="primer">Primer Only</SelectItem>
+                        <SelectItem value="custom">Custom Paint</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Order and Notes */}
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add special instructions or notes..."
+                  rows={3}
                 />
               </div>
 
-              <div className="mt-6 border-t pt-4 space-y-2 text-sm">
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Saving..." : "Save as Draft"}
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  variant="default"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Processing..." : "Create Order"}
+                </Button>
+              </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Order Summary */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Order Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>1</span>
+                  <span className="text-blue-600 font-semibold">${pricing.basePrice.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Shipping &amp; Handling:</span>
-                  <span>${shipping.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total:</span>
-                  <span>${total.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center space-x-2 mt-2">
-                  <input
-                    id="markAsPaid"
-                    name="markAsPaid"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="markAsPaid" className="text-sm">
-                    Mark as Paid
-                  </label>
+                <div className="text-sm text-muted-foreground">
+                  {selectedModel?.displayName || 'No model selected'}
                 </div>
               </div>
 
-              <button
-                type="button"
-                className="w-full mt-4 px-4 py-2 rounded-md bg-primary text-white"
-              >
-                Create Order
-              </button>
-            </div>
-          </aside>
+              {/* Feature Selections */}
+              <div className="space-y-1 text-sm">
+                <div className="font-medium">Feature Selections</div>
+                <div className="space-y-1 text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Handedness</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Action Length</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Action Inlet</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Barrel Inlet</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Bottom Metal</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>QD Quick Detach Cups</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>LOP Length of Pull</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rails</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Texture</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Swivel Studs</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Other Options</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Paint Options</span>
+                    <span>$0.00</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Discount Code */}
+              <div className="border-t pt-4">
+                <div className="text-sm font-medium mb-2">Discount Code</div>
+                <Input
+                  placeholder="Select discount code"
+                  value={discountCode}
+                  onChange={(e) => setDiscountCode(e.target.value)}
+                />
+              </div>
+
+              {/* Shipping & Handling */}
+              <div className="border-t pt-4">
+                <div className="text-sm font-medium mb-2">Shipping & Handling</div>
+                <div className="flex justify-between">
+                  <span>${shipping.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Totals */}
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>${pricing.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Shipping & Handling</span>
+                  <span>${pricing.shipping.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-lg">
+                  <span>Total</span>
+                  <span className="text-blue-600">${pricing.total.toFixed(2)}</span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Save as Draft
+                </div>
+              </div>
+
+
+            </CardContent>
+          </Card>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

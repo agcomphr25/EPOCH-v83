@@ -132,11 +132,19 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             <style>
               @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39:wght@400&display=swap');
               
-              body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 0.25in;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+                align-content: flex-start;
+              }
               .barcode-label { 
                 border: 1px solid #000; 
                 padding: 1px; 
-                margin: 0; 
+                margin: 0.05in; 
                 width: 2.625in; 
                 height: 1in;
                 text-align: center;
@@ -146,6 +154,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 justify-content: center;
                 box-sizing: border-box;
                 position: relative;
+                flex: 0 0 auto;
               }
               .barcode { 
                 font-family: 'Libre Barcode 39', 'Courier New', monospace; 
@@ -161,24 +170,31 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               .expiration { font-size: 6px; margin: 1px 0; color: #333; line-height: 1; }
               @media print {
                 body { 
-                  margin: 0; 
+                  margin: 0.25in; 
                   padding: 0; 
                   -webkit-print-color-adjust: exact;
                   print-color-adjust: exact;
+                  display: flex;
+                  flex-wrap: wrap;
+                  justify-content: flex-start;
+                  align-content: flex-start;
                 }
                 .barcode-label { 
-                  margin: 0; 
-                  padding: 2px;
+                  margin: 0.05in; 
+                  padding: 1px;
                   width: 2.625in !important; 
                   height: 1in !important;
                   border: 1px solid #000 !important;
                   box-sizing: border-box !important;
-                  display: block !important;
-                  position: relative !important;
+                  display: flex !important;
+                  flex-direction: column !important;
+                  justify-content: center !important;
+                  flex: 0 0 auto !important;
+                  page-break-inside: avoid;
                 }
                 @page {
-                  size: 2.625in 1in;
-                  margin: 0 !important;
+                  size: 8.5in 11in;
+                  margin: 0.25in !important;
                 }
                 * {
                   -webkit-print-color-adjust: exact !important;
@@ -188,7 +204,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             </style>
           </head>
           <body>
-            ${Array.from({ length: 5 }, (_, i) => `
+            ${Array.from({ length: 30 }, (_, i) => `
               <div class="barcode-label">
                 <div class="part-info">${formData.itemCode} ${item?.name || 'P2 Product'}</div>
                 <div class="barcode">*${formData.barcode}*</div>
@@ -201,12 +217,13 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                 // Add print instructions for user
                 document.body.insertAdjacentHTML('beforeend', 
                   '<div style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border:2px solid #000;z-index:1000;font-size:12px;width:300px;" id="print-instructions">' +
-                  '<strong>Print Settings Required:</strong><br/>' +
-                  '• Paper Size: Custom (2.625" x 1")<br/>' +
-                  '• Margins: None (0)<br/>' +
+                  '<strong>30 Labels - Print Settings Required:</strong><br/>' +
+                  '• Paper Size: Letter (8.5" x 11")<br/>' +
+                  '• Margins: 0.25" all sides<br/>' +
                   '• Scale: 100%<br/>' +
                   '• Background graphics: ON<br/>' +
-                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print Labels</button>' +
+                  '• Layout: 3 across × 10 down<br/>' +
+                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print 30 Labels</button>' +
                   '</div>'
                 );
               }
@@ -267,7 +284,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                   </Button>
                   <Button onClick={handlePrintBarcode} variant="outline" size="sm">
                     <Printer className="h-4 w-4 mr-1" />
-                    Print (5x)
+                    Print (30x)
                   </Button>
                 </div>
               </div>

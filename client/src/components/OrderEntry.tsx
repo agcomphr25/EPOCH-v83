@@ -416,15 +416,20 @@ export default function OrderEntry() {
                       </SelectTrigger>
                       <SelectContent>
                         {(() => {
-                          console.log('All featureDefs:', featureDefs);
-                          const lopFeature = featureDefs.find(f => f.id === 'lop' || f.name === 'lop');
-                          console.log('Found LOP feature:', lopFeature);
+                          // Try multiple possible IDs for the LOP feature
+                          const lopFeature = featureDefs.find(f => 
+                            f.id === 'lop' || 
+                            f.name === 'lop' || 
+                            f.id?.toLowerCase().includes('lop') ||
+                            f.name?.toLowerCase().includes('lop') ||
+                            f.displayName?.toLowerCase().includes('length of pull') ||
+                            f.displayName?.toLowerCase().includes('lop')
+                          );
                           
                           if (!lopFeature || !lopFeature.options) {
-                            console.log('No LOP feature or options found');
                             return [
-                              <SelectItem key="debug" value="debug" disabled>
-                                No LOP options configured
+                              <SelectItem key="no-options" value="" disabled>
+                                No LOP options found
                               </SelectItem>
                             ];
                           }

@@ -207,6 +207,7 @@ export const additionalStocks = pgTable("additional_stocks", {
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
   tikkaOption: text("tikka_option"),
+  isCustomOrder: text("is_custom_order"), // "yes", "no", or null
   priceOverride: real("price_override"), // Manual price override for this stock
   // Department tracking for this specific stock
   currentDepartment: text("current_department").default("Layup"),
@@ -730,6 +731,7 @@ export const insertAdditionalStockSchema = createInsertSchema(additionalStocks).
   features: z.record(z.any()).optional().nullable(),
   featureQuantities: z.record(z.number()).optional().nullable(),
   tikkaOption: z.string().optional().nullable(),
+  isCustomOrder: z.string().optional().nullable(),
   priceOverride: z.number().optional().nullable(),
   currentDepartment: z.string().default("Layup"),
   departmentHistory: z.array(z.any()).default([]),

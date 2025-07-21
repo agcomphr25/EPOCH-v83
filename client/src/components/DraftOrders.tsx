@@ -137,7 +137,7 @@ export default function DraftOrders() {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        setLocation(`/order-entry?draft=${draft.orderId}`);
+                        setLocation(`/order-entry-simple?orderId=${draft.orderId}`);
                       }}
                     >
                       <Edit className="h-4 w-4 mr-2" />

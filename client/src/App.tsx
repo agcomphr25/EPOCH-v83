@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import OrderManagement from "./pages/OrderManagement";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
+import OrderEntrySimple from "./pages/OrderEntrySimple";
 import OrderEntryTest from "./components/OrderEntryTest";
 import OrdersList from "./pages/OrdersList";
 import OrdersListSimple from "./pages/OrdersListSimple";
@@ -60,6 +61,7 @@ function App() {
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/order-entry" component={OrderEntry} />
+                  <Route path="/order-entry-simple" component={OrderEntrySimple} />
                   <Route path="/test-order-entry" component={OrderEntryTest} />
                   <Route path="/orders" component={OrdersList} />
                   <Route path="/orders-list" component={OrdersList} />

@@ -888,9 +888,14 @@ export default function OrderEntry() {
               {/* Shipping & Handling */}
               <div className="border-t pt-4">
                 <div className="text-sm font-medium mb-2">Shipping & Handling</div>
-                <div className="flex justify-between">
-                  <span>${shipping.toFixed(2)}</span>
-                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={shipping}
+                  onChange={(e) => setShipping(parseFloat(e.target.value) || 0)}
+                />
               </div>
 
               {/* Totals */}

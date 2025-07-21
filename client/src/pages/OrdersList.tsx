@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderPricingTooltip from '@/components/OrderPricingTooltip';
@@ -65,6 +66,7 @@ interface StockModel {
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{orderId: string, barcode: string} | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
@@ -147,6 +149,41 @@ export default function OrdersList() {
     const customer = customers.find(c => c.id.toString() === customerId);
     return customer ? customer.name : customerId;
   };
+
+  const getCustomerPhone = (customerId: string) => {
+    if (!customers) return '';
+    const customer = customers.find(c => c.id.toString() === customerId);
+    return customer ? customer.phone : '';
+  };
+
+  // Filter orders based on search term
+  const filteredOrders = useMemo(() => {
+    if (!orders || !searchTerm.trim()) {
+      return orders || [];
+    }
+    
+    const term = searchTerm.toLowerCase().trim();
+    return orders.filter((order) => {
+      // Search by Order ID
+      if (order.orderId.toLowerCase().includes(term)) {
+        return true;
+      }
+      
+      // Search by Customer Name
+      const customerName = getCustomerName(order.customerId);
+      if (customerName.toLowerCase().includes(term)) {
+        return true;
+      }
+      
+      // Search by Customer Phone
+      const customerPhone = getCustomerPhone(order.customerId);
+      if (customerPhone && customerPhone.toLowerCase().includes(term)) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [orders, customers, searchTerm]);
 
   const getModelDisplayName = (modelId: string) => {
     if (!stockModels) return modelId;
@@ -313,22 +350,63 @@ export default function OrdersList() {
             </Link>
           </div>
         </div>
+        
+        {/* Search Input */}
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by Order ID, Customer Name, or Phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          {searchTerm && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchTerm('')}
+              className="px-3"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
 
-      {!orders || orders.length === 0 ? (
+      {!filteredOrders || filteredOrders.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-              <p className="text-gray-600 mb-4">
-                You haven't created any orders yet. Start by creating your first order.
-              </p>
-              <Link href="/order-entry">
-                <Button>
-                  Create Your First Order
-                </Button>
-              </Link>
+              {searchTerm ? (
+                <>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No orders match your search</h3>
+                  <p className="text-gray-600 mb-4">
+                    No orders found for "{searchTerm}". Try a different search term.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    Clear Search
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+                  <p className="text-gray-600 mb-4">
+                    You haven't created any orders yet. Start by creating your first order.
+                  </p>
+                  <Link href="/order-entry">
+                    <Button>
+                      Create Your First Order
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -337,7 +415,7 @@ export default function OrdersList() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Orders ({orders.length})
+              Orders ({filteredOrders.length}{searchTerm ? ` of ${orders?.length || 0}` : ''})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -355,7 +433,7 @@ export default function OrdersList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                   <TableRow 
                     key={order.id}
                     className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}

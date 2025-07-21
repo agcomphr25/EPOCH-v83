@@ -407,13 +407,21 @@ export default function OrderEntry() {
                   {/* LOP Length Of Pull */}
                   <div>
                     <Label>LOP Length Of Pull</Label>
-                    <Select>
+                    <Select 
+                      value={features.lop || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, lop: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
+                        {featureDefs
+                          .find(f => f.name === 'lop' || f.id === 'lop')
+                          ?.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          )) || []}
                       </SelectContent>
                     </Select>
                   </div>
@@ -689,8 +697,16 @@ export default function OrderEntry() {
                   <div className="flex justify-between">
                     <span>LOP (Length of Pull):</span>
                     <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                      <span>{features.lop ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'lop');
+                        const option = feature?.options?.find(opt => opt.value === features.lop);
+                        return option?.label || features.lop;
+                      })() : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">${features.lop ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'lop');
+                        const option = feature?.options?.find(opt => opt.value === features.lop);
+                        return (option?.price || 0).toFixed(2);
+                      })() : '0.00'}</span>
                     </div>
                   </div>
                   

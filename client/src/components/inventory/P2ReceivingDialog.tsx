@@ -32,13 +32,13 @@ function generateBarcode(): string {
   // For simplicity, we'll use alphanumeric only for P2 products
   const characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substr(2, 8).toUpperCase();
+  const random = Math.random().toString(36).substr(2, 4).toUpperCase();
   
-  // Create a 20-character barcode with timestamp + random + P2 prefix
+  // Create a shorter 12-character barcode with timestamp + random + P2 prefix
   let result = "P2" + timestamp + random;
   
-  // Pad or trim to exactly 20 characters for consistent length
-  result = result.substr(0, 20).padEnd(20, '0');
+  // Pad or trim to exactly 12 characters for consistent length
+  result = result.substr(0, 12).padEnd(12, '0');
   
   return result;
 }
@@ -143,12 +143,13 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               }
               .barcode { 
                 font-family: 'Libre Barcode 39', 'Courier New', monospace; 
-                font-size: 36px; 
+                font-size: 32px; 
                 font-weight: normal; 
                 letter-spacing: 0px; 
                 margin: 8px 0;
                 line-height: 1;
-                word-break: break-all;
+                white-space: nowrap;
+                overflow: hidden;
               }
               .part-info { font-size: 14px; margin: 5px 0; font-weight: bold; }
               .expiration { font-size: 12px; margin: 5px 0; color: #333; }

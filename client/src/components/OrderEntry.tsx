@@ -911,7 +911,7 @@ export default function OrderEntry() {
                     <SelectValue placeholder="Select discount code" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No discount</SelectItem>
+                    <SelectItem value="none">No discount</SelectItem>
                     {discountOptions.map((discount) => (
                       <SelectItem key={discount.value} value={discount.value}>
                         {discount.label}

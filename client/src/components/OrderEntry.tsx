@@ -427,11 +427,7 @@ export default function OrderEntry() {
                           );
                           
                           if (!lopFeature || !lopFeature.options) {
-                            return [
-                              <SelectItem key="no-options" value="" disabled>
-                                No LOP options found
-                              </SelectItem>
-                            ];
+                            return null;
                           }
                           
                           return lopFeature.options.map((option) => (

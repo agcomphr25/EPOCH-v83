@@ -308,34 +308,16 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* FB Order and AGR Order */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* FB Order */}
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label>FB Order #</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      name="fbOrderNumber"
-                      value={fbOrderNumber}
-                      onChange={(e) => setFbOrderNumber(e.target.value)}
-                      placeholder="Enter FB Order #"
-                    />
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="text-blue-600 p-0 h-auto"
-                    >
-                      Enable AGR Order
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2 pt-6">
-                  <Checkbox
-                    id="customOrder"
-                    checked={isCustomOrder}
-                    onCheckedChange={(checked) => setIsCustomOrder(!!checked)}
+                  <Input
+                    name="fbOrderNumber"
+                    value={fbOrderNumber}
+                    onChange={(e) => setFbOrderNumber(e.target.value)}
+                    placeholder="Enter FB Order #"
                   />
-                  <Label htmlFor="customOrder">Custom Order</Label>
                 </div>
               </div>
 

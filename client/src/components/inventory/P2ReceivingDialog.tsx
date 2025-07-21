@@ -135,7 +135,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               body { 
                 font-family: Arial, sans-serif; 
                 margin: 0; 
-                padding: 0.25in;
+                padding: 0.5in 0.25in 0.25in 0.25in;
                 display: flex;
                 flex-wrap: wrap;
                 justify-content: flex-start;
@@ -170,8 +170,8 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               .expiration { font-size: 6px; margin: 1px 0; color: #333; line-height: 1; }
               @media print {
                 body { 
-                  margin: 0.25in; 
-                  padding: 0; 
+                  margin: 0; 
+                  padding: 0.5in 0.25in 0.25in 0.25in; 
                   -webkit-print-color-adjust: exact;
                   print-color-adjust: exact;
                   display: flex;
@@ -219,7 +219,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
                   '<div style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border:2px solid #000;z-index:1000;font-size:12px;width:300px;" id="print-instructions">' +
                   '<strong>30 Labels - Print Settings Required:</strong><br/>' +
                   '• Paper Size: Letter (8.5" x 11")<br/>' +
-                  '• Margins: 0.25" all sides<br/>' +
+                  '• Margins: 0.5" top, 0.25" sides/bottom<br/>' +
                   '• Scale: 100%<br/>' +
                   '• Background graphics: ON<br/>' +
                   '• Layout: 3 across × 10 down<br/>' +

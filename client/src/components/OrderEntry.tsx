@@ -336,26 +336,6 @@ export default function OrderEntry() {
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedModel && (
-                  <div className="mt-2 flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-yellow-600 border-yellow-600"
-                    >
-                      📍 Alamo Pine Premium
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline" 
-                      size="sm"
-                      className="text-blue-600 border-blue-600"
-                    >
-                      💧 Overcast Pine
-                    </Button>
-                  </div>
-                )}
                 {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}
               </div>
 

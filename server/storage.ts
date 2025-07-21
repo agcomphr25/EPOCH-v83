@@ -667,10 +667,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async generateNextOrderId(): Promise<string> {
-    // Use a database transaction to ensure atomicity
-    return await db.transaction(async (tx) => {
-      // Get the current last order ID within the transaction
-      const result = await tx
+    try {
+      // Get the current last order ID
+      const result = await db
         .select({ orderId: orderDrafts.orderId })
         .from(orderDrafts)
         .orderBy(desc(orderDrafts.id))
@@ -679,23 +678,17 @@ export class DatabaseStorage implements IStorage {
       const lastOrderId = result.length > 0 ? result[0].orderId : '';
       const nextOrderId = generateP1OrderId(new Date(), lastOrderId);
 
-      // Reserve this order ID by creating a placeholder draft
-      // This prevents other concurrent requests from getting the same ID
-      await tx.insert(orderDrafts).values({
-        orderId: nextOrderId,
-        orderDate: new Date(),
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-        customerId: '', // Will be updated when actual order is created
-        modelId: '',
-        status: 'RESERVED', // Special status to indicate this is just a reservation
-        features: {},
-        featureQuantities: {},
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-
       return nextOrderId;
-    });
+    } catch (error) {
+      console.error("Error generating next order ID:", error);
+      // Fallback to basic ID generation
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const yearLetter = String.fromCharCode(65 + (year - 2025));
+      const monthLetter = String.fromCharCode(65 + month);
+      return yearLetter + monthLetter + '001';
+    }
   }
 
   async getAllOrders(): Promise<OrderDraft[]> {

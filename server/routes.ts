@@ -226,10 +226,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/orders/last-id", async (req, res) => {
     try {
       const lastOrderId = await storage.getLastOrderId();
-      const nextOrderId = generateP1OrderId(new Date(), lastOrderId);
-      res.json({ lastOrderId: nextOrderId });
+      res.json({ lastOrderId });
     } catch (error) {
-      res.status(500).json({ error: "Failed to retrieve last order ID" });
+      console.error("Get last order ID error:", error);
+      // Return empty string fallback instead of error
+      res.json({ lastOrderId: '' });
     }
   });
 

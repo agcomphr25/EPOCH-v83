@@ -29,15 +29,8 @@ interface BomItem {
   id: number;
   bomId: number;
   partName: string;
-  partNumber?: string;
-  description?: string;
   quantity: number;
-  unitOfMeasure: string;
-  category?: string;
-  supplier?: string;
-  cost?: number;
-  leadTime?: string;
-  notes?: string;
+  firstDept: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -90,9 +83,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   // Filter items based on search term
   const filteredItems = bom?.items?.filter(item => 
     item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.partNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   const handleDeleteItem = (itemId: number) => {
@@ -113,9 +104,9 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
     toast.success("Item updated successfully");
   };
 
-  // Calculate total estimated cost
-  const totalCost = filteredItems.reduce((sum, item) => {
-    return sum + ((item.cost || 0) * item.quantity);
+  // Calculate total quantity
+  const totalQuantity = filteredItems.reduce((sum, item) => {
+    return sum + item.quantity;
   }, 0);
 
   if (isLoading) {
@@ -193,8 +184,8 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
               <span className="ml-2 font-semibold">{filteredItems.length}</span>
             </div>
             <div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">Estimated Cost:</span>
-              <span className="ml-2 font-semibold">${totalCost.toFixed(2)}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Total Quantity:</span>
+              <span className="ml-2 font-semibold">{totalQuantity}</span>
             </div>
             <div>
               <span className="text-sm text-gray-600 dark:text-gray-400">Last Updated:</span>
@@ -253,13 +244,9 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Part Name</TableHead>
-                      <TableHead>Part Number</TableHead>
-                      <TableHead>Description</TableHead>
                       <TableHead>Quantity</TableHead>
-                      <TableHead>UOM</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Cost/Unit</TableHead>
-                      <TableHead>Total Cost</TableHead>
+                      <TableHead>First Department</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -267,22 +254,14 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                     {filteredItems.map((item) => (
                       <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                         <TableCell className="font-medium">{item.partName}</TableCell>
-                        <TableCell>{item.partNumber || "—"}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {item.description || "—"}
-                        </TableCell>
                         <TableCell>{item.quantity}</TableCell>
-                        <TableCell>{item.unitOfMeasure}</TableCell>
                         <TableCell>
-                          {item.category ? (
-                            <Badge variant="outline">{item.category}</Badge>
-                          ) : "—"}
+                          <Badge variant="outline">{item.firstDept}</Badge>
                         </TableCell>
                         <TableCell>
-                          {item.cost ? `$${item.cost.toFixed(2)}` : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {item.cost ? `$${(item.cost * item.quantity).toFixed(2)}` : "—"}
+                          <Badge variant={item.isActive ? "default" : "secondary"}>
+                            {item.isActive ? "Active" : "Inactive"}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">

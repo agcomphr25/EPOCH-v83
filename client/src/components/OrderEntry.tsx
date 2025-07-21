@@ -415,13 +415,26 @@ export default function OrderEntry() {
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {featureDefs
-                          .find(f => f.id === 'lop')
-                          ?.options?.map((option) => (
+                        {(() => {
+                          console.log('All featureDefs:', featureDefs);
+                          const lopFeature = featureDefs.find(f => f.id === 'lop' || f.name === 'lop');
+                          console.log('Found LOP feature:', lopFeature);
+                          
+                          if (!lopFeature || !lopFeature.options) {
+                            console.log('No LOP feature or options found');
+                            return [
+                              <SelectItem key="debug" value="debug" disabled>
+                                No LOP options configured
+                              </SelectItem>
+                            ];
+                          }
+                          
+                          return lopFeature.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
-                          )) || []}
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>

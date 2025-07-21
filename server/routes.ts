@@ -615,6 +615,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Outstanding Orders route (must be before :orderId route)
+  app.get("/api/orders/outstanding", async (req, res) => {
+    try {
+      const orders = await storage.getOutstandingOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Get outstanding orders error:", error);
+      res.status(500).json({ error: "Failed to get outstanding orders" });
+    }
+  });
+
 
 
   // Get individual order by orderId
@@ -1075,16 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Outstanding Orders route
-  app.get("/api/orders/outstanding", async (req, res) => {
-    try {
-      const orders = await storage.getOutstandingOrders();
-      res.json(orders);
-    } catch (error) {
-      console.error("Get outstanding orders error:", error);
-      res.status(500).json({ error: "Failed to get outstanding orders" });
-    }
-  });
+
 
   // Employee routes
   app.get("/api/employees", async (req, res) => {

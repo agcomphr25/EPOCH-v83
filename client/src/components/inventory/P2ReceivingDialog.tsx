@@ -132,19 +132,20 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             <style>
               @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39:wght@400&display=swap');
               
-              body { font-family: Arial, sans-serif; margin: 5px; }
+              body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
               .barcode-label { 
                 border: 1px solid #000; 
-                padding: 2px; 
-                margin: 2px 0; 
+                padding: 1px; 
+                margin: 0; 
                 width: 2.625in; 
                 height: 1in;
                 text-align: center;
                 page-break-inside: avoid;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
+                justify-content: center;
                 box-sizing: border-box;
+                position: relative;
               }
               .barcode { 
                 font-family: 'Libre Barcode 39', 'Courier New', monospace; 
@@ -159,16 +160,29 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               .part-info { font-size: 8px; margin: 1px 0; font-weight: bold; line-height: 1.1; }
               .expiration { font-size: 6px; margin: 1px 0; color: #333; line-height: 1; }
               @media print {
-                body { margin: 0; padding: 0; }
+                body { 
+                  margin: 0; 
+                  padding: 0; 
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
                 .barcode-label { 
-                  margin: 1px; 
-                  width: 2.625in; 
-                  height: 1in;
-                  border: 1px solid #000;
+                  margin: 0; 
+                  padding: 2px;
+                  width: 2.625in !important; 
+                  height: 1in !important;
+                  border: 1px solid #000 !important;
+                  box-sizing: border-box !important;
+                  display: block !important;
+                  position: relative !important;
                 }
                 @page {
                   size: 2.625in 1in;
-                  margin: 0;
+                  margin: 0 !important;
+                }
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
                 }
               }
             </style>
@@ -182,11 +196,19 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               </div>
             `).join('')}
             <script>
-              // Auto-print when page loads
+              // Auto-print when page loads with proper settings
               window.onload = function() {
-                setTimeout(function() {
-                  window.print();
-                }, 500);
+                // Add print instructions for user
+                document.body.insertAdjacentHTML('beforeend', 
+                  '<div style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border:2px solid #000;z-index:1000;font-size:12px;width:300px;" id="print-instructions">' +
+                  '<strong>Print Settings Required:</strong><br/>' +
+                  '• Paper Size: Custom (2.625" x 1")<br/>' +
+                  '• Margins: None (0)<br/>' +
+                  '• Scale: 100%<br/>' +
+                  '• Background graphics: ON<br/>' +
+                  '<button onclick="document.getElementById(\'print-instructions\').style.display=\'none\';window.print();">Print Labels</button>' +
+                  '</div>'
+                );
               }
             </script>
           </body>

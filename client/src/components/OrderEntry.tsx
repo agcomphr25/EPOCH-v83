@@ -530,15 +530,34 @@ export default function OrderEntry() {
                   {/* QD Quick Detach Cups */}
                   <div>
                     <Label>QD Quick Detach Cups</Label>
-                    <Select>
+                    <Select 
+                      value={features.qd_quick_detach || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, qd_quick_detach: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="front">Front</SelectItem>
-                        <SelectItem value="rear">Rear</SelectItem>
-                        <SelectItem value="both">Both</SelectItem>
+                        {(() => {
+                          const qdFeature = featureDefs.find(f => 
+                            f.id === 'qd_quick_detach' || 
+                            f.name === 'qd_quick_detach' || 
+                            f.id?.toLowerCase().includes('qd') ||
+                            f.name?.toLowerCase().includes('qd') ||
+                            f.displayName?.toLowerCase().includes('qd') ||
+                            f.displayName?.toLowerCase().includes('quick detach')
+                          );
+                          
+                          if (!qdFeature || !qdFeature.options) {
+                            return null;
+                          }
+                          
+                          return qdFeature.options.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>

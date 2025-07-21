@@ -34,11 +34,11 @@ function generateBarcode(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substr(2, 4).toUpperCase();
   
-  // Create a shorter 12-character barcode with timestamp + random + P2 prefix
+  // Create a shorter 10-character barcode with timestamp + random + P2 prefix
   let result = "P2" + timestamp + random;
   
-  // Pad or trim to exactly 12 characters for consistent length
-  result = result.substr(0, 12).padEnd(12, '0');
+  // Pad or trim to exactly 10 characters for consistent length
+  result = result.substr(0, 10).padEnd(10, '0');
   
   return result;
 }
@@ -132,27 +132,32 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
             <style>
               @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39:wght@400&display=swap');
               
-              body { font-family: Arial, sans-serif; margin: 20px; }
+              body { font-family: Arial, sans-serif; margin: 5px; }
               .barcode-label { 
-                border: 2px solid #000; 
-                padding: 10px; 
-                margin: 10px 0; 
-                width: 350px; 
+                border: 1px solid #000; 
+                padding: 2px; 
+                margin: 2px 0; 
+                width: 2.625in; 
+                height: 1in;
                 text-align: center;
                 page-break-inside: avoid;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
               }
               .barcode { 
                 font-family: 'Libre Barcode 39', 'Courier New', monospace; 
-                font-size: 32px; 
+                font-size: 18px; 
                 font-weight: normal; 
                 letter-spacing: 0px; 
-                margin: 8px 0;
+                margin: 1px 0;
                 line-height: 1;
                 white-space: nowrap;
                 overflow: hidden;
               }
-              .part-info { font-size: 14px; margin: 5px 0; font-weight: bold; }
-              .expiration { font-size: 12px; margin: 5px 0; color: #333; }
+              .part-info { font-size: 8px; margin: 1px 0; font-weight: bold; line-height: 1.1; }
+              .expiration { font-size: 6px; margin: 1px 0; color: #333; line-height: 1; }
               @media print {
                 body { margin: 0; }
                 .barcode-label { margin: 5px; }

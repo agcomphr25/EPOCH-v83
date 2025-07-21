@@ -122,6 +122,8 @@ export default function OrderEntry() {
     const basePrice = selectedModel?.price || 0;
     
     let featureCost = 0;
+    
+    // Calculate cost from features state
     Object.entries(features).forEach(([featureId, value]) => {
       const feature = featureDefs.find(f => f.id === featureId);
       if (feature?.options) {
@@ -129,6 +131,15 @@ export default function OrderEntry() {
         featureCost += option?.price || 0;
       }
     });
+    
+    // Add cost from bottom metal selection
+    if (bottomMetal) {
+      const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
+      if (bottomMetalFeature?.options) {
+        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
+        featureCost += option?.price || 0;
+      }
+    }
 
     const subtotal = basePrice + featureCost;
     const total = subtotal + shipping;
@@ -595,54 +606,71 @@ export default function OrderEntry() {
               <div className="space-y-1 text-sm">
                 <div className="font-medium">Feature Selections</div>
                 <div className="space-y-1 text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Handedness</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Action Length</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Action Inlet</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Barrel Inlet</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Bottom Metal</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>QD Quick Detach Cups</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>LOP Length of Pull</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Rails</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Texture</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Swivel Studs</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Other Options</span>
-                    <span>$0.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Paint Options</span>
-                    <span>$0.00</span>
-                  </div>
+                  {/* Handedness */}
+                  {handedness && (
+                    <div className="flex justify-between">
+                      <span>Handedness</span>
+                      <span>{handedness === 'right' ? 'Right' : 'Left'}</span>
+                    </div>
+                  )}
+                  
+                  {/* Action Length */}
+                  {actionLength && (
+                    <div className="flex justify-between">
+                      <span>Action Length</span>
+                      <span>{actionLength.charAt(0).toUpperCase() + actionLength.slice(1)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Dynamic Features from features state */}
+                  {Object.entries(features).map(([featureId, value]) => {
+                    if (!value || value === 'none' || value === '') return null;
+                    
+                    const feature = featureDefs.find(f => f.id === featureId);
+                    const featureName = feature?.displayName || featureId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    
+                    // Get the option details to show price
+                    const option = feature?.options?.find(opt => opt.value === value);
+                    const price = option?.price || 0;
+                    const displayValue = option?.label || value;
+                    
+                    return (
+                      <div key={featureId} className="flex justify-between">
+                        <span>{featureName}</span>
+                        <div className="text-right">
+                          <div>{displayValue}</div>
+                          {price > 0 && <div className="text-xs text-green-600">+${price.toFixed(2)}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Bottom Metal */}
+                  {bottomMetal && (
+                    <div className="flex justify-between">
+                      <span>Bottom Metal</span>
+                      <div className="text-right">
+                        <div>{(() => {
+                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                          return option?.label || bottomMetal;
+                        })()}</div>
+                        {(() => {
+                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                          const price = option?.price || 0;
+                          return price > 0 ? <div className="text-xs text-green-600">+${price.toFixed(2)}</div> : null;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show message if no features selected */}
+                  {!handedness && !actionLength && Object.keys(features).length === 0 && !bottomMetal && (
+                    <div className="text-center text-gray-400 py-2">
+                      No features selected
+                    </div>
+                  )}
                 </div>
               </div>
 

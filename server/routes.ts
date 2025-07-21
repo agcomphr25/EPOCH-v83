@@ -582,10 +582,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      // Try to get by database ID first (when coming from All Orders page)
-      let draft = await storage.getOrderDraftById(parseInt(id));
+      // Check if id is a valid number for database ID lookup
+      const numericId = parseInt(id);
+      let draft;
       
-      // If not found by ID, try by orderId string (legacy support)
+      if (!isNaN(numericId) && numericId > 0) {
+        // Try to get by database ID first (when coming from All Orders page)
+        draft = await storage.getOrderDraftById(numericId);
+      }
+      
+      // If not found by ID or ID is not numeric, try by orderId string (legacy support)
       if (!draft) {
         draft = await storage.getOrderDraft(id);
       }

@@ -2039,7 +2039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dateFrom && dateTo) {
         filteredTransactions = mockAPTransactions.filter(tx => {
           const txDate = new Date(tx.date);
-          return txDate >= new Date(dateFrom) && txDate <= new Date(dateTo);
+          return txDate >= new Date(dateFrom as string) && txDate <= new Date(dateTo as string);
         });
       }
 
@@ -2108,7 +2108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dateFrom && dateTo) {
         filteredTransactions = mockARTransactions.filter(tx => {
           const txDate = new Date(tx.date);
-          return txDate >= new Date(dateFrom) && txDate <= new Date(dateTo);
+          return txDate >= new Date(dateFrom as string) && txDate <= new Date(dateTo as string);
         });
       }
 
@@ -2852,7 +2852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: feature.displayName || feature.name,
             description: `Feature: ${featureValue}`,
             price: feature.price,
-            quantity: order.featureQuantities?.[featureId] || 1
+            quantity: (order.featureQuantities as any)?.[featureId] || 1
           });
         }
       }
@@ -2875,8 +2875,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let discountAmount = 0;
       let discountDetails = [];
       
-      if (order.discounts && Array.isArray(order.discounts)) {
-        for (const discount of order.discounts) {
+      if ((order as any).discounts && Array.isArray((order as any).discounts)) {
+        for (const discount of (order as any).discounts) {
           let amount = 0;
           if (discount.type === 'PERCENTAGE') {
             amount = subtotal * (discount.value / 100);

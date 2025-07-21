@@ -443,15 +443,33 @@ export default function OrderEntry() {
                   {/* Texture */}
                   <div>
                     <Label>Texture</Label>
-                    <Select>
+                    <Select 
+                      value={features.texture || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, texture: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="heavy">Heavy</SelectItem>
+                        {(() => {
+                          const textureFeature = featureDefs.find(f => 
+                            f.id === 'texture' || 
+                            f.name === 'texture' || 
+                            f.id?.toLowerCase().includes('texture') ||
+                            f.name?.toLowerCase().includes('texture') ||
+                            f.displayName?.toLowerCase().includes('texture')
+                          );
+                          
+                          if (!textureFeature || !textureFeature.options) {
+                            return null;
+                          }
+                          
+                          return textureFeature.options.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>
@@ -737,8 +755,16 @@ export default function OrderEntry() {
                   <div className="flex justify-between">
                     <span>Texture:</span>
                     <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                      <span>{features.texture ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'texture');
+                        const option = feature?.options?.find(opt => opt.value === features.texture);
+                        return option?.label || features.texture;
+                      })() : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">${features.texture ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'texture');
+                        const option = feature?.options?.find(opt => opt.value === features.texture);
+                        return (option?.price || 0).toFixed(2);
+                      })() : '0.00'}</span>
                     </div>
                   </div>
                   

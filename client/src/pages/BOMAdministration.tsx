@@ -28,6 +28,7 @@ import {
 
 interface BomDefinition {
   id: number;
+  sku?: string;
   modelName: string;
   revision: string;
   description?: string;
@@ -181,6 +182,7 @@ export function BOMAdministration() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>SKU</TableHead>
                       <TableHead>Model Name</TableHead>
                       <TableHead>Revision</TableHead>
                       <TableHead>Description</TableHead>
@@ -192,6 +194,7 @@ export function BOMAdministration() {
                   <TableBody>
                     {filteredBOMs.map((bom) => (
                       <TableRow key={bom.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <TableCell className="text-sm text-gray-600">{bom.sku || "—"}</TableCell>
                         <TableCell className="font-medium">{bom.modelName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{bom.revision}</Badge>

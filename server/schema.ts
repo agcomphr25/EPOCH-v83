@@ -1198,6 +1198,7 @@ export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FI
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {
   id: serial('id').primaryKey(),
+  sku: text('sku'),
   modelName: text('model_name').notNull(),
   revision: text('revision').notNull().default('A'),
   description: text('description'),
@@ -1223,6 +1224,7 @@ export const insertBomDefinitionSchema = createInsertSchema(bomDefinitions).omit
   createdAt: true,
   updatedAt: true,
 }).extend({
+  sku: z.string().optional(),
   modelName: z.string().min(1, "Model name is required"),
   revision: z.string().min(1, "Revision is required").default('A'),
   description: z.string().optional(),

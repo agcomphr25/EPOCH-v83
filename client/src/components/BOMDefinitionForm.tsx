@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { toast } from "react-hot-toast";
 
 const bomDefinitionSchema = z.object({
+  sku: z.string().optional(),
   modelName: z.string().min(1, "Model name is required"),
   revision: z.string().min(1, "Revision is required"),
   description: z.string().optional(),
@@ -30,6 +31,7 @@ type BomDefinitionFormData = z.infer<typeof bomDefinitionSchema>;
 
 interface BomDefinition {
   id: number;
+  sku?: string;
   modelName: string;
   revision: string;
   description?: string;
@@ -51,6 +53,7 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
   const form = useForm<BomDefinitionFormData>({
     resolver: zodResolver(bomDefinitionSchema),
     defaultValues: {
+      sku: bom?.sku || "",
       modelName: bom?.modelName || "",
       revision: bom?.revision || "",
       description: bom?.description || "",
@@ -89,6 +92,26 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <FormField
+          control={form.control}
+          name="sku"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>SKU</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="e.g., P2-001, SKU-ABC123" 
+                  {...field} 
+                />
+              </FormControl>
+              <FormDescription>
+                Stock Keeping Unit identifier
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

@@ -983,11 +983,15 @@ export default function OrderEntry() {
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Discount:</span>
                     <Select 
-                      value={showCustomDiscount ? 'CUSTOM' : discountCode} 
+                      value={showCustomDiscount ? 'CUSTOM' : (discountCode || 'NONE')} 
                       onValueChange={(value) => {
                         if (value === 'CUSTOM') {
                           setDiscountCode('');
                           setShowCustomDiscount(true);
+                        } else if (value === 'NONE') {
+                          setDiscountCode('');
+                          setShowCustomDiscount(false);
+                          setCustomDiscountValue(0);
                         } else {
                           setDiscountCode(value);
                           setShowCustomDiscount(false);
@@ -999,7 +1003,7 @@ export default function OrderEntry() {
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No Discount</SelectItem>
+                        <SelectItem value="NONE">No Discount</SelectItem>
                         {shortTermSales.map((sale) => (
                           <SelectItem key={sale.id} value={sale.name}>
                             {sale.name} ({sale.percent}%)

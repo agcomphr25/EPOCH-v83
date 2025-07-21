@@ -48,6 +48,7 @@ import {
 } from "./schema";
 import { db } from "./db";
 import { eq, desc, and, or, ilike, isNull, sql, ne } from "drizzle-orm";
+import { generateP1OrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -682,10 +683,11 @@ export class DatabaseStorage implements IStorage {
       // This prevents other concurrent requests from getting the same ID
       await tx.insert(orderDrafts).values({
         orderId: nextOrderId,
+        orderDate: new Date(),
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         customerId: '', // Will be updated when actual order is created
         modelId: '',
         status: 'RESERVED', // Special status to indicate this is just a reservation
-        orderDate: new Date(),
         features: {},
         featureQuantities: {},
         createdAt: new Date(),
@@ -2181,22 +2183,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-}
-
-// Utility function to generate order IDs
-function generateP1OrderId(date: Date, lastOrderId: string): string {
-  const today = date.toISOString().slice(0, 10).replace(/-/g, "");
-  const base = `P1-${today}`;
-
-  if (!lastOrderId || !lastOrderId.startsWith(base)) {
-    return `${base}-0001`;
-  }
-
-  const sequence = parseInt(lastOrderId.slice(14), 10);
-  const nextSequence = sequence + 1;
-  const nextSequenceStr = String(nextSequence).padStart(4, '0');
-
-  return `${base}-${nextSequenceStr}`;
 }
 
 export const storage = new DatabaseStorage();

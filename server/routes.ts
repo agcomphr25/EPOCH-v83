@@ -601,6 +601,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get detailed pipeline data with schedule status (must be before :orderId route)
+  app.get("/api/orders/pipeline-details", async (req, res) => {
+    try {
+      const details = await storage.getPipelineDetails();
+      res.json(details);
+    } catch (error) {
+      console.error("Pipeline details fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch pipeline details" });
+    }
+  });
+
   // Get individual order by orderId
   app.get("/api/orders/:orderId", async (req, res) => {
     try {

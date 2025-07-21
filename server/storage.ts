@@ -289,6 +289,7 @@ export interface IStorage {
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
+  getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>>>;
   progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft>;
   scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
@@ -1744,6 +1745,137 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error getting pipeline counts:', error);
       return {};
+    }
+  }
+
+  async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>>> {
+    try {
+      // Get all active orders with their department entry timestamps
+      const orders = await db
+        .select({
+          orderId: orderDrafts.orderId,
+          modelId: orderDrafts.modelId,
+          currentDepartment: orderDrafts.currentDepartment,
+          dueDate: orderDrafts.dueDate,
+          layupCompletedAt: orderDrafts.layupCompletedAt,
+          pluggingCompletedAt: orderDrafts.pluggingCompletedAt,
+          cncCompletedAt: orderDrafts.cncCompletedAt,
+          finishCompletedAt: orderDrafts.finishCompletedAt,
+          gunsmithCompletedAt: orderDrafts.gunsmithCompletedAt,
+          paintCompletedAt: orderDrafts.paintCompletedAt,
+          qcCompletedAt: orderDrafts.qcCompletedAt,
+          createdAt: orderDrafts.createdAt
+        })
+        .from(orderDrafts)
+        .where(
+          and(
+            ne(orderDrafts.status, 'SCRAPPED'),
+            isNull(orderDrafts.scrapDate)
+          )
+        );
+
+      // Group by department and calculate schedule status
+      const pipelineDetails: Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>> = {};
+
+      orders.forEach(order => {
+        if (!order.currentDepartment) return;
+
+        // Calculate days in current department
+        const daysInDept = this.calculateDaysInDepartment(order);
+        
+        // Calculate schedule status
+        const scheduleStatus = this.calculateScheduleStatus(order, daysInDept);
+
+        if (!pipelineDetails[order.currentDepartment]) {
+          pipelineDetails[order.currentDepartment] = [];
+        }
+
+        pipelineDetails[order.currentDepartment].push({
+          orderId: order.orderId,
+          modelId: order.modelId || '',
+          dueDate: order.dueDate,
+          daysInDept,
+          scheduleStatus
+        });
+      });
+
+      return pipelineDetails;
+    } catch (error) {
+      console.error('Error getting pipeline details:', error);
+      return {};
+    }
+  }
+
+  private calculateDaysInDepartment(order: any): number {
+    const now = new Date();
+    let deptEntryDate: Date;
+
+    // Determine when the order entered the current department
+    switch (order.currentDepartment) {
+      case 'Layup':
+        deptEntryDate = order.createdAt;
+        break;
+      case 'Plugging':
+        deptEntryDate = order.layupCompletedAt || order.createdAt;
+        break;
+      case 'CNC':
+        deptEntryDate = order.pluggingCompletedAt || order.createdAt;
+        break;
+      case 'Finish':
+        deptEntryDate = order.cncCompletedAt || order.createdAt;
+        break;
+      case 'Gunsmith':
+        deptEntryDate = order.finishCompletedAt || order.createdAt;
+        break;
+      case 'Paint':
+        deptEntryDate = order.gunsmithCompletedAt || order.createdAt;
+        break;
+      case 'QC':
+        deptEntryDate = order.paintCompletedAt || order.createdAt;
+        break;
+      case 'Shipping':
+        deptEntryDate = order.qcCompletedAt || order.createdAt;
+        break;
+      default:
+        deptEntryDate = order.createdAt;
+    }
+
+    const diffTime = Math.abs(now.getTime() - deptEntryDate.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'at-risk' | 'behind' {
+    const isAdjusted = order.modelId?.includes('Adj') || false;
+    let standardDays: number;
+
+    // Get standard processing time for current department
+    switch (order.currentDepartment) {
+      case 'Layup':
+        standardDays = 35; // 5 weeks
+        break;
+      case 'Finish':
+        standardDays = isAdjusted ? 14 : 7; // 2 weeks for Adj, 1 week for regular
+        break;
+      case 'Gunsmith':
+        standardDays = isAdjusted ? 14 : 7; // 2 weeks for Adj, 1 week for regular
+        break;
+      case 'Plugging':
+      case 'CNC':
+      case 'Paint':
+      case 'QC':
+      case 'Shipping':
+      default:
+        standardDays = 7; // 1 week
+        break;
+    }
+
+    // Calculate status
+    if (daysInDept > standardDays) {
+      return 'behind';
+    } else if (daysInDept > standardDays * 0.8) {
+      return 'at-risk';
+    } else {
+      return 'on-schedule';
     }
   }
 

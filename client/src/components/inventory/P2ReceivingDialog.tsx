@@ -135,7 +135,7 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               body { font-family: Arial, sans-serif; margin: 20px; }
               .barcode-label { 
                 border: 2px solid #000; 
-                padding: 15px; 
+                padding: 10px; 
                 margin: 10px 0; 
                 width: 350px; 
                 text-align: center;
@@ -143,21 +143,15 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
               }
               .barcode { 
                 font-family: 'Libre Barcode 39', 'Courier New', monospace; 
-                font-size: 48px; 
+                font-size: 36px; 
                 font-weight: normal; 
                 letter-spacing: 0px; 
-                margin: 15px 0;
+                margin: 8px 0;
                 line-height: 1;
                 word-break: break-all;
               }
-              .barcode-text {
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                margin: 5px 0;
-                letter-spacing: 1px;
-              }
-              .item-info { font-size: 12px; margin: 5px 0; font-weight: bold; }
-              .dates { font-size: 10px; color: #666; }
+              .part-info { font-size: 14px; margin: 5px 0; font-weight: bold; }
+              .expiration { font-size: 12px; margin: 5px 0; color: #333; }
               @media print {
                 body { margin: 0; }
                 .barcode-label { margin: 5px; }
@@ -167,14 +161,9 @@ export default function P2ReceivingDialog({ open, onOpenChange, item }: P2Receiv
           <body>
             ${Array.from({ length: 5 }, (_, i) => `
               <div class="barcode-label">
-                <div class="item-info">${formData.itemCode} - ${item?.name || 'P2 Product'}</div>
+                <div class="part-info">${formData.itemCode} ${item?.name || 'P2 Product'}</div>
                 <div class="barcode">*${formData.barcode}*</div>
-                <div class="dates">
-                  <div><strong>Batch:</strong> ${formData.batchNumber} | <strong>Lot:</strong> ${formData.lotNumber}</div>
-                  <div><strong>Heat#:</strong> ${formData.aluminumHeatNumber}</div>
-                  <div><strong>Mfg:</strong> ${formData.manufactureDate} | <strong>Exp:</strong> ${formData.expirationDate}</div>
-                  <div><strong>Received:</strong> ${formData.receivingDate}</div>
-                </div>
+                <div class="expiration">Expiration Date: ${formData.expirationDate}</div>
               </div>
             `).join('')}
             <script>

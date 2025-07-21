@@ -64,12 +64,12 @@ export function BOMDefinitionForm({ bom, onSuccess, onCancel }: BOMDefinitionFor
       if (isEditing) {
         return apiRequest(`/api/boms/${bom.id}`, {
           method: "PUT",
-          body: JSON.stringify(data),
+          body: data,
         });
       } else {
         return apiRequest("/api/boms", {
           method: "POST",
-          body: JSON.stringify(data),
+          body: data,
         });
       }
     },

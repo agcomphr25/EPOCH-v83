@@ -6,6 +6,7 @@ import { db } from "./db";
 import { enhancedForms, enhancedFormCategories } from "./schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { insertAdditionalStockSchema } from "./schema";
 
 // SmartyStreets direct API calls
 import axios from 'axios';
@@ -609,6 +610,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Pipeline details fetch error:", error);
       res.status(500).json({ error: "Failed to fetch pipeline details" });
+    }
+  });
+
+  // Additional stocks routes (must be before :orderId route)
+  app.get("/api/orders/:orderId/additional-stocks", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      // First get the order draft to get the database ID
+      const order = await storage.getOrderDraft(orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      
+      const additionalStocks = await storage.getAdditionalStocks(order.id);
+      res.json(additionalStocks);
+    } catch (error) {
+      console.error("Additional stocks fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch additional stocks" });
+    }
+  });
+
+  app.post("/api/orders/:orderId/additional-stocks", async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      // First get the order draft to get the database ID
+      const order = await storage.getOrderDraft(orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      const stockData = insertAdditionalStockSchema.parse(req.body);
+      const newStock = await storage.addAdditionalStock(order.id, stockData);
+      res.json(newStock);
+    } catch (error) {
+      console.error("Add additional stock error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid stock data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to add additional stock" });
+      }
+    }
+  });
+
+  app.put("/api/additional-stocks/:stockId", async (req, res) => {
+    try {
+      const { stockId } = req.params;
+      const stockData = insertAdditionalStockSchema.partial().parse(req.body);
+      const updatedStock = await storage.updateAdditionalStock(parseInt(stockId), stockData);
+      res.json(updatedStock);
+    } catch (error) {
+      console.error("Update additional stock error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid stock data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update additional stock" });
+      }
+    }
+  });
+
+  app.delete("/api/additional-stocks/:stockId", async (req, res) => {
+    try {
+      const { stockId } = req.params;
+      await storage.deleteAdditionalStock(parseInt(stockId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete additional stock error:", error);
+      res.status(500).json({ error: "Failed to delete additional stock" });
+    }
+  });
+
+  app.post("/api/additional-stocks/:stockId/progress", async (req, res) => {
+    try {
+      const { stockId } = req.params;
+      const { nextDepartment } = req.body;
+      const progressedStock = await storage.progressAdditionalStock(parseInt(stockId), nextDepartment);
+      res.json(progressedStock);
+    } catch (error) {
+      console.error("Progress additional stock error:", error);
+      res.status(500).json({ error: "Failed to progress additional stock" });
     }
   });
 

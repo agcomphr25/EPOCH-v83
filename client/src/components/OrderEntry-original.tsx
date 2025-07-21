@@ -14,6 +14,7 @@ import { Package, Users, ChevronDown, Send, CheckCircle, DollarSign, Edit } from
 import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
+import AdditionalStocksManager from '@/components/AdditionalStocksManager';
 import type { Customer } from '@shared/schema';
 
 interface StockModel {
@@ -1343,6 +1344,13 @@ export default function OrderEntry() {
           </div>
             </CardContent>
           </Card>
+
+          {/* Additional Stocks Manager - Only show for existing drafts */}
+          {orderId && (
+            <div className="mt-6">
+              <AdditionalStocksManager orderId={orderId} />
+            </div>
+          )}
         </div>
 
         {/* Order Summary Sidebar */}

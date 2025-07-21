@@ -359,12 +359,23 @@ export default function OrderEntry() {
                   {/* Action Inlet */}
                   <div>
                     <Label>Action Inlet</Label>
-                    <Input
-                      name="actionInlet"
-                      value={features.action_inlet || ''}
-                      onChange={(e) => setFeatures(prev => ({ ...prev, action_inlet: e.target.value }))}
-                      placeholder="Select..."
-                    />
+                    <Select 
+                      value={features.action_inlet || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {featureDefs
+                          .find(f => f.name === 'action_inlet' || f.id === 'action_inlet')
+                          ?.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          )) || []}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Barrel Inlet */}

@@ -606,71 +606,138 @@ export default function OrderEntry() {
               <div className="space-y-1 text-sm">
                 <div className="font-medium">Feature Selections</div>
                 <div className="space-y-1 text-muted-foreground">
-                  {/* Handedness */}
-                  {handedness && (
-                    <div className="flex justify-between">
-                      <span>Handedness</span>
-                      <span>{handedness === 'right' ? 'Right' : 'Left'}</span>
+                  {/* Stock Model */}
+                  <div className="flex justify-between">
+                    <span>Stock Model:</span>
+                    <div className="text-right">
+                      <span>{selectedModel?.displayName || 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
                     </div>
-                  )}
+                  </div>
+                  
+                  {/* Handedness */}
+                  <div className="flex justify-between">
+                    <span>Handedness:</span>
+                    <div className="text-right">
+                      <span>{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
                   
                   {/* Action Length */}
-                  {actionLength && (
-                    <div className="flex justify-between">
-                      <span>Action Length</span>
-                      <span>{actionLength.charAt(0).toUpperCase() + actionLength.slice(1)}</span>
+                  <div className="flex justify-between">
+                    <span>Action Length:</span>
+                    <div className="text-right">
+                      <span>{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
                     </div>
-                  )}
+                  </div>
                   
-                  {/* Dynamic Features from features state */}
-                  {Object.entries(features).map(([featureId, value]) => {
-                    if (!value || value === 'none' || value === '') return null;
-                    
-                    const feature = featureDefs.find(f => f.id === featureId);
-                    const featureName = feature?.displayName || featureId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    
-                    // Get the option details to show price
-                    const option = feature?.options?.find(opt => opt.value === value);
-                    const price = option?.price || 0;
-                    const displayValue = option?.label || value;
-                    
-                    return (
-                      <div key={featureId} className="flex justify-between">
-                        <span>{featureName}</span>
-                        <div className="text-right">
-                          <div>{displayValue}</div>
-                          {price > 0 && <div className="text-xs text-green-600">+${price.toFixed(2)}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {/* Action Inlet */}
+                  <div className="flex justify-between">
+                    <span>Action Inlet:</span>
+                    <div className="text-right">
+                      <span>{features.action_inlet ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'action_inlet');
+                        const option = feature?.options?.find(opt => opt.value === features.action_inlet);
+                        return option?.label || features.action_inlet;
+                      })() : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">${features.action_inlet ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'action_inlet');
+                        const option = feature?.options?.find(opt => opt.value === features.action_inlet);
+                        return (option?.price || 0).toFixed(2);
+                      })() : '0.00'}</span>
+                    </div>
+                  </div>
                   
                   {/* Bottom Metal */}
-                  {bottomMetal && (
-                    <div className="flex justify-between">
-                      <span>Bottom Metal</span>
-                      <div className="text-right">
-                        <div>{(() => {
-                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                          return option?.label || bottomMetal;
-                        })()}</div>
-                        {(() => {
-                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                          const price = option?.price || 0;
-                          return price > 0 ? <div className="text-xs text-green-600">+${price.toFixed(2)}</div> : null;
-                        })()}
-                      </div>
+                  <div className="flex justify-between">
+                    <span>Bottom Metal:</span>
+                    <div className="text-right">
+                      <span>{bottomMetal ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                        const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                        return option?.label || bottomMetal;
+                      })() : 'Not selected'}</span>
+                      <span className="ml-2 text-blue-600">${bottomMetal ? (() => {
+                        const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                        const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                        return (option?.price || 0).toFixed(2);
+                      })() : '0.00'}</span>
                     </div>
-                  )}
+                  </div>
                   
-                  {/* Show message if no features selected */}
-                  {!handedness && !actionLength && Object.keys(features).length === 0 && !bottomMetal && (
-                    <div className="text-center text-gray-400 py-2">
-                      No features selected
+                  {/* Barrel Inlet */}
+                  <div className="flex justify-between">
+                    <span>Barrel Inlet:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
                     </div>
-                  )}
+                  </div>
+                  
+                  {/* QDs (Quick Detach Cups) */}
+                  <div className="flex justify-between">
+                    <span>QDs (Quick Detach Cups):</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* LOP (Length of Pull) */}
+                  <div className="flex justify-between">
+                    <span>LOP (Length of Pull):</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* Rails */}
+                  <div className="flex justify-between">
+                    <span>Rails:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* Texture */}
+                  <div className="flex justify-between">
+                    <span>Texture:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* Swivel Studs */}
+                  <div className="flex justify-between">
+                    <span>Swivel Studs:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* Other Options */}
+                  <div className="flex justify-between">
+                    <span>Other Options:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
+                  
+                  {/* Paint Options */}
+                  <div className="flex justify-between">
+                    <span>Paint Options:</span>
+                    <div className="text-right">
+                      <span>Not selected</span>
+                      <span className="ml-2 text-blue-600">$0.00</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

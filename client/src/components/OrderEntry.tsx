@@ -297,7 +297,7 @@ export default function OrderEntry() {
               </div>
 
               {/* Customer Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <CustomerSearchInput
                     value={customer}
@@ -305,27 +305,6 @@ export default function OrderEntry() {
                     placeholder="Search customer..."
                     error={errors.customer}
                   />
-                </div>
-                <div>
-                  <Label>Customer PO</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      name="customerPO"
-                      value={customerPO}
-                      onChange={(e) => setCustomerPO(e.target.value)}
-                      placeholder=""
-                      disabled={!hasCustomerPO}
-                    />
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={() => setHasCustomerPO(!hasCustomerPO)}
-                      className="text-blue-600 p-0 h-auto"
-                    >
-                      Enable Customer PO
-                    </Button>
-                  </div>
                 </div>
               </div>
 

@@ -33,6 +33,8 @@ import {
   insertChecklistItemSchema,
   insertOnboardingDocSchema,
   insertPartsRequestSchema,
+  insertBomDefinitionSchema,
+  insertBomItemSchema,
   insertCustomerSchema,
   insertCustomerAddressSchema,
   insertCommunicationLogSchema,
@@ -3224,6 +3226,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Replacement order error:", error);
       res.status(500).json({ error: "Failed to create replacement order" });
+    }
+  });
+
+  // BOM (Bill of Materials) Management Routes
+  app.get("/api/boms", async (req, res) => {
+    try {
+      const boms = await storage.getAllBOMs();
+      res.json(boms);
+    } catch (error) {
+      console.error("Get BOMs error:", error);
+      res.status(500).json({ error: "Failed to fetch BOMs" });
+    }
+  });
+
+  app.post("/api/boms", async (req, res) => {
+    try {
+      const bomData = insertBomDefinitionSchema.parse(req.body);
+      const bom = await storage.createBOM(bomData);
+      res.status(201).json(bom);
+    } catch (error) {
+      console.error("Create BOM error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid BOM data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create BOM" });
+      }
+    }
+  });
+
+  app.get("/api/boms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const bom = await storage.getBOMDetails(parseInt(id));
+      if (!bom) {
+        return res.status(404).json({ error: "BOM not found" });
+      }
+      res.json(bom);
+    } catch (error) {
+      console.error("Get BOM details error:", error);
+      res.status(500).json({ error: "Failed to fetch BOM details" });
+    }
+  });
+
+  app.put("/api/boms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const bomData = insertBomDefinitionSchema.partial().parse(req.body);
+      const bom = await storage.updateBOM(parseInt(id), bomData);
+      res.json(bom);
+    } catch (error) {
+      console.error("Update BOM error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid BOM data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update BOM" });
+      }
+    }
+  });
+
+  app.delete("/api/boms/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteBOM(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete BOM error:", error);
+      res.status(500).json({ error: "Failed to delete BOM" });
+    }
+  });
+
+  app.post("/api/boms/:id/items", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const itemData = insertBomItemSchema.omit({ bomId: true }).parse(req.body);
+      const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Add BOM item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid BOM item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to add BOM item" });
+      }
+    }
+  });
+
+  app.put("/api/boms/:bomId/items/:itemId", async (req, res) => {
+    try {
+      const { bomId, itemId } = req.params;
+      const itemData = insertBomItemSchema.partial().omit({ bomId: true }).parse(req.body);
+      const item = await storage.updateBOMItem(parseInt(bomId), parseInt(itemId), itemData);
+      res.json(item);
+    } catch (error) {
+      console.error("Update BOM item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid BOM item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update BOM item" });
+      }
+    }
+  });
+
+  app.delete("/api/boms/:bomId/items/:itemId", async (req, res) => {
+    try {
+      const { bomId, itemId } = req.params;
+      await storage.deleteBOMItem(parseInt(bomId), parseInt(itemId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete BOM item error:", error);
+      res.status(500).json({ error: "Failed to delete BOM item" });
     }
   });
 

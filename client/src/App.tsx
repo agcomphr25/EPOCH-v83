@@ -43,6 +43,7 @@ import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
 import AllOrdersPage from "./pages/AllOrdersPage";
+import { BOMAdministration } from "./pages/BOMAdministration";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
@@ -88,6 +89,7 @@ function App() {
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/production-tracking" component={ProductionTracking} />
+                  <Route path="/bom-administration" component={BOMAdministration} />
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route component={NotFound} />

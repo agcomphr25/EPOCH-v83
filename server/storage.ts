@@ -4,7 +4,7 @@ import {
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule,
+  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -42,6 +42,8 @@ import {
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
   type LayupOrder, type InsertLayupOrder,
   type LayupSchedule, type InsertLayupSchedule,
+  type BomDefinition, type InsertBomDefinition,
+  type BomItem, type InsertBomItem,
 
 } from "./schema";
 import { db } from "./db";
@@ -294,6 +296,16 @@ export interface IStorage {
   progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft>;
   scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
+
+  // BOM Management Methods
+  getAllBOMs(): Promise<BomDefinition[]>;
+  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[] }) | undefined>;
+  createBOM(data: InsertBomDefinition): Promise<BomDefinition>;
+  updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition>;
+  deleteBOM(bomId: number): Promise<void>;
+  addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem>;
+  updateBOMItem(bomId: number, itemId: number, data: Partial<InsertBomItem>): Promise<BomItem>;
+  deleteBOMItem(bomId: number, itemId: number): Promise<void>;
 
 
 
@@ -2014,7 +2026,160 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // BOM Management Implementation
+  async getAllBOMs(): Promise<BomDefinition[]> {
+    try {
+      const boms = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.isActive, true))
+        .orderBy(bomDefinitions.modelName, bomDefinitions.revision);
+      return boms;
+    } catch (error) {
+      console.error('Error fetching BOMs:', error);
+      throw error;
+    }
+  }
 
+  async getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[] }) | undefined> {
+    try {
+      const [bom] = await db
+        .select()
+        .from(bomDefinitions)
+        .where(and(eq(bomDefinitions.id, bomId), eq(bomDefinitions.isActive, true)));
+
+      if (!bom) return undefined;
+
+      const items = await db
+        .select()
+        .from(bomItems)
+        .where(and(eq(bomItems.bomId, bomId), eq(bomItems.isActive, true)))
+        .orderBy(bomItems.partName);
+
+      return { ...bom, items };
+    } catch (error) {
+      console.error('Error fetching BOM details:', error);
+      throw error;
+    }
+  }
+
+  async createBOM(data: InsertBomDefinition): Promise<BomDefinition> {
+    try {
+      const [bom] = await db
+        .insert(bomDefinitions)
+        .values({
+          ...data,
+          updatedAt: new Date()
+        })
+        .returning();
+      return bom;
+    } catch (error) {
+      console.error('Error creating BOM:', error);
+      throw error;
+    }
+  }
+
+  async updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition> {
+    try {
+      const [bom] = await db
+        .update(bomDefinitions)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(bomDefinitions.id, bomId))
+        .returning();
+
+      if (!bom) {
+        throw new Error(`BOM ${bomId} not found`);
+      }
+
+      return bom;
+    } catch (error) {
+      console.error('Error updating BOM:', error);
+      throw error;
+    }
+  }
+
+  async deleteBOM(bomId: number): Promise<void> {
+    try {
+      // Soft delete - mark as inactive
+      await db
+        .update(bomDefinitions)
+        .set({
+          isActive: false,
+          updatedAt: new Date()
+        })
+        .where(eq(bomDefinitions.id, bomId));
+
+      // Also soft delete all items
+      await db
+        .update(bomItems)
+        .set({
+          isActive: false,
+          updatedAt: new Date()
+        })
+        .where(eq(bomItems.bomId, bomId));
+    } catch (error) {
+      console.error('Error deleting BOM:', error);
+      throw error;
+    }
+  }
+
+  async addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem> {
+    try {
+      const [item] = await db
+        .insert(bomItems)
+        .values({
+          ...data,
+          bomId,
+          updatedAt: new Date()
+        })
+        .returning();
+      return item;
+    } catch (error) {
+      console.error('Error adding BOM item:', error);
+      throw error;
+    }
+  }
+
+  async updateBOMItem(bomId: number, itemId: number, data: Partial<InsertBomItem>): Promise<BomItem> {
+    try {
+      const [item] = await db
+        .update(bomItems)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)))
+        .returning();
+
+      if (!item) {
+        throw new Error(`BOM item ${itemId} not found in BOM ${bomId}`);
+      }
+
+      return item;
+    } catch (error) {
+      console.error('Error updating BOM item:', error);
+      throw error;
+    }
+  }
+
+  async deleteBOMItem(bomId: number, itemId: number): Promise<void> {
+    try {
+      // Soft delete - mark as inactive
+      await db
+        .update(bomItems)
+        .set({
+          isActive: false,
+          updatedAt: new Date()
+        })
+        .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)));
+    } catch (error) {
+      console.error('Error deleting BOM item:', error);
+      throw error;
+    }
+  }
 
 }
 

@@ -59,6 +59,12 @@ export default function Navigation() {
       description: 'Track production orders from POs'
     },
     {
+      path: '/bom-administration',
+      label: 'BOM Administration',
+      icon: Package,
+      description: 'Manage Bill of Materials for P2 operations'
+    },
+    {
       path: '/barcode-scanner',
       label: 'Barcode Scanner',
       icon: Scan,

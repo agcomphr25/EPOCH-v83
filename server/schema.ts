@@ -1194,3 +1194,55 @@ export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
 export const orderStatusEnum = pgEnum('order_status', ['DRAFT', 'CONFIRMED', 'FINALIZED', 'CANCELLED', 'RESERVED']);
+
+// BOM (Bill of Materials) Management Tables for P2
+export const bomDefinitions = pgTable('bom_definitions', {
+  id: serial('id').primaryKey(),
+  modelName: text('model_name').notNull(),
+  revision: text('revision').notNull().default('A'),
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const bomItems = pgTable('bom_items', {
+  id: serial('id').primaryKey(),
+  bomId: integer('bom_id').references(() => bomDefinitions.id).notNull(),
+  partName: text('part_name').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  firstDept: text('first_dept').notNull().default('Layup'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert schemas for BOM
+export const insertBomDefinitionSchema = createInsertSchema(bomDefinitions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  modelName: z.string().min(1, "Model name is required"),
+  revision: z.string().min(1, "Revision is required").default('A'),
+  description: z.string().optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertBomItemSchema = createInsertSchema(bomItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  bomId: z.number().min(1, "BOM ID is required"),
+  partName: z.string().min(1, "Part name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1").default(1),
+  firstDept: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']).default('Layup'),
+  isActive: z.boolean().default(true),
+});
+
+// BOM Types
+export type InsertBomDefinition = z.infer<typeof insertBomDefinitionSchema>;
+export type BomDefinition = typeof bomDefinitions.$inferSelect;
+export type InsertBomItem = z.infer<typeof insertBomItemSchema>;
+export type BomItem = typeof bomItems.$inferSelect;

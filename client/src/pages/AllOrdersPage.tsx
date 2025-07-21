@@ -1,6 +1,5 @@
 import React from 'react';
 import AllOrdersList from '../components/AllOrdersList';
-import PipelineVisualization from '../components/PipelineVisualization';
 
 export default function AllOrdersPage() {
   return (
@@ -8,12 +7,9 @@ export default function AllOrdersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">All Orders</h1>
         <div className="text-sm text-gray-500">
-          Department Progression & Pipeline Management
+          Order Management & Department Progression
         </div>
       </div>
-      
-      {/* Pipeline Overview */}
-      <PipelineVisualization />
       
       {/* Orders List with Department Actions */}
       <AllOrdersList />

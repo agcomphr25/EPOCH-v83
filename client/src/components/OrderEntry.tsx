@@ -623,23 +623,39 @@ export default function OrderEntry() {
                       </SelectTrigger>
                       <SelectContent>
                         {(() => {
-                          const paintFeature = featureDefs.find(f => 
-                            f.id === 'paint_options' || 
-                            f.name === 'paint_options' || 
+                          // Find all paint-related features from different sub-categories
+                          const paintFeatures = featureDefs.filter(f => 
+                            f.category === 'paint_options' ||
+                            f.displayName === 'Premium Options' ||
+                            f.displayName === 'Terrain Options' ||
+                            f.displayName === 'Rogue Options' ||
+                            f.displayName === 'Standard Options' ||
+                            f.displayName === 'Carbon Camo Ready' ||
+                            f.displayName === 'Camo Options' ||
                             f.id === 'metallic_finishes' ||
-                            f.name === 'metallic_finishes' ||
-                            f.id?.toLowerCase().includes('paint') ||
-                            f.name?.toLowerCase().includes('paint') ||
-                            f.displayName?.toLowerCase().includes('paint') ||
-                            f.displayName?.toLowerCase().includes('finish') ||
-                            f.displayName?.toLowerCase().includes('metallic')
+                            f.name === 'metallic_finishes'
                           );
                           
-                          if (!paintFeature || !paintFeature.options) {
-                            return null;
+                          if (!paintFeatures || paintFeatures.length === 0) {
+                            return <SelectItem value="none">No paint options available</SelectItem>;
                           }
                           
-                          return paintFeature.options.map((option) => (
+                          // Collect all options from all paint features
+                          const allOptions: { value: string; label: string; category?: string }[] = [];
+                          
+                          paintFeatures.forEach(feature => {
+                            if (feature.options) {
+                              feature.options.forEach(option => {
+                                allOptions.push({
+                                  value: option.value,
+                                  label: `${feature.displayName || feature.name} - ${option.label}`,
+                                  category: feature.displayName || feature.name
+                                });
+                              });
+                            }
+                          });
+                          
+                          return allOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>

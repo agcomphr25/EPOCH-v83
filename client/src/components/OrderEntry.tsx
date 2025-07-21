@@ -680,24 +680,7 @@ export default function OrderEntry() {
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-4">
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Saving..." : "Save as Draft"}
-                </Button>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  variant="default"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Processing..." : "Create Order"}
-                </Button>
-              </div>
+
               </form>
             </CardContent>
           </Card>
@@ -912,11 +895,29 @@ export default function OrderEntry() {
                   <span>Total</span>
                   <span className="text-blue-600">${pricing.total.toFixed(2)}</span>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Save as Draft
-                </div>
               </div>
 
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={handleSubmit}
+                >
+                  {isSubmitting ? "Saving..." : "Save as Draft"}
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  variant="default"
+                  disabled={isSubmitting}
+                  onClick={handleSubmit}
+                >
+                  {isSubmitting ? "Processing..." : "Create Order"}
+                </Button>
+              </div>
 
             </CardContent>
           </Card>

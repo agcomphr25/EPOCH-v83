@@ -614,14 +614,34 @@ export default function OrderEntry() {
                   {/* Paint Options */}
                   <div>
                     <Label>Paint Options</Label>
-                    <Select>
+                    <Select 
+                      value={features.paint_options || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, paint_options: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select or search..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="primer">Primer Only</SelectItem>
-                        <SelectItem value="custom">Custom Paint</SelectItem>
+                        {(() => {
+                          const paintFeature = featureDefs.find(f => 
+                            f.id === 'paint_options' || 
+                            f.name === 'paint_options' || 
+                            f.id?.toLowerCase().includes('paint') ||
+                            f.name?.toLowerCase().includes('paint') ||
+                            f.displayName?.toLowerCase().includes('paint') ||
+                            f.displayName?.toLowerCase().includes('finish')
+                          );
+                          
+                          if (!paintFeature || !paintFeature.options) {
+                            return null;
+                          }
+                          
+                          return paintFeature.options.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>

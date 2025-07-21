@@ -1,4 +1,17 @@
 import React, { useState } from 'react';
+
+interface Order {
+  id: number;
+  orderId: string;
+  orderDate: string;
+  dueDate: string;
+  customerId: string;
+  customer?: string;
+  product?: string;
+  modelId: string;
+  currentDepartment: string;
+  status: string;
+}
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowRight, AlertTriangle, Package2 } from 'lucide-react';
-import { apiRequest } from '../lib/queryClient';
+import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import toast from 'react-hot-toast';
 
@@ -14,16 +27,16 @@ const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [scrapModalOrder, setScrapModalOrder] = useState(null);
+  const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: orders, isLoading } = useQuery({
+  const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }) => {
+    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
         body: { nextDepartment }
@@ -40,7 +53,7 @@ export default function AllOrdersList() {
   });
 
   const scrapOrderMutation = useMutation({
-    mutationFn: async ({ orderId, scrapData }) => {
+    mutationFn: async ({ orderId, scrapData }: { orderId: string, scrapData: any }) => {
       return apiRequest(`/api/orders/${orderId}/scrap`, {
         method: 'POST',
         body: scrapData
@@ -58,7 +71,7 @@ export default function AllOrdersList() {
   });
 
   const createReplacementMutation = useMutation({
-    mutationFn: async (orderId) => {
+    mutationFn: async (orderId: string) => {
       return apiRequest(`/api/orders/${orderId}/reload-replacement`, {
         method: 'POST'
       });
@@ -77,19 +90,21 @@ export default function AllOrdersList() {
     return order.currentDepartment === selectedDepartment;
   }) || [];
 
-  const handleProgressOrder = (orderId, nextDepartment) => {
+  const handleProgressOrder = (orderId: string, nextDepartment: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
-  const handleScrapOrder = (scrapData) => {
-    scrapOrderMutation.mutate({ 
-      orderId: scrapModalOrder.orderId, 
-      scrapData 
-    });
+  const handleScrapOrder = (scrapData: any) => {
+    if (scrapModalOrder) {
+      scrapOrderMutation.mutate({ 
+        orderId: scrapModalOrder.orderId, 
+        scrapData 
+      });
+    }
   };
 
-  const getDepartmentBadgeColor = (department) => {
-    const colors = {
+  const getDepartmentBadgeColor = (department: string) => {
+    const colors: { [key: string]: string } = {
       'Layup': 'bg-blue-500',
       'Plugging': 'bg-orange-500',
       'CNC': 'bg-green-500',
@@ -102,7 +117,7 @@ export default function AllOrdersList() {
     return colors[department] || 'bg-gray-400';
   };
 
-  const getNextDepartment = (currentDept) => {
+  const getNextDepartment = (currentDept: string) => {
     const index = departments.indexOf(currentDept);
     return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
   };

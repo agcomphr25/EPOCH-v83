@@ -49,6 +49,7 @@ export default function OrderEntry() {
   const [modelOpen, setModelOpen] = useState(false);
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
+  const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
 
   const [orderDate, setOrderDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
@@ -84,6 +85,7 @@ export default function OrderEntry() {
   useEffect(() => {
     loadStockModels();
     loadFeatures();
+    loadDiscountCodes();
     generateOrderId();
   }, []);
 
@@ -102,6 +104,49 @@ export default function OrderEntry() {
       setFeatureDefs(features);
     } catch (error) {
       console.error('Failed to load features:', error);
+    }
+  };
+
+  const loadDiscountCodes = async () => {
+    try {
+      const [shortTermSales, persistentDiscounts] = await Promise.all([
+        apiRequest('/api/short-term-sales'),
+        apiRequest('/api/persistent-discounts')
+      ]);
+      
+      const discounts = [];
+      
+      // Add active short-term sales
+      const now = new Date();
+      shortTermSales
+        .filter((sale: any) => {
+          const startDate = new Date(sale.startDate);
+          const endDate = new Date(sale.endDate);
+          return startDate <= now && now <= endDate && sale.isActive;
+        })
+        .forEach((sale: any) => {
+          discounts.push({
+            value: `short_term_${sale.id}`,
+            label: `${sale.name} (${sale.percent}% off)`
+          });
+        });
+      
+      // Add active persistent discounts
+      persistentDiscounts
+        .filter((discount: any) => discount.isActive)
+        .forEach((discount: any) => {
+          const displayValue = discount.percent 
+            ? `${discount.percent}% off`
+            : `$${(discount.fixedAmount / 100).toFixed(2)} off`;
+          discounts.push({
+            value: `persistent_${discount.id}`,
+            label: `${discount.name} (${displayValue})`
+          });
+        });
+      
+      setDiscountOptions(discounts);
+    } catch (error) {
+      console.error('Failed to load discount codes:', error);
     }
   };
 
@@ -861,11 +906,19 @@ export default function OrderEntry() {
               {/* Discount Code */}
               <div className="border-t pt-4">
                 <div className="text-sm font-medium mb-2">Discount Code</div>
-                <Input
-                  placeholder="Select discount code"
-                  value={discountCode}
-                  onChange={(e) => setDiscountCode(e.target.value)}
-                />
+                <Select value={discountCode} onValueChange={setDiscountCode}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select discount code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No discount</SelectItem>
+                    {discountOptions.map((discount) => (
+                      <SelectItem key={discount.value} value={discount.value}>
+                        {discount.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Shipping & Handling */}

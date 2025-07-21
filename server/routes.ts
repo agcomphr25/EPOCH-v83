@@ -590,6 +590,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get pipeline counts for all departments (must be before :orderId route)
+  app.get("/api/orders/pipeline-counts", async (req, res) => {
+    try {
+      const counts = await storage.getPipelineCounts();
+      res.json(counts);
+    } catch (error) {
+      console.error("Pipeline counts fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch pipeline counts" });
+    }
+  });
+
   // Get individual order by orderId
   app.get("/api/orders/:orderId", async (req, res) => {
     try {
@@ -3157,16 +3168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get pipeline counts for all departments
-  app.get("/api/orders/pipeline-counts", async (req, res) => {
-    try {
-      const counts = await storage.getPipelineCounts();
-      res.json(counts);
-    } catch (error) {
-      console.error("Pipeline counts fetch error:", error);
-      res.status(500).json({ error: "Failed to fetch pipeline counts" });
-    }
-  });
+
 
   // Progress an order to the next department
   app.post("/api/orders/:orderId/progress", async (req, res) => {

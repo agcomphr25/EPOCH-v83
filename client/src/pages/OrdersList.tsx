@@ -145,15 +145,15 @@ export default function OrdersList() {
     console.log('Error state:', error);
 
   const getCustomerName = (customerId: string) => {
-    if (!customers) return customerId;
+    if (!customers || !customerId) return customerId || '';
     const customer = customers.find(c => c.id.toString() === customerId);
-    return customer ? customer.name : customerId;
+    return customer?.name || customerId || '';
   };
 
   const getCustomerPhone = (customerId: string) => {
-    if (!customers) return '';
+    if (!customers || !customerId) return '';
     const customer = customers.find(c => c.id.toString() === customerId);
-    return customer ? customer.phone : '';
+    return customer?.phone || '';
   };
 
   // Filter orders based on search term
@@ -165,13 +165,13 @@ export default function OrdersList() {
     const term = searchTerm.toLowerCase().trim();
     return orders.filter((order) => {
       // Search by Order ID
-      if (order.orderId.toLowerCase().includes(term)) {
+      if (order.orderId && order.orderId.toLowerCase().includes(term)) {
         return true;
       }
       
       // Search by Customer Name
       const customerName = getCustomerName(order.customerId);
-      if (customerName.toLowerCase().includes(term)) {
+      if (customerName && customerName.toLowerCase().includes(term)) {
         return true;
       }
       

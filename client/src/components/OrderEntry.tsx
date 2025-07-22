@@ -86,6 +86,10 @@ export default function OrderEntry() {
     actionLength
   });
 
+  // Price Override state
+  const [priceOverride, setPriceOverride] = useState<number | null>(null);
+  const [showPriceOverride, setShowPriceOverride] = useState(false);
+  
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
@@ -108,10 +112,10 @@ export default function OrderEntry() {
   const calculateTotalPrice = useCallback(() => {
     let total = 0;
 
-    // Add stock model price
+    // Add stock model price (use override if set, otherwise use standard price)
     const selectedModel = modelOptions.find(model => model.id === modelId);
     if (selectedModel) {
-      total += selectedModel.price || 0;
+      total += priceOverride !== null ? priceOverride : (selectedModel.price || 0);
     }
 
     // Add feature prices
@@ -453,7 +457,8 @@ export default function OrderEntry() {
         discountCode,
         customDiscountType,
         customDiscountValue,
-        showCustomDiscount
+        showCustomDiscount,
+        priceOverride
       };
 
       const response = await apiRequest('/api/orders/draft', {
@@ -506,6 +511,8 @@ export default function OrderEntry() {
     setCustomDiscountType('percent');
     setCustomDiscountValue(0);
     setShowCustomDiscount(false);
+    setPriceOverride(null);
+    setShowPriceOverride(false);
     setShipping(36.95);
     setIsCustomOrder(false);
     setNotes('');
@@ -674,6 +681,85 @@ export default function OrderEntry() {
                 </Select>
                 {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}
               </div>
+
+              {/* Alamo Price Override */}
+              {modelId && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-600">💰</span>
+                      <span className="font-medium text-gray-900">Alamo Price Override</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPriceOverride(!showPriceOverride)}
+                      className="flex items-center gap-2"
+                    >
+                      <span>✏️</span>
+                      Override Price
+                    </Button>
+                  </div>
+                  
+                  {showPriceOverride && (
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm text-gray-600">Original Price</Label>
+                          <div className="text-lg font-semibold text-gray-900">
+                            ${(() => {
+                              const selectedModel = modelOptions.find(model => model.id === modelId);
+                              return selectedModel ? selectedModel.price.toFixed(2) : '0.00';
+                            })()}
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="price-override">Override Price</Label>
+                          <Input
+                            id="price-override"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter override price"
+                            value={priceOverride || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setPriceOverride(value ? parseFloat(value) : null);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPriceOverride(null);
+                            setShowPriceOverride(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setShowPriceOverride(false)}
+                        >
+                          Apply Override
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {priceOverride !== null && !showPriceOverride && (
+                    <div className="mt-2 text-sm text-green-700">
+                      Price overridden to: <span className="font-semibold">${priceOverride.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Product Features - Two Column Layout */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,151 @@ interface InventoryFormData {
   secondarySource: string;
   notes: string;
 }
+
+// Move FormContent outside to prevent recreation on each render
+const InventoryForm = ({ 
+  formData, 
+  onSubmit, 
+  onChange, 
+  editingItem, 
+  isCreatePending, 
+  isUpdatePending,
+  onCancel 
+}: {
+  formData: InventoryFormData;
+  onSubmit: (e: React.FormEvent) => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  editingItem: InventoryItem | null;
+  isCreatePending: boolean;
+  isUpdatePending: boolean;
+  onCancel: () => void;
+}) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="agPartNumber">AG Part# *</Label>
+        <Input
+          id="agPartNumber"
+          name="agPartNumber"
+          value={formData.agPartNumber}
+          onChange={onChange}
+          placeholder="Enter AG Part#"
+          required
+        />
+      </div>
+      <div>
+        <Label htmlFor="name">Name *</Label>
+        <Input
+          id="name"
+          name="name"
+          value={formData.name}
+          onChange={onChange}
+          placeholder="Enter item name"
+          required
+        />
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="source">Source</Label>
+        <Input
+          id="source"
+          name="source"
+          value={formData.source}
+          onChange={onChange}
+          placeholder="Enter source"
+        />
+      </div>
+      <div>
+        <Label htmlFor="supplierPartNumber">Supplier Part #</Label>
+        <Input
+          id="supplierPartNumber"
+          name="supplierPartNumber"
+          value={formData.supplierPartNumber}
+          onChange={onChange}
+          placeholder="Enter supplier part #"
+        />
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="costPer">Cost per</Label>
+        <Input
+          id="costPer"
+          name="costPer"
+          type="number"
+          step="0.01"
+          value={formData.costPer}
+          onChange={onChange}
+          placeholder="0.00"
+        />
+      </div>
+      <div>
+        <Label htmlFor="orderDate">Order Date</Label>
+        <Input
+          id="orderDate"
+          name="orderDate"
+          type="date"
+          value={formData.orderDate}
+          onChange={onChange}
+        />
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="department">Dept.</Label>
+        <Input
+          id="department"
+          name="department"
+          value={formData.department}
+          onChange={onChange}
+          placeholder="Enter department"
+        />
+      </div>
+      <div>
+        <Label htmlFor="secondarySource">Secondary Source</Label>
+        <Input
+          id="secondarySource"
+          name="secondarySource"
+          value={formData.secondarySource}
+          onChange={onChange}
+          placeholder="Enter secondary source"
+        />
+      </div>
+    </div>
+
+    <div>
+      <Label htmlFor="notes">Notes</Label>
+      <Textarea
+        id="notes"
+        name="notes"
+        value={formData.notes}
+        onChange={onChange}
+        placeholder="Enter notes"
+        rows={3}
+      />
+    </div>
+
+    <div className="flex justify-end space-x-2">
+      <Button 
+        type="button" 
+        variant="outline" 
+        onClick={onCancel}
+      >
+        Cancel
+      </Button>
+      <Button 
+        type="submit" 
+        disabled={isCreatePending || isUpdatePending}
+      >
+        {editingItem ? 'Update' : 'Create'} Item
+      </Button>
+    </div>
+  </form>
+);
 
 export default function InventoryItemsCard() {
   const queryClient = useQueryClient();
@@ -195,12 +340,12 @@ export default function InventoryItemsCard() {
     });
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.agPartNumber || !formData.name) {
@@ -225,7 +370,7 @@ export default function InventoryItemsCard() {
     } else {
       createMutation.mutate(submitData);
     }
-  };
+  }, [formData, editingItem, updateMutation, createMutation]);
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
@@ -249,141 +394,7 @@ export default function InventoryItemsCard() {
     }
   };
 
-  const FormContent = () => (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="agPartNumber">AG Part# *</Label>
-          <Input
-            id="agPartNumber"
-            name="agPartNumber"
-            value={formData.agPartNumber}
-            onChange={handleChange}
-            placeholder="Enter AG Part#"
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="name">Name *</Label>
-          <Input
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Enter item name"
-            required
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="source">Source</Label>
-          <Input
-            id="source"
-            name="source"
-            value={formData.source}
-            onChange={handleChange}
-            placeholder="Enter source"
-          />
-        </div>
-        <div>
-          <Label htmlFor="supplierPartNumber">Supplier Part #</Label>
-          <Input
-            id="supplierPartNumber"
-            name="supplierPartNumber"
-            value={formData.supplierPartNumber}
-            onChange={handleChange}
-            placeholder="Enter supplier part #"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="costPer">Cost per</Label>
-          <Input
-            id="costPer"
-            name="costPer"
-            type="number"
-            step="0.01"
-            value={formData.costPer}
-            onChange={handleChange}
-            placeholder="0.00"
-          />
-        </div>
-        <div>
-          <Label htmlFor="orderDate">Order Date</Label>
-          <Input
-            id="orderDate"
-            name="orderDate"
-            type="date"
-            value={formData.orderDate}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="department">Dept.</Label>
-          <Input
-            id="department"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            placeholder="Enter department"
-          />
-        </div>
-        <div>
-          <Label htmlFor="secondarySource">Secondary Source</Label>
-          <Input
-            id="secondarySource"
-            name="secondarySource"
-            value={formData.secondarySource}
-            onChange={handleChange}
-            placeholder="Enter secondary source"
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea
-          id="notes"
-          name="notes"
-          value={formData.notes}
-          onChange={handleChange}
-          placeholder="Enter notes"
-          rows={3}
-        />
-      </div>
-
-      <div className="flex justify-end space-x-2">
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={() => {
-            if (editingItem) {
-              setIsEditOpen(false);
-              setEditingItem(null);
-            } else {
-              setIsCreateOpen(false);
-            }
-            resetForm();
-          }}
-        >
-          Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          disabled={createMutation.isPending || updateMutation.isPending}
-        >
-          {editingItem ? 'Update' : 'Create'} Item
-        </Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6">
@@ -414,7 +425,18 @@ export default function InventoryItemsCard() {
               <DialogHeader>
                 <DialogTitle>Create New Inventory Item</DialogTitle>
               </DialogHeader>
-              <FormContent />
+              <InventoryForm
+                formData={formData}
+                onSubmit={handleSubmit}
+                onChange={handleChange}
+                editingItem={editingItem}
+                isCreatePending={createMutation.isPending}
+                isUpdatePending={updateMutation.isPending}
+                onCancel={() => {
+                  setIsCreateOpen(false);
+                  resetForm();
+                }}
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -548,7 +570,19 @@ export default function InventoryItemsCard() {
           <DialogHeader>
             <DialogTitle>Edit Inventory Item</DialogTitle>
           </DialogHeader>
-          <FormContent />
+          <InventoryForm
+            formData={formData}
+            onSubmit={handleSubmit}
+            onChange={handleChange}
+            editingItem={editingItem}
+            isCreatePending={createMutation.isPending}
+            isUpdatePending={updateMutation.isPending}
+            onCancel={() => {
+              setIsEditOpen(false);
+              setEditingItem(null);
+              resetForm();
+            }}
+          />
         </DialogContent>
       </Dialog>
     </div>

@@ -104,6 +104,15 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
+        {/* Show Action Length under Order ID */}
+        {order.features?.action_length && (
+          <div className="text-xs opacity-80 mt-0.5 font-medium">
+            {order.features.action_length === 'Long' ? 'LA' : 
+             order.features.action_length === 'Medium' ? 'MA' : 
+             order.features.action_length === 'Short' ? 'SA' : 
+             order.features.action_length}
+          </div>
+        )}
         {/* Show product display name if available */}
         {getModelDisplayName && order.modelId && (
           <div className="text-xs opacity-80 mt-0.5">

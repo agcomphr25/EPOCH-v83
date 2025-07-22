@@ -27,6 +27,8 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Status Footer Update**: Updated footer cards to reflect P1 Layup Scheduler active status and P2 Layup Scheduler readiness
 - ✅ **User Experience**: Enhanced dashboard to provide direct access to layup scheduling without navigation between screens
 - ✅ **Order Queue Hidden**: Temporarily hidden Order Queue sidebar in Layup Scheduler to optimize screen space for calendar view
+- ✅ **Action Length Display**: Added Action Length (LA/MA/SA) under Order ID on all order cards for quick identification
+- ✅ **Mold Configuration Integration**: Confirmed Layup Scheduler uses molds from Mold Configuration modal for proper assignment workflow
 
 **July 22, 2025 - ADMINTEST Dashboard Implementation (COMPLETED)**
 - ✅ **Comprehensive Navigation Dashboard**: Built complete ADMINTEST Dashboard with organized navigation cards for all system sections

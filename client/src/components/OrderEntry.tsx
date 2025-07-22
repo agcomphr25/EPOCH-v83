@@ -73,6 +73,71 @@ export default function OrderEntry() {
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+
+  // Calculate total price based on selected features
+  const calculateTotalPrice = useCallback(() => {
+    let total = 0;
+
+    // Add stock model price
+    const selectedModel = modelOptions.find(model => model.id === modelId);
+    if (selectedModel) {
+      total += selectedModel.price || 0;
+    }
+
+    // Add feature prices
+    Object.entries(features).forEach(([featureId, value]) => {
+      if (value && value !== 'none') {
+        const feature = featureDefs.find(f => f.id === featureId);
+        if (feature?.options) {
+          if (Array.isArray(value)) {
+            // Handle multi-select features
+            value.forEach(optionValue => {
+              const option = feature.options!.find(opt => opt.value === optionValue);
+              if (option?.price) {
+                total += option.price;
+              }
+            });
+          } else {
+            // Handle single-select features
+            const option = feature.options.find(opt => opt.value === value);
+            if (option?.price) {
+              total += option.price;
+            }
+          }
+        }
+      }
+    });
+
+    // Add rail accessory prices
+    if (railAccessory && railAccessory.length > 0) {
+      const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
+      if (railFeature?.options) {
+        railAccessory.forEach(optionValue => {
+          const option = railFeature.options!.find(opt => opt.value === optionValue);
+          if (option?.price) {
+            total += option.price;
+          }
+        });
+      }
+    }
+
+    // Add other options prices
+    if (otherOptions && otherOptions.length > 0) {
+      const otherFeature = featureDefs.find(f => f.id === 'other_options');
+      if (otherFeature?.options) {
+        otherOptions.forEach(optionValue => {
+          const option = otherFeature.options!.find(opt => opt.value === optionValue);
+          if (option?.price) {
+            total += option.price;
+          }
+        });
+      }
+    }
+
+    return total;
+  }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
+
+  const totalPrice = calculateTotalPrice();
   const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [showCustomDiscount, setShowCustomDiscount] = useState(false);
   const [shipping, setShipping] = useState(36.95);

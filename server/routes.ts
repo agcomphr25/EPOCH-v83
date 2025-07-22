@@ -2897,6 +2897,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unified Layup Queue endpoint - combines regular orders and P1 PO orders
+  app.get("/api/layup-queue", async (req, res) => {
+    try {
+      // Get regular orders from main database (existing logic)
+      const regularOrders = await storage.getAllOrderDrafts();
+      const layupOrders = regularOrders.filter(order => 
+        order.status === 'FINALIZED' && 
+        (order.department === 'Layup' || order.currentDepartment === 'Layup')
+      );
+
+      // Get P1 Purchase Orders with stock model items
+      const pos = await storage.getAllPurchaseOrders();
+      const activePos = pos.filter(po => po.status === 'OPEN');
+      
+      const p1LayupOrders = [];
+      
+      // Process each active PO for layup-required items
+      for (const po of activePos) {
+        const items = await storage.getPurchaseOrderItems(po.id);
+        const stockModelItems = items.filter(item => item.itemType === 'stock_model');
+        
+        for (const item of stockModelItems) {
+          // Calculate priority score for P1 PO items
+          const calculateP1Priority = (po: any, item: any) => {
+            let baseScore = 50; // Default medium priority
+            
+            // Due date factor (0-40 points based on urgency)
+            const dueDate = new Date(po.expectedDelivery);
+            const now = new Date();
+            const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const urgencyScore = Math.max(0, Math.min(40, 40 - daysUntilDue));
+            
+            // Customer factor (check if existing customer - 10 points bonus)
+            // We'll add this logic when customer matching is needed
+            const customerScore = 0; // TODO: implement customer lookup
+            
+            return Math.max(1, baseScore + urgencyScore + customerScore);
+          };
+
+          // Create layup order entry for each P1 PO item
+          const layupOrder = {
+            id: `p1-po-${po.id}-${item.id}`, // Unique identifier
+            orderId: `${po.poNumber}-${item.id}`, // Display identifier
+            orderDate: po.poDate,
+            customer: po.customerName,
+            product: item.itemName,
+            quantity: item.quantity,
+            status: 'FINALIZED',
+            department: 'Layup',
+            currentDepartment: 'Layup',
+            priorityScore: calculateP1Priority(po, item),
+            dueDate: po.expectedDelivery,
+            source: 'p1_purchase_order', // Track source for identification
+            poId: po.id,
+            poItemId: item.id,
+            stockModelId: item.itemId, // For mold mapping
+            createdAt: po.createdAt,
+            updatedAt: po.updatedAt
+          };
+          
+          p1LayupOrders.push(layupOrder);
+        }
+      }
+
+      // Combine and sort all orders by priority score (lower = higher priority)
+      const combinedOrders = [
+        ...layupOrders.map(order => ({ ...order, source: 'main_orders' })),
+        ...p1LayupOrders
+      ].sort((a, b) => (a.priorityScore || 50) - (b.priorityScore || 50));
+
+      res.json(combinedOrders);
+    } catch (error) {
+      console.error("Layup queue error:", error);
+      res.status(500).json({ error: "Failed to fetch layup queue" });
+    }
+  });
+
   // Documentation endpoint
   app.get("/api/documentation", async (req, res) => {
     try {

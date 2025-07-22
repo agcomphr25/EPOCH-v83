@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { generateLayupSchedule } from '../utils/schedulerUtils';
 import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
-import useLayupOrders from '../hooks/useLayupOrders';
+import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
 import {
   DndContext,
@@ -96,10 +96,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell }: { order: any
       style={style}
       {...attributes}
       {...listeners}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} bg-blue-50 dark:bg-blue-900/30 rounded-lg border shadow-sm cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200`}
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${order.source === 'p1_purchase_order' ? 'bg-green-50 dark:bg-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/50 border-green-200 dark:border-green-800' : 'bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border'} rounded-lg shadow-sm cursor-grab transition-all duration-200`}
     >
-      <div className={`font-medium text-blue-900 dark:text-blue-100 ${sizing.textSize} text-center flex items-center justify-center h-full`}>
+      <div className={`font-medium ${order.source === 'p1_purchase_order' ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'} ${sizing.textSize} text-center flex items-center justify-center h-full`}>
         {order.orderId}
+        {order.source === 'p1_purchase_order' && <span className="text-xs ml-1">P1</span>}
       </div>
     </div>
   );
@@ -166,7 +167,7 @@ export default function LayupScheduler() {
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
-  const { orders, reloadOrders, loading: ordersLoading } = useLayupOrders();
+  const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

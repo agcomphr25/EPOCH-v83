@@ -405,8 +405,8 @@ export default function LayupScheduler() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex h-full">
-        {/* Sidebar for Order Queue */}
-        <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+        {/* Sidebar for Order Queue - Temporarily Hidden */}
+        <aside className="hidden w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

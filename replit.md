@@ -26,6 +26,7 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Responsive Grid Layout**: Maintained xl:grid-cols-2 layout adapting gracefully from 2-column desktop to single-column mobile view
 - ✅ **Status Footer Update**: Updated footer cards to reflect P1 Layup Scheduler active status and P2 Layup Scheduler readiness
 - ✅ **User Experience**: Enhanced dashboard to provide direct access to layup scheduling without navigation between screens
+- ✅ **Order Queue Hidden**: Temporarily hidden Order Queue sidebar in Layup Scheduler to optimize screen space for calendar view
 
 **July 22, 2025 - ADMINTEST Dashboard Implementation (COMPLETED)**
 - ✅ **Comprehensive Navigation Dashboard**: Built complete ADMINTEST Dashboard with organized navigation cards for all system sections

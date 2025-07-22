@@ -10,6 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - P1 Purchase Orders Integration with Layup Scheduler (COMPLETED)**
+- ✅ **Unified Layup Queue API**: Created `/api/layup-queue` endpoint combining regular orders and P1 Purchase Order items  
+- ✅ **Smart Priority Scoring**: P1 orders get calculated priority scores based on due date urgency (closer dates = higher priority)
+- ✅ **Automatic Mold Assignment**: P1 stock model items automatically map to configured molds using existing mold configuration
+- ✅ **Visual Distinction**: P1 orders display as green cards with "P1" label, regular orders remain blue for clear identification
+- ✅ **Drag and Drop Integration**: Both order types work identically in the scheduling interface with persistent positioning
+- ✅ **Navigation Consistency**: Updated nav label from "Purchase Orders" to "P1 Purchase Orders" to match "P2 Purchase Orders"
+- ✅ **Real-Time Updates**: Queue refreshes every 30 seconds to include new P1 PO items automatically
+
 **July 22, 2025 - Fixed All Orders Edit Button Issue (COMPLETED)**
 - ✅ **Root Cause Identification**: Edit button in All Orders list was passing database record ID instead of order ID to the order entry page
 - ✅ **Link Parameter Fix**: Changed `/order-entry?draft=${order.id}` to `/order-entry?draft=${order.orderId}` in OrdersList component

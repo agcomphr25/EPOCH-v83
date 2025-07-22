@@ -48,7 +48,7 @@ export default function Navigation() {
     },
     {
       path: '/purchase-orders',
-      label: 'Purchase Orders',
+      label: 'P1 Purchase Orders',
       icon: ClipboardList,
       description: 'Module 12: Customer PO management'
     },

@@ -181,12 +181,13 @@ export default function LayupScheduler() {
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Debug logging
-  console.log('LayupScheduler - Orders data:', orders);
-  console.log('LayupScheduler - Orders count:', orders?.length);
-  console.log('LayupScheduler - Sample order:', orders?.[0]);
-  console.log('LayupScheduler - Order Assignments:', orderAssignments);
-  console.log('LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
+  // Debug logging with emojis for visibility
+  console.log('🎯 LayupScheduler - Orders data:', orders);
+  console.log('📊 LayupScheduler - Orders count:', orders?.length);
+  console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
+  console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
+  console.log('🏭 LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
+  console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -229,10 +230,11 @@ export default function LayupScheduler() {
   // Apply automatic schedule to orderAssignments when schedule changes
   React.useEffect(() => {
     if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log('Applying automatic schedule:', schedule);
+      console.log('🚀 Applying automatic schedule:', schedule);
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
       
       schedule.forEach(item => {
+        console.log(`📋 Assigning ${item.orderId} to mold ${item.moldId} on ${item.scheduledDate}`);
         autoAssignments[item.orderId] = {
           moldId: item.moldId,
           date: item.scheduledDate.toISOString()
@@ -240,7 +242,14 @@ export default function LayupScheduler() {
       });
       
       setOrderAssignments(autoAssignments);
-      console.log('Auto-assigned orders:', autoAssignments);
+      console.log('✅ Auto-assigned orders:', autoAssignments);
+      console.log('🔢 Total assignments made:', Object.keys(autoAssignments).length);
+    } else {
+      console.log('❌ Not applying auto-schedule:', {
+        scheduleLength: schedule.length,
+        existingAssignments: Object.keys(orderAssignments).length,
+        schedule: schedule
+      });
     }
   }, [schedule, orderAssignments]);
 
@@ -402,7 +411,37 @@ export default function LayupScheduler() {
               variant="outline" 
               size="sm"
               onClick={() => {
-                console.log('Resetting assignments, applying auto-schedule:', schedule);
+                console.log('🔧 Manual test assignment...');
+                if (orders.length > 0 && molds.length > 0) {
+                  const testAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+                  const firstMold = molds.find(m => m.enabled);
+                  const today = new Date();
+                  
+                  orders.forEach((order, index) => {
+                    if (firstMold) {
+                      const assignDate = new Date(today);
+                      assignDate.setDate(today.getDate() + index);
+                      testAssignments[order.orderId] = {
+                        moldId: firstMold.moldId,
+                        date: assignDate.toISOString()
+                      };
+                      console.log(`🎯 Test assigning ${order.orderId} to ${firstMold.moldId} on ${assignDate.toDateString()}`);
+                    }
+                  });
+                  setOrderAssignments(testAssignments);
+                  console.log('✅ Manual test assignments:', testAssignments);
+                } else {
+                  console.log('❌ No orders or molds available for test assignment');
+                }
+              }}
+            >
+              Test Assignment
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                console.log('🚀 Resetting assignments, applying auto-schedule:', schedule);
                 const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
                 schedule.forEach(item => {
                   autoAssignments[item.orderId] = {

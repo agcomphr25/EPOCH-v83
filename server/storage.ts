@@ -4,7 +4,7 @@ import {
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
-  p2Customers, p2PurchaseOrders, p2PurchaseOrderItems,
+  p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -42,6 +42,7 @@ import {
   type P2Customer, type InsertP2Customer,
   type P2PurchaseOrder, type InsertP2PurchaseOrder,
   type P2PurchaseOrderItem, type InsertP2PurchaseOrderItem,
+  type P2ProductionOrder, type InsertP2ProductionOrder,
   type Mold, type InsertMold,
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
   type LayupOrder, type InsertLayupOrder,
@@ -274,6 +275,15 @@ export interface IStorage {
   createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem>;
   updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem>;
   deleteP2PurchaseOrderItem(id: number): Promise<void>;
+
+  // P2 Production Orders CRUD
+  getAllP2ProductionOrders(): Promise<P2ProductionOrder[]>;
+  getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]>;
+  getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined>;
+  createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder>;
+  updateP2ProductionOrder(id: number, data: Partial<InsertP2ProductionOrder>): Promise<P2ProductionOrder>;
+  deleteP2ProductionOrder(id: number): Promise<void>;
+  generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
@@ -2449,6 +2459,118 @@ export class DatabaseStorage implements IStorage {
 
   async deleteP2PurchaseOrderItem(id: number): Promise<void> {
     await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.id, id));
+  }
+
+  // P2 Production Orders CRUD
+  async getAllP2ProductionOrders(): Promise<P2ProductionOrder[]> {
+    return await db
+      .select()
+      .from(p2ProductionOrders)
+      .orderBy(desc(p2ProductionOrders.createdAt));
+  }
+
+  async getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]> {
+    return await db
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.p2PoId, poId))
+      .orderBy(p2ProductionOrders.department, p2ProductionOrders.createdAt);
+  }
+
+  async getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined> {
+    const orders = await db
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.id, id));
+    return orders[0];
+  }
+
+  async createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder> {
+    const [order] = await db.insert(p2ProductionOrders).values(data).returning();
+    return order;
+  }
+
+  async updateP2ProductionOrder(id: number, data: Partial<InsertP2ProductionOrder>): Promise<P2ProductionOrder> {
+    const [order] = await db.update(p2ProductionOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2ProductionOrders.id, id))
+      .returning();
+    return order;
+  }
+
+  async deleteP2ProductionOrder(id: number): Promise<void> {
+    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.id, id));
+  }
+
+  async generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]> {
+    // Get the P2 Purchase Order and its items
+    const po = await this.getP2PurchaseOrder(poId);
+    if (!po) {
+      throw new Error(`P2 Purchase Order ${poId} not found`);
+    }
+
+    const poItems = await this.getP2PurchaseOrderItems(poId);
+    if (poItems.length === 0) {
+      throw new Error(`No items found for P2 Purchase Order ${poId}`);
+    }
+
+    const productionOrders: P2ProductionOrder[] = [];
+
+    // Process each PO item
+    for (const poItem of poItems) {
+      // Get the BOM definition for this SKU
+      const bomDefs = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.sku, poItem.partNumber));
+      
+      if (bomDefs.length === 0) {
+        console.warn(`No BOM definition found for SKU: ${poItem.partNumber}`);
+        continue;
+      }
+
+      const bomDef = bomDefs[0];
+
+      // Get all BOM items for this definition
+      const bomItems = await db
+        .select()
+        .from(bomItems)
+        .where(and(
+          eq(bomItems.bomId, bomDef.id),
+          eq(bomItems.isActive, true)
+        ));
+
+      // Create production orders for each BOM item
+      for (let i = 0; i < bomItems.length; i++) {
+        const bomItem = bomItems[i];
+        const totalQuantity = bomItem.quantity * poItem.quantity;
+        
+        // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}
+        const orderIdSuffix = String(i + 1).padStart(3, '0');
+        const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}`;
+
+        const productionOrderData: InsertP2ProductionOrder = {
+          orderId,
+          p2PoId: poId,
+          p2PoItemId: poItem.id,
+          bomDefinitionId: bomDef.id,
+          bomItemId: bomItem.id,
+          sku: poItem.partNumber,
+          partName: bomItem.partName,
+          quantity: totalQuantity,
+          department: bomItem.firstDept as any,
+          status: 'PENDING',
+          priority: 50,
+          dueDate: po.dueDate || undefined,
+          notes: `Generated from P2 PO ${po.poNumber} - ${bomDef.modelName} (${bomDef.revision})`,
+        };
+
+        const productionOrder = await this.createP2ProductionOrder(productionOrderData);
+        productionOrders.push(productionOrder);
+      }
+    }
+
+    return productionOrders;
   }
 
 }

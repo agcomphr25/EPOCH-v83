@@ -65,6 +65,26 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
     queryKey: ["/api/boms"],
   });
 
+  const { data: productionOrders = [] } = useQuery({
+    queryKey: ["/api/p2/purchase-orders", poId, "production-orders"],
+    queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/production-orders`),
+  });
+
+  const generateProductionOrdersMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/generate-production-orders`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "production-orders"] });
+      toast({ title: "Success", description: "P2 production orders generated successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error?.message || "Failed to generate P2 production orders",
+        variant: "destructive" 
+      });
+    },
+  });
+
   const form = useForm<P2PurchaseOrderItemForm>({
     resolver: zodResolver(p2PurchaseOrderItemSchema),
     defaultValues: {
@@ -182,15 +202,23 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
             <p className="text-muted-foreground">Manage parts and quantities for this P2 purchase order</p>
           </div>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => generateProductionOrdersMutation.mutate()}
+            disabled={generateProductionOrdersMutation.isPending || items.length === 0}
+          >
+            {generateProductionOrdersMutation.isPending ? "Generating..." : "Generate Production Orders"}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreateDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
               <DialogTitle>
                 {selectedItem ? "Edit P2 PO Item" : "Add P2 PO Item"}
               </DialogTitle>
@@ -318,6 +346,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -399,6 +428,56 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Production Orders Section */}
+      {productionOrders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Production Orders</CardTitle>
+            <CardDescription>
+              {productionOrders.length} production order{productionOrders.length !== 1 ? 's' : ''} generated from this P2 purchase order
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Part Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Due Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {productionOrders.map((order: any) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-mono text-sm">{order.orderId}</TableCell>
+                    <TableCell className="font-medium">{order.sku}</TableCell>
+                    <TableCell>{order.partName}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{order.department}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{order.quantity}</TableCell>
+                    <TableCell>
+                      <Badge variant={order.status === 'PENDING' ? 'secondary' : 
+                                    order.status === 'IN_PROGRESS' ? 'default' : 
+                                    order.status === 'COMPLETED' ? 'success' : 'destructive'}>
+                        {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'No due date'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

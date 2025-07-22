@@ -45,6 +45,7 @@ import {
   insertP2CustomerSchema,
   insertP2PurchaseOrderSchema,
   insertP2PurchaseOrderItemSchema,
+  insertP2ProductionOrderSchema,
   insertMoldSchema,
   insertEmployeeLayupSettingsSchema,
   insertLayupOrderSchema,
@@ -3491,6 +3492,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete P2 purchase order item error:", error);
       res.status(500).json({ error: "Failed to delete P2 purchase order item" });
+    }
+  });
+
+  // P2 Production Orders Routes
+  app.get("/api/p2/production-orders", async (req, res) => {
+    try {
+      const orders = await storage.getAllP2ProductionOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Get P2 production orders error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 production orders" });
+    }
+  });
+
+  app.get("/api/p2/purchase-orders/:poId/production-orders", async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const orders = await storage.getP2ProductionOrdersByPoId(parseInt(poId));
+      res.json(orders);
+    } catch (error) {
+      console.error("Get P2 production orders by PO ID error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 production orders" });
+    }
+  });
+
+  app.post("/api/p2/purchase-orders/:poId/generate-production-orders", async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const orders = await storage.generateP2ProductionOrders(parseInt(poId));
+      res.status(201).json(orders);
+    } catch (error) {
+      console.error("Generate P2 production orders error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to generate P2 production orders" });
+    }
+  });
+
+  app.get("/api/p2/production-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await storage.getP2ProductionOrder(parseInt(id));
+      if (!order) {
+        return res.status(404).json({ error: "P2 production order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Get P2 production order error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 production order" });
+    }
+  });
+
+  app.put("/api/p2/production-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const orderData = insertP2ProductionOrderSchema.partial().parse(req.body);
+      const order = await storage.updateP2ProductionOrder(parseInt(id), orderData);
+      res.json(order);
+    } catch (error) {
+      console.error("Update P2 production order error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 production order data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update P2 production order" });
+      }
+    }
+  });
+
+  app.delete("/api/p2/production-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteP2ProductionOrder(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete P2 production order error:", error);
+      res.status(500).json({ error: "Failed to delete P2 production order" });
     }
   });
 

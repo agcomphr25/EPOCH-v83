@@ -1373,3 +1373,48 @@ export const insertOrderIdReservationSchema = createInsertSchema(orderIdReservat
 
 export type InsertOrderIdReservation = z.infer<typeof insertOrderIdReservationSchema>;
 export type OrderIdReservation = typeof orderIdReservations.$inferSelect;
+
+// P2 Production Orders - Generated from P2 Purchase Orders based on BOM
+export const p2ProductionOrders = pgTable('p2_production_orders', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().unique(), // P2-PO123-001, P2-PO123-002, etc.
+  p2PoId: integer('p2_po_id').references(() => p2PurchaseOrders.id).notNull(),
+  p2PoItemId: integer('p2_po_item_id').references(() => p2PurchaseOrderItems.id).notNull(),
+  bomDefinitionId: integer('bom_definition_id').references(() => bomDefinitions.id).notNull(),
+  bomItemId: integer('bom_item_id').references(() => bomItems.id).notNull(),
+  sku: text('sku').notNull(), // From BOM definition
+  partName: text('part_name').notNull(), // From BOM item
+  quantity: integer('quantity').notNull(), // BOM item quantity * PO quantity
+  department: text('department').notNull(), // From BOM item firstDept
+  status: text('status').default('PENDING').notNull(), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  priority: integer('priority').default(50), // 1-100, lower = higher priority
+  dueDate: timestamp('due_date'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertP2ProductionOrderSchema = createInsertSchema(p2ProductionOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  p2PoId: z.number().min(1, "P2 PO ID is required"),
+  p2PoItemId: z.number().min(1, "P2 PO Item ID is required"),
+  bomDefinitionId: z.number().min(1, "BOM Definition ID is required"),
+  bomItemId: z.number().min(1, "BOM Item ID is required"),
+  sku: z.string().min(1, "SKU is required"),
+  partName: z.string().min(1, "Part name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  department: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).default('PENDING'),
+  priority: z.number().min(1).max(100).default(50),
+  dueDate: z.string().datetime().optional(),
+  notes: z.string().optional(),
+});
+
+export type InsertP2ProductionOrder = z.infer<typeof insertP2ProductionOrderSchema>;
+export type P2ProductionOrder = typeof p2ProductionOrders.$inferSelect;

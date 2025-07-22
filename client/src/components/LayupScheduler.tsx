@@ -145,22 +145,38 @@ function DroppableCell({
     id: `${moldId}|${date.toISOString()}`
   });
 
+  // Debug logging for each cell
+  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
+
   return (
     <div 
       ref={setNodeRef}
       className={`${cellHeight} border ${isOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'} p-1 bg-white dark:bg-gray-800 transition-all duration-200`}
     >
-      <SortableContext items={orders.map(o => o.orderId)} strategy={verticalListSortingStrategy}>
-        {orders.map((order, idx) => (
-          <DraggableOrderItem
-            key={order.orderId}
-            order={order}
-            priority={order.priorityScore}
-            totalOrdersInCell={orders.length}
-            moldInfo={moldInfo}
-          />
-        ))}
+      {orders.length > 0 && (
+        <div className="text-xs text-gray-500 mb-1">
+          {orders.length} order(s)
+        </div>
+      )}
+      <SortableContext items={orders.map(o => o?.orderId || 'unknown')} strategy={verticalListSortingStrategy}>
+        {orders.map((order, idx) => {
+          console.log(`🎯 Rendering order in cell:`, order);
+          return (
+            <DraggableOrderItem
+              key={order?.orderId || `order-${idx}`}
+              order={order}
+              priority={order?.priorityScore || 0}
+              totalOrdersInCell={orders.length}
+              moldInfo={moldInfo}
+            />
+          );
+        })}
       </SortableContext>
+      {orders.length === 0 && (
+        <div className="text-xs text-gray-400 text-center py-4">
+          Empty cell
+        </div>
+      )}
     </div>
   );
 }
@@ -854,12 +870,14 @@ export default function LayupScheduler() {
                     .map(([orderId]) => orders.find(o => o.orderId === orderId))
                     .filter(order => order !== undefined) as any[];
 
-                  // Debug logging for all cells
-                  console.log(`Cell [${mold.moldId}|${format(date, 'MM/dd')}]:`, {
-                    dateString,
+                  // Enhanced debug logging for all cells
+                  console.log(`📅 Cell [${mold.moldId}|${format(date, 'MM/dd')}]:`, {
+                    dateString: dateString.substring(0, 10), // Show just date part
                     assignmentsForThisMold: Object.entries(orderAssignments).filter(([_, assignment]) => assignment.moldId === mold.moldId),
                     cellOrdersCount: cellOrders.length,
-                    cellOrderIds: cellOrders.map(o => o?.orderId)
+                    cellOrderIds: cellOrders.map(o => o?.orderId),
+                    allOrders: orders?.map(o => o.orderId),
+                    allAssignments: Object.keys(orderAssignments)
                   });
 
                   const dropId = `${mold.moldId}|${dateString}`;

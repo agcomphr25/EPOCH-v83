@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,15 @@ interface P2PurchaseOrderItem extends P2PurchaseOrderItemForm {
   updatedAt: string;
 }
 
+interface BOMDefinition {
+  id: number;
+  sku: string;
+  modelName: string;
+  revision: string;
+  description?: string;
+  isActive: boolean;
+}
+
 interface P2POItemsManagerProps {
   poId: number;
   poNumber: string;
@@ -49,6 +59,10 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
   const { data: items = [], isLoading } = useQuery<P2PurchaseOrderItem[]>({
     queryKey: ["/api/p2/purchase-orders", poId, "items"],
     queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/items`),
+  });
+
+  const { data: boms = [] } = useQuery<BOMDefinition[]>({
+    queryKey: ["/api/boms"],
   });
 
   const form = useForm<P2PurchaseOrderItemForm>({
@@ -193,9 +207,22 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>SKU</FormLabel>
-                        <FormControl>
-                          <Input placeholder="P2-SKU-001" {...field} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select SKU from BOM" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {boms
+                              .filter(bom => bom.isActive && bom.sku)
+                              .map((bom) => (
+                                <SelectItem key={bom.id} value={bom.sku}>
+                                  {bom.sku} - {bom.modelName}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

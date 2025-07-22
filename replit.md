@@ -10,6 +10,12 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Fixed All Orders Edit Button Issue (COMPLETED)**
+- ✅ **Root Cause Identification**: Edit button in All Orders list was passing database record ID instead of order ID to the order entry page
+- ✅ **Link Parameter Fix**: Changed `/order-entry?draft=${order.id}` to `/order-entry?draft=${order.orderId}` in OrdersList component
+- ✅ **Data Loading Restoration**: Order entry page now correctly loads existing order data when editing from All Orders list
+- ✅ **Backend Compatibility**: Confirmed backend API endpoint `/api/orders/draft/:id` supports both database IDs and order IDs for flexibility
+
 **July 22, 2025 - Customer CSV Import with Update Capability (COMPLETED)**
 - ✅ **Smart Customer Import**: Enhanced CSV import to check for existing customers by name and update their records instead of creating duplicates
 - ✅ **Flexible Column Detection**: Supports Name (required), Email (optional), and Phone (optional) columns with case-insensitive header matching

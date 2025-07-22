@@ -9,8 +9,7 @@ export default function useEmployeeSettings() {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('/api/employees/layup-settings');
-      const data = await response.json();
+      const data = await apiRequest('/api/employees/layup-settings');
       setEmployees(data);
     } catch (error) {
       console.error('Failed to fetch employee layup settings:', error);
@@ -40,12 +39,10 @@ export default function useEmployeeSettings() {
         );
       } else {
         // Create new employee
-        const response = await apiRequest('/api/employees/layup-settings', {
+        const newEmployee = await apiRequest('/api/employees/layup-settings', {
           method: 'POST',
           body: updatedEmp,
         });
-        
-        const newEmployee = await response;
         setEmployees(es => [...es, newEmployee]);
       }
     } catch (error) {

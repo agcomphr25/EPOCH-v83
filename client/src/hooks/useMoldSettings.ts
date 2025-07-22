@@ -9,8 +9,7 @@ export default function useMoldSettings() {
   const fetchMolds = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('/api/molds');
-      const data = await response.json();
+      const data = await apiRequest('/api/molds');
       setMolds(data);
     } catch (error) {
       console.error('Failed to fetch molds:', error);
@@ -40,12 +39,10 @@ export default function useMoldSettings() {
         );
       } else {
         // Create new mold
-        const response = await apiRequest('/api/molds', {
+        const newMold = await apiRequest('/api/molds', {
           method: 'POST',
           body: updatedMold,
         });
-        
-        const newMold = await response;
         setMolds(ms => [...ms, newMold]);
       }
     } catch (error) {

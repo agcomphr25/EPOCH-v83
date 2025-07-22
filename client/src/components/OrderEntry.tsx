@@ -273,9 +273,23 @@ export default function OrderEntry() {
         setQdQuickDetach(featuresObj.qd_accessory || '');
         setSwivelStuds(featuresObj.swivel_studs || '');
         setTexture(featuresObj.texture_options || '');
-        setPaintOptions(featuresObj.paint_options || '');
-        setOtherOptions(featuresObj.other_options ? (Array.isArray(featuresObj.other_options) ? featuresObj.other_options : [featuresObj.other_options]) : []);
-        setRailAccessory(featuresObj.rail_accessory ? (Array.isArray(featuresObj.rail_accessory) ? featuresObj.rail_accessory : [featuresObj.rail_accessory]) : []);
+        
+        // Handle paint options - check multiple possible field names
+        const paintValue = featuresObj.paint_options || featuresObj.paintOptions || featuresObj.paint || '';
+        console.log('Setting paint options:', paintValue);
+        setPaintOptions(paintValue);
+        
+        // Handle rail accessories - check multiple possible field names  
+        const railValue = featuresObj.rail_accessory || featuresObj.railAccessory || featuresObj.rail_accessories || [];
+        const railArray = Array.isArray(railValue) ? railValue : (railValue ? [railValue] : []);
+        console.log('Setting rail accessories:', railArray);
+        setRailAccessory(railArray);
+        
+        // Handle other options - check multiple possible field names
+        const otherValue = featuresObj.other_options || featuresObj.otherOptions || featuresObj.other || [];
+        const otherArray = Array.isArray(otherValue) ? otherValue : (otherValue ? [otherValue] : []);
+        console.log('Setting other options:', otherArray);
+        setOtherOptions(otherArray);
         
         // Set the main features object which will populate form dropdowns
         console.log('Setting features object with length_of_pull:', featuresObj.length_of_pull);

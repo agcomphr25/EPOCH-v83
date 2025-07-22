@@ -815,10 +815,13 @@ export default function LayupScheduler() {
                     .map(([orderId]) => orders.find(o => o.orderId === orderId))
                     .filter(order => order !== undefined) as any[];
 
-                                  // Debug logging for cell orders
-                  if (cellOrders.length > 0) {
-                    console.log(`Cell [${mold.moldId}|${dateString}] has ${cellOrders.length} orders:`, cellOrders.map(o => o.orderId));
-                  }
+                  // Debug logging for all cells
+                  console.log(`Cell [${mold.moldId}|${format(date, 'MM/dd')}]:`, {
+                    dateString,
+                    assignmentsForThisMold: Object.entries(orderAssignments).filter(([_, assignment]) => assignment.moldId === mold.moldId),
+                    cellOrdersCount: cellOrders.length,
+                    cellOrderIds: cellOrders.map(o => o?.orderId)
+                  });
 
                   const dropId = `${mold.moldId}|${dateString}`;
 

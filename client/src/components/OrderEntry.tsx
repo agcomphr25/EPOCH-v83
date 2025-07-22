@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
 import debounce from 'lodash.debounce';
@@ -82,6 +82,7 @@ export default function OrderEntry() {
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentTimestamp, setPaymentTimestamp] = useState<Date | null>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Calculate total price based on selected features
   const calculateTotalPrice = useCallback(() => {
@@ -1200,30 +1201,38 @@ export default function OrderEntry() {
                       }
                     }}
                   />
-                  {isPaid && paymentType && paymentAmount && paymentTimestamp ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="font-medium cursor-pointer text-green-600">
-                            Paid
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs">
-                          <div className="text-sm space-y-1">
-                            <div><strong>Payment Details:</strong></div>
-                            <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
-                            <div>Date: {paymentDate.toLocaleDateString()}</div>
-                            <div>Amount: ${parseFloat(paymentAmount).toFixed(2)}</div>
-                            <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    <span className="font-medium cursor-pointer">
+                  <div className="relative">
+                    <span 
+                      className={`font-medium cursor-pointer ${
+                        isPaid && paymentType && paymentAmount && paymentTimestamp 
+                          ? 'text-green-600' 
+                          : ''
+                      }`}
+                      onMouseEnter={() => {
+                        if (isPaid && paymentType && paymentAmount && paymentTimestamp) {
+                          setShowTooltip(true);
+                        }
+                      }}
+                      onMouseLeave={() => setShowTooltip(false)}
+                    >
                       Paid
                     </span>
-                  )}
+                    
+                    {/* Custom Tooltip */}
+                    {showTooltip && isPaid && paymentType && paymentAmount && paymentTimestamp && (
+                      <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg z-50">
+                        <div className="space-y-1">
+                          <div className="font-semibold">Payment Details:</div>
+                          <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
+                          <div>Date: {paymentDate.toLocaleDateString()}</div>
+                          <div>Amount: ${parseFloat(paymentAmount).toFixed(2)}</div>
+                          <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
+                        </div>
+                        {/* Tooltip Arrow */}
+                        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

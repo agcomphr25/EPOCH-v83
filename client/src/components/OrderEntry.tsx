@@ -148,6 +148,16 @@ export default function OrderEntry() {
   }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
 
   const totalPrice = calculateTotalPrice();
+
+  // Helper function to format currency with commas
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
   const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [showCustomDiscount, setShowCustomDiscount] = useState(false);
   const [shipping, setShipping] = useState(36.95);
@@ -1156,34 +1166,42 @@ export default function OrderEntry() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Subtotal:</span>
-                  <span className="font-bold">${totalPrice.toFixed(2)}</span>
+                  <span className="font-bold">{formatCurrency(totalPrice)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Shipping & Handling:</span>
-                  <span className="font-bold">$36.95</span>
+                  <span className="font-bold">{formatCurrency(36.95)}</span>
                 </div>
                 <div className="flex justify-between items-center text-lg border-t pt-2">
                   <span className="font-bold">Total:</span>
-                  <span className="font-bold text-blue-600">${(totalPrice + 36.95).toFixed(2)}</span>
+                  <span className="font-bold text-blue-600">{formatCurrency(totalPrice + 36.95)}</span>
                 </div>
                 
                 {/* Payment Amount - Only show if payment exists */}
                 {isPaid && paymentAmount && (
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Payment Amount:</span>
-                    <span className="font-bold text-green-600">-${parseFloat(paymentAmount).toFixed(2)}</span>
+                    <span className="font-bold text-green-600">-{formatCurrency(parseFloat(paymentAmount))}</span>
                   </div>
                 )}
                 
-                {/* Remaining Balance - Only show if payment exists */}
-                {isPaid && paymentAmount && (
-                  <div className="flex justify-between items-center text-lg border-t pt-2">
-                    <span className="font-bold">Remaining Balance:</span>
-                    <span className="font-bold text-red-600">
-                      ${Math.max(0, (totalPrice + 36.95) - parseFloat(paymentAmount || '0')).toFixed(2)}
-                    </span>
-                  </div>
-                )}
+                {/* Balance Due/Credit - Only show if payment exists */}
+                {isPaid && paymentAmount && (() => {
+                  const remainingBalance = (totalPrice + 36.95) - parseFloat(paymentAmount || '0');
+                  const isCredit = remainingBalance < 0;
+                  const balanceAmount = Math.abs(remainingBalance);
+                  
+                  return (
+                    <div className="flex justify-between items-center text-lg border-t pt-2">
+                      <span className="font-bold">
+                        {isCredit ? 'Credit Balance:' : 'Balance Due:'}
+                      </span>
+                      <span className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(balanceAmount)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 
                 {/* Paid Checkbox */}
                 <div className="flex items-center gap-2 pt-2">
@@ -1231,7 +1249,7 @@ export default function OrderEntry() {
                           <div className="font-semibold">Payment Details:</div>
                           <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
                           <div>Date: {paymentDate.toLocaleDateString()}</div>
-                          <div>Amount: ${parseFloat(paymentAmount).toFixed(2)}</div>
+                          <div>Amount: {formatCurrency(parseFloat(paymentAmount))}</div>
                           <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
                         </div>
                         {/* Tooltip Arrow */}
@@ -1339,7 +1357,7 @@ export default function OrderEntry() {
                   setShowPaymentModal(false);
                   toast({
                     title: paymentTimestamp ? "Payment Updated" : "Payment Saved",
-                    description: `Payment of $${paymentAmount} via ${paymentType.replace('_', ' ').toUpperCase()} ${paymentTimestamp ? 'updated' : 'recorded'}.`,
+                    description: `Payment of ${formatCurrency(parseFloat(paymentAmount))} via ${paymentType.replace('_', ' ').toUpperCase()} ${paymentTimestamp ? 'updated' : 'recorded'}.`,
                   });
                 } else {
                   toast({

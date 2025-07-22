@@ -1164,6 +1164,24 @@ export default function OrderEntry() {
                   <span className="font-bold text-blue-600">${(totalPrice + 36.95).toFixed(2)}</span>
                 </div>
                 
+                {/* Payment Amount - Only show if payment exists */}
+                {isPaid && paymentAmount && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Payment Amount:</span>
+                    <span className="font-bold text-green-600">-${parseFloat(paymentAmount).toFixed(2)}</span>
+                  </div>
+                )}
+                
+                {/* Remaining Balance - Only show if payment exists */}
+                {isPaid && paymentAmount && (
+                  <div className="flex justify-between items-center text-lg border-t pt-2">
+                    <span className="font-bold">Remaining Balance:</span>
+                    <span className="font-bold text-red-600">
+                      ${Math.max(0, (totalPrice + 36.95) - parseFloat(paymentAmount || '0')).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
                 {/* Paid Checkbox */}
                 <div className="flex items-center gap-2 pt-2">
                   <Checkbox 

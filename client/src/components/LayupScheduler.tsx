@@ -11,6 +11,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -138,15 +139,17 @@ function DroppableCell({
 
   const cellHeight = getCellHeight(orders.length);
   
+  const {
+    setNodeRef,
+    isOver,
+  } = useDroppable({
+    id: `${moldId}|${date.toISOString()}`
+  });
+
   return (
     <div 
-      className={`${cellHeight} border border-gray-200 dark:border-gray-700 p-1 bg-white dark:bg-gray-800 transition-all duration-200`}
-      onDrop={(e) => {
-        e.preventDefault();
-        const orderId = e.dataTransfer.getData('text/plain');
-        onDrop(orderId, moldId, date);
-      }}
-      onDragOver={(e) => e.preventDefault()}
+      ref={setNodeRef}
+      className={`${cellHeight} border ${isOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'} p-1 bg-white dark:bg-gray-800 transition-all duration-200`}
     >
       <SortableContext items={orders.map(o => o.orderId)} strategy={verticalListSortingStrategy}>
         {orders.map((order, idx) => (
@@ -183,6 +186,8 @@ export default function LayupScheduler() {
   console.log('LayupScheduler - Orders data:', orders);
   console.log('LayupScheduler - Orders count:', orders?.length);
   console.log('LayupScheduler - Sample order:', orders?.[0]);
+  console.log('LayupScheduler - Order Assignments:', orderAssignments);
+  console.log('LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -765,6 +770,11 @@ export default function LayupScheduler() {
                     )
                     .map(([orderId]) => orders.find(o => o.orderId === orderId))
                     .filter(order => order !== undefined) as any[];
+
+                                  // Debug logging for cell orders
+                  if (cellOrders.length > 0) {
+                    console.log(`Cell [${mold.moldId}|${dateString}] has ${cellOrders.length} orders:`, cellOrders.map(o => o.orderId));
+                  }
 
                   const dropId = `${mold.moldId}|${dateString}`;
 

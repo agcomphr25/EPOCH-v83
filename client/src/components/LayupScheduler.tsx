@@ -126,13 +126,15 @@ function DroppableCell({
   date, 
   orders, 
   onDrop,
-  moldInfo
+  moldInfo,
+  getModelDisplayName
 }: { 
   moldId: string; 
   date: Date; 
   orders: any[]; 
   onDrop: (orderId: string, moldId: string, date: Date) => void;
   moldInfo?: { moldId: string, instanceNumber?: number };
+  getModelDisplayName?: (modelId: string) => string;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -946,6 +948,7 @@ export default function LayupScheduler() {
                         moldId: mold.moldId,
                         instanceNumber: mold.instanceNumber
                       }}
+                      getModelDisplayName={getModelDisplayName}
                     />
                   );
                 })}

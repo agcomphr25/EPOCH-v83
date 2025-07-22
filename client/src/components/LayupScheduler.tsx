@@ -37,8 +37,8 @@ import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, User
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 
-// Draggable Order Item Component
-function DraggableOrderItem({ order, priority }: { order: any, priority: number }) {
+// Draggable Order Item Component with responsive sizing
+function DraggableOrderItem({ order, priority, totalOrdersInCell }: { order: any, priority: number, totalOrdersInCell?: number }) {
   const {
     attributes,
     listeners,
@@ -54,22 +54,58 @@ function DraggableOrderItem({ order, priority }: { order: any, priority: number 
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // Responsive sizing based on number of orders in cell
+  const getCardSizing = (orderCount: number) => {
+    if (orderCount <= 2) {
+      return {
+        padding: 'p-3',
+        margin: 'mb-2',
+        textSize: 'text-sm',
+        height: 'min-h-[3rem]'
+      };
+    } else if (orderCount <= 5) {
+      return {
+        padding: 'p-2',
+        margin: 'mb-1.5',
+        textSize: 'text-xs',
+        height: 'min-h-[2.5rem]'
+      };
+    } else if (orderCount <= 8) {
+      return {
+        padding: 'p-1.5',
+        margin: 'mb-1',
+        textSize: 'text-xs',
+        height: 'min-h-[2rem]'
+      };
+    } else {
+      // Many orders - ultra compact
+      return {
+        padding: 'p-1',
+        margin: 'mb-0.5',
+        textSize: 'text-xs',
+        height: 'min-h-[1.5rem]'
+      };
+    }
+  };
+
+  const sizing = getCardSizing(totalOrdersInCell || 1);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border shadow-sm cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} bg-blue-50 dark:bg-blue-900/30 rounded-lg border shadow-sm cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200`}
     >
-      <div className="font-medium text-blue-900 dark:text-blue-100 text-sm text-center">
+      <div className={`font-medium text-blue-900 dark:text-blue-100 ${sizing.textSize} text-center flex items-center justify-center h-full`}>
         {order.orderId}
       </div>
     </div>
   );
 }
 
-// Droppable Cell Component
+// Droppable Cell Component with responsive height
 function DroppableCell({ 
   moldId, 
   date, 
@@ -81,9 +117,20 @@ function DroppableCell({
   orders: any[]; 
   onDrop: (orderId: string, moldId: string, date: Date) => void;
 }) {
+  // Responsive cell height based on order count
+  const getCellHeight = (orderCount: number) => {
+    if (orderCount === 0) return 'min-h-[100px]';
+    if (orderCount <= 2) return 'min-h-[100px]';
+    if (orderCount <= 5) return 'min-h-[120px]';
+    if (orderCount <= 8) return 'min-h-[140px]';
+    return 'min-h-[160px] max-h-[200px] overflow-y-auto'; // Scrollable for many orders
+  };
+
+  const cellHeight = getCellHeight(orders.length);
+  
   return (
     <div 
-      className="min-h-[100px] border border-gray-200 dark:border-gray-700 p-1 bg-white dark:bg-gray-800"
+      className={`${cellHeight} border border-gray-200 dark:border-gray-700 p-1 bg-white dark:bg-gray-800 transition-all duration-200`}
       onDrop={(e) => {
         e.preventDefault();
         const orderId = e.dataTransfer.getData('text/plain');
@@ -91,12 +138,18 @@ function DroppableCell({
       }}
       onDragOver={(e) => e.preventDefault()}
     >
+      {orders.length > 0 && (
+        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-center">
+          {orders.length} order{orders.length !== 1 ? 's' : ''}
+        </div>
+      )}
       <SortableContext items={orders.map(o => o.orderId)} strategy={verticalListSortingStrategy}>
         {orders.map((order, idx) => (
           <DraggableOrderItem
             key={order.orderId}
             order={order}
             priority={order.priorityScore}
+            totalOrdersInCell={orders.length}
           />
         ))}
       </SortableContext>
@@ -298,6 +351,7 @@ export default function LayupScheduler() {
                     key={order.orderId}
                     order={order}
                     priority={index + 1}
+                    totalOrdersInCell={orders.length}
                   />
                 ))}
               </div>

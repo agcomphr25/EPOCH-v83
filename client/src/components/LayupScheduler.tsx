@@ -104,36 +104,31 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
-        {/* Show Action Length Display Name under Order ID */}
+        {/* Show Action Inlet (Action Length) Display Name under Order ID */}
         {(() => {
-          // Get action length display name from Feature Manager
-          const getActionLengthDisplay = (orderFeatures: any) => {
+          // Get Action Inlet display name from Feature Manager (field ID: action-length, Display Name: Action Inlet)
+          const getActionInletDisplay = (orderFeatures: any) => {
             if (!orderFeatures || !features) return null;
             
-            // Check different possible field names for action length in order features
-            const actionLengthValue = orderFeatures.action_length || orderFeatures.length_of_pull;
-            if (!actionLengthValue || actionLengthValue === 'none' || actionLengthValue === 'no_lop_change') return null;
+            // Look specifically for action_length field (NOT length_of_pull)
+            const actionLengthValue = orderFeatures.action_length;
+            if (!actionLengthValue || actionLengthValue === 'none') return null;
             
-            // Find the action_length feature definition in Feature Manager
-            const actionLengthFeature = features.find((f: any) => 
-              f.id === 'action_length' || f.id === 'length_of_pull'
-            );
+            // Find the action-length feature definition in Feature Manager
+            const actionLengthFeature = features.find((f: any) => f.id === 'action-length');
             
             if (!actionLengthFeature || !actionLengthFeature.options) {
               // Fallback to abbreviations if Feature Manager data not available
               const displayMap: {[key: string]: string} = {
                 'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-                'long': 'LA', 'medium': 'MA', 'short': 'SA',
-                'lop_short': 'SA', 'lop_medium': 'MA', 'lop_long': 'LA',
-                'short_lop': 'SA', 'medium_lop': 'MA', 'long_lop': 'LA'
+                'long': 'LA', 'medium': 'MA', 'short': 'SA'
               };
               return displayMap[actionLengthValue] || actionLengthValue;
             }
             
-            // Use Feature Manager option label as display name
+            // Use Feature Manager option label and convert to abbreviation
             const option = actionLengthFeature.options.find((opt: any) => opt.value === actionLengthValue);
             if (option && option.label) {
-              // Convert display name to abbreviation for compact display
               const label = option.label;
               if (label.toLowerCase().includes('long')) return 'LA';
               if (label.toLowerCase().includes('medium')) return 'MA';
@@ -144,11 +139,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             return actionLengthValue;
           };
           
-          const actionLengthDisplay = getActionLengthDisplay(order.features);
+          const actionInletDisplay = getActionInletDisplay(order.features);
           
-          return actionLengthDisplay ? (
+          return actionInletDisplay ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {actionLengthDisplay}
+              {actionInletDisplay}
             </div>
           ) : null;
         })()}

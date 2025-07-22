@@ -1015,10 +1015,21 @@ export default function OrderEntry() {
                 
                 {/* Action Length - Show if selected or as "Not selected" */}
                 <div className="flex justify-between items-center">
-                  <span>Action Length:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'action_length');
+                    return feature?.displayName || 'Action Length';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">$0.00</span>
+                    <span className="font-medium">{features.action_length ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'action_length');
+                      const option = feature?.options?.find(opt => opt.value === features.action_length);
+                      return option?.label || features.action_length;
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600 font-bold">${features.action_length ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'action_length');
+                      const option = feature?.options?.find(opt => opt.value === features.action_length);
+                      return (option?.price || 0).toFixed(2);
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
@@ -1169,8 +1180,16 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Swivel Studs';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Not selected</span>
-                    <span className="text-blue-600 font-bold">$0.00</span>
+                    <span className="font-medium">{features.swivel_studs ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'swivel_studs');
+                      const option = feature?.options?.find(opt => opt.value === features.swivel_studs);
+                      return option?.label || features.swivel_studs;
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600 font-bold">${features.swivel_studs ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'swivel_studs');
+                      const option = feature?.options?.find(opt => opt.value === features.swivel_studs);
+                      return (option?.price || 0).toFixed(2);
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 

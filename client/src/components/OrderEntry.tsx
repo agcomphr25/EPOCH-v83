@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
+// @ts-ignore
 import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
@@ -53,17 +54,7 @@ export default function OrderEntry() {
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
-
-  // Feature validation hooks (development only)
-  useFeatureValidation(featureDefs);
-  useFeatureStateValidation(features, {
-    paintOptions,
-    bottomMetal,
-    railAccessory,
-    otherOptions,
-    actionLength
-  });
-
+  
   const [orderDate, setOrderDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
   const [orderId, setOrderId] = useState('');
@@ -84,6 +75,16 @@ export default function OrderEntry() {
   const [paintOptions, setPaintOptions] = useState('');
   const [otherOptions, setOtherOptions] = useState<string[]>([]);
   const [railAccessory, setRailAccessory] = useState<string[]>([]);
+
+  // Feature validation hooks (development only)
+  useFeatureValidation(featureDefs);
+  useFeatureStateValidation(features, {
+    paintOptions,
+    bottomMetal,
+    railAccessory,
+    otherOptions,
+    actionLength
+  });
 
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
@@ -213,7 +214,7 @@ export default function OrderEntry() {
         apiRequest('/api/persistent-discounts')
       ]);
       
-      const discounts = [];
+      const discounts: {value: string; label: string}[] = [];
       
       // Add active short-term sales
       const now = new Date();

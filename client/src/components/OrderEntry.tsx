@@ -493,7 +493,6 @@ export default function OrderEntry() {
               {/* Customer Selection and Customer PO */}
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <Label htmlFor="customer">Customer</Label>
                   <CustomerSearchInput
                     value={customer}
                     onValueChange={setCustomer}

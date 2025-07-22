@@ -496,6 +496,39 @@ export default function OrderEntry() {
                     error={errors.customer}
                   />
                 </div>
+                
+                {/* Customer PO Checkbox and Input */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="customer-po-checkbox"
+                      checked={hasCustomerPO}
+                      onCheckedChange={(checked) => {
+                        setHasCustomerPO(!!checked);
+                        if (!checked) {
+                          setCustomerPO('');
+                        }
+                      }}
+                    />
+                    <Label 
+                      htmlFor="customer-po-checkbox" 
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Customer PO
+                    </Label>
+                  </div>
+                  
+                  {hasCustomerPO && (
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Enter Customer PO"
+                        value={customerPO}
+                        onChange={(e) => setCustomerPO(e.target.value)}
+                        className="max-w-md"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* FB Order */}

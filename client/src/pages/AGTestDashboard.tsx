@@ -29,6 +29,45 @@ export default function AGTestDashboard() {
         </div>
       </div>
 
+      {/* Quick Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <BarChart3 className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium">Pipeline Status</span>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Real-time production tracking across all departments
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <List className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium">Order Management</span>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Complete order lifecycle and department progression
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-4 h-4 text-purple-600" />
+              <span className="text-sm font-medium">Layup Scheduling</span>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Drag & drop scheduling with automatic optimization
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Dashboard Layout */}
       {!expandedSection ? (
         /* Grid Layout - Default View */
@@ -140,45 +179,6 @@ export default function AGTestDashboard() {
           </CardContent>
         </Card>
       )}
-
-      {/* Quick Stats Footer */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium">Pipeline Status</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Real-time production tracking across all departments
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <List className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium">Order Management</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Complete order lifecycle and department progression
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-medium">Layup Scheduling</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Drag & drop scheduling with automatic optimization
-            </p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

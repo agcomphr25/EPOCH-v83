@@ -67,7 +67,7 @@ export default function useMoldSettings() {
       if (mold) {
         await apiRequest(`/api/molds/${moldId}`, {
           method: 'PUT',
-          body: { ...mold, isActive },
+          body: { ...mold, isActive, updatedAt: new Date() },
         });
         setMolds(ms =>
           ms.map(m => (m.moldId === moldId ? { ...m, isActive } : m))

@@ -67,7 +67,7 @@ export default function useEmployeeSettings() {
       if (employee) {
         await apiRequest(`/api/employees/layup-settings/${employeeId}`, {
           method: 'PUT',
-          body: { ...employee, isActive },
+          body: { ...employee, isActive, updatedAt: new Date() },
         });
         setEmployees(es =>
           es.map(e => (e.employeeId === employeeId ? { ...e, isActive } : e))

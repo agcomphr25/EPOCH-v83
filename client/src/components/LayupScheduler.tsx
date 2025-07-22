@@ -62,17 +62,8 @@ function DraggableOrderItem({ order, priority }: { order: any, priority: number 
       {...listeners}
       className="mb-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border shadow-sm cursor-grab hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
     >
-      <div className="font-medium text-blue-900 dark:text-blue-100 text-sm">
+      <div className="font-medium text-blue-900 dark:text-blue-100 text-sm text-center">
         {order.orderId}
-      </div>
-      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-        {order.customerName || 'Unknown Customer'}
-      </div>
-      <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
-        Due: {new Date(order.dueDate).toLocaleDateString()}
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-        Priority: #{priority} • {order.status}
       </div>
     </div>
   );

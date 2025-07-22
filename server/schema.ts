@@ -1249,3 +1249,28 @@ export type InsertBomDefinition = z.infer<typeof insertBomDefinitionSchema>;
 export type BomDefinition = typeof bomDefinitions.$inferSelect;
 export type InsertBomItem = z.infer<typeof insertBomItemSchema>;
 export type BomItem = typeof bomItems.$inferSelect;
+
+// Order ID Reservation System - Eliminates race conditions for concurrent order creation
+export const orderIdReservations = pgTable('order_id_reservations', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull().unique(), // The reserved Order ID (e.g., AG003)
+  yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., AG)
+  sequenceNumber: integer('sequence_number').notNull(), // Sequential number (e.g., 3 for AG003)
+  reservedAt: timestamp('reserved_at').defaultNow().notNull(), // When ID was reserved
+  expiresAt: timestamp('expires_at').notNull(), // When reservation expires (5 minutes default)
+  isUsed: boolean('is_used').default(false), // Whether the reserved ID has been used
+  usedAt: timestamp('used_at'), // When the ID was actually used
+  sessionId: text('session_id'), // Optional: track which session reserved the ID
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Index for efficient cleanup of expired reservations
+// CREATE INDEX CONCURRENTLY idx_order_id_reservations_expires_at ON order_id_reservations(expires_at) WHERE is_used = false;
+
+export const insertOrderIdReservationSchema = createInsertSchema(orderIdReservations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertOrderIdReservation = z.infer<typeof insertOrderIdReservationSchema>;
+export type OrderIdReservation = typeof orderIdReservations.$inferSelect;

@@ -62,10 +62,44 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   return currentPrefix + '001';
 }
 
-// Utility function to get the last order ID from the database
-export async function getLastOrderId(): Promise<string> {
-  // This would query the orders table to get the most recent order ID
-  // For now, we'll return a placeholder - this should be implemented with actual database query
-  // TODO: Implement actual database query to get the last order ID
-  return 'AG001'; // Placeholder
+// Helper function to get current year-month prefix (e.g., "AG" for July 2025)
+export function getCurrentYearMonthPrefix(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const yearsSince2025 = year - 2025;
+  
+  let yearLetter: string;
+  if (yearsSince2025 < 26) {
+    // Single letter years (2025-2047)
+    yearLetter = String.fromCharCode(65 + yearsSince2025);
+  } else {
+    // Double letter years (2048+)
+    const firstLetter = Math.floor((yearsSince2025 - 26) / 26);
+    const secondLetter = (yearsSince2025 - 26) % 26;
+    yearLetter = String.fromCharCode(65 + firstLetter) + String.fromCharCode(65 + secondLetter);
+  }
+  
+  // Calculate month letter (Jan=A, Feb=B, ..., Dec=L)
+  const month = date.getMonth(); // 0-based (0=Jan, 11=Dec)
+  const monthLetter = String.fromCharCode(65 + month);
+  
+  return yearLetter + monthLetter;
+}
+
+// Parse an Order ID to extract its components
+export function parseOrderId(orderId: string): { prefix: string; sequence: number } | null {
+  // Try new format: AG001, AG002, etc.
+  const match = /^([A-Z]+)(\d{3,})$/.exec(orderId.trim());
+  
+  if (match) {
+    const [, prefix, numStr] = match;
+    const sequence = parseInt(numStr, 10);
+    return { prefix, sequence };
+  }
+  
+  return null;
+}
+
+// Generate Order ID from prefix and sequence number
+export function formatOrderId(prefix: string, sequence: number): string {
+  return prefix + String(sequence).padStart(3, '0');
 }

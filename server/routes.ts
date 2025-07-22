@@ -252,6 +252,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test concurrent order ID generation (for testing race condition prevention)
+  app.post("/api/orders/test-concurrent", async (req, res) => {
+    try {
+      const concurrency = req.body.concurrency || 5;
+      console.log(`Testing concurrent Order ID generation with ${concurrency} parallel requests`);
+      
+      // Generate multiple Order IDs concurrently
+      const promises = Array.from({ length: concurrency }, () => 
+        storage.generateNextOrderId()
+      );
+      
+      const orderIds = await Promise.all(promises);
+      
+      // Check for duplicates
+      const uniqueIds = new Set(orderIds);
+      const hasDuplicates = uniqueIds.size !== orderIds.length;
+      
+      res.json({
+        orderIds,
+        uniqueIds: Array.from(uniqueIds),
+        totalGenerated: orderIds.length,
+        uniqueCount: uniqueIds.size,
+        hasDuplicates,
+        success: !hasDuplicates
+      });
+    } catch (error) {
+      console.error("Concurrent test error:", error);
+      res.status(500).json({ error: "Test failed", details: error.message });
+    }
+  });
+
+  // Cleanup expired Order ID reservations
+  app.post("/api/orders/cleanup-reservations", async (req, res) => {
+    try {
+      const cleanedCount = await storage.cleanupExpiredReservations();
+      res.json({ 
+        message: `Cleaned up ${cleanedCount} expired reservations`,
+        cleanedCount 
+      });
+    } catch (error) {
+      console.error("Cleanup error:", error);
+      res.status(500).json({ error: "Cleanup failed", details: error.message });
+    }
+  });
+
   app.get("/api/orders/all", async (req, res) => {
     try {
       const orders = await storage.getAllOrders();
@@ -487,6 +532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Creating new draft with order ID:', result.orderId);
         const draft = await storage.createOrderDraft(result);
         console.log('Created new draft:', draft.id);
+        
+        // Mark reserved Order ID as used when order is actually created
+        await storage.markOrderIdAsUsed(result.orderId);
+        console.log('Marked Order ID as used:', result.orderId);
+        
         res.json(draft);
       }
     } catch (error) {

@@ -4,7 +4,7 @@ import {
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems,
+  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -47,8 +47,8 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, isNull, sql, ne } from "drizzle-orm";
-import { generateP1OrderId } from "./utils/orderIdGenerator";
+import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt } from "drizzle-orm";
+import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -119,7 +119,10 @@ export interface IStorage {
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<OrderDraft[]>;
+  
+  // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
+  markOrderIdAsUsed(orderId: string): Promise<void>;
 
   // Forms CRUD
   getAllForms(): Promise<Form[]>;
@@ -668,26 +671,149 @@ export class DatabaseStorage implements IStorage {
 
   async generateNextOrderId(): Promise<string> {
     try {
-      // Get the current last order ID
-      const result = await db
-        .select({ orderId: orderDrafts.orderId })
-        .from(orderDrafts)
-        .orderBy(desc(orderDrafts.id))
-        .limit(1);
+      const now = new Date();
+      const currentPrefix = getCurrentYearMonthPrefix(now);
+      
+      // Clean up expired reservations first (non-atomic, but helps keep table clean)
+      try {
+        await db.delete(orderIdReservations).where(
+          and(
+            eq(orderIdReservations.isUsed, false),
+            lt(orderIdReservations.expiresAt, now)
+          )
+        );
+      } catch (cleanupError) {
+        console.warn('Cleanup error (non-critical):', cleanupError);
+      }
 
-      const lastOrderId = result.length > 0 ? result[0].orderId : '';
-      const nextOrderId = generateP1OrderId(new Date(), lastOrderId);
+      // Retry loop for handling race conditions
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          // Find the highest sequence number for current year-month prefix
+          // Check both actual orders and active reservations
+          const [orderResult, reservationResult] = await Promise.all([
+            // Get highest sequence from actual orders
+            db
+              .select({ orderId: orderDrafts.orderId })
+              .from(orderDrafts)
+              .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+              .orderBy(desc(orderDrafts.orderId))
+              .limit(1),
+            
+            // Get highest sequence from active reservations
+            db
+              .select({ sequenceNumber: orderIdReservations.sequenceNumber })
+              .from(orderIdReservations)
+              .where(
+                and(
+                  eq(orderIdReservations.yearMonthPrefix, currentPrefix),
+                  eq(orderIdReservations.isUsed, false),
+                  gt(orderIdReservations.expiresAt, now)
+                )
+              )
+              .orderBy(desc(orderIdReservations.sequenceNumber))
+              .limit(1)
+          ]);
 
-      return nextOrderId;
+          let maxSequence = 0;
+
+          // Check highest sequence from orders
+          if (orderResult.length > 0) {
+            const parsed = parseOrderId(orderResult[0].orderId);
+            if (parsed && parsed.prefix === currentPrefix) {
+              maxSequence = Math.max(maxSequence, parsed.sequence);
+            }
+          }
+
+          // Check highest sequence from active reservations
+          if (reservationResult.length > 0) {
+            maxSequence = Math.max(maxSequence, reservationResult[0].sequenceNumber);
+          }
+
+          // Generate next sequence number
+          const nextSequence = maxSequence + 1;
+          const nextOrderId = formatOrderId(currentPrefix, nextSequence);
+
+          // Atomically reserve the Order ID using INSERT (will fail if duplicate)
+          const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
+          
+          await db.insert(orderIdReservations).values({
+            orderId: nextOrderId,
+            yearMonthPrefix: currentPrefix,
+            sequenceNumber: nextSequence,
+            reservedAt: now,
+            expiresAt: expiresAt,
+            isUsed: false,
+          });
+
+          console.log(`Reserved Order ID: ${nextOrderId} (expires: ${expiresAt.toISOString()})`);
+          return nextOrderId;
+
+        } catch (insertError: any) {
+          // If unique constraint violation, retry with next sequence
+          if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('unique')) {
+            console.log(`Order ID conflict on attempt ${attempt + 1}, retrying...`);
+            continue;
+          }
+          throw insertError;
+        }
+      }
+
+      // If all retries failed, fall back to timestamp-based ID
+      const fallbackId = currentPrefix + String(Date.now() % 10000).padStart(4, '0');
+      console.warn(`All Order ID generation attempts failed, using fallback: ${fallbackId}`);
+      return fallbackId;
+
     } catch (error) {
-      console.error("Error generating next order ID:", error);
-      // Fallback to basic ID generation
+      console.error("Error in Order ID generation:", error);
+      // Ultimate fallback
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth();
       const yearLetter = String.fromCharCode(65 + (year - 2025));
       const monthLetter = String.fromCharCode(65 + month);
-      return yearLetter + monthLetter + '001';
+      const fallbackId = yearLetter + monthLetter + String(Date.now() % 1000).padStart(3, '0');
+      return fallbackId;
+    }
+  }
+
+  async markOrderIdAsUsed(orderId: string): Promise<void> {
+    try {
+      await db
+        .update(orderIdReservations)
+        .set({
+          isUsed: true,
+          usedAt: new Date(),
+        })
+        .where(eq(orderIdReservations.orderId, orderId));
+      
+      console.log(`Marked Order ID as used: ${orderId}`);
+    } catch (error) {
+      console.error(`Error marking Order ID as used: ${orderId}`, error);
+      // Don't throw - this is not critical for order creation
+    }
+  }
+
+  // Cleanup expired reservations (call periodically)
+  async cleanupExpiredReservations(): Promise<number> {
+    try {
+      const result = await db
+        .delete(orderIdReservations)
+        .where(
+          and(
+            eq(orderIdReservations.isUsed, false),
+            lt(orderIdReservations.expiresAt, new Date())
+          )
+        );
+      
+      const count = result.rowCount || 0;
+      if (count > 0) {
+        console.log(`Cleaned up ${count} expired Order ID reservations`);
+      }
+      return count;
+    } catch (error) {
+      console.error('Error cleaning up expired reservations:', error);
+      return 0;
     }
   }
 

@@ -424,14 +424,20 @@ export default function LayupScheduler() {
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
             <Button 
-              variant="outline" 
+              variant="default" 
               size="sm"
-              onClick={() => {
-                console.log('🔧 Manual test assignment...');
-                if (orders.length > 0 && molds.length > 0) {
+              onClick={(e) => {
+                e.preventDefault();
+                console.log('🔧 TEST ASSIGNMENT CLICKED!');
+                console.log('Orders available:', orders?.length, orders?.map(o => o.orderId));
+                console.log('Molds available:', molds?.length, molds?.map(m => m.moldId));
+                
+                if (orders && orders.length > 0 && molds && molds.length > 0) {
                   const testAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
                   const firstMold = molds.find(m => m.enabled);
                   const today = new Date();
+                  
+                  console.log('Using mold:', firstMold?.moldId);
                   
                   orders.forEach((order, index) => {
                     if (firstMold) {
@@ -444,14 +450,15 @@ export default function LayupScheduler() {
                       console.log(`🎯 Test assigning ${order.orderId} to ${firstMold.moldId} on ${assignDate.toDateString()}`);
                     }
                   });
+                  console.log('Setting assignments:', testAssignments);
                   setOrderAssignments(testAssignments);
-                  console.log('✅ Manual test assignments:', testAssignments);
+                  console.log('✅ Manual test assignments completed');
                 } else {
-                  console.log('❌ No orders or molds available for test assignment');
+                  console.log('❌ Missing data - Orders:', orders?.length, 'Molds:', molds?.length);
                 }
               }}
             >
-              Test Assignment
+              🧪 TEST ASSIGNMENT
             </Button>
             <Button 
               variant="outline" 

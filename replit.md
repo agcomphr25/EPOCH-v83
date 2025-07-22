@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Layup Scheduler Drag & Drop System Implementation (IN PROGRESS)**
+- ✅ **Fixed Drag and Drop Scope**: Moved DndContext to wrap both sidebar queue and calendar for proper drag functionality
+- ✅ **Corrected Draggable Components**: Changed from useSortable to useDraggable for cross-container drag operations
+- ✅ **Enhanced Calendar Display**: Added visual indicators and debugging to calendar cells showing "Empty cell" status
+- ✅ **Restored Automatic Assignment**: Fixed auto-schedule system that applies optimal order placement on component load
+- 🔄 **Troubleshooting Display Issue**: Calendar cells show properly but assigned orders not displaying - investigating assignment logic
+- 🔄 **Manual Test Controls**: Added Test Assignment button with enhanced debugging to isolate display vs logic issues
+
 **July 22, 2025 - P1 Purchase Orders Integration with Layup Scheduler (COMPLETED)**
 - ✅ **Unified Layup Queue API**: Created `/api/layup-queue` endpoint combining regular orders and P1 Purchase Order items  
 - ✅ **Smart Priority Scoring**: P1 orders get calculated priority scores based on due date urgency (closer dates = higher priority)

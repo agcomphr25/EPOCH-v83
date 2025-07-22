@@ -66,8 +66,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
   const createMutation = useMutation({
     mutationFn: (data: P2PurchaseOrderItemForm) => apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
       method: "POST",
-      body: JSON.stringify(data),
-      headers: { "Content-Type": "application/json" },
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });
@@ -84,8 +83,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
     mutationFn: ({ itemId, data }: { itemId: number; data: Partial<P2PurchaseOrderItemForm> }) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
         method: "PUT",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders", poId, "items"] });

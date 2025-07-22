@@ -81,8 +81,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const createMutation = useMutation({
     mutationFn: (data: P2PurchaseOrderForm) => apiRequest("/api/p2/purchase-orders", {
       method: "POST",
-      body: JSON.stringify(data),
-      headers: { "Content-Type": "application/json" },
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders"] });
@@ -99,8 +98,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     mutationFn: ({ id, data }: { id: number; data: Partial<P2PurchaseOrderForm> }) =>
       apiRequest(`/api/p2/purchase-orders/${id}`, {
         method: "PUT",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders"] });

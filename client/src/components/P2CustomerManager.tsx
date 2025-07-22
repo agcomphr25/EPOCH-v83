@@ -63,8 +63,7 @@ export function P2CustomerManager() {
   const createMutation = useMutation({
     mutationFn: (data: P2CustomerForm) => apiRequest("/api/p2/customers", {
       method: "POST",
-      body: JSON.stringify(data),
-      headers: { "Content-Type": "application/json" },
+      body: data,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/customers"] });
@@ -81,8 +80,7 @@ export function P2CustomerManager() {
     mutationFn: ({ id, data }: { id: number; data: Partial<P2CustomerForm> }) =>
       apiRequest(`/api/p2/customers/${id}`, {
         method: "PUT",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
+        body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/p2/customers"] });

@@ -85,12 +85,15 @@ export function serveStatic(app: Express) {
       return next();
     }
 
-    // For all other routes, serve the React app
-    vite.middlewares.handle(req, res, (err) => {
-      if (err) {
-        console.error("Vite middleware error:", err);
+    // fall through to index.html if the file doesn't exist
+    app.use("*", (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith("/api")) {
+        return next();
       }
-      next(err);
+      // For all other routes, serve the React app
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath);
     });
   });
 }

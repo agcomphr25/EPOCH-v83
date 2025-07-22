@@ -809,7 +809,7 @@ export default function OrderEntry() {
                   <span>Stock Model:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{selectedModel?.displayName || 'Not selected'}</span>
-                    <span className="text-blue-600">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
+                    <span className="text-blue-600 font-bold">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
                   </div>
                 </div>
                 
@@ -818,7 +818,7 @@ export default function OrderEntry() {
                   <span>Handedness:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
-                    <span className="text-blue-600">$0.00</span>
+                    <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
                 
@@ -827,7 +827,7 @@ export default function OrderEntry() {
                   <span>Action Length:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</span>
-                    <span className="text-blue-600">$0.00</span>
+                    <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
                 
@@ -840,7 +840,7 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
                       return option?.label || features.action_inlet;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${features.action_inlet ? (() => {
+                    <span className="text-blue-600 font-bold">${features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
                       return (option?.price || 0).toFixed(2);
@@ -857,7 +857,7 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === bottomMetal);
                       return option?.label || bottomMetal;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${bottomMetal ? (() => {
+                    <span className="text-blue-600 font-bold">${bottomMetal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
                       const option = feature?.options?.find(opt => opt.value === bottomMetal);
                       return (option?.price || 0).toFixed(2);
@@ -870,7 +870,7 @@ export default function OrderEntry() {
                   <span>Barrel Inlet:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Not selected</span>
-                    <span className="text-blue-600">$0.00</span>
+                    <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
                 
@@ -883,7 +883,7 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
                       return option?.label || features.qd_quick_detach;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${features.qd_quick_detach ? (() => {
+                    <span className="text-blue-600 font-bold">${features.qd_quick_detach ? (() => {
                       const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
                       const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
                       return (option?.price || 0).toFixed(2);
@@ -900,7 +900,7 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === features.lop);
                       return option?.label || features.lop;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${features.lop ? (() => {
+                    <span className="text-blue-600 font-bold">${features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
                       const option = feature?.options?.find(opt => opt.value === features.lop);
                       return (option?.price || 0).toFixed(2);
@@ -913,7 +913,7 @@ export default function OrderEntry() {
                   <span>Rails:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{railAccessory && railAccessory.length > 0 ? railAccessory.join(', ') : 'Not selected'}</span>
-                    <span className="text-blue-600">${railAccessory && railAccessory.length > 0 ? (() => {
+                    <span className="text-blue-600 font-bold">${railAccessory && railAccessory.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'rail_accessory');
                       if (!feature?.options) return '0.00';
                       const totalPrice = railAccessory.reduce((sum, optionValue) => {
@@ -934,7 +934,7 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === features.texture);
                       return option?.label || features.texture;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${features.texture ? (() => {
+                    <span className="text-blue-600 font-bold">${features.texture ? (() => {
                       const feature = featureDefs.find(f => f.id === 'texture');
                       const option = feature?.options?.find(opt => opt.value === features.texture);
                       return (option?.price || 0).toFixed(2);
@@ -947,7 +947,7 @@ export default function OrderEntry() {
                   <span>Swivel Studs:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Not selected</span>
-                    <span className="text-blue-600">$0.00</span>
+                    <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
                 
@@ -956,7 +956,7 @@ export default function OrderEntry() {
                   <span>Other Options:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{otherOptions && otherOptions.length > 0 ? otherOptions.join(', ') : 'Not selected'}</span>
-                    <span className="text-blue-600">${otherOptions && otherOptions.length > 0 ? (() => {
+                    <span className="text-blue-600 font-bold">${otherOptions && otherOptions.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
                       if (!feature?.options) return '0.00';
                       const totalPrice = otherOptions.reduce((sum, optionValue) => {
@@ -994,7 +994,7 @@ export default function OrderEntry() {
                       }
                       return paintOptions;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600">${paintOptions && paintOptions !== 'none' ? (() => {
+                    <span className="text-blue-600 font-bold">${paintOptions && paintOptions !== 'none' ? (() => {
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName === 'Cerakote Options' ||
                         f.displayName === 'Terrain Options' ||

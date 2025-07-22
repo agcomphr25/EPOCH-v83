@@ -162,6 +162,7 @@ export const orderDrafts = pgTable("order_drafts", {
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
   discountCode: text("discount_code"),
+  notes: text("notes"), // Order notes/special instructions
   customDiscountType: text("custom_discount_type").default("percent"),
   customDiscountValue: real("custom_discount_value").default(0),
   showCustomDiscount: boolean("show_custom_discount").default(false),

@@ -301,7 +301,7 @@ export default function OrderEntry() {
         setHasAGROrder(!!order.agrOrderDetails);
         setShipping(order.shipping || 36.95);
         setIsCustomOrder(order.isCustomOrder === 'yes');
-        setNotes(''); // No notes field in current order schema
+        setNotes(order.notes || '');
         setDiscountCode(order.discountCode || '');
         setCustomDiscountType(order.customDiscountType || 'percent');
         setCustomDiscountValue(order.customDiscountValue || 0);

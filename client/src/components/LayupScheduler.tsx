@@ -12,6 +12,7 @@ import {
   useSensor,
   useSensors,
   useDroppable,
+  useDraggable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -45,13 +46,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { 
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
-  } = useSortable({ id: order.orderId });
+  } = useDraggable({ id: order.orderId });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : 'none',
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -336,44 +335,49 @@ export default function LayupScheduler() {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Sidebar for Order Queue */}
-      <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Order Queue</CardTitle>
-              <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                {orders.filter(o => !orderAssignments[o.orderId]).length} orders
+    <DndContext 
+      sensors={sensors} 
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex h-full">
+        {/* Sidebar for Order Queue */}
+        <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Order Queue</CardTitle>
+                <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
+                  {orders.filter(o => !orderAssignments[o.orderId]).length} orders
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {orders.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <div className="text-sm">No orders in queue</div>
-                <div className="text-xs mt-1">Orders will appear here when available</div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {orders
-                  .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
-                  .map((order, index) => (
-                    <DraggableOrderItem
-                      key={order.orderId}
-                      order={order}
-                      priority={index + 1}
-                      totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
-                    />
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </aside>
+            </CardHeader>
+            <CardContent>
+              {orders.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-sm">No orders in queue</div>
+                  <div className="text-xs mt-1">Orders will appear here when available</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {orders
+                    .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
+                    .map((order, index) => (
+                      <DraggableOrderItem
+                        key={order.orderId}
+                        order={order}
+                        priority={index + 1}
+                        totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
+                      />
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
 
-      {/* Calendar */}
-      <main className="flex-1 p-4 overflow-auto">
+        {/* Calendar */}
+        <main className="flex-1 p-4 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
             <Dialog>
@@ -737,11 +741,6 @@ export default function LayupScheduler() {
           </div>
         </div>
 
-        <DndContext 
-          sensors={sensors} 
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
           <div
             className="grid gap-1"
             style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
@@ -798,15 +797,16 @@ export default function LayupScheduler() {
             ))}
           </div>
 
-          <DragOverlay>
-            {activeId ? (
-              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-                {activeId}
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      </main>
-    </div>
+        </main>
+      </div>
+      
+      <DragOverlay>
+        {activeId ? (
+          <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
+            {activeId}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

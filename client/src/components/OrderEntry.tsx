@@ -561,10 +561,27 @@ export default function OrderEntry() {
         return;
       }
 
+      // Merge all features including rails, other options, and paint into features object
+      const completeFeatures = {
+        ...features,
+        // Add handedness to features if set
+        ...(handedness && { handedness }),
+        // Add bottom metal to features if set  
+        ...(bottomMetal && { bottom_metal: bottomMetal }),
+        // Add paint options to features if set
+        ...(paintOptions && { paint_options: paintOptions }),
+        // Add rail accessories if any selected
+        ...(railAccessory && railAccessory.length > 0 && { rail_accessory: railAccessory }),
+        // Add other options if any selected
+        ...(otherOptions && otherOptions.length > 0 && { other_options: otherOptions })
+      };
+
+      console.log('Complete features being saved:', completeFeatures);
+
       const orderData = {
         customerId: customer.id.toString(),
         modelId,
-        features,
+        features: completeFeatures,
         orderDate: orderDate.toISOString(),
         dueDate: dueDate.toISOString(),
         orderId,

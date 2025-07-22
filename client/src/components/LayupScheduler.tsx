@@ -119,9 +119,11 @@ export default function LayupScheduler() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ modelName: '', instanceNumber: 1, multiplier: 2 });
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
+  const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const { molds, saveMold, loading: moldsLoading } = useMoldSettings();
-  const { employees, saveEmployee, loading: employeesLoading } = useEmployeeSettings();
+  const { employees, saveEmployee, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useLayupOrders();
 
   const sensors = useSensors(
@@ -229,6 +231,46 @@ export default function LayupScheduler() {
       isActive: true
     });
     setNewEmployee({ employeeId: '', rate: 1.5, hours: 8 });
+    // Refresh the employee list to show the newly added employee
+    await refetchEmployees();
+  };
+
+  const handleEmployeeChange = (employeeId: string, field: 'rate' | 'hours', value: number) => {
+    setEmployeeChanges(prev => ({
+      ...prev,
+      [employeeId]: {
+        ...prev[employeeId],
+        [field]: value
+      }
+    }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSaveEmployeeChanges = async () => {
+    try {
+      // Save all changes
+      const savePromises = Object.entries(employeeChanges).map(([employeeId, changes]) => {
+        const employee = employees.find(emp => emp.employeeId === employeeId);
+        if (employee) {
+          return saveEmployee({
+            ...employee,
+            ...changes
+          });
+        }
+        return Promise.resolve();
+      });
+
+      await Promise.all(savePromises);
+      
+      // Clear unsaved changes
+      setEmployeeChanges({});
+      setHasUnsavedChanges(false);
+      
+      // Refresh the employee list
+      await refetchEmployees();
+    } catch (error) {
+      console.error('Failed to save employee changes:', error);
+    }
   };
 
   if (moldsLoading || employeesLoading || ordersLoading) {
@@ -450,51 +492,71 @@ export default function LayupScheduler() {
                       No employees configured yet. Use the form above to add your first employee.
                     </div>
                   ) : (
-                    employees.map(emp => (
-                      <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <div className="font-medium text-base">{emp.name}</div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Employee ID: {emp.employeeId} | Department: {emp.department}
+                    <div className="space-y-4">
+                      {employees.map(emp => {
+                        const changes = employeeChanges[emp.employeeId];
+                        const currentRate = changes?.rate ?? emp.rate;
+                        const currentHours = changes?.hours ?? emp.hours;
+                        
+                        return (
+                          <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="font-medium text-base">{emp.name}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  Employee ID: {emp.employeeId} | Department: {emp.department}
+                                </div>
+                              </div>
+                              <Badge variant={emp.isActive ? "default" : "secondary"}>
+                                {emp.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm font-medium">Production Rate:</label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  value={currentRate}
+                                  onChange={(e) =>
+                                    handleEmployeeChange(emp.employeeId, 'rate', +e.target.value)
+                                  }
+                                  className="w-24"
+                                />
+                                <span className="text-sm text-gray-600">units/hr</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm font-medium">Daily Hours:</label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={currentHours}
+                                  min={1}
+                                  max={12}
+                                  onChange={(e) =>
+                                    handleEmployeeChange(emp.employeeId, 'hours', +e.target.value)
+                                  }
+                                  className="w-24"
+                                />
+                                <span className="text-sm text-gray-600">hrs/day</span>
+                              </div>
                             </div>
                           </div>
-                          <Badge variant={emp.isActive ? "default" : "secondary"}>
-                            {emp.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                        );
+                      })}
+                      
+                      {/* Save Button */}
+                      {hasUnsavedChanges && (
+                        <div className="flex justify-center pt-4 border-t">
+                          <Button 
+                            onClick={handleSaveEmployeeChanges}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            Save Changes
+                          </Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex items-center space-x-2">
-                            <label className="text-sm font-medium">Production Rate:</label>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              value={emp.rate}
-                              onChange={(e) =>
-                                saveEmployee({ ...emp, rate: +e.target.value })
-                              }
-                              className="w-24"
-                            />
-                            <span className="text-sm text-gray-600">units/hr</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <label className="text-sm font-medium">Daily Hours:</label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={emp.hours}
-                              min={1}
-                              max={12}
-                              onChange={(e) =>
-                                saveEmployee({ ...emp, hours: +e.target.value })
-                              }
-                              className="w-24"
-                            />
-                            <span className="text-sm text-gray-600">hrs/day</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                      )}
+                    </div>
                   )}
                   
                   {employees.length > 0 && (

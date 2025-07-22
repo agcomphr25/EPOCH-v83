@@ -104,24 +104,54 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
-        {/* Show Action Length under Order ID */}
-        {order.features?.action_length && order.features.action_length !== 'none' && (
-          <div className="text-xs opacity-80 mt-0.5 font-medium">
-            {order.features.action_length === 'Long' ? 'LA' : 
-             order.features.action_length === 'Medium' ? 'MA' : 
-             order.features.action_length === 'Short' ? 'SA' :
-             order.features.action_length === 'long' ? 'LA' : 
-             order.features.action_length === 'medium' ? 'MA' : 
-             order.features.action_length === 'short' ? 'SA' : 
-             order.features.action_length}
-          </div>
-        )}
-        {/* Debug: Show available feature keys */}
-        {order.features && Object.keys(order.features).length > 0 && (
-          <div className="text-xs opacity-50 mt-0.5" style={{ maxWidth: '120px', wordWrap: 'break-word' }}>
-            Keys: {Object.keys(order.features).join(', ')}
-          </div>
-        )}
+        {/* Show Action Length Display Name under Order ID */}
+        {(() => {
+          // Get action length display name from Feature Manager
+          const getActionLengthDisplay = (orderFeatures: any) => {
+            if (!orderFeatures || !features) return null;
+            
+            // Check different possible field names for action length in order features
+            const actionLengthValue = orderFeatures.action_length || orderFeatures.length_of_pull;
+            if (!actionLengthValue || actionLengthValue === 'none' || actionLengthValue === 'no_lop_change') return null;
+            
+            // Find the action_length feature definition in Feature Manager
+            const actionLengthFeature = features.find((f: any) => 
+              f.id === 'action_length' || f.id === 'length_of_pull'
+            );
+            
+            if (!actionLengthFeature || !actionLengthFeature.options) {
+              // Fallback to abbreviations if Feature Manager data not available
+              const displayMap: {[key: string]: string} = {
+                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+                'long': 'LA', 'medium': 'MA', 'short': 'SA',
+                'lop_short': 'SA', 'lop_medium': 'MA', 'lop_long': 'LA',
+                'short_lop': 'SA', 'medium_lop': 'MA', 'long_lop': 'LA'
+              };
+              return displayMap[actionLengthValue] || actionLengthValue;
+            }
+            
+            // Use Feature Manager option label as display name
+            const option = actionLengthFeature.options.find((opt: any) => opt.value === actionLengthValue);
+            if (option && option.label) {
+              // Convert display name to abbreviation for compact display
+              const label = option.label;
+              if (label.toLowerCase().includes('long')) return 'LA';
+              if (label.toLowerCase().includes('medium')) return 'MA';
+              if (label.toLowerCase().includes('short')) return 'SA';
+              return label.substring(0, 2).toUpperCase(); // First 2 chars as fallback
+            }
+            
+            return actionLengthValue;
+          };
+          
+          const actionLengthDisplay = getActionLengthDisplay(order.features);
+          
+          return actionLengthDisplay ? (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              {actionLengthDisplay}
+            </div>
+          ) : null;
+        })()}
         {/* Show product display name if available */}
         {getModelDisplayName && order.modelId && (
           <div className="text-xs opacity-80 mt-0.5">
@@ -228,6 +258,10 @@ export default function LayupScheduler() {
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
+  });
+
+  const { data: features = [] } = useQuery({
+    queryKey: ['/api/features'],
   });
 
   // Helper function to get model display name

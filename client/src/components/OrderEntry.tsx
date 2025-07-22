@@ -1041,8 +1041,7 @@ export default function OrderEntry() {
                   })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.action_inlet ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'action_inlet');
-                      console.log('Action Inlet Debug:', { value: features.action_inlet, feature: feature, options: feature?.options });
+                      const feature = featureDefs.find(f => f.id === 'action_inlet' || f.name === 'action_inlet');
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
                       return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
@@ -1077,18 +1076,18 @@ export default function OrderEntry() {
                 {/* Barrel Inlet */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
-                    const feature = featureDefs.find(f => f.id === 'barrel_inlet');
+                    const feature = featureDefs.find(f => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
                     return feature?.displayName || 'Barrel Inlet';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{barrelInlet ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'barrel_inlet');
-                      const option = feature?.options?.find(opt => opt.value === barrelInlet);
-                      return option?.label || barrelInlet;
+                    <span className="font-medium">{features.barrel_inlet ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
+                      const option = feature?.options?.find(opt => opt.value === features.barrel_inlet);
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${barrelInlet ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'barrel_inlet');
-                      const option = feature?.options?.find(opt => opt.value === barrelInlet);
+                    <span className="text-blue-600 font-bold">${features.barrel_inlet ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
+                      const option = feature?.options?.find(opt => opt.value === features.barrel_inlet);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1097,18 +1096,18 @@ export default function OrderEntry() {
                 {/* QDs (Quick Detach Cups) */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
-                    const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
+                    const feature = featureDefs.find(f => f.id === 'qd_quick_detach' || f.name === 'qd_quick_detach');
                     return feature?.displayName || 'QDs (Quick Detach Cups)';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{qdQuickDetach ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
-                      const option = feature?.options?.find(opt => opt.value === qdQuickDetach);
-                      return option?.label || qdQuickDetach;
+                    <span className="font-medium">{features.qd_quick_detach ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'qd_quick_detach' || f.name === 'qd_quick_detach');
+                      const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${qdQuickDetach ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
-                      const option = feature?.options?.find(opt => opt.value === qdQuickDetach);
+                    <span className="text-blue-600 font-bold">${features.qd_quick_detach ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'qd_quick_detach' || f.name === 'qd_quick_detach');
+                      const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1122,8 +1121,7 @@ export default function OrderEntry() {
                   })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.lop ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'lop');
-                      console.log('LOP Debug:', { value: features.lop, feature: feature, options: feature?.options });
+                      const feature = featureDefs.find(f => f.id === 'lop' || f.name === 'lop');
                       const option = feature?.options?.find(opt => opt.value === features.lop);
                       return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
@@ -1158,18 +1156,18 @@ export default function OrderEntry() {
                 {/* Texture */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
-                    const feature = featureDefs.find(f => f.id === 'texture');
+                    const feature = featureDefs.find(f => f.id === 'texture' || f.name === 'texture');
                     return feature?.displayName || 'Texture';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{texture ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'texture');
-                      const option = feature?.options?.find(opt => opt.value === texture);
-                      return option?.label || texture;
+                    <span className="font-medium">{features.texture ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'texture' || f.name === 'texture');
+                      const option = feature?.options?.find(opt => opt.value === features.texture);
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${texture ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'texture');
-                      const option = feature?.options?.find(opt => opt.value === texture);
+                    <span className="text-blue-600 font-bold">${features.texture ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'texture' || f.name === 'texture');
+                      const option = feature?.options?.find(opt => opt.value === features.texture);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1178,18 +1176,18 @@ export default function OrderEntry() {
                 {/* Swivel Studs */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
-                    const feature = featureDefs.find(f => f.id === 'swivel_studs');
+                    const feature = featureDefs.find(f => f.id === 'swivel_studs' || f.name === 'swivel_studs');
                     return feature?.displayName || 'Swivel Studs';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{swivelStuds ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'swivel_studs');
-                      const option = feature?.options?.find(opt => opt.value === swivelStuds);
-                      return option?.label || swivelStuds;
+                    <span className="font-medium">{features.swivel_studs ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'swivel_studs' || f.name === 'swivel_studs');
+                      const option = feature?.options?.find(opt => opt.value === features.swivel_studs);
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${swivelStuds ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'swivel_studs');
-                      const option = feature?.options?.find(opt => opt.value === swivelStuds);
+                    <span className="text-blue-600 font-bold">${features.swivel_studs ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'swivel_studs' || f.name === 'swivel_studs');
+                      const option = feature?.options?.find(opt => opt.value === features.swivel_studs);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1220,7 +1218,6 @@ export default function OrderEntry() {
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
-                      console.log('Paint Options Debug:', { value: paintOptions, allFeatures: featureDefs.map(f => ({ id: f.id, displayName: f.displayName, hasOptions: !!f.options })) });
                       // Search through ALL paint-related features to find the matching option
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName?.includes('Options') || 
@@ -1235,13 +1232,10 @@ export default function OrderEntry() {
                         f.subcategory === 'paint'
                       );
                       
-                      console.log('Paint Features Found:', paintFeatures.map(f => ({ id: f.id, displayName: f.displayName, optionsCount: f.options?.length })));
-                      
                       for (const feature of paintFeatures) {
                         if (feature.options) {
                           const option = feature.options.find(opt => opt.value === paintOptions);
                           if (option) {
-                            console.log('Paint Option Found:', option);
                             return option.label;
                           }
                         }

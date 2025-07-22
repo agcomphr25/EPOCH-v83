@@ -263,17 +263,22 @@ export default function OrderEntry() {
         setFeatures(order.features || {});
         
         // Set individual feature states from features object
-        const features = order.features || {};
-        setHandedness(features.handedness || order.handedness || '');
-        setActionLength(features.action_length || '');
-        setBottomMetal(features.bottom_metal || '');
-        setBarrelInlet(features.barrel_inlet || '');
-        setQdQuickDetach(features.qd_accessory || '');
-        setSwivelStuds(features.swivel_studs || '');
-        setTexture(features.texture_options || '');
-        setPaintOptions(features.paint_options || '');
-        setOtherOptions(features.other_options ? (Array.isArray(features.other_options) ? features.other_options : [features.other_options]) : []);
-        setRailAccessory(features.rail_accessory ? (Array.isArray(features.rail_accessory) ? features.rail_accessory : [features.rail_accessory]) : []);
+        const featuresObj = order.features || {};
+        console.log('Loading order features:', featuresObj);
+        
+        setHandedness(featuresObj.handedness || order.handedness || '');
+        setActionLength(featuresObj.action_length || '');
+        setBottomMetal(featuresObj.bottom_metal || '');
+        setBarrelInlet(featuresObj.barrel_inlet || '');
+        setQdQuickDetach(featuresObj.qd_accessory || '');
+        setSwivelStuds(featuresObj.swivel_studs || '');
+        setTexture(featuresObj.texture_options || '');
+        setPaintOptions(featuresObj.paint_options || '');
+        setOtherOptions(featuresObj.other_options ? (Array.isArray(featuresObj.other_options) ? featuresObj.other_options : [featuresObj.other_options]) : []);
+        setRailAccessory(featuresObj.rail_accessory ? (Array.isArray(featuresObj.rail_accessory) ? featuresObj.rail_accessory : [featuresObj.rail_accessory]) : []);
+        
+        // Set the main features object which will populate form dropdowns
+        console.log('Setting features object with length_of_pull:', featuresObj.length_of_pull);
         
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);
@@ -561,7 +566,9 @@ export default function OrderEntry() {
       });
 
       // Reset form
+      console.log('Before resetForm - paymentAmount:', paymentAmount, 'isPaid:', isPaid);
       resetForm();
+      console.log('After resetForm - paymentAmount should be empty');
 
     } catch (error: any) {
       console.error('Submit error:', error);
@@ -1640,7 +1647,7 @@ export default function OrderEntry() {
                 </div>
                 
                 {/* Payment Amount - Only show if payment exists */}
-                {isPaid && paymentAmount && (
+                {isPaid && paymentAmount && paymentAmount.trim() !== '' && (
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Payment Amount:</span>
                     <span className="font-bold text-green-600">-{formatCurrency(parseFloat(paymentAmount))}</span>
@@ -1648,7 +1655,7 @@ export default function OrderEntry() {
                 )}
                 
                 {/* Balance Due/Credit - Only show if payment exists */}
-                {isPaid && paymentAmount && (() => {
+                {isPaid && paymentAmount && paymentAmount.trim() !== '' && (() => {
                   const remainingBalance = (totalPrice + 36.95) - parseFloat(paymentAmount || '0');
                   const isCredit = remainingBalance < 0;
                   const balanceAmount = Math.abs(remainingBalance);

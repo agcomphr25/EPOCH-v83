@@ -50,5 +50,33 @@ export default function useEmployeeSettings() {
     }
   };
 
-  return { employees, saveEmployee, loading, refetch: fetchEmployees };
+  const deleteEmployee = async (employeeId: string) => {
+    try {
+      await apiRequest(`/api/employees/layup-settings/${employeeId}`, {
+        method: 'DELETE',
+      });
+      setEmployees(employees.filter(e => e.employeeId !== employeeId));
+    } catch (error) {
+      console.error('Failed to delete employee:', error);
+    }
+  };
+
+  const toggleEmployeeStatus = async (employeeId: string, isActive: boolean) => {
+    try {
+      const employee = employees.find(e => e.employeeId === employeeId);
+      if (employee) {
+        await apiRequest(`/api/employees/layup-settings/${employeeId}`, {
+          method: 'PUT',
+          body: { ...employee, isActive },
+        });
+        setEmployees(es =>
+          es.map(e => (e.employeeId === employeeId ? { ...e, isActive } : e))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle employee status:', error);
+    }
+  };
+
+  return { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading, refetch: fetchEmployees };
 }

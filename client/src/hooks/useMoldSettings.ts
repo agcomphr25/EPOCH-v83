@@ -50,5 +50,33 @@ export default function useMoldSettings() {
     }
   };
 
-  return { molds, saveMold, loading, refetch: fetchMolds };
+  const deleteMold = async (moldId: string) => {
+    try {
+      await apiRequest(`/api/molds/${moldId}`, {
+        method: 'DELETE',
+      });
+      setMolds(molds.filter(m => m.moldId !== moldId));
+    } catch (error) {
+      console.error('Failed to delete mold:', error);
+    }
+  };
+
+  const toggleMoldStatus = async (moldId: string, isActive: boolean) => {
+    try {
+      const mold = molds.find(m => m.moldId === moldId);
+      if (mold) {
+        await apiRequest(`/api/molds/${moldId}`, {
+          method: 'PUT',
+          body: { ...mold, isActive },
+        });
+        setMolds(ms =>
+          ms.map(m => (m.moldId === moldId ? { ...m, isActive } : m))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle mold status:', error);
+    }
+  };
+
+  return { molds, saveMold, deleteMold, toggleMoldStatus, loading, refetch: fetchMolds };
 }

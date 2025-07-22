@@ -122,8 +122,8 @@ export default function LayupScheduler() {
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const { molds, saveMold, loading: moldsLoading } = useMoldSettings();
-  const { employees, saveEmployee, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
+  const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
+  const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useLayupOrders();
 
   const sensors = useSensors(
@@ -398,8 +398,13 @@ export default function LayupScheduler() {
                           }
                         />
                         <div className="flex-1">
-                          <div className="font-medium text-base">
-                            {mold.modelName} #{mold.instanceNumber}
+                          <div className="flex items-center space-x-2 mb-1">
+                            <div className="font-medium text-base">
+                              {mold.modelName} #{mold.instanceNumber}
+                            </div>
+                            <Badge variant={mold.isActive ? "default" : "secondary"}>
+                              {mold.isActive ? "Active" : "Inactive"}
+                            </Badge>
                           </div>
                           <div className="text-sm text-gray-600 dark:text-gray-400">
                             Mold ID: {mold.moldId}
@@ -417,6 +422,24 @@ export default function LayupScheduler() {
                             className="w-24"
                           />
                           <span className="text-sm text-gray-600">units/day</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleMoldStatus(mold.moldId, !mold.isActive)}
+                            className={mold.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
+                          >
+                            {mold.isActive ? "Mark Inactive" : "Reactivate"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteMold(mold.moldId)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     ))
@@ -528,9 +551,27 @@ export default function LayupScheduler() {
                                   Employee ID: {emp.employeeId} | Department: {emp.department}
                                 </div>
                               </div>
-                              <Badge variant={emp.isActive ? "default" : "secondary"}>
-                                {emp.isActive ? "Active" : "Inactive"}
-                              </Badge>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant={emp.isActive ? "default" : "secondary"}>
+                                  {emp.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleEmployeeStatus(emp.employeeId, !emp.isActive)}
+                                  className={emp.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
+                                >
+                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => deleteEmployee(emp.employeeId)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  Delete
+                                </Button>
+                              </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="flex items-center space-x-2">

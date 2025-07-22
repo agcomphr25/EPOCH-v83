@@ -226,6 +226,24 @@ export default function LayupScheduler() {
     return generateLayupSchedule(orderData, moldData, employeeData);
   }, [orders, molds, employees]);
 
+  // Apply automatic schedule to orderAssignments when schedule changes
+  React.useEffect(() => {
+    if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
+      console.log('Applying automatic schedule:', schedule);
+      const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      schedule.forEach(item => {
+        autoAssignments[item.orderId] = {
+          moldId: item.moldId,
+          date: item.scheduledDate.toISOString()
+        };
+      });
+      
+      setOrderAssignments(autoAssignments);
+      console.log('Auto-assigned orders:', autoAssignments);
+    }
+  }, [schedule, orderAssignments]);
+
   // Build date columns
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
@@ -380,6 +398,33 @@ export default function LayupScheduler() {
         <main className="flex-1 p-4 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                console.log('Resetting assignments, applying auto-schedule:', schedule);
+                const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+                schedule.forEach(item => {
+                  autoAssignments[item.orderId] = {
+                    moldId: item.moldId,
+                    date: item.scheduledDate.toISOString()
+                  };
+                });
+                setOrderAssignments(autoAssignments);
+              }}
+            >
+              Auto-Schedule Orders
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                console.log('Clearing all assignments');
+                setOrderAssignments({});
+              }}
+            >
+              Clear Schedule
+            </Button>
             <Dialog>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">

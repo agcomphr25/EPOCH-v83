@@ -89,6 +89,11 @@ export default function OrderEntry() {
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
+  const [showCustomDiscount, setShowCustomDiscount] = useState(false);
+  const [shipping, setShipping] = useState(36.95);
+  const [isCustomOrder, setIsCustomOrder] = useState(false);
+  const [notes, setNotes] = useState('');
   
   // Payment state
   const [isPaid, setIsPaid] = useState(false);
@@ -162,7 +167,43 @@ export default function OrderEntry() {
     return total;
   }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
 
-  const totalPrice = calculateTotalPrice();
+  // Calculate discount amount based on selected discount code
+  const calculateDiscountAmount = useCallback((subtotal: number) => {
+    if (!discountCode || discountCode === 'none') return 0;
+    
+    // Handle custom discount
+    if (showCustomDiscount) {
+      if (customDiscountType === 'percent') {
+        return (subtotal * customDiscountValue) / 100;
+      } else {
+        return customDiscountValue;
+      }
+    }
+    
+    // Handle predefined discount codes
+    const selectedDiscount = discountOptions.find(d => d.value === discountCode);
+    if (!selectedDiscount) return 0;
+    
+    // Extract percentage from label (e.g., "10% off")
+    const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
+    if (percentMatch) {
+      const percent = parseInt(percentMatch[1]);
+      return (subtotal * percent) / 100;
+    }
+    
+    // Extract dollar amount from label (e.g., "$50.00 off")
+    const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
+    if (dollarMatch) {
+      const amount = parseFloat(dollarMatch[1]);
+      return amount;
+    }
+    
+    return 0;
+  }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue]);
+
+  const subtotalPrice = calculateTotalPrice();
+  const discountAmount = calculateDiscountAmount(subtotalPrice);
+  const totalPrice = subtotalPrice - discountAmount;
 
   // Helper function to format currency with commas
   const formatCurrency = (amount: number) => {
@@ -173,13 +214,6 @@ export default function OrderEntry() {
       maximumFractionDigits: 2
     }).format(amount);
   };
-  const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
-  const [showCustomDiscount, setShowCustomDiscount] = useState(false);
-  const [shipping, setShipping] = useState(36.95);
-
-  // Additional fields
-  const [isCustomOrder, setIsCustomOrder] = useState(false);
-  const [notes, setNotes] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -1308,7 +1342,8 @@ export default function OrderEntry() {
                 <input 
                   type="number" 
                   placeholder="36.95"
-                  defaultValue="36.95"
+                  value={shipping}
+                  onChange={(e) => setShipping(parseFloat(e.target.value) || 0)}
                   className="w-full p-3 border rounded-lg"
                   step="0.01"
                 />
@@ -1318,15 +1353,26 @@ export default function OrderEntry() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Subtotal:</span>
-                  <span className="font-bold">{formatCurrency(totalPrice)}</span>
+                  <span className="font-bold">{formatCurrency(subtotalPrice)}</span>
                 </div>
+                
+                {/* Display selected discount */}
+                {discountCode && discountCode !== 'none' && discountAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-green-600">
+                      Discount ({discountOptions.find(d => d.value === discountCode)?.label || 'Custom'}):
+                    </span>
+                    <span className="font-bold text-green-600">-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Shipping & Handling:</span>
-                  <span className="font-bold">{formatCurrency(36.95)}</span>
+                  <span className="font-bold">{formatCurrency(shipping)}</span>
                 </div>
                 <div className="flex justify-between items-center text-lg border-t pt-2">
                   <span className="font-bold">Total:</span>
-                  <span className="font-bold text-blue-600">{formatCurrency(totalPrice + 36.95)}</span>
+                  <span className="font-bold text-blue-600">{formatCurrency(totalPrice + shipping)}</span>
                 </div>
                 
                 {/* Payment Amount - Only show if payment exists */}

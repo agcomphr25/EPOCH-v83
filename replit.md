@@ -10,6 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Customer CSV Import with Update Capability (COMPLETED)**
+- ✅ **Smart Customer Import**: Enhanced CSV import to check for existing customers by name and update their records instead of creating duplicates
+- ✅ **Flexible Column Detection**: Supports Name (required), Email (optional), and Phone (optional) columns with case-insensitive header matching
+- ✅ **Update vs Create Logic**: Automatically updates existing customers with new email/phone data while creating new customers for unmatched names
+- ✅ **Enhanced Feedback**: Provides detailed import results showing count of new customers created vs existing customers updated
+- ✅ **Error Handling**: Comprehensive error reporting for failed rows with specific error messages
+- ✅ **Backend API Endpoint**: Created `/api/customers/import/csv` endpoint with robust data validation and processing
+- ✅ **UI Enhancement**: Updated Customer Management interface with improved CSV preview showing customer data format
+
 **July 22, 2025 - Order Entry Payment Reset and Edit Functionality Fix (COMPLETED)**
 - ✅ **Payment Reset Enhancement**: Fixed payment fields persisting after order creation by adding payment state variables to resetForm function and improving conditional rendering
 - ✅ **Edit Functionality Implementation**: Added URL parameter detection (?draft=id) to load existing orders for editing with comprehensive field population

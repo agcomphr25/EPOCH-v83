@@ -1557,6 +1557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
       const importedCustomers = [];
+      const updatedCustomers = [];
       const errors = [];
 
       // Expected columns: Name, Email, Phone
@@ -1591,9 +1592,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (customerData.email === '') customerData.email = undefined;
           if (customerData.phone === '') customerData.phone = undefined;
 
-          const validatedData = insertCustomerSchema.parse(customerData);
-          const customer = await storage.createCustomer(validatedData);
-          importedCustomers.push(customer);
+          // Check if customer already exists by name
+          const existingCustomers = await storage.searchCustomers(customerData.name);
+          const existingCustomer = existingCustomers.find(c => 
+            c.name.toLowerCase() === customerData.name.toLowerCase()
+          );
+
+          let customer;
+          if (existingCustomer) {
+            // Update existing customer with new data (only if new data is provided)
+            const updateData: any = {};
+            if (customerData.email) updateData.email = customerData.email;
+            if (customerData.phone) updateData.phone = customerData.phone;
+            
+            // Only update if we have new information to add
+            if (Object.keys(updateData).length > 0) {
+              customer = await storage.updateCustomer(existingCustomer.id, updateData);
+              updatedCustomers.push(customer);
+            } else {
+              customer = existingCustomer; // No new data to update
+            }
+          } else {
+            // Create new customer
+            const validatedData = insertCustomerSchema.parse(customerData);
+            customer = await storage.createCustomer(validatedData);
+            importedCustomers.push(customer);
+          }
         } catch (error) {
           errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
         }
@@ -1602,8 +1626,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         importedCount: importedCustomers.length,
+        updatedCount: updatedCustomers.length,
+        totalProcessed: importedCustomers.length + updatedCustomers.length,
         errors: errors,
-        customers: importedCustomers
+        newCustomers: importedCustomers,
+        updatedCustomers: updatedCustomers
       });
     } catch (error) {
       console.error("Import customers CSV error:", error);

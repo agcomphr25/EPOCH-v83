@@ -623,7 +623,17 @@ export default function CustomerManagement() {
       setIsProcessingCSV(false);
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
 
-      let description = `Successfully imported ${result.importedCount} customer(s)`;
+      let description = '';
+      
+      if (result.importedCount > 0 && result.updatedCount > 0) {
+        description = `Created ${result.importedCount} new customer(s) and updated ${result.updatedCount} existing customer(s)`;
+      } else if (result.importedCount > 0) {
+        description = `Successfully created ${result.importedCount} new customer(s)`;
+      } else if (result.updatedCount > 0) {
+        description = `Successfully updated ${result.updatedCount} existing customer(s)`;
+      } else {
+        description = 'No customers were created or updated';
+      }
       
       if (result.errors && result.errors.length > 0) {
         description += ` with ${result.errors.length} error(s)`;

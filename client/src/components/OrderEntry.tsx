@@ -1200,14 +1200,20 @@ export default function OrderEntry() {
                       }
                     }}
                   />
-                  {isPaid && paymentType && paymentAmount && paymentTimestamp ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <label htmlFor="paid-checkbox" className="font-medium cursor-pointer text-green-600">
-                            Paid
-                          </label>
-                        </TooltipTrigger>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span 
+                          className={`font-medium cursor-pointer ${
+                            isPaid && paymentType && paymentAmount && paymentTimestamp 
+                              ? 'text-green-600' 
+                              : ''
+                          }`}
+                        >
+                          Paid
+                        </span>
+                      </TooltipTrigger>
+                      {isPaid && paymentType && paymentAmount && paymentTimestamp && (
                         <TooltipContent>
                           <div className="text-sm space-y-1">
                             <div><strong>Payment Details:</strong></div>
@@ -1217,13 +1223,9 @@ export default function OrderEntry() {
                             <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
                           </div>
                         </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    <label htmlFor="paid-checkbox" className="font-medium cursor-pointer">
-                      Paid
-                    </label>
-                  )}
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
 

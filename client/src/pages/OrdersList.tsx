@@ -486,6 +486,8 @@ export default function OrdersList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {/* IMPORTANT: Use order.orderId (e.g. "AG245") NOT order.id (database record ID) 
+                            The order entry page expects the actual order identifier */}
                         <Link href={`/order-entry?draft=${order.orderId}`}>
                           <Button variant="outline" size="sm">
                             <Edit className="h-4 w-4" />

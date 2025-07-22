@@ -15,6 +15,7 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Link Parameter Fix**: Changed `/order-entry?draft=${order.id}` to `/order-entry?draft=${order.orderId}` in OrdersList component
 - ✅ **Data Loading Restoration**: Order entry page now correctly loads existing order data when editing from All Orders list
 - ✅ **Backend Compatibility**: Confirmed backend API endpoint `/api/orders/draft/:id` supports both database IDs and order IDs for flexibility
+- ✅ **Prevention Documentation**: Added code comment explaining why order.orderId must be used to prevent future regression
 
 **July 22, 2025 - Customer CSV Import with Update Capability (COMPLETED)**
 - ✅ **Smart Customer Import**: Enhanced CSV import to check for existing customers by name and update their records instead of creating duplicates

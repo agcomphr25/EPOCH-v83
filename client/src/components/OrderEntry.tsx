@@ -504,25 +504,23 @@ export default function OrderEntry() {
                 
                 <div>
                   <Label htmlFor="customer-po">Customer PO</Label>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="customer-po-checkbox"
-                        checked={hasCustomerPO}
-                        onCheckedChange={(checked) => {
-                          setHasCustomerPO(!!checked);
-                          if (!checked) {
-                            setCustomerPO('');
-                          }
-                        }}
-                      />
-                      <Label 
-                        htmlFor="customer-po-checkbox" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Enable Customer PO
-                      </Label>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="customer-po-checkbox"
+                      checked={hasCustomerPO}
+                      onCheckedChange={(checked) => {
+                        setHasCustomerPO(!!checked);
+                        if (!checked) {
+                          setCustomerPO('');
+                        }
+                      }}
+                    />
+                    <Label 
+                      htmlFor="customer-po-checkbox" 
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Enable Customer PO
+                    </Label>
                   </div>
                   
                   {hasCustomerPO && (

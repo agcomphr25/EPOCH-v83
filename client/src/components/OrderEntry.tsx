@@ -316,7 +316,8 @@ export default function OrderEntry() {
   // Calculate order total
   const calculateTotal = useCallback(() => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
-    const basePrice = selectedModel?.price || 0;
+    // Use price override if set, otherwise use original model price
+    const basePrice = priceOverride !== null ? priceOverride : (selectedModel?.price || 0);
     
     let featureCost = 0;
     
@@ -398,7 +399,7 @@ export default function OrderEntry() {
       shipping,
       total
     };
-  }, [modelId, modelOptions, features, featureDefs, shipping, bottomMetal, paintOptions, otherOptions, railAccessory]);
+  }, [modelId, modelOptions, features, featureDefs, shipping, bottomMetal, paintOptions, otherOptions, railAccessory, priceOverride]);
 
   const pricing = calculateTotal();
 
@@ -1193,7 +1194,12 @@ export default function OrderEntry() {
                   <span>Stock Model:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{selectedModel?.displayName || 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
+                    <span className="text-blue-600 font-bold">
+                      ${priceOverride !== null ? priceOverride.toFixed(2) : (selectedModel?.price?.toFixed(2) || '0.00')}
+                      {priceOverride !== null && (
+                        <span className="text-xs text-green-600 ml-1">(Override)</span>
+                      )}
+                    </span>
                   </div>
                 </div>
                 

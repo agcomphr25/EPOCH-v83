@@ -60,6 +60,8 @@ export default function OrderEntry() {
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
   const [customerPO, setCustomerPO] = useState('');
   const [fbOrderNumber, setFbOrderNumber] = useState('');
+  const [hasAGROrder, setHasAGROrder] = useState(false);
+  const [agrOrderDetails, setAgrOrderDetails] = useState('');
   const [handedness, setHandedness] = useState('');
   const [actionLength, setActionLength] = useState('');
   const [bottomMetal, setBottomMetal] = useState('');
@@ -413,6 +415,8 @@ export default function OrderEntry() {
     setHasCustomerPO(false);
     setCustomerPO('');
     setFbOrderNumber('');
+    setHasAGROrder(false);
+    setAgrOrderDetails('');
     setHandedness('');
     setActionLength('');
     setBottomMetal('');
@@ -533,8 +537,8 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* FB Order */}
-              <div className="grid grid-cols-1 gap-4">
+              {/* FB Order and AGR Order */}
+              <div className="grid grid-cols-2 gap-6">
                 <div>
                   <Label>FB Order #</Label>
                   <Input
@@ -543,6 +547,40 @@ export default function OrderEntry() {
                     onChange={(e) => setFbOrderNumber(e.target.value)}
                     placeholder="Enter FB Order #"
                   />
+                </div>
+                
+                <div>
+                  <Label htmlFor="agr-order">AGR Order</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="agr-order-checkbox"
+                        checked={hasAGROrder}
+                        onCheckedChange={(checked) => {
+                          setHasAGROrder(!!checked);
+                          if (!checked) {
+                            setAgrOrderDetails('');
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="agr-order-checkbox" 
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Enable AGR Order
+                      </Label>
+                    </div>
+                  </div>
+                  
+                  {hasAGROrder && (
+                    <div className="mt-2">
+                      <Input
+                        placeholder="Enter Order Details (e.g., AGR-11865 (00586B))"
+                        value={agrOrderDetails}
+                        onChange={(e) => setAgrOrderDetails(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

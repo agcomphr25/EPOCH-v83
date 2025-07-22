@@ -36,6 +36,17 @@ export default function AllOrdersList() {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
+  // Fetch stock models to get display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
+
+  // Helper function to get model display name
+  const getModelDisplayName = (modelId: string) => {
+    const model = stockModels.find((m: any) => m.id === modelId);
+    return model?.displayName || model?.name || modelId;
+  };
+
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
@@ -182,7 +193,7 @@ export default function AllOrdersList() {
                       {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell>{order.customer || order.customerId}</TableCell>
-                    <TableCell>{order.product || order.modelId}</TableCell>
+                    <TableCell>{order.product || getModelDisplayName(order.modelId)}</TableCell>
                     <TableCell>
                       <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
                         {order.currentDepartment}

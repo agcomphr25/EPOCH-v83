@@ -40,17 +40,17 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
   />
 );
 
-const OrderChip = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => (
+const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail; onClick?: () => void; getModelDisplayName?: (modelId: string) => string }) => (
   <div 
     className={`px-2 py-1 rounded text-xs text-white ${statusColors[order.scheduleStatus]} cursor-pointer hover:bg-opacity-80 transition-colors`}
     onClick={onClick}
-    title={`${order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+    title={`${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
   >
     {order.orderId}
   </div>
 );
 
-const DepartmentVisualization = ({ department, orders }: { department: string; orders: OrderDetail[] }) => {
+const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { department: string; orders: OrderDetail[]; getModelDisplayName: (modelId: string) => string }) => {
   const count = orders.length;
   const usePixels = count > 20; // Hybrid selection threshold
 
@@ -70,7 +70,7 @@ const DepartmentVisualization = ({ department, orders }: { department: string; o
     return (
       <div className="flex flex-wrap gap-1">
         {orders.map((order) => (
-          <OrderChip key={order.orderId} order={order} />
+          <OrderChip key={order.orderId} order={order} getModelDisplayName={getModelDisplayName} />
         ))}
       </div>
     );
@@ -87,6 +87,17 @@ export default function PipelineVisualization() {
     queryKey: ['/api/orders/pipeline-details'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
+
+  // Fetch stock models to get display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
+
+  // Helper function to get model display name
+  const getModelDisplayName = (modelId: string) => {
+    const model = stockModels.find((m: any) => m.id === modelId);
+    return model?.displayName || model?.name || modelId;
+  };
 
   const isLoading = countsLoading || detailsLoading;
 
@@ -131,7 +142,7 @@ export default function PipelineVisualization() {
                 
                 {/* Schedule status visualization */}
                 <div className="min-h-[60px] p-2 bg-gray-50 rounded border overflow-hidden">
-                  <DepartmentVisualization department={dept.name} orders={orders} />
+                  <DepartmentVisualization department={dept.name} orders={orders} getModelDisplayName={getModelDisplayName} />
                 </div>
                 
                 <Progress value={percentage} className="h-2" />

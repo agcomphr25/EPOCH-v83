@@ -12,6 +12,17 @@ export default function OutstandingOrdersCard() {
     queryFn: () => apiRequest('/api/orders/outstanding'),
   });
 
+  // Fetch stock models to get display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
+
+  // Helper function to get model display name
+  const getModelDisplayName = (modelId: string) => {
+    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
+    return model?.displayName || model?.name || modelId;
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'DRAFT': return 'bg-gray-100 text-gray-800';
@@ -69,21 +80,21 @@ export default function OutstandingOrdersCard() {
                 {order.customerId && (
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-gray-400" />
-                    <span>{order.customerId}</span>
+                    <span>{order.customerId || 'No Customer'}</span>
                   </div>
                 )}
 
                 {order.modelId && (
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-gray-400" />
-                    <span>{order.modelId}</span>
+                    <span>{getModelDisplayName(order.modelId)}</span>
                     {order.handedness && <span className="text-gray-500">({order.handedness})</span>}
                   </div>
                 )}
 
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>Due: {formatDate(order.dueDate)}</span>
+                  <span>Due: {order.dueDate ? formatDate(order.dueDate) : 'No Due Date'}</span>
                 </div>
 
                 <div className="flex items-center gap-2">

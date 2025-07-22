@@ -4,6 +4,7 @@ import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
+import { useQuery } from '@tanstack/react-query';
 import {
   DndContext,
   DragEndEvent,
@@ -40,7 +41,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Separator } from "@/components/ui/separator";
 
 // Draggable Order Item Component with responsive sizing
-function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number } }) {
+function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string }) {
   const {
     attributes,
     listeners,
@@ -103,6 +104,12 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { 
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
+        {/* Show product display name if available */}
+        {getModelDisplayName && order.modelId && (
+          <div className="text-xs opacity-80 mt-0.5">
+            {getModelDisplayName(order.modelId)}
+          </div>
+        )}
         {moldInfo && (
           <div className="text-xs font-semibold opacity-80 mt-0.5">
             {moldInfo.instanceNumber ? `Mold ${moldInfo.instanceNumber}` : moldInfo.moldId}
@@ -168,6 +175,7 @@ function DroppableCell({
               priority={order?.priorityScore || 0}
               totalOrdersInCell={orders.length}
               moldInfo={moldInfo}
+              getModelDisplayName={getModelDisplayName}
             />
           );
         })}
@@ -196,6 +204,17 @@ export default function LayupScheduler() {
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+
+  // Fetch stock models to get display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
+
+  // Helper function to get model display name
+  const getModelDisplayName = (modelId: string) => {
+    const model = stockModels.find((m: any) => m.id === modelId);
+    return model?.displayName || model?.name || modelId;
+  };
 
   // Debug logging with emojis for visibility
   console.log('🎯 LayupScheduler - Orders data:', orders);
@@ -411,6 +430,7 @@ export default function LayupScheduler() {
                         order={order}
                         priority={index + 1}
                         totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
+                        getModelDisplayName={getModelDisplayName}
                       />
                     ))}
                 </div>

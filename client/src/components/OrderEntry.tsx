@@ -1205,7 +1205,7 @@ export default function OrderEntry() {
                     <span 
                       className={`font-medium cursor-pointer ${
                         isPaid && paymentType && paymentAmount && paymentTimestamp 
-                          ? 'text-green-600' 
+                          ? 'text-green-600 hover:text-green-700' 
                           : ''
                       }`}
                       onMouseEnter={() => {
@@ -1214,6 +1214,12 @@ export default function OrderEntry() {
                         }
                       }}
                       onMouseLeave={() => setShowTooltip(false)}
+                      onClick={() => {
+                        if (isPaid && paymentType && paymentAmount && paymentTimestamp) {
+                          setShowPaymentModal(true);
+                        }
+                      }}
+                      title={isPaid && paymentType && paymentAmount ? "Click to edit payment" : ""}
                     >
                       Paid
                     </span>
@@ -1326,11 +1332,14 @@ export default function OrderEntry() {
               onClick={() => {
                 if (paymentType && paymentAmount) {
                   setIsPaid(true);
-                  setPaymentTimestamp(new Date());
+                  // Only update timestamp if this is a new payment (no existing timestamp)
+                  if (!paymentTimestamp) {
+                    setPaymentTimestamp(new Date());
+                  }
                   setShowPaymentModal(false);
                   toast({
-                    title: "Payment Saved",
-                    description: `Payment of $${paymentAmount} via ${paymentType.replace('_', ' ').toUpperCase()} recorded.`,
+                    title: paymentTimestamp ? "Payment Updated" : "Payment Saved",
+                    description: `Payment of $${paymentAmount} via ${paymentType.replace('_', ' ').toUpperCase()} ${paymentTimestamp ? 'updated' : 'recorded'}.`,
                   });
                 } else {
                   toast({
@@ -1341,7 +1350,7 @@ export default function OrderEntry() {
                 }
               }}
             >
-              Save Payment
+              {paymentTimestamp ? "Update Payment" : "Save Payment"}
             </Button>
           </div>
         </DialogContent>

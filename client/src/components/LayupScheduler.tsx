@@ -747,13 +747,8 @@ export default function LayupScheduler() {
                       assignment.moldId === mold.moldId && 
                       assignment.date === dateString
                     )
-                    .map(([orderId]) => {
-                      const order = orders.find(o => o.orderId === orderId);
-                      return {
-                        orderId,
-                        priorityScore: order?.priorityScore || 0
-                      };
-                    });
+                    .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                    .filter(order => order !== undefined) as any[];
 
                   const dropId = `${mold.moldId}|${dateString}`;
 

@@ -605,110 +605,48 @@ export default function CustomerManagement() {
     }
 
     setIsProcessingCSV(true);
-    let successCount = 0;
-    let errorCount = 0;
-    let skippedCount = 0;
-    const errors: string[] = [];
+    
+    try {
+      // Convert CSV data to raw CSV string format for the backend
+      const headers = Object.keys(csvData[0]);
+      const csvString = [
+        headers.join(','), // Header row
+        ...csvData.map(row => headers.map(header => row[header] || '').join(','))
+      ].join('\n');
 
-    for (const row of csvData) {
-      try {
-        const customerName = row.Name || row.AddressContact || 'Unknown Customer';
-        
-        // Check if customer already exists
-        const existingCustomer = customers.find(c => 
-          c.name.toLowerCase() === customerName.toLowerCase()
-        );
+      // Send to our customer CSV import endpoint
+      const result = await apiRequest('/api/customers/import/csv', {
+        method: 'POST',
+        body: { csvData: csvString },
+      });
 
-        let customerId;
-        
-        if (existingCustomer) {
-          // Use existing customer
-          customerId = existingCustomer.id;
-          skippedCount++;
-        } else {
-          // Create new customer
-          const customerData = {
-            name: customerName,
-            email: '',
-            phone: '',
-            company: row.Name || '',
-            customerType: 'standard',
-            notes: `Imported from CSV - Address Type: ${row.AddressType}`,
-            isActive: true
-          };
+      setIsProcessingCSV(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
 
-          const customerResponse = await apiRequest('/api/customers', {
-            method: 'POST',
-            body: customerData,
-          });
-          
-          customerId = customerResponse.id;
-        }
-
-        // Create address if customer ID exists and address data is available
-        if (customerId && row.Address && row.City) {
-          // Parse address - handle multi-line addresses
-          const addressParts = row.Address.split('\n').filter((part: string) => part.trim());
-          const street = addressParts.join(', ');
-
-          const addressData = {
-            customerId: customerId.toString(),
-            street: street,
-            city: row.City,
-            state: row.State || '',
-            zipCode: row.Zip || '',
-            country: row.Country || 'United States',
-            type: 'both',
-            isDefault: row.IsDefault === 'TRUE' || row.IsDefault === true
-          };
-
-          await apiRequest('/api/addresses', {
-            method: 'POST',
-            body: addressData,
-          });
-        }
-
-        successCount++;
-      } catch (error: any) {
-        errorCount++;
-        errors.push(`${row.Name || 'Unknown'}: ${error.message || 'Unknown error'}`);
-      }
-    }
-
-    setIsProcessingCSV(false);
-    queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-
-    if (successCount > 0) {
-      const newCustomers = successCount - skippedCount;
-      let description = `Successfully processed ${successCount} record(s)`;
+      let description = `Successfully imported ${result.importedCount} customer(s)`;
       
-      if (newCustomers > 0) {
-        description += ` (${newCustomers} new customer${newCustomers > 1 ? 's' : ''})`;
-      }
-      
-      if (skippedCount > 0) {
-        description += ` (${skippedCount} existing customer${skippedCount > 1 ? 's' : ''} updated with addresses)`;
-      }
-      
-      if (errorCount > 0) {
-        description += ` with ${errorCount} error(s)`;
+      if (result.errors && result.errors.length > 0) {
+        description += ` with ${result.errors.length} error(s)`;
+        console.error('Import errors:', result.errors);
       }
       
       toast({
         title: "Import Complete",
         description: description,
-        variant: successCount > errorCount ? "default" : "destructive"
+        variant: result.errors && result.errors.length > 0 ? "destructive" : "default"
+      });
+
+      setIsCSVImportDialogOpen(false);
+      setCsvFile(null);
+      setCsvData([]);
+    } catch (error: any) {
+      setIsProcessingCSV(false);
+      toast({
+        title: "Import Failed",
+        description: error.message || "Failed to import customers from CSV",
+        variant: "destructive"
       });
     }
-
-    if (errors.length > 0) {
-      console.error('Import errors:', errors);
-    }
-
-    setIsCSVImportDialogOpen(false);
-    setCsvFile(null);
-    setCsvData([]);
   };
 
   const CustomerFormFields = () => (
@@ -1075,7 +1013,7 @@ export default function CustomerManagement() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Import Customer Addresses from CSV
+              Import Customers from CSV
             </DialogTitle>
           </DialogHeader>
           
@@ -1083,10 +1021,10 @@ export default function CustomerManagement() {
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <Upload className="h-8 w-8 text-gray-400 mx-auto mb-4" />
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Select CSV file with customer addresses
+                Select CSV file with customer data
               </p>
               <p className="text-xs text-gray-500 mb-4">
-                Expected format: Name, AddressName, AddressContact, AddressType, IsDefault, Address, City, State, Zip, Country
+                Expected format: Name, Email, Phone (Name is required, Email and Phone are optional)
               </p>
               <input
                 ref={csvInputRef}
@@ -1125,9 +1063,9 @@ export default function CustomerManagement() {
                 <div className="max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
                   {csvData.slice(0, 3).map((row, index) => (
                     <div key={index} className="text-sm mb-2 p-2 bg-white rounded border">
-                      <strong>{row.Name}</strong><br />
-                      {row.Address && <span>{row.Address.replace(/\n/g, ', ')}</span>}<br />
-                      {row.City}, {row.State} {row.Zip}
+                      <strong>{row.Name || row.name || 'No name'}</strong><br />
+                      {(row.Email || row.email) && <span>📧 {row.Email || row.email}</span>}<br />
+                      {(row.Phone || row.phone) && <span>📞 {row.Phone || row.phone}</span>}
                     </div>
                   ))}
                   {csvData.length > 3 && (

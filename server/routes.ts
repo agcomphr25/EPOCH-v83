@@ -1540,6 +1540,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete customer" });
     }
   });
+
+  // Customer CSV import
+  app.post("/api/customers/import/csv", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+      
+      if (!csvData || typeof csvData !== 'string') {
+        return res.status(400).json({ error: "CSV data is required" });
+      }
+
+      const lines = csvData.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must contain at least a header and one data row" });
+      }
+
+      const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const importedCustomers = [];
+      const errors = [];
+
+      // Expected columns: Name, Email, Phone
+      const nameIndex = header.findIndex(h => h.toLowerCase().includes('name'));
+      const emailIndex = header.findIndex(h => h.toLowerCase().includes('email'));
+      const phoneIndex = header.findIndex(h => h.toLowerCase().includes('phone'));
+      
+      if (nameIndex === -1) {
+        return res.status(400).json({ error: "CSV must contain a 'Name' column" });
+      }
+      
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          
+          if (values.length < 1) continue; // Skip empty rows
+          
+          const customerData: any = {
+            name: values[nameIndex] || '',
+            email: emailIndex >= 0 ? (values[emailIndex] || undefined) : undefined,
+            phone: phoneIndex >= 0 ? (values[phoneIndex] || undefined) : undefined,
+            customerType: 'standard',
+            isActive: true
+          };
+
+          if (!customerData.name) {
+            errors.push(`Row ${i + 1}: Name is required`);
+            continue;
+          }
+
+          // Clean up empty strings to undefined for optional fields
+          if (customerData.email === '') customerData.email = undefined;
+          if (customerData.phone === '') customerData.phone = undefined;
+
+          const validatedData = insertCustomerSchema.parse(customerData);
+          const customer = await storage.createCustomer(validatedData);
+          importedCustomers.push(customer);
+        } catch (error) {
+          errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        importedCount: importedCustomers.length,
+        errors: errors,
+        customers: importedCustomers
+      });
+    } catch (error) {
+      console.error("Import customers CSV error:", error);
+      res.status(500).json({ error: "Failed to import customers CSV" });
+    }
+  });
   app.get("/api/address/autocomplete", async (req, res) => {
     try {
       const { query } = req.query;

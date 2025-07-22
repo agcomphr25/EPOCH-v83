@@ -883,11 +883,22 @@ export default function LayupScheduler() {
                   
                   // Get orders assigned to this mold/date combination
                   const cellOrders = Object.entries(orderAssignments)
-                    .filter(([orderId, assignment]) => 
-                      assignment.moldId === mold.moldId && 
-                      assignment.date === dateString
-                    )
-                    .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                    .filter(([orderId, assignment]) => {
+                      const assignmentDateOnly = assignment.date.split('T')[0]; // Get YYYY-MM-DD part only
+                      const cellDateOnly = dateString.split('T')[0];
+                      const matches = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                      
+                      if (matches) {
+                        console.log(`🎯 MATCH FOUND: Order ${orderId} assigned to ${assignment.moldId} on ${assignmentDateOnly} matches cell ${mold.moldId}|${cellDateOnly}`);
+                      }
+                      
+                      return matches;
+                    })
+                    .map(([orderId]) => {
+                      const order = orders.find(o => o.orderId === orderId);
+                      console.log(`📦 Finding order ${orderId}:`, order ? 'FOUND' : 'NOT FOUND', order);
+                      return order;
+                    })
                     .filter(order => order !== undefined) as any[];
 
                   // Enhanced debug logging for all cells

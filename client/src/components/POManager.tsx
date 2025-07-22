@@ -392,14 +392,23 @@ export default function POManager() {
                         <Badge className={getStatusColor(po.status)}>
                           {po.status}
                         </Badge>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewItems(po)}
+                            className="flex items-center gap-1"
+                          >
+                            <Package className="w-4 h-4" />
+                            Manage Items
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleViewItems(po)}
-                            title="View Items"
+                            onClick={() => handleEdit(po)}
+                            title="Edit PO Details"
                           >
-                            <Package className="w-4 h-4" />
+                            <Pencil className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -409,14 +418,6 @@ export default function POManager() {
                             disabled={generateProductionOrdersMutation.isPending}
                           >
                             <TrendingUp className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(po)}
-                            title="Edit"
-                          >
-                            <Pencil className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"

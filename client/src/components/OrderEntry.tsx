@@ -810,14 +810,43 @@ export default function OrderEntry() {
                   {/* Other Options */}
                   <div>
                     <Label>Other Options</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select or search..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None selected</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                      {(() => {
+                        const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
+                        
+                        if (!otherOptionsFeature || !otherOptionsFeature.options) {
+                          return <div className="text-gray-500 text-sm">No options available</div>;
+                        }
+                        
+                        return otherOptionsFeature.options.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`other-option-${option.value}`}
+                              checked={otherOptions.includes(option.value)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setOtherOptions(prev => [...prev, option.value]);
+                                } else {
+                                  setOtherOptions(prev => prev.filter(item => item !== option.value));
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`other-option-${option.value}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                            >
+                              {option.label}
+                              {option.price && option.price > 0 && (
+                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
+                              )}
+                            </label>
+                          </div>
+                        ));
+                      })()}
+                      {otherOptions.length === 0 && (
+                        <div className="text-gray-400 text-sm italic">No options selected</div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

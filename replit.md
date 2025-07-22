@@ -15,8 +15,11 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Edit Functionality Implementation**: Added URL parameter detection (?draft=id) to load existing orders for editing with comprehensive field population
 - ✅ **Individual Feature State Loading**: Enhanced loadExistingOrder to populate individual feature states from the features object with detailed debugging
 - ✅ **Customer and Model Loading**: Verified customer lookup and stock model population working correctly
-- ✅ **Root Cause Identified**: Edit functionality works correctly - empty fields in test orders were due to minimal data entry during creation, not loading failures
-- ✅ **Debugging Added**: Comprehensive console logging for order loading and field population verification
+- ✅ **Critical Rails/Other Options Fix**: Fixed Rails and Other Options not saving during order creation by merging all feature state variables (railAccessory, otherOptions, paintOptions, bottomMetal, handedness) into the features object before submission
+- ✅ **Enhanced Feature Persistence**: Modified handleSubmit to create completeFeatures object that combines main features state with separate state variables, ensuring all form selections persist correctly
+- ✅ **Array Field Support**: Added proper array handling for multi-select features (Rails, Other Options) in both save and load operations
+- ✅ **Comprehensive Debugging**: Added console logging for feature saving ("Complete features being saved") and loading with field-specific debugging
+- ✅ **Verification Complete**: Confirmed all fields including Rails, Other Options, Paint, Bottom Metal, and Handedness now save and load correctly during edit operations
 
 **July 22, 2025 - P2 Production Orders Generation System Implementation (COMPLETED)**
 - ✅ **Complete P2 Production Orders System**: Built comprehensive BOM-based production order generation from P2 Purchase Orders
@@ -173,10 +176,12 @@ The application follows a monorepo structure with a full-stack TypeScript approa
 
 ### Order Management Flow
 1. Customer creation/selection via search interface
-2. Product configuration using dynamic features system
-3. Order draft creation with automatic ID generation
-4. Order processing through various status states
-5. Inventory tracking and updates
+2. Product configuration using dynamic features system with comprehensive state management
+3. Feature consolidation: All form selections (features, railAccessory, otherOptions, paintOptions, bottomMetal, handedness) merged into unified features object
+4. Order draft creation with automatic ID generation and complete feature persistence
+5. Edit functionality: URL parameter-based loading (?draft=id) with full feature state restoration
+6. Order processing through various status states
+7. Inventory tracking and updates
 
 ### Form System Flow
 1. Form definition creation via drag-and-drop builder

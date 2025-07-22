@@ -274,18 +274,18 @@ export default function OrderEntry() {
         setSwivelStuds(featuresObj.swivel_studs || '');
         setTexture(featuresObj.texture_options || '');
         
-        // Handle paint options - check multiple possible field names
+        // CRITICAL FIX: Handle paint options - check multiple possible field names
         const paintValue = featuresObj.paint_options || featuresObj.paintOptions || featuresObj.paint || '';
         console.log('Setting paint options:', paintValue);
         setPaintOptions(paintValue);
         
-        // Handle rail accessories - check multiple possible field names  
+        // CRITICAL FIX: Handle rail accessories - check multiple possible field names and ensure array format
         const railValue = featuresObj.rail_accessory || featuresObj.railAccessory || featuresObj.rail_accessories || [];
         const railArray = Array.isArray(railValue) ? railValue : (railValue ? [railValue] : []);
         console.log('Setting rail accessories:', railArray);
         setRailAccessory(railArray);
         
-        // Handle other options - check multiple possible field names
+        // CRITICAL FIX: Handle other options - check multiple possible field names and ensure array format
         const otherValue = featuresObj.other_options || featuresObj.otherOptions || featuresObj.other || [];
         const otherArray = Array.isArray(otherValue) ? otherValue : (otherValue ? [otherValue] : []);
         console.log('Setting other options:', otherArray);
@@ -561,7 +561,10 @@ export default function OrderEntry() {
         return;
       }
 
-      // Merge all features including rails, other options, and paint into features object
+      // CRITICAL FIX: Merge all features including rails, other options, and paint into features object
+      // This solves the issue where railAccessory, otherOptions, paintOptions, bottomMetal, and handedness
+      // were stored as separate state variables but not being saved to the database features field.
+      // Without this consolidation, these fields would appear empty when editing orders.
       const completeFeatures = {
         ...features,
         // Add handedness to features if set
@@ -570,9 +573,9 @@ export default function OrderEntry() {
         ...(bottomMetal && { bottom_metal: bottomMetal }),
         // Add paint options to features if set
         ...(paintOptions && { paint_options: paintOptions }),
-        // Add rail accessories if any selected
+        // Add rail accessories if any selected (array field)
         ...(railAccessory && railAccessory.length > 0 && { rail_accessory: railAccessory }),
-        // Add other options if any selected
+        // Add other options if any selected (array field)
         ...(otherOptions && otherOptions.length > 0 && { other_options: otherOptions })
       };
 

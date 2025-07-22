@@ -261,21 +261,43 @@ export default function OrderEntry() {
         
         setModelId(order.modelId || '');
         setFeatures(order.features || {});
+        
+        // Set individual feature states from features object
+        const features = order.features || {};
+        setHandedness(features.handedness || order.handedness || '');
+        setActionLength(features.action_length || '');
+        setBottomMetal(features.bottom_metal || '');
+        setBarrelInlet(features.barrel_inlet || '');
+        setQdQuickDetach(features.qd_accessory || '');
+        setSwivelStuds(features.swivel_studs || '');
+        setTexture(features.texture_options || '');
+        setPaintOptions(features.paint_options || '');
+        setOtherOptions(features.other_options ? (Array.isArray(features.other_options) ? features.other_options : [features.other_options]) : []);
+        setRailAccessory(features.rail_accessory ? (Array.isArray(features.rail_accessory) ? features.rail_accessory : [features.rail_accessory]) : []);
+        
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);
         setFbOrderNumber(order.fbOrderNumber || '');
         setAgrOrderDetails(order.agrOrderDetails || '');
         setHasAGROrder(!!order.agrOrderDetails);
-        setHandedness(order.handedness || '');
         setShipping(order.shipping || 36.95);
         setIsCustomOrder(order.isCustomOrder === 'yes');
-        setNotes(order.notes || '');
+        setNotes(''); // No notes field in current order schema
         setDiscountCode(order.discountCode || '');
         setCustomDiscountType(order.customDiscountType || 'percent');
         setCustomDiscountValue(order.customDiscountValue || 0);
         setShowCustomDiscount(order.showCustomDiscount || false);
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
+        
+        // Reset payment state (orders don't store payment info currently)
+        setIsPaid(false);
+        setShowPaymentModal(false);
+        setPaymentType('');
+        setPaymentDate(new Date());
+        setPaymentAmount('');
+        setPaymentTimestamp(null);
+        setShowTooltip(false);
         
         toast({
           title: "Order Loaded",

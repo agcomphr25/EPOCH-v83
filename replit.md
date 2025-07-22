@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Order Entry Payment Reset and Edit Functionality Fix (IN PROGRESS)**
+- ✅ **Payment Reset Enhancement**: Added payment state variables to resetForm function (isPaid, showPaymentModal, paymentType, paymentDate, paymentAmount, paymentTimestamp, showTooltip)
+- ✅ **Edit Functionality Implementation**: Added URL parameter detection (?draft=id) to load existing orders for editing
+- ✅ **Individual Feature State Loading**: Enhanced loadExistingOrder to populate individual feature states from the features object
+- ✅ **Customer and Model Loading**: Verified customer lookup and stock model population working correctly
+- 🚧 **Testing Required**: Need to verify payment reset functionality and complete feature loading in edit mode
+
 **July 22, 2025 - P2 Production Orders Generation System Implementation (COMPLETED)**
 - ✅ **Complete P2 Production Orders System**: Built comprehensive BOM-based production order generation from P2 Purchase Orders
 - ✅ **BOM Integration**: SKU dropdown in P2 PO items now fetches from BOM Administration showing "SKU - Model Name" format

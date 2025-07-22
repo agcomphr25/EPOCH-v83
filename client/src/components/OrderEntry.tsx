@@ -833,7 +833,10 @@ export default function OrderEntry() {
                 
                 {/* Action Inlet */}
                 <div className="flex justify-between items-center">
-                  <span>Action Inlet:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'action_inlet');
+                    return feature?.displayName || 'Action Inlet';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
@@ -850,7 +853,10 @@ export default function OrderEntry() {
                 
                 {/* Bottom Metal */}
                 <div className="flex justify-between items-center">
-                  <span>Bottom Metal:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                    return feature?.displayName || 'Bottom Metal';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{bottomMetal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
@@ -867,7 +873,10 @@ export default function OrderEntry() {
                 
                 {/* Barrel Inlet */}
                 <div className="flex justify-between items-center">
-                  <span>Barrel Inlet:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'barrel_inlet');
+                    return feature?.displayName || 'Barrel Inlet';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Not selected</span>
                     <span className="text-blue-600 font-bold">$0.00</span>
@@ -876,7 +885,10 @@ export default function OrderEntry() {
                 
                 {/* QDs (Quick Detach Cups) */}
                 <div className="flex justify-between items-center">
-                  <span>QDs (Quick Detach Cups):</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
+                    return feature?.displayName || 'QDs (Quick Detach Cups)';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.qd_quick_detach ? (() => {
                       const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
@@ -893,7 +905,10 @@ export default function OrderEntry() {
                 
                 {/* LOP (Length of Pull) */}
                 <div className="flex justify-between items-center">
-                  <span>LOP (Length of Pull):</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'lop');
+                    return feature?.displayName || 'LOP (Length of Pull)';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
@@ -910,7 +925,10 @@ export default function OrderEntry() {
                 
                 {/* Rails */}
                 <div className="flex justify-between items-center">
-                  <span>Rails:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                    return feature?.displayName || 'Rails';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{railAccessory && railAccessory.length > 0 ? railAccessory.join(', ') : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${railAccessory && railAccessory.length > 0 ? (() => {
@@ -927,7 +945,10 @@ export default function OrderEntry() {
                 
                 {/* Texture */}
                 <div className="flex justify-between items-center">
-                  <span>Texture:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'texture');
+                    return feature?.displayName || 'Texture';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.texture ? (() => {
                       const feature = featureDefs.find(f => f.id === 'texture');
@@ -944,7 +965,10 @@ export default function OrderEntry() {
                 
                 {/* Swivel Studs */}
                 <div className="flex justify-between items-center">
-                  <span>Swivel Studs:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'swivel_studs');
+                    return feature?.displayName || 'Swivel Studs';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Not selected</span>
                     <span className="text-blue-600 font-bold">$0.00</span>
@@ -953,7 +977,10 @@ export default function OrderEntry() {
                 
                 {/* Other Options */}
                 <div className="flex justify-between items-center">
-                  <span>Other Options:</span>
+                  <span>{(() => {
+                    const feature = featureDefs.find(f => f.id === 'other_options');
+                    return feature?.displayName || 'Other Options';
+                  })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{otherOptions && otherOptions.length > 0 ? otherOptions.join(', ') : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${otherOptions && otherOptions.length > 0 ? (() => {

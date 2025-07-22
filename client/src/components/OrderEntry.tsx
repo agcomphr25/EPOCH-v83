@@ -304,6 +304,20 @@ export default function OrderEntry() {
         setPaymentTimestamp(null);
         setShowTooltip(false);
         
+        console.log('All order fields loaded:', {
+          orderId: order.orderId,
+          modelId: order.modelId,
+          customerId: order.customerId,
+          customerPO: order.customerPO,
+          fbOrderNumber: order.fbOrderNumber,
+          agrOrderDetails: order.agrOrderDetails,
+          handedness: order.handedness,
+          features: order.features,
+          shipping: order.shipping,
+          isCustomOrder: order.isCustomOrder,
+          discountCode: order.discountCode
+        });
+        
         toast({
           title: "Order Loaded",
           description: `Editing order ${order.orderId}`,

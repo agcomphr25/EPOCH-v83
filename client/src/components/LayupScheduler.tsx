@@ -60,29 +60,29 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { 
       return {
         padding: 'p-3',
         margin: 'mb-2',
-        textSize: 'text-sm',
+        textSize: 'text-base font-bold',
         height: 'min-h-[3rem]'
       };
     } else if (orderCount <= 5) {
       return {
         padding: 'p-2',
         margin: 'mb-1.5',
-        textSize: 'text-xs',
+        textSize: 'text-sm font-bold',
         height: 'min-h-[2.5rem]'
       };
     } else if (orderCount <= 8) {
       return {
-        padding: 'p-1.5',
+        padding: 'p-2',
         margin: 'mb-1',
-        textSize: 'text-xs',
+        textSize: 'text-sm font-semibold',
         height: 'min-h-[2rem]'
       };
     } else {
       // Many orders - ultra compact
       return {
-        padding: 'p-1',
+        padding: 'p-1.5',
         margin: 'mb-0.5',
-        textSize: 'text-xs',
+        textSize: 'text-xs font-semibold',
         height: 'min-h-[1.5rem]'
       };
     }
@@ -96,15 +96,15 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { 
       style={style}
       {...attributes}
       {...listeners}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${order.source === 'p1_purchase_order' ? 'bg-green-50 dark:bg-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/50 border-green-200 dark:border-green-800' : 'bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border'} rounded-lg shadow-sm cursor-grab transition-all duration-200`}
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${order.source === 'p1_purchase_order' ? 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600' : 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600'} rounded-lg shadow-md cursor-grab transition-all duration-200`}
     >
-      <div className={`font-medium ${order.source === 'p1_purchase_order' ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
-        <div className="flex items-center">
+      <div className={`${order.source === 'p1_purchase_order' ? 'text-green-800 dark:text-green-200' : 'text-blue-800 dark:text-blue-200'} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
+        <div className="flex items-center font-bold">
           {order.orderId || 'No ID'}
-          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1">P1</span>}
+          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
         {moldInfo && (
-          <div className="text-xs opacity-70 mt-0.5">
+          <div className="text-xs font-semibold opacity-80 mt-0.5">
             {moldInfo.instanceNumber ? `Mold ${moldInfo.instanceNumber}` : moldInfo.moldId}
           </div>
         )}

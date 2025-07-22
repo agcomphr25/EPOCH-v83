@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, Edit, Trash2, Package, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { BOMItemForm } from "./BOMItemForm";
+import type { InventoryItem } from '@shared/schema';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,11 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
     queryKey: ["/api/boms", bomId],
   });
 
+  // Fetch inventory items to get part numbers
+  const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
+    queryKey: ["/api/inventory"],
+  });
+
   // Delete item mutation
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
@@ -80,10 +86,17 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
     },
   });
 
+  // Helper function to get AG Part Number for a BOM item
+  const getPartNumber = (partName: string) => {
+    const inventoryItem = inventoryItems.find(item => item.name === partName);
+    return inventoryItem?.agPartNumber || "N/A";
+  };
+
   // Filter items based on search term
   const filteredItems = bom?.items?.filter(item => 
     item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase())
+    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
   const handleDeleteItem = (itemId: number) => {
@@ -243,6 +256,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Part #</TableHead>
                       <TableHead>Part Name</TableHead>
                       <TableHead>Quantity</TableHead>
                       <TableHead>First Department</TableHead>
@@ -253,6 +267,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                   <TableBody>
                     {filteredItems.map((item) => (
                       <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <TableCell className="font-mono text-sm">{getPartNumber(item.partName)}</TableCell>
                         <TableCell className="font-medium">{item.partName}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell>

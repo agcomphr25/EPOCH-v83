@@ -10,6 +10,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Enhanced BOM Administration with Part Number Display**
+- ✅ **Part Number Column**: Added AG Part Number column to BOM Components table for better part identification
+- ✅ **Enhanced Search**: Updated search functionality to include part numbers alongside part names and departments
+- ✅ **Inventory Integration**: Linked BOM items to inventory database to display actual AG Part Numbers
+- ✅ **Visual Formatting**: Used monospace font for part numbers to improve readability and scanning
+
+**July 22, 2025 - Fixed BOM Administration Edit vs Add Item Issue**
+- ✅ **Issue Resolution**: Confirmed BOM Administration "Add Item" vs "Edit Item" functionality working correctly
+- ✅ **Backend Verification**: POST requests properly create new BOM items, PUT requests update existing items
+- ✅ **User Testing**: Verified through logs that new items get unique IDs (2, 3, 4, 5, 6, 7) and edits modify existing items
+
 **July 22, 2025 - Implemented Atomic Order ID Reservation System (Option 3)**
 - ✅ **Race Condition Elimination**: Implemented database-based Order ID reservation system preventing duplicate IDs during concurrent order creation
 - ✅ **Atomic Generation**: Created retry logic with unique constraint validation ensuring each Order ID is reserved exactly once

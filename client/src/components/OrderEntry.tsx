@@ -185,6 +185,56 @@ export default function OrderEntry() {
         featureCost += option?.price || 0;
       }
     }
+    
+    // Add cost from paint options
+    if (paintOptions && paintOptions !== 'none') {
+      const paintFeatures = featureDefs.filter(f => 
+        f.displayName === 'Cerakote Options' ||
+        f.displayName === 'Terrain Options' ||
+        f.displayName === 'Rogue Options' ||
+        f.displayName === 'Standard Options' ||
+        f.displayName === 'Carbon Camo Ready' ||
+        f.displayName === 'Camo Options' ||
+        f.id === 'metallic_finishes' ||
+        f.name === 'metallic_finishes'
+      );
+      
+      for (const feature of paintFeatures) {
+        if (feature.options) {
+          const option = feature.options.find(opt => opt.value === paintOptions);
+          if (option) {
+            featureCost += option.price || 0;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Add cost from other options (multiselect)
+    if (otherOptions && otherOptions.length > 0) {
+      const feature = featureDefs.find(f => f.id === 'other_options');
+      if (feature?.options) {
+        otherOptions.forEach(optionValue => {
+          const option = feature.options!.find(opt => opt.value === optionValue);
+          if (option) {
+            featureCost += option.price || 0;
+          }
+        });
+      }
+    }
+    
+    // Add cost from rail accessory (multiselect)
+    if (railAccessory && railAccessory.length > 0) {
+      const feature = featureDefs.find(f => f.id === 'rail_accessory');
+      if (feature?.options) {
+        railAccessory.forEach(optionValue => {
+          const option = feature.options!.find(opt => opt.value === optionValue);
+          if (option) {
+            featureCost += option.price || 0;
+          }
+        });
+      }
+    }
 
     const subtotal = basePrice + featureCost;
     const total = subtotal + shipping;
@@ -196,7 +246,7 @@ export default function OrderEntry() {
       shipping,
       total
     };
-  }, [modelId, modelOptions, features, featureDefs, shipping]);
+  }, [modelId, modelOptions, features, featureDefs, shipping, bottomMetal, paintOptions, otherOptions, railAccessory]);
 
   const pricing = calculateTotal();
 
@@ -754,152 +804,181 @@ export default function OrderEntry() {
                 <div className="space-y-1 text-muted-foreground">
                   {/* Stock Model */}
                   <div className="flex justify-between">
-                    <span>Stock Model:</span>
+                    <span className="font-semibold">Stock Model:</span>
                     <div className="text-right">
-                      <span>{selectedModel?.displayName || 'Not selected'}</span>
+                      <span className="font-medium">{selectedModel?.displayName || 'Not selected'}</span>
                       <span className="ml-2 text-blue-600">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
                     </div>
                   </div>
                   
                   {/* Handedness */}
-                  <div className="flex justify-between">
-                    <span>Handedness:</span>
-                    <div className="text-right">
-                      <span>{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                  {handedness && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Handedness:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{handedness === 'right' ? 'Right' : 'Left'}</span>
+                        <span className="ml-2 text-blue-600">$0.00</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Action Length */}
-                  <div className="flex justify-between">
-                    <span>Action Length:</span>
-                    <div className="text-right">
-                      <span>{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                  {actionLength && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Action Length:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{actionLength.charAt(0).toUpperCase() + actionLength.slice(1)}</span>
+                        <span className="ml-2 text-blue-600">$0.00</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
-                  {/* Action Inlet */}
-                  <div className="flex justify-between">
-                    <span>Action Inlet:</span>
-                    <div className="text-right">
-                      <span>{features.action_inlet ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'action_inlet');
-                        const option = feature?.options?.find(opt => opt.value === features.action_inlet);
-                        return option?.label || features.action_inlet;
-                      })() : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">${features.action_inlet ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'action_inlet');
-                        const option = feature?.options?.find(opt => opt.value === features.action_inlet);
-                        return (option?.price || 0).toFixed(2);
-                      })() : '0.00'}</span>
-                    </div>
-                  </div>
+                  {/* Dynamic Feature Rendering */}
+                  {Object.entries(features).map(([featureId, value]) => {
+                    if (!value || value === 'none' || value === '') return null;
+                    
+                    const feature = featureDefs.find(f => f.id === featureId);
+                    if (!feature) return null;
+                    
+                    let displayValue = 'Not selected';
+                    let featurePrice = 0;
+                    
+                    // Handle different feature types
+                    if (feature.options) {
+                      const selectedOption = feature.options.find(opt => opt.value === value);
+                      if (selectedOption) {
+                        displayValue = selectedOption.label;
+                        featurePrice = selectedOption.price || 0;
+                      }
+                    } else if (Array.isArray(value)) {
+                      displayValue = value.join(', ');
+                    } else {
+                      displayValue = String(value);
+                    }
+                    
+                    return (
+                      <div key={featureId} className="flex justify-between">
+                        <span className="font-semibold">{feature.displayName || feature.name}:</span>
+                        <div className="text-right">
+                          <span className="font-medium">{displayValue}</span>
+                          <span className="ml-2 text-blue-600">${featurePrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   
-                  {/* Bottom Metal */}
-                  <div className="flex justify-between">
-                    <span>Bottom Metal:</span>
-                    <div className="text-right">
-                      <span>{bottomMetal ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                        const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                        return option?.label || bottomMetal;
-                      })() : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">${bottomMetal ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                        const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                        return (option?.price || 0).toFixed(2);
-                      })() : '0.00'}</span>
+                  {/* Bottom Metal (separate state variable) */}
+                  {bottomMetal && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Bottom Metal:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{(() => {
+                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                          return option?.label || bottomMetal;
+                        })()}</span>
+                        <span className="ml-2 text-blue-600">${(() => {
+                          const feature = featureDefs.find(f => f.id === 'bottom_metal');
+                          const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                          return (option?.price || 0).toFixed(2);
+                        })()}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
-                  {/* Barrel Inlet */}
-                  <div className="flex justify-between">
-                    <span>Barrel Inlet:</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                  {/* Paint Options (separate state variable) */}
+                  {paintOptions && paintOptions !== 'none' && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Paint Options:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{(() => {
+                          // Find paint feature and extract display name
+                          const paintFeatures = featureDefs.filter(f => 
+                            f.displayName === 'Cerakote Options' ||
+                            f.displayName === 'Terrain Options' ||
+                            f.displayName === 'Rogue Options' ||
+                            f.displayName === 'Standard Options' ||
+                            f.displayName === 'Carbon Camo Ready' ||
+                            f.displayName === 'Camo Options' ||
+                            f.id === 'metallic_finishes' ||
+                            f.name === 'metallic_finishes'
+                          );
+                          
+                          for (const feature of paintFeatures) {
+                            if (feature.options) {
+                              const option = feature.options.find(opt => opt.value === paintOptions);
+                              if (option) {
+                                return `${feature.displayName || feature.name} - ${option.label}`;
+                              }
+                            }
+                          }
+                          return paintOptions;
+                        })()}</span>
+                        <span className="ml-2 text-blue-600">${(() => {
+                          const paintFeatures = featureDefs.filter(f => 
+                            f.displayName === 'Cerakote Options' ||
+                            f.displayName === 'Terrain Options' ||
+                            f.displayName === 'Rogue Options' ||
+                            f.displayName === 'Standard Options' ||
+                            f.displayName === 'Carbon Camo Ready' ||
+                            f.displayName === 'Camo Options' ||
+                            f.id === 'metallic_finishes' ||
+                            f.name === 'metallic_finishes'
+                          );
+                          
+                          for (const feature of paintFeatures) {
+                            if (feature.options) {
+                              const option = feature.options.find(opt => opt.value === paintOptions);
+                              if (option) {
+                                return (option.price || 0).toFixed(2);
+                              }
+                            }
+                          }
+                          return '0.00';
+                        })()}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
-                  {/* QDs (Quick Detach Cups) */}
-                  <div className="flex justify-between">
-                    <span>QDs (Quick Detach Cups):</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
+                  {/* Other Options (multiselect) */}
+                  {otherOptions && otherOptions.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Other Options:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{otherOptions.join(', ')}</span>
+                        <span className="ml-2 text-blue-600">${(() => {
+                          const feature = featureDefs.find(f => f.id === 'other_options');
+                          if (!feature?.options) return '0.00';
+                          
+                          const totalPrice = otherOptions.reduce((sum, optionValue) => {
+                            const option = feature.options!.find(opt => opt.value === optionValue);
+                            return sum + (option?.price || 0);
+                          }, 0);
+                          return totalPrice.toFixed(2);
+                        })()}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
-                  {/* LOP (Length of Pull) */}
-                  <div className="flex justify-between">
-                    <span>LOP (Length of Pull):</span>
-                    <div className="text-right">
-                      <span>{features.lop ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'lop');
-                        const option = feature?.options?.find(opt => opt.value === features.lop);
-                        return option?.label || features.lop;
-                      })() : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">${features.lop ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'lop');
-                        const option = feature?.options?.find(opt => opt.value === features.lop);
-                        return (option?.price || 0).toFixed(2);
-                      })() : '0.00'}</span>
+                  {/* Rail Accessory (multiselect) */}
+                  {railAccessory && railAccessory.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Rail Accessory:</span>
+                      <div className="text-right">
+                        <span className="font-medium">{railAccessory.join(', ')}</span>
+                        <span className="ml-2 text-blue-600">${(() => {
+                          const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                          if (!feature?.options) return '0.00';
+                          
+                          const totalPrice = railAccessory.reduce((sum, optionValue) => {
+                            const option = feature.options!.find(opt => opt.value === optionValue);
+                            return sum + (option?.price || 0);
+                          }, 0);
+                          return totalPrice.toFixed(2);
+                        })()}</span>
+                      </div>
                     </div>
-                  </div>
-                  
-                  {/* Rails */}
-                  <div className="flex justify-between">
-                    <span>Rails:</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
-                    </div>
-                  </div>
-                  
-                  {/* Texture */}
-                  <div className="flex justify-between">
-                    <span>Texture:</span>
-                    <div className="text-right">
-                      <span>{features.texture ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'texture');
-                        const option = feature?.options?.find(opt => opt.value === features.texture);
-                        return option?.label || features.texture;
-                      })() : 'Not selected'}</span>
-                      <span className="ml-2 text-blue-600">${features.texture ? (() => {
-                        const feature = featureDefs.find(f => f.id === 'texture');
-                        const option = feature?.options?.find(opt => opt.value === features.texture);
-                        return (option?.price || 0).toFixed(2);
-                      })() : '0.00'}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Swivel Studs */}
-                  <div className="flex justify-between">
-                    <span>Swivel Studs:</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
-                    </div>
-                  </div>
-                  
-                  {/* Other Options */}
-                  <div className="flex justify-between">
-                    <span>Other Options:</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
-                    </div>
-                  </div>
-                  
-                  {/* Paint Options */}
-                  <div className="flex justify-between">
-                    <span>Paint Options:</span>
-                    <div className="text-right">
-                      <span>Not selected</span>
-                      <span className="ml-2 text-blue-600">$0.00</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -953,20 +1032,20 @@ export default function OrderEntry() {
               {/* Action Buttons */}
               <div className="space-y-2 pt-4">
                 <Button
-                  type="submit"
+                  type="button"
                   className="w-full"
                   variant="outline"
                   disabled={isSubmitting}
-                  onClick={handleSubmit}
+                  onClick={() => handleSubmit()}
                 >
                   {isSubmitting ? "Saving..." : "Save as Draft"}
                 </Button>
                 <Button
-                  type="submit"
+                  type="button"
                   className="w-full"
                   variant="default"
                   disabled={isSubmitting}
-                  onClick={handleSubmit}
+                  onClick={() => handleSubmit()}
                 >
                   {isSubmitting ? "Processing..." : "Create Order"}
                 </Button>

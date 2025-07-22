@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
 import debounce from 'lodash.debounce';
@@ -80,6 +81,7 @@ export default function OrderEntry() {
   const [paymentType, setPaymentType] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentTimestamp, setPaymentTimestamp] = useState<Date | null>(null);
 
   // Calculate total price based on selected features
   const calculateTotalPrice = useCallback(() => {
@@ -1194,12 +1196,34 @@ export default function OrderEntry() {
                         setIsPaid(false);
                         setPaymentType('');
                         setPaymentAmount('');
+                        setPaymentTimestamp(null);
                       }
                     }}
                   />
-                  <label htmlFor="paid-checkbox" className="font-medium cursor-pointer">
-                    Paid
-                  </label>
+                  {isPaid && paymentType && paymentAmount && paymentTimestamp ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <label htmlFor="paid-checkbox" className="font-medium cursor-pointer text-green-600">
+                            Paid
+                          </label>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="text-sm space-y-1">
+                            <div><strong>Payment Details:</strong></div>
+                            <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
+                            <div>Date: {paymentDate.toLocaleDateString()}</div>
+                            <div>Amount: ${parseFloat(paymentAmount).toFixed(2)}</div>
+                            <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <label htmlFor="paid-checkbox" className="font-medium cursor-pointer">
+                      Paid
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -1293,6 +1317,7 @@ export default function OrderEntry() {
               onClick={() => {
                 if (paymentType && paymentAmount) {
                   setIsPaid(true);
+                  setPaymentTimestamp(new Date());
                   setShowPaymentModal(false);
                   toast({
                     title: "Payment Saved",

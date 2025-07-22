@@ -1042,8 +1042,9 @@ export default function OrderEntry() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
+                      console.log('Action Inlet Debug:', { value: features.action_inlet, feature: feature, options: feature?.options });
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
-                      return option?.label || features.action_inlet;
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
@@ -1122,8 +1123,9 @@ export default function OrderEntry() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
+                      console.log('LOP Debug:', { value: features.lop, feature: feature, options: feature?.options });
                       const option = feature?.options?.find(opt => opt.value === features.lop);
-                      return option?.label || features.lop;
+                      return option?.label || 'Not selected';
                     })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
@@ -1218,37 +1220,47 @@ export default function OrderEntry() {
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
+                      console.log('Paint Options Debug:', { value: paintOptions, allFeatures: featureDefs.map(f => ({ id: f.id, displayName: f.displayName, hasOptions: !!f.options })) });
+                      // Search through ALL paint-related features to find the matching option
                       const paintFeatures = featureDefs.filter(f => 
-                        f.displayName === 'Cerakote Options' ||
-                        f.displayName === 'Terrain Options' ||
-                        f.displayName === 'Rogue Options' ||
-                        f.displayName === 'Standard Options' ||
-                        f.displayName === 'Carbon Camo Ready' ||
-                        f.displayName === 'Camo Options' ||
+                        f.displayName?.includes('Options') || 
+                        f.displayName?.includes('Camo') || 
+                        f.displayName?.includes('Cerakote') ||
+                        f.displayName?.includes('Terrain') ||
+                        f.displayName?.includes('Rogue') ||
+                        f.displayName?.includes('Standard') ||
                         f.id === 'metallic_finishes' ||
-                        f.name === 'metallic_finishes'
+                        f.name === 'metallic_finishes' ||
+                        f.category === 'paint' ||
+                        f.subcategory === 'paint'
                       );
+                      
+                      console.log('Paint Features Found:', paintFeatures.map(f => ({ id: f.id, displayName: f.displayName, optionsCount: f.options?.length })));
                       
                       for (const feature of paintFeatures) {
                         if (feature.options) {
                           const option = feature.options.find(opt => opt.value === paintOptions);
                           if (option) {
+                            console.log('Paint Option Found:', option);
                             return option.label;
                           }
                         }
                       }
-                      return paintOptions;
+                      return 'Selected';
                     })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${paintOptions && paintOptions !== 'none' ? (() => {
+                      // Search through ALL paint-related features to find the matching option
                       const paintFeatures = featureDefs.filter(f => 
-                        f.displayName === 'Cerakote Options' ||
-                        f.displayName === 'Terrain Options' ||
-                        f.displayName === 'Rogue Options' ||
-                        f.displayName === 'Standard Options' ||
-                        f.displayName === 'Carbon Camo Ready' ||
-                        f.displayName === 'Camo Options' ||
+                        f.displayName?.includes('Options') || 
+                        f.displayName?.includes('Camo') || 
+                        f.displayName?.includes('Cerakote') ||
+                        f.displayName?.includes('Terrain') ||
+                        f.displayName?.includes('Rogue') ||
+                        f.displayName?.includes('Standard') ||
                         f.id === 'metallic_finishes' ||
-                        f.name === 'metallic_finishes'
+                        f.name === 'metallic_finishes' ||
+                        f.category === 'paint' ||
+                        f.subcategory === 'paint'
                       );
                       
                       for (const feature of paintFeatures) {

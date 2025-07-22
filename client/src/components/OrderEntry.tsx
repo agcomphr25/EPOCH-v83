@@ -686,7 +686,7 @@ export default function OrderEntry() {
 
                 {/* Alamo Price Override */}
                 {modelId && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 pl-[16px] pr-[16px] pt-[0px] pb-[0px]"></div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-yellow-600">💰</span>

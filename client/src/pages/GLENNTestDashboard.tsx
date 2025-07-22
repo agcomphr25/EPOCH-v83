@@ -9,7 +9,7 @@ import {
   Factory, User, Settings
 } from 'lucide-react';
 
-export default function GLENNTestDashboard() {
+export default function ADMINTestDashboard() {
   const orderManagementItems = [
     {
       path: '/order-entry',
@@ -225,7 +225,7 @@ export default function GLENNTestDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">GLENNTEST Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">ADMINTEST Dashboard</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Welcome to your comprehensive manufacturing management system
           </p>

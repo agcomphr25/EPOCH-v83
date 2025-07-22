@@ -89,8 +89,8 @@ export default function Navigation() {
       description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
     },
     {
-      path: '/glenntest-dashboard',
-      label: 'GLENNTEST Dashboard',
+      path: '/admintest-dashboard',
+      label: 'ADMINTEST Dashboard',
       icon: Factory,
       description: 'Complete navigation dashboard for all system sections'
     }

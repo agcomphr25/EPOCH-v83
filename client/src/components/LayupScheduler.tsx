@@ -41,7 +41,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Separator } from "@/components/ui/separator";
 
 // Draggable Order Item Component with responsive sizing
-function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string }) {
+function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[] }) {
   const {
     attributes,
     listeners,
@@ -175,7 +175,8 @@ function DroppableCell({
   orders, 
   onDrop,
   moldInfo,
-  getModelDisplayName
+  getModelDisplayName,
+  features
 }: { 
   moldId: string; 
   date: Date; 
@@ -183,6 +184,7 @@ function DroppableCell({
   onDrop: (orderId: string, moldId: string, date: Date) => void;
   moldInfo?: { moldId: string, instanceNumber?: number };
   getModelDisplayName?: (modelId: string) => string;
+  features?: any[];
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -226,6 +228,7 @@ function DroppableCell({
               totalOrdersInCell={orders.length}
               moldInfo={moldInfo}
               getModelDisplayName={getModelDisplayName}
+              features={features}
             />
           );
         })}
@@ -262,11 +265,11 @@ export default function LayupScheduler() {
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
-  });
+  }) as { data: any[] };
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
-    const model = stockModels.find((m: any) => m.id === modelId);
+    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
@@ -485,6 +488,7 @@ export default function LayupScheduler() {
                         priority={index + 1}
                         totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
                         getModelDisplayName={getModelDisplayName}
+                        features={features}
                       />
                     ))}
                 </div>
@@ -1001,6 +1005,7 @@ export default function LayupScheduler() {
                         instanceNumber: mold.instanceNumber
                       }}
                       getModelDisplayName={getModelDisplayName}
+                      features={features}
                     />
                   );
                 })}

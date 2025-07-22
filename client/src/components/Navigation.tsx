@@ -93,6 +93,12 @@ export default function Navigation() {
       label: 'ADMINTEST Dashboard',
       icon: Factory,
       description: 'Complete navigation dashboard for all system sections'
+    },
+    {
+      path: '/stacitest-dashboard',
+      label: 'STACITEST Dashboard',
+      icon: BarChart,
+      description: 'P1 & P2 production pipeline overview dashboard'
     }
     // Documentation button disabled per user request - was causing problems
     // {

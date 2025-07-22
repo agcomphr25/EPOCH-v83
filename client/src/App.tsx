@@ -46,6 +46,7 @@ import LayupSchedulerPage from "./pages/LayupSchedulerPage";
 import AllOrdersPage from "./pages/AllOrdersPage";
 import AGTestDashboard from "./pages/AGTestDashboard";
 import ADMINTestDashboard from "./pages/GLENNTestDashboard";
+import STACITestDashboard from "./pages/STACITestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -98,6 +99,7 @@ function App() {
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
+                  <Route path="/stacitest-dashboard" component={STACITestDashboard} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

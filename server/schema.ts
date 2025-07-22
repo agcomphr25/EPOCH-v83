@@ -492,6 +492,7 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   customerPO: z.string().optional().nullable(),
   fbOrderNumber: z.string().optional().nullable(),
   agrOrderDetails: z.string().optional().nullable(),
+  isCustomOrder: z.enum(['yes', 'no']).optional().nullable(),
   modelId: z.string().optional().nullable(),
   handedness: z.string().optional().nullable(),
   features: z.record(z.any()).optional().nullable(),

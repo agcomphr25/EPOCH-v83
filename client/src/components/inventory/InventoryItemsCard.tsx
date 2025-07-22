@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Download, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InventoryItem } from '@shared/schema';
 
@@ -29,6 +29,7 @@ export default function InventoryItemsCard() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
@@ -43,9 +44,25 @@ export default function InventoryItemsCard() {
   });
 
   // Load inventory items
-  const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
+  const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
     queryFn: () => apiRequest('/api/inventory'),
+  });
+
+  // Filter items based on search term
+  const items = allItems.filter(item => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.agPartNumber.toLowerCase().includes(searchLower) ||
+      item.name.toLowerCase().includes(searchLower) ||
+      (item.source && item.source.toLowerCase().includes(searchLower)) ||
+      (item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
+      (item.department && item.department.toLowerCase().includes(searchLower)) ||
+      (item.secondarySource && item.secondarySource.toLowerCase().includes(searchLower)) ||
+      (item.notes && item.notes.toLowerCase().includes(searchLower))
+    );
   });
 
   // Create mutation
@@ -447,6 +464,19 @@ export default function InventoryItemsCard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Search Field */}
+      <div className="mb-4">
+        <div className="relative max-w-sm">
+          <Input
+            placeholder="Search by AG Part #, Name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+        </div>
+      </div>
 
       {/* Inventory Items Table */}
       {isLoading ? (

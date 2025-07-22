@@ -423,12 +423,11 @@ export default function LayupScheduler() {
         <main className="flex-1 p-4 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
-            <Button 
-              variant="default" 
-              size="sm"
+            <button 
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
               onClick={(e) => {
-                e.preventDefault();
                 console.log('🔧 TEST ASSIGNMENT CLICKED!');
+                alert('TEST ASSIGNMENT CLICKED!');
                 console.log('Orders available:', orders?.length, orders?.map(o => o.orderId));
                 console.log('Molds available:', molds?.length, molds?.map(m => m.moldId));
                 
@@ -459,7 +458,7 @@ export default function LayupScheduler() {
               }}
             >
               🧪 TEST ASSIGNMENT
-            </Button>
+            </button>
             <Button 
               variant="outline" 
               size="sm"

@@ -87,6 +87,12 @@ export default function Navigation() {
       label: 'AGTEST Dashboard',
       icon: BarChart,
       description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
+    },
+    {
+      path: '/glenntest-dashboard',
+      label: 'GLENNTEST Dashboard',
+      icon: Factory,
+      description: 'Complete navigation dashboard for all system sections'
     }
     // Documentation button disabled per user request - was causing problems
     // {

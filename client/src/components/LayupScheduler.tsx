@@ -138,11 +138,6 @@ function DroppableCell({
       }}
       onDragOver={(e) => e.preventDefault()}
     >
-      {orders.length > 0 && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-center">
-          {orders.length} order{orders.length !== 1 ? 's' : ''}
-        </div>
-      )}
       <SortableContext items={orders.map(o => o.orderId)} strategy={verticalListSortingStrategy}>
         {orders.map((order, idx) => (
           <DraggableOrderItem

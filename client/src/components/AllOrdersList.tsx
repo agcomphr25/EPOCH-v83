@@ -18,10 +18,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2 } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Package2, Edit } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import toast from 'react-hot-toast';
+import { Link } from 'wouter';
 
 const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
@@ -197,6 +198,18 @@ export default function AllOrdersList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
+                        {/* Edit Button - Always available for all orders */}
+                        <Link href={`/order-entry?draft=${order.orderId}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        </Link>
+                        
                         {!isScrapped && !isComplete && nextDept && (
                           <Button
                             size="sm"

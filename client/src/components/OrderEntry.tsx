@@ -1200,21 +1200,15 @@ export default function OrderEntry() {
                       }
                     }}
                   />
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span 
-                          className={`font-medium cursor-pointer ${
-                            isPaid && paymentType && paymentAmount && paymentTimestamp 
-                              ? 'text-green-600' 
-                              : ''
-                          }`}
-                        >
-                          Paid
-                        </span>
-                      </TooltipTrigger>
-                      {isPaid && paymentType && paymentAmount && paymentTimestamp && (
-                        <TooltipContent>
+                  {isPaid && paymentType && paymentAmount && paymentTimestamp ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="font-medium cursor-pointer text-green-600">
+                            Paid
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
                           <div className="text-sm space-y-1">
                             <div><strong>Payment Details:</strong></div>
                             <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
@@ -1223,9 +1217,13 @@ export default function OrderEntry() {
                             <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
                           </div>
                         </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <span className="font-medium cursor-pointer">
+                      Paid
+                    </span>
+                  )}
                 </div>
               </div>
 

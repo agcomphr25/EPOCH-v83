@@ -38,7 +38,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Separator } from "@/components/ui/separator";
 
 // Draggable Order Item Component with responsive sizing
-function DraggableOrderItem({ order, priority, totalOrdersInCell }: { order: any, priority: number, totalOrdersInCell?: number }) {
+function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number } }) {
   const {
     attributes,
     listeners,
@@ -98,9 +98,16 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell }: { order: any
       {...listeners}
       className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${order.source === 'p1_purchase_order' ? 'bg-green-50 dark:bg-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/50 border-green-200 dark:border-green-800' : 'bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border'} rounded-lg shadow-sm cursor-grab transition-all duration-200`}
     >
-      <div className={`font-medium ${order.source === 'p1_purchase_order' ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'} ${sizing.textSize} text-center flex items-center justify-center h-full`}>
-        {order.orderId}
-        {order.source === 'p1_purchase_order' && <span className="text-xs ml-1">P1</span>}
+      <div className={`font-medium ${order.source === 'p1_purchase_order' ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
+        <div className="flex items-center">
+          {order.orderId}
+          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1">P1</span>}
+        </div>
+        {moldInfo && (
+          <div className="text-xs opacity-70 mt-0.5">
+            {moldInfo.instanceNumber ? `Mold ${moldInfo.instanceNumber}` : moldInfo.moldId}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -111,12 +118,14 @@ function DroppableCell({
   moldId, 
   date, 
   orders, 
-  onDrop 
+  onDrop,
+  moldInfo
 }: { 
   moldId: string; 
   date: Date; 
   orders: any[]; 
   onDrop: (orderId: string, moldId: string, date: Date) => void;
+  moldInfo?: { moldId: string, instanceNumber?: number };
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -146,6 +155,7 @@ function DroppableCell({
             order={order}
             priority={order.priorityScore}
             totalOrdersInCell={orders.length}
+            moldInfo={moldInfo}
           />
         ))}
       </SortableContext>
@@ -761,6 +771,10 @@ export default function LayupScheduler() {
                       orders={cellOrders}
                       onDrop={(orderId, moldId, date) => {
                         // Handle drop (this is handled by DndContext now)
+                      }}
+                      moldInfo={{
+                        moldId: mold.moldId,
+                        instanceNumber: mold.instanceNumber
                       }}
                     />
                   );

@@ -901,8 +901,8 @@ export default function OrderEntry() {
                   <div>
                     <Label>Paint Options</Label>
                     <Select 
-                      value={features.paint_options || ''} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, paint_options: value }))}
+                      value={paintOptions} 
+                      onValueChange={setPaintOptions}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select or search..." />

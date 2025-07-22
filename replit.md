@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 22, 2025 - Enhanced Inventory Management with Search Functionality**
+- ✅ **Inventory Search Field**: Added comprehensive search functionality to Inventory Items Management card
+- ✅ **Multi-Field Search**: Search across AG Part #, Name, Source, Supplier Part #, Department, Secondary Source, and Notes
+- ✅ **Real-Time Filtering**: Instant search results as users type with case-insensitive matching
+- ✅ **Item Count Display**: Shows filtered item count in card header for better visibility
+- ✅ **Searchable BOM Selection**: Enhanced Add BOM Item modal with searchable combobox for inventory item selection
+
 **July 22, 2025 - Enhanced BOM Administration with Part Number Display**
 - ✅ **Part Number Column**: Added AG Part Number column to BOM Components table for better part identification
 - ✅ **Enhanced Search**: Updated search functionality to include part numbers alongside part names and departments

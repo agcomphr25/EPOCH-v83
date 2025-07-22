@@ -32,6 +32,7 @@ export default function InventoryManager() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
 
   // Export CSV functionality
@@ -128,9 +129,25 @@ export default function InventoryManager() {
   });
 
   // Load inventory items
-  const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
+  const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
     queryFn: () => apiRequest('/api/inventory'),
+  });
+
+  // Filter items based on search term
+  const items = allItems.filter(item => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.agPartNumber.toLowerCase().includes(searchLower) ||
+      item.name.toLowerCase().includes(searchLower) ||
+      (item.source && item.source.toLowerCase().includes(searchLower)) ||
+      (item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
+      (item.department && item.department.toLowerCase().includes(searchLower)) ||
+      (item.secondarySource && item.secondarySource.toLowerCase().includes(searchLower)) ||
+      (item.notes && item.notes.toLowerCase().includes(searchLower))
+    );
   });
 
   // Create mutation
@@ -484,10 +501,22 @@ export default function InventoryManager() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Inventory Items
+            Inventory Items ({items.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Search Field */}
+          <div className="mb-4">
+            <div className="relative max-w-sm">
+              <Input
+                placeholder="Search by AG Part #, Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+              <Package className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
           {isLoading ? (
             <div className="text-center py-8">Loading inventory items...</div>
           ) : (

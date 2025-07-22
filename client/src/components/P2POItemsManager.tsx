@@ -16,7 +16,7 @@ import { Pencil, Trash2, Plus, Package, ArrowLeft } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 const p2PurchaseOrderItemSchema = z.object({
-  partNumber: z.string().min(1, "SKU Number is required"),
+  partNumber: z.string().min(1, "SKU is required"),
   partName: z.string().min(1, "Part Name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
   unitPrice: z.number().min(0, "Unit price must be non-negative").default(0),
@@ -192,7 +192,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                     name="partNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>SKU Number</FormLabel>
+                        <FormLabel>SKU</FormLabel>
                         <FormControl>
                           <Input placeholder="P2-SKU-001" {...field} />
                         </FormControl>
@@ -325,7 +325,7 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>SKU Number</TableHead>
+                    <TableHead>SKU</TableHead>
                     <TableHead>Part Name</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Unit Price</TableHead>

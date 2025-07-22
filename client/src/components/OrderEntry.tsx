@@ -1244,7 +1244,15 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Rails';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{railAccessory && railAccessory.length > 0 ? railAccessory.join(', ') : 'Not selected'}</span>
+                    <span className="font-medium">{railAccessory && railAccessory.length > 0 ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                      if (!feature?.options) return railAccessory.join(', ');
+                      const labels = railAccessory.map(optionValue => {
+                        const option = feature.options!.find(opt => opt.value === optionValue);
+                        return option?.label || optionValue;
+                      });
+                      return labels.join(', ');
+                    })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${railAccessory && railAccessory.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'rail_accessory');
                       if (!feature?.options) return '0.00';
@@ -1304,7 +1312,15 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Other Options';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{otherOptions && otherOptions.length > 0 ? otherOptions.join(', ') : 'Not selected'}</span>
+                    <span className="font-medium">{otherOptions && otherOptions.length > 0 ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'other_options');
+                      if (!feature?.options) return otherOptions.join(', ');
+                      const labels = otherOptions.map(optionValue => {
+                        const option = feature.options!.find(opt => opt.value === optionValue);
+                        return option?.label || optionValue;
+                      });
+                      return labels.join(', ');
+                    })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${otherOptions && otherOptions.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
                       if (!feature?.options) return '0.00';

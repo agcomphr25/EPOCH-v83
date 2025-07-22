@@ -671,14 +671,21 @@ export default function OrderEntry() {
                   {/* Barrel Inlet */}
                   <div>
                     <Label>Barrel Inlet</Label>
-                    <Select>
+                    <Select 
+                      value={features.barrel_inlet || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, barrel_inlet: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="heavy">Heavy</SelectItem>
-                        <SelectItem value="bull">Bull</SelectItem>
+                        {featureDefs
+                          .find(f => f.name === 'barrel_inlet' || f.id === 'barrel_inlet')
+                          ?.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          )) || []}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1062,8 +1069,16 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Barrel Inlet';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Not selected</span>
-                    <span className="text-blue-600 font-bold">$0.00</span>
+                    <span className="font-medium">{features.barrel_inlet ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'barrel_inlet');
+                      const option = feature?.options?.find(opt => opt.value === features.barrel_inlet);
+                      return option?.label || features.barrel_inlet;
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600 font-bold">${features.barrel_inlet ? (() => {
+                      const feature = featureDefs.find(f => f.id === 'barrel_inlet');
+                      const option = feature?.options?.find(opt => opt.value === features.barrel_inlet);
+                      return (option?.price || 0).toFixed(2);
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 

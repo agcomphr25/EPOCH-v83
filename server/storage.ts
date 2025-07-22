@@ -2543,34 +2543,121 @@ export class DatabaseStorage implements IStorage {
       // Create production orders for each BOM item
       for (let i = 0; i < bomItemsList.length; i++) {
         const bomItem = bomItemsList[i];
+        
+        // Skip materials - only create production orders for manufactured parts
+        if (bomItem.itemType === 'material') {
+          console.log(`Skipping material item: ${bomItem.partName} - quantity tracking only`);
+          continue;
+        }
+        
         const totalQuantity = bomItem.quantity * poItem.quantity;
         
-        // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}
-        const orderIdSuffix = String(i + 1).padStart(3, '0');
-        const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}`;
+        // Create individual production orders (1 unit each) instead of bulk orders
+        for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
+          // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
+          const orderIdSuffix = String(i + 1).padStart(3, '0');
+          const unitSuffix = String(unitIndex).padStart(3, '0');
+          const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}-${unitSuffix}`;
 
-        const productionOrderData: InsertP2ProductionOrder = {
-          orderId,
-          p2PoId: poId,
-          p2PoItemId: poItem.id,
-          bomDefinitionId: bomDef.id,
-          bomItemId: bomItem.id,
-          sku: poItem.partNumber,
-          partName: bomItem.partName,
-          quantity: totalQuantity,
-          department: bomItem.firstDept as any,
-          status: 'PENDING',
-          priority: 50,
-          dueDate: po.dueDate || undefined,
-          notes: `Generated from P2 PO ${po.poNumber} - ${bomDef.modelName} (${bomDef.revision})`,
-        };
+          const productionOrderData: InsertP2ProductionOrder = {
+            orderId,
+            p2PoId: poId,
+            p2PoItemId: poItem.id,
+            bomDefinitionId: bomDef.id,
+            bomItemId: bomItem.id,
+            sku: poItem.partNumber,
+            partName: bomItem.partName,
+            quantity: 1, // Individual orders with quantity of 1
+            department: bomItem.firstDept as any,
+            status: 'PENDING',
+            priority: 50,
+            dueDate: po.dueDate || undefined,
+            notes: `Generated from P2 PO ${po.poNumber} - ${bomDef.modelName} (${bomDef.revision}) - Unit ${unitIndex} of ${totalQuantity}`,
+          };
 
-        const productionOrder = await this.createP2ProductionOrder(productionOrderData);
-        productionOrders.push(productionOrder);
+          const productionOrder = await this.createP2ProductionOrder(productionOrderData);
+          productionOrders.push(productionOrder);
+        }
       }
     }
 
     return productionOrders;
+  }
+
+  async getP2MaterialRequirements(poId: number): Promise<any[]> {
+    const po = await this.getP2PurchaseOrder(poId);
+    if (!po) {
+      throw new Error(`P2 Purchase Order ${poId} not found`);
+    }
+
+    const poItems = await this.getP2PurchaseOrderItems(poId);
+    if (poItems.length === 0) {
+      return [];
+    }
+
+    const materialRequirements: any[] = [];
+
+    // Process each PO item
+    for (const poItem of poItems) {
+      // Get the BOM definition for this SKU
+      const bomDefs = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.sku, poItem.partNumber));
+      
+      if (bomDefs.length === 0) {
+        continue;
+      }
+
+      const bomDef = bomDefs[0];
+
+      // Get all BOM items for this definition that are materials
+      const materialItems = await db
+        .select()
+        .from(bomItems)
+        .where(and(
+          eq(bomItems.bomId, bomDef.id),
+          eq(bomItems.isActive, true),
+          eq(bomItems.itemType, 'material')
+        ));
+
+      // Calculate material requirements
+      for (const materialItem of materialItems) {
+        const totalQuantity = materialItem.quantity * poItem.quantity;
+        
+        // Check if this material is already in our requirements list
+        const existingIndex = materialRequirements.findIndex(
+          req => req.partName === materialItem.partName
+        );
+        
+        if (existingIndex >= 0) {
+          // Add to existing requirement
+          materialRequirements[existingIndex].totalQuantity += totalQuantity;
+          materialRequirements[existingIndex].sources.push({
+            sku: poItem.partNumber,
+            skuQuantity: poItem.quantity,
+            bomQuantity: materialItem.quantity,
+            subtotal: totalQuantity
+          });
+        } else {
+          // Create new requirement
+          materialRequirements.push({
+            partName: materialItem.partName,
+            unitQuantity: materialItem.quantity,
+            totalQuantity: totalQuantity,
+            department: materialItem.firstDept,
+            sources: [{
+              sku: poItem.partNumber,
+              skuQuantity: poItem.quantity,
+              bomQuantity: materialItem.quantity,
+              subtotal: totalQuantity
+            }]
+          });
+        }
+      }
+    }
+
+    return materialRequirements;
   }
 
 }

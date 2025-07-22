@@ -70,6 +70,12 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
     queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/production-orders`),
   });
 
+  const { data: materialRequirements = [] } = useQuery({
+    queryKey: ["/api/p2/purchase-orders", poId, "material-requirements"],
+    queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/material-requirements`),
+    enabled: items.length > 0, // Only fetch when items exist
+  });
+
   const generateProductionOrdersMutation = useMutation({
     mutationFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/generate-production-orders`, { method: "POST" }),
     onSuccess: () => {
@@ -471,6 +477,51 @@ export function P2POItemsManager({ poId, poNumber, onBack }: P2POItemsManagerPro
                     </TableCell>
                     <TableCell>
                       {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'No due date'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Material Requirements Section */}
+      {materialRequirements.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Material Requirements</CardTitle>
+            <CardDescription>
+              Materials needed for production (quantity tracking only - no production orders created)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Material Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Total Quantity</TableHead>
+                  <TableHead>Sources</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {materialRequirements.map((material: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">{material.partName}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{material.department}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{material.totalQuantity}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {material.sources.map((source: any, sourceIndex: number) => (
+                          <div key={sourceIndex} className="text-sm text-muted-foreground">
+                            {source.sku} × {source.skuQuantity} = {source.subtotal} 
+                            <span className="text-xs"> ({source.bomQuantity} each)</span>
+                          </div>
+                        ))}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

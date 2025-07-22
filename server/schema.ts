@@ -1313,6 +1313,7 @@ export const bomItems = pgTable('bom_items', {
   partName: text('part_name').notNull(),
   quantity: integer('quantity').notNull().default(1),
   firstDept: text('first_dept').notNull().default('Layup'),
+  itemType: text('item_type').notNull().default('manufactured'), // 'manufactured' or 'material'
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

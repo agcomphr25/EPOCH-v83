@@ -46,6 +46,7 @@ const bomItemSchema = z.object({
   partName: z.string().min(1, "Part name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
   firstDept: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']).default('Layup'),
+  itemType: z.enum(['manufactured', 'material']).default('manufactured'),
   isActive: z.boolean().default(true),
 });
 
@@ -57,6 +58,7 @@ interface BomItem {
   partName: string;
   quantity: number;
   firstDept: string;
+  itemType: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -121,6 +123,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
       partName: item?.partName || "",
       quantity: item?.quantity || 1,
       firstDept: item?.firstDept || "Layup",
+      itemType: item?.itemType || "manufactured",
       isActive: item?.isActive ?? true,
     },
   });
@@ -284,6 +287,31 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="itemType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Item Type *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select item type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="manufactured">Manufactured Part (Creates Production Orders)</SelectItem>
+                  <SelectItem value="material">Material (Quantity Tracking Only)</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Manufactured parts create individual production orders. Materials only track quantities.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}

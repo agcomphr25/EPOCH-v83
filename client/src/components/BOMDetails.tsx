@@ -260,6 +260,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                       <TableHead>Part Name</TableHead>
                       <TableHead>Quantity</TableHead>
                       <TableHead>First Department</TableHead>
+                      <TableHead>Item Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -272,6 +273,11 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{item.firstDept}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
+                            {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant={item.isActive ? "default" : "secondary"}>

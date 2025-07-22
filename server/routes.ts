@@ -3528,6 +3528,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/p2/purchase-orders/:poId/material-requirements", async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const materials = await storage.getP2MaterialRequirements(parseInt(poId));
+      res.json(materials);
+    } catch (error) {
+      console.error("Get P2 material requirements error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch material requirements" });
+    }
+  });
+
   app.get("/api/p2/production-orders/:id", async (req, res) => {
     try {
       const { id } = req.params;

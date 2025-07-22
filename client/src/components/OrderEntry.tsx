@@ -807,113 +807,113 @@ export default function OrderEntry() {
                 {/* Stock Model - Always Show */}
                 <div className="flex justify-between items-center">
                   <span>Stock Model:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{selectedModel?.displayName || 'Not selected'}</div>
-                    <div className="text-blue-600">${selectedModel?.price?.toFixed(2) || '0.00'}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{selectedModel?.displayName || 'Not selected'}</span>
+                    <span className="text-blue-600">${selectedModel?.price?.toFixed(2) || '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Handedness - Show if selected or as "Not selected" */}
                 <div className="flex justify-between items-center">
                   <span>Handedness:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</div>
-                    <div className="text-blue-600">$0.00</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
+                    <span className="text-blue-600">$0.00</span>
                   </div>
                 </div>
                 
                 {/* Action Length - Show if selected or as "Not selected" */}
                 <div className="flex justify-between items-center">
                   <span>Action Length:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</div>
-                    <div className="text-blue-600">$0.00</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{actionLength ? actionLength.charAt(0).toUpperCase() + actionLength.slice(1) : 'Not selected'}</span>
+                    <span className="text-blue-600">$0.00</span>
                   </div>
                 </div>
                 
                 {/* Action Inlet */}
                 <div className="flex justify-between items-center">
                   <span>Action Inlet:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{features.action_inlet ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
                       return option?.label || features.action_inlet;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${features.action_inlet ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${features.action_inlet ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_inlet');
                       const option = feature?.options?.find(opt => opt.value === features.action_inlet);
                       return (option?.price || 0).toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Bottom Metal */}
                 <div className="flex justify-between items-center">
                   <span>Bottom Metal:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{bottomMetal ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{bottomMetal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
                       const option = feature?.options?.find(opt => opt.value === bottomMetal);
                       return option?.label || bottomMetal;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${bottomMetal ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${bottomMetal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
                       const option = feature?.options?.find(opt => opt.value === bottomMetal);
                       return (option?.price || 0).toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Barrel Inlet */}
                 <div className="flex justify-between items-center">
                   <span>Barrel Inlet:</span>
-                  <div className="text-right">
-                    <div className="font-medium">Not selected</div>
-                    <div className="text-blue-600">$0.00</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Not selected</span>
+                    <span className="text-blue-600">$0.00</span>
                   </div>
                 </div>
                 
                 {/* QDs (Quick Detach Cups) */}
                 <div className="flex justify-between items-center">
                   <span>QDs (Quick Detach Cups):</span>
-                  <div className="text-right">
-                    <div className="font-medium">{features.qd_quick_detach ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{features.qd_quick_detach ? (() => {
                       const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
                       const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
                       return option?.label || features.qd_quick_detach;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${features.qd_quick_detach ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${features.qd_quick_detach ? (() => {
                       const feature = featureDefs.find(f => f.id === 'qd_quick_detach');
                       const option = feature?.options?.find(opt => opt.value === features.qd_quick_detach);
                       return (option?.price || 0).toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* LOP (Length of Pull) */}
                 <div className="flex justify-between items-center">
                   <span>LOP (Length of Pull):</span>
-                  <div className="text-right">
-                    <div className="font-medium">{features.lop ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
                       const option = feature?.options?.find(opt => opt.value === features.lop);
                       return option?.label || features.lop;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${features.lop ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${features.lop ? (() => {
                       const feature = featureDefs.find(f => f.id === 'lop');
                       const option = feature?.options?.find(opt => opt.value === features.lop);
                       return (option?.price || 0).toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Rails */}
                 <div className="flex justify-between items-center">
                   <span>Rails:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{railAccessory && railAccessory.length > 0 ? railAccessory.join(', ') : 'Not selected'}</div>
-                    <div className="text-blue-600">${railAccessory && railAccessory.length > 0 ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{railAccessory && railAccessory.length > 0 ? railAccessory.join(', ') : 'Not selected'}</span>
+                    <span className="text-blue-600">${railAccessory && railAccessory.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'rail_accessory');
                       if (!feature?.options) return '0.00';
                       const totalPrice = railAccessory.reduce((sum, optionValue) => {
@@ -921,42 +921,42 @@ export default function OrderEntry() {
                         return sum + (option?.price || 0);
                       }, 0);
                       return totalPrice.toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Texture */}
                 <div className="flex justify-between items-center">
                   <span>Texture:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{features.texture ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{features.texture ? (() => {
                       const feature = featureDefs.find(f => f.id === 'texture');
                       const option = feature?.options?.find(opt => opt.value === features.texture);
                       return option?.label || features.texture;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${features.texture ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${features.texture ? (() => {
                       const feature = featureDefs.find(f => f.id === 'texture');
                       const option = feature?.options?.find(opt => opt.value === features.texture);
                       return (option?.price || 0).toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Swivel Studs */}
                 <div className="flex justify-between items-center">
                   <span>Swivel Studs:</span>
-                  <div className="text-right">
-                    <div className="font-medium">Not selected</div>
-                    <div className="text-blue-600">$0.00</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Not selected</span>
+                    <span className="text-blue-600">$0.00</span>
                   </div>
                 </div>
                 
                 {/* Other Options */}
                 <div className="flex justify-between items-center">
                   <span>Other Options:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{otherOptions && otherOptions.length > 0 ? otherOptions.join(', ') : 'Not selected'}</div>
-                    <div className="text-blue-600">${otherOptions && otherOptions.length > 0 ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{otherOptions && otherOptions.length > 0 ? otherOptions.join(', ') : 'Not selected'}</span>
+                    <span className="text-blue-600">${otherOptions && otherOptions.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
                       if (!feature?.options) return '0.00';
                       const totalPrice = otherOptions.reduce((sum, optionValue) => {
@@ -964,15 +964,15 @@ export default function OrderEntry() {
                         return sum + (option?.price || 0);
                       }, 0);
                       return totalPrice.toFixed(2);
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
                 
                 {/* Paint Options */}
                 <div className="flex justify-between items-center">
                   <span>Paint Options:</span>
-                  <div className="text-right">
-                    <div className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName === 'Cerakote Options' ||
                         f.displayName === 'Terrain Options' ||
@@ -993,8 +993,8 @@ export default function OrderEntry() {
                         }
                       }
                       return paintOptions;
-                    })() : 'Not selected'}</div>
-                    <div className="text-blue-600">${paintOptions && paintOptions !== 'none' ? (() => {
+                    })() : 'Not selected'}</span>
+                    <span className="text-blue-600">${paintOptions && paintOptions !== 'none' ? (() => {
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName === 'Cerakote Options' ||
                         f.displayName === 'Terrain Options' ||
@@ -1015,7 +1015,7 @@ export default function OrderEntry() {
                         }
                       }
                       return '0.00';
-                    })() : '0.00'}</div>
+                    })() : '0.00'}</span>
                   </div>
                 </div>
               </div>

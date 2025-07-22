@@ -1065,6 +1065,34 @@ export default function OrderEntry() {
                 </Select>
               </div>
 
+              {/* Shipping & Handling */}
+              <div className="border-t pt-4">
+                <div className="font-medium text-base mb-2">Shipping & Handling</div>
+                <input 
+                  type="number" 
+                  placeholder="36.95"
+                  defaultValue="36.95"
+                  className="w-full p-3 border rounded-lg"
+                  step="0.01"
+                />
+              </div>
+
+              {/* Order Totals */}
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Subtotal:</span>
+                  <span className="font-bold">${totalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Shipping & Handling:</span>
+                  <span className="font-bold">$36.95</span>
+                </div>
+                <div className="flex justify-between items-center text-lg border-t pt-2">
+                  <span className="font-bold">Total:</span>
+                  <span className="font-bold text-blue-600">${(totalPrice + 36.95).toFixed(2)}</span>
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div className="space-y-2 pt-4">
                 <Button

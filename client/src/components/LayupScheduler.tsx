@@ -337,26 +337,39 @@ export default function LayupScheduler() {
                       <Plus className="w-4 h-4 mr-2" />
                       <span className="font-medium">Add New Mold</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <Input
-                        placeholder="Model Name (e.g., M001)"
-                        value={newMold.modelName}
-                        onChange={(e) => setNewMold(prev => ({...prev, modelName: e.target.value}))}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Instance #"
-                        value={newMold.instanceNumber}
-                        min={1}
-                        onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Daily Capacity"
-                        value={newMold.multiplier}
-                        min={1}
-                        onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
-                      />
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Model Name</label>
+                        <Input
+                          placeholder="e.g., M001, CF_Tactical, etc."
+                          value={newMold.modelName}
+                          onChange={(e) => setNewMold(prev => ({...prev, modelName: e.target.value}))}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm font-medium mb-1 block">Instance Number</label>
+                          <Input
+                            type="number"
+                            placeholder="1"
+                            value={newMold.instanceNumber}
+                            min={1}
+                            onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">If you have multiple molds of the same model (e.g., M001-1, M001-2)</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
+                          <Input
+                            type="number"
+                            placeholder="2"
+                            value={newMold.multiplier}
+                            min={1}
+                            onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Units this mold can produce per day</p>
+                        </div>
+                      </div>
                     </div>
                     <Button 
                       onClick={handleAddMold} 
@@ -409,14 +422,22 @@ export default function LayupScheduler() {
                     ))
                   )}
                   
-                  {molds.length > 0 && (
-                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                      <strong>How to Add Molds:</strong>
+                    </p>
+                    <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
+                      <li><strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")</li>
+                      <li><strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on</li>
+                      <li><strong>Daily Capacity:</strong> How many units this specific mold can produce in one day</li>
+                    </ul>
+                    {molds.length > 0 && (
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
                         <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
                         Adjust daily capacity to reflect each mold's production capability.
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>

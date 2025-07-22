@@ -66,6 +66,13 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Item Count Display**: Shows filtered item count in card header for better visibility
 - ✅ **Searchable BOM Selection**: Enhanced Add BOM Item modal with searchable combobox for inventory item selection
 
+**July 22, 2025 - Enhanced Layup Scheduler Employee Configuration and Mold Setup**
+- ✅ **Employee Persistence Fix**: Employees now properly persist in the list after being added, with data refresh ensuring they stay visible
+- ✅ **Save Button Implementation**: Added green "Save Changes" button that appears when modifying Production Rate or Daily Hours for existing employees
+- ✅ **Batch Change Management**: Employee setting changes are tracked locally until user clicks Save, then all changes are applied together
+- ✅ **Mold Configuration Clarity**: Enhanced Mold Configuration modal with clear labels, help text, and comprehensive explanation of Instance Number concept
+- ✅ **Improved User Experience**: Added detailed instructions explaining Model Name (mold model), Instance Number (for multiple molds of same model), and Daily Capacity (units per day)
+
 **July 22, 2025 - Enhanced BOM Administration with Part Number Display**
 - ✅ **Part Number Column**: Added AG Part Number column to BOM Components table for better part identification
 - ✅ **Enhanced Search**: Updated search functionality to include part numbers alongside part names and departments

@@ -113,6 +113,12 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
              order.features.action_length}
           </div>
         )}
+        {/* Debug: Show if we have any features at all */}
+        {!order.features?.action_length && order.features && Object.keys(order.features).length > 0 && (
+          <div className="text-xs opacity-50 mt-0.5">
+            AL: {JSON.stringify(order.features.action_length || 'none')}
+          </div>
+        )}
         {/* Show product display name if available */}
         {getModelDisplayName && order.modelId && (
           <div className="text-xs opacity-80 mt-0.5">

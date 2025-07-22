@@ -2963,8 +2963,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Combine and sort all orders by priority score (lower = higher priority)
       const combinedOrders = [
-        ...layupOrders.map(order => ({ ...order, source: 'main_orders' })),
-        ...p1LayupOrders
+        ...layupOrders.map(order => ({ 
+          ...order, 
+          source: 'main_orders',
+          // Ensure features object is included for action length display
+          features: order.features || {},
+          modelId: order.stockModel
+        })),
+        ...p1LayupOrders.map(order => ({
+          ...order,
+          // P1 orders don't have features but we can add modelId for consistency  
+          modelId: order.stockModelId
+        }))
       ].sort((a, b) => (a.priorityScore || 50) - (b.priorityScore || 50));
 
       res.json(combinedOrders);

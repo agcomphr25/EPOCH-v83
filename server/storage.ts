@@ -2532,7 +2532,7 @@ export class DatabaseStorage implements IStorage {
       const bomDef = bomDefs[0];
 
       // Get all BOM items for this definition
-      const bomItems = await db
+      const bomItemsList = await db
         .select()
         .from(bomItems)
         .where(and(
@@ -2541,8 +2541,8 @@ export class DatabaseStorage implements IStorage {
         ));
 
       // Create production orders for each BOM item
-      for (let i = 0; i < bomItems.length; i++) {
-        const bomItem = bomItems[i];
+      for (let i = 0; i < bomItemsList.length; i++) {
+        const bomItem = bomItemsList[i];
         const totalQuantity = bomItem.quantity * poItem.quantity;
         
         // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}

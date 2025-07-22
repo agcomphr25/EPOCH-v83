@@ -242,9 +242,23 @@ export default function OrderEntry() {
       const response = await apiRequest('/api/orders/generate-id', {
         method: 'POST'
       });
+      
+      // Validate the generated ID format (e.g., AG001)
+      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      if (!orderIdPattern.test(response.orderId)) {
+        throw new Error('Invalid Order ID format generated');
+      }
+      
       setOrderId(response.orderId);
+      setErrors(prev => ({ ...prev, orderId: '' })); // Clear any previous errors
     } catch (error) {
       console.error('Failed to generate order ID:', error);
+      setErrors(prev => ({ 
+        ...prev, 
+        orderId: 'Failed to generate Order ID. Please refresh the page.' 
+      }));
+      // Set fallback ID with error indicator
+      setOrderId('ERROR-001');
     }
   };
 
@@ -346,8 +360,21 @@ export default function OrderEntry() {
     setIsSubmitting(true);
 
     try {
+      // Validate required fields
       if (!customer) {
         setErrors(prev => ({ ...prev, customer: 'Customer is required' }));
+        return;
+      }
+      
+      if (!orderId || orderId.startsWith('ERROR')) {
+        setErrors(prev => ({ ...prev, orderId: 'Valid Order ID is required' }));
+        return;
+      }
+      
+      // Validate Order ID format
+      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      if (!orderIdPattern.test(orderId)) {
+        setErrors(prev => ({ ...prev, orderId: 'Invalid Order ID format' }));
         return;
       }
 
@@ -463,8 +490,9 @@ export default function OrderEntry() {
                     id="orderId"
                     name="orderId"
                     value={orderId}
-                    onChange={(e) => setOrderId(e.target.value)}
-                    placeholder="AG200"
+                    readOnly
+                    className="bg-gray-50 cursor-not-allowed"
+                    placeholder="Generating..."
                   />
                   {errors.orderId && <p className="text-sm text-red-500">{errors.orderId}</p>}
                 </div>

@@ -44,6 +44,7 @@ import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
 import AllOrdersPage from "./pages/AllOrdersPage";
+import AGTestDashboard from "./pages/AGTestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -94,6 +95,7 @@ function App() {
                   <Route path="/bom-administration" component={BOMAdministration} />
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
+                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route component={NotFound} />
                 </Switch>
               </main>

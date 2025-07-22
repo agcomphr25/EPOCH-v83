@@ -81,6 +81,12 @@ export default function Navigation() {
       label: 'Layup Scheduler',
       icon: Calendar,
       description: 'Schedule and manage layup production orders with drag-and-drop interface'
+    },
+    {
+      path: '/agtest-dashboard',
+      label: 'AGTEST Dashboard',
+      icon: BarChart,
+      description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
     }
     // Documentation button disabled per user request - was causing problems
     // {

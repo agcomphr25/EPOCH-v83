@@ -53,6 +53,12 @@ export default function Navigation() {
       description: 'Module 12: Customer PO management'
     },
     {
+      path: '/p2-purchase-orders',
+      label: 'P2 Purchase Orders',
+      icon: FileText,
+      description: 'P2 customer management and purchase orders with Part #, Quantity, Price'
+    },
+    {
       path: '/production-tracking',
       label: 'Production Tracking',
       icon: TrendingUp,

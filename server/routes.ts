@@ -42,6 +42,9 @@ import {
   insertPurchaseOrderSchema,
   insertPurchaseOrderItemSchema,
   insertProductionOrderSchema,
+  insertP2CustomerSchema,
+  insertP2PurchaseOrderSchema,
+  insertP2PurchaseOrderItemSchema,
   insertMoldSchema,
   insertEmployeeLayupSettingsSchema,
   insertLayupOrderSchema,
@@ -3292,6 +3295,202 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Replacement order error:", error);
       res.status(500).json({ error: "Failed to create replacement order" });
+    }
+  });
+
+  // P2 Customer Management API routes
+  app.get("/api/p2/customers", async (req, res) => {
+    try {
+      const customers = await storage.getAllP2Customers();
+      res.json(customers);
+    } catch (error) {
+      console.error("Get P2 customers error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 customers" });
+    }
+  });
+
+  app.get("/api/p2/customers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const customer = await storage.getP2Customer(parseInt(id));
+      if (!customer) {
+        return res.status(404).json({ error: "P2 Customer not found" });
+      }
+      res.json(customer);
+    } catch (error) {
+      console.error("Get P2 customer error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 customer" });
+    }
+  });
+
+  app.post("/api/p2/customers", async (req, res) => {
+    try {
+      const customerData = insertP2CustomerSchema.parse(req.body);
+      const customer = await storage.createP2Customer(customerData);
+      res.status(201).json(customer);
+    } catch (error) {
+      console.error("Create P2 customer error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 customer data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create P2 customer" });
+      }
+    }
+  });
+
+  app.put("/api/p2/customers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const customerData = insertP2CustomerSchema.partial().parse(req.body);
+      const customer = await storage.updateP2Customer(parseInt(id), customerData);
+      res.json(customer);
+    } catch (error) {
+      console.error("Update P2 customer error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 customer data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update P2 customer" });
+      }
+    }
+  });
+
+  app.delete("/api/p2/customers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteP2Customer(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete P2 customer error:", error);
+      res.status(500).json({ error: "Failed to delete P2 customer" });
+    }
+  });
+
+  // P2 Purchase Orders API routes
+  app.get("/api/p2/purchase-orders", async (req, res) => {
+    try {
+      const pos = await storage.getAllP2PurchaseOrders();
+      res.json(pos);
+    } catch (error) {
+      console.error("Get P2 purchase orders error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 purchase orders" });
+    }
+  });
+
+  app.get("/api/p2/purchase-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { includeItems } = req.query;
+      const po = await storage.getP2PurchaseOrder(parseInt(id), {
+        includeItems: includeItems === 'true'
+      });
+      if (!po) {
+        return res.status(404).json({ error: "P2 Purchase Order not found" });
+      }
+      res.json(po);
+    } catch (error) {
+      console.error("Get P2 purchase order error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 purchase order" });
+    }
+  });
+
+  app.post("/api/p2/purchase-orders", async (req, res) => {
+    try {
+      const poData = insertP2PurchaseOrderSchema.parse(req.body);
+      const po = await storage.createP2PurchaseOrder(poData);
+      res.status(201).json(po);
+    } catch (error) {
+      console.error("Create P2 purchase order error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 purchase order data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create P2 purchase order" });
+      }
+    }
+  });
+
+  app.put("/api/p2/purchase-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const poData = insertP2PurchaseOrderSchema.partial().parse(req.body);
+      const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
+      res.json(po);
+    } catch (error) {
+      console.error("Update P2 purchase order error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 purchase order data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update P2 purchase order" });
+      }
+    }
+  });
+
+  app.delete("/api/p2/purchase-orders/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteP2PurchaseOrder(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete P2 purchase order error:", error);
+      res.status(500).json({ error: "Failed to delete P2 purchase order" });
+    }
+  });
+
+  // P2 Purchase Order Items API routes
+  app.get("/api/p2/purchase-orders/:poId/items", async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const items = await storage.getP2PurchaseOrderItems(parseInt(poId));
+      res.json(items);
+    } catch (error) {
+      console.error("Get P2 purchase order items error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 purchase order items" });
+    }
+  });
+
+  app.post("/api/p2/purchase-orders/:poId/items", async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const itemData = insertP2PurchaseOrderItemSchema.omit({ poId: true }).parse(req.body);
+      const item = await storage.createP2PurchaseOrderItem({ 
+        ...itemData, 
+        poId: parseInt(poId),
+        totalPrice: itemData.quantity * (itemData.unitPrice || 0)
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create P2 purchase order item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 purchase order item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create P2 purchase order item" });
+      }
+    }
+  });
+
+  app.put("/api/p2/purchase-orders/:poId/items/:itemId", async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const itemData = insertP2PurchaseOrderItemSchema.partial().omit({ poId: true }).parse(req.body);
+      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), itemData);
+      res.json(item);
+    } catch (error) {
+      console.error("Update P2 purchase order item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid P2 purchase order item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update P2 purchase order item" });
+      }
+    }
+  });
+
+  app.delete("/api/p2/purchase-orders/:poId/items/:itemId", async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete P2 purchase order item error:", error);
+      res.status(500).json({ error: "Failed to delete P2 purchase order item" });
     }
   });
 

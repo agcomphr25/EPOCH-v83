@@ -39,6 +39,7 @@ import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import P2PurchaseOrders from "./pages/P2PurchaseOrders";
 import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
@@ -88,6 +89,7 @@ function App() {
                   <Route path="/documentation" component={DocumentationPageNew} />
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/purchase-orders" component={PurchaseOrders} />
+                  <Route path="/p2-purchase-orders" component={P2PurchaseOrders} />
                   <Route path="/production-tracking" component={ProductionTracking} />
                   <Route path="/bom-administration" component={BOMAdministration} />
                   <Route path="/barcode-scanner" component={BarcodeScannerPage} />

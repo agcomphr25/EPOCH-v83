@@ -4,6 +4,7 @@ import {
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
+  p2Customers, p2PurchaseOrders, p2PurchaseOrderItems,
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -38,6 +39,9 @@ import {
   type PurchaseOrder, type InsertPurchaseOrder,
   type PurchaseOrderItem, type InsertPurchaseOrderItem,
   type ProductionOrder, type InsertProductionOrder,
+  type P2Customer, type InsertP2Customer,
+  type P2PurchaseOrder, type InsertP2PurchaseOrder,
+  type P2PurchaseOrderItem, type InsertP2PurchaseOrderItem,
   type Mold, type InsertMold,
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
   type LayupOrder, type InsertLayupOrder,
@@ -249,6 +253,27 @@ export interface IStorage {
   createPurchaseOrder(data: InsertPurchaseOrder): Promise<PurchaseOrder>;
   updatePurchaseOrder(id: number, data: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder>;
   deletePurchaseOrder(id: number): Promise<void>;
+
+  // P2 Customers CRUD
+  getAllP2Customers(): Promise<P2Customer[]>;
+  getP2Customer(id: number): Promise<P2Customer | undefined>;
+  getP2CustomerByCustomerId(customerId: string): Promise<P2Customer | undefined>;
+  createP2Customer(data: InsertP2Customer): Promise<P2Customer>;
+  updateP2Customer(id: number, data: Partial<InsertP2Customer>): Promise<P2Customer>;
+  deleteP2Customer(id: number): Promise<void>;
+
+  // P2 Purchase Orders CRUD
+  getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
+  getP2PurchaseOrder(id: number, options?: { includeItems?: boolean }): Promise<P2PurchaseOrder & { items?: P2PurchaseOrderItem[] } | undefined>;
+  createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
+  updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder>;
+  deleteP2PurchaseOrder(id: number): Promise<void>;
+
+  // P2 Purchase Order Items CRUD
+  getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]>;
+  createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem>;
+  updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem>;
+  deleteP2PurchaseOrderItem(id: number): Promise<void>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
@@ -2300,6 +2325,130 @@ export class DatabaseStorage implements IStorage {
       console.error('Error deleting BOM item:', error);
       throw error;
     }
+  }
+
+  // P2 Customers CRUD
+  async getAllP2Customers(): Promise<P2Customer[]> {
+    return await db
+      .select()
+      .from(p2Customers)
+      .orderBy(p2Customers.customerName);
+  }
+
+  async getP2Customer(id: number): Promise<P2Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(p2Customers)
+      .where(eq(p2Customers.id, id))
+      .limit(1);
+    return customer;
+  }
+
+  async getP2CustomerByCustomerId(customerId: string): Promise<P2Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(p2Customers)
+      .where(eq(p2Customers.customerId, customerId))
+      .limit(1);
+    return customer;
+  }
+
+  async createP2Customer(data: InsertP2Customer): Promise<P2Customer> {
+    const [customer] = await db.insert(p2Customers).values(data).returning();
+    return customer;
+  }
+
+  async updateP2Customer(id: number, data: Partial<InsertP2Customer>): Promise<P2Customer> {
+    const [customer] = await db
+      .update(p2Customers)
+      .set(data)
+      .where(eq(p2Customers.id, id))
+      .returning();
+    return customer;
+  }
+
+  async deleteP2Customer(id: number): Promise<void> {
+    await db.delete(p2Customers).where(eq(p2Customers.id, id));
+  }
+
+  // P2 Purchase Orders CRUD
+  async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
+    return await db
+      .select()
+      .from(p2PurchaseOrders)
+      .orderBy(desc(p2PurchaseOrders.createdAt));
+  }
+
+  async getP2PurchaseOrder(id: number, options?: { includeItems?: boolean }): Promise<P2PurchaseOrder & { items?: P2PurchaseOrderItem[] } | undefined> {
+    const [po] = await db
+      .select()
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.id, id))
+      .limit(1);
+
+    if (!po) return undefined;
+
+    let items: P2PurchaseOrderItem[] = [];
+    if (options?.includeItems) {
+      items = await this.getP2PurchaseOrderItems(id);
+    }
+
+    return { ...po, items };
+  }
+
+  async createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder> {
+    const [po] = await db.insert(p2PurchaseOrders).values(data).returning();
+    return po;
+  }
+
+  async updateP2PurchaseOrder(id: number, data: Partial<InsertP2PurchaseOrder>): Promise<P2PurchaseOrder> {
+    const [po] = await db
+      .update(p2PurchaseOrders)
+      .set(data)
+      .where(eq(p2PurchaseOrders.id, id))
+      .returning();
+    return po;
+  }
+
+  async deleteP2PurchaseOrder(id: number): Promise<void> {
+    await db.delete(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id));
+  }
+
+  // P2 Purchase Order Items CRUD
+  async getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]> {
+    return await db
+      .select()
+      .from(p2PurchaseOrderItems)
+      .where(eq(p2PurchaseOrderItems.poId, poId))
+      .orderBy(p2PurchaseOrderItems.createdAt);
+  }
+
+  async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {
+    const [item] = await db.insert(p2PurchaseOrderItems).values(data).returning();
+    return item;
+  }
+
+  async updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem> {
+    // Calculate total price if quantity or unitPrice changed
+    if (data.quantity !== undefined || data.unitPrice !== undefined) {
+      const currentItem = await db.select().from(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.id, id));
+      if (currentItem.length > 0) {
+        const item = currentItem[0];
+        const quantity = data.quantity ?? item.quantity;
+        const unitPrice = data.unitPrice ?? item.unitPrice;
+        data.totalPrice = quantity * unitPrice;
+      }
+    }
+
+    const [item] = await db.update(p2PurchaseOrderItems)
+      .set(data)
+      .where(eq(p2PurchaseOrderItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteP2PurchaseOrderItem(id: number): Promise<void> {
+    await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.id, id));
   }
 
 }

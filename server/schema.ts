@@ -1052,6 +1052,50 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   updatedAt: timestamp('updated_at').defaultNow()
 });
 
+// P2 Customer Management - separate customer database for P2 operations
+export const p2Customers = pgTable('p2_customers', {
+  id: serial('id').primaryKey(),
+  customerId: text('customer_id').notNull().unique(),
+  customerName: text('customer_name').notNull(),
+  contactEmail: text('contact_email'),
+  contactPhone: text('contact_phone'),
+  billingAddress: text('billing_address'),
+  shippingAddress: text('shipping_address'),
+  paymentTerms: text('payment_terms').default('NET_30'),
+  status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// P2 Purchase Order Management Tables
+export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
+  id: serial('id').primaryKey(),
+  poNumber: text('po_number').notNull().unique(),
+  customerId: text('customer_id').references(() => p2Customers.customerId).notNull(),
+  customerName: text('customer_name').notNull(), // Denormalized for performance
+  poDate: date('po_date').notNull(),
+  expectedDelivery: date('expected_delivery').notNull(),
+  status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
+  id: serial('id').primaryKey(),
+  poId: integer('po_id').references(() => p2PurchaseOrders.id).notNull(),
+  partNumber: text('part_number').notNull(), // P2-specific part number
+  partName: text('part_name').notNull(), // Display name for the part
+  quantity: integer('quantity').notNull(),
+  unitPrice: real('unit_price').default(0), // Price per unit
+  totalPrice: real('total_price').default(0), // quantity * unitPrice
+  specifications: text('specifications'), // Part specifications
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -1150,6 +1194,53 @@ export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderIte
   orderCount: z.number().min(0).default(0),
 });
 
+// P2 Customer Insert Schema
+export const insertP2CustomerSchema = createInsertSchema(p2Customers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().min(1, "Customer ID is required"),
+  customerName: z.string().min(1, "Customer Name is required"),
+  contactEmail: z.string().email().optional().nullable(),
+  contactPhone: z.string().optional().nullable(),
+  billingAddress: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  paymentTerms: z.string().default('NET_30'),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
+  notes: z.string().optional().nullable(),
+});
+
+// P2 Purchase Order Insert Schemas
+export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  poNumber: z.string().min(1, "PO Number is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  customerName: z.string().min(1, "Customer Name is required"),
+  poDate: z.coerce.date(),
+  expectedDelivery: z.coerce.date(),
+  status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
+  notes: z.string().optional().nullable(),
+});
+
+export const insertP2PurchaseOrderItemSchema = createInsertSchema(p2PurchaseOrderItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  poId: z.number().min(1, "PO ID is required"),
+  partNumber: z.string().min(1, "Part Number is required"),
+  partName: z.string().min(1, "Part Name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  unitPrice: z.number().min(0).default(0),
+  totalPrice: z.number().min(0).default(0),
+  specifications: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
 // Production Order Schema
 export const insertProductionOrderSchema = createInsertSchema(productionOrders).omit({
   id: true,
@@ -1189,6 +1280,14 @@ export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+
+// P2 Purchase Order Types
+export type InsertP2Customer = z.infer<typeof insertP2CustomerSchema>;
+export type P2Customer = typeof p2Customers.$inferSelect;
+export type InsertP2PurchaseOrder = z.infer<typeof insertP2PurchaseOrderSchema>;
+export type P2PurchaseOrder = typeof p2PurchaseOrders.$inferSelect;
+export type InsertP2PurchaseOrderItem = z.infer<typeof insertP2PurchaseOrderItemSchema>;
+export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

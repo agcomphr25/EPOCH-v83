@@ -160,6 +160,9 @@ export default function LayupScheduler() {
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // Track order assignments (orderId -> { moldId, date })
+  const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
@@ -216,7 +219,7 @@ export default function LayupScheduler() {
     return eachDayOfInterval({ start, end });
   }, [viewType, currentDate]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
 
@@ -224,21 +227,12 @@ export default function LayupScheduler() {
 
     const orderId = active.id as string;
     const [moldId, dateIso] = (over.id as string).split('|');
-    const newDate = new Date(dateIso);
 
-    try {
-      await apiRequest(`/api/layup-orders/${orderId}/override`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          newDate: newDate.toISOString(),
-          moldId,
-        }),
-      });
-      reloadOrders();
-    } catch (error) {
-      console.error('Override failed:', error);
-    }
+    // Update local assignment state
+    setOrderAssignments(prev => ({
+      ...prev,
+      [orderId]: { moldId, date: dateIso }
+    }));
   };
 
   const handleDragStart = (event: any) => {
@@ -329,7 +323,7 @@ export default function LayupScheduler() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Order Queue</CardTitle>
               <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                {orders.length} orders
+                {orders.filter(o => !orderAssignments[o.orderId]).length} orders
               </div>
             </div>
           </CardHeader>
@@ -341,14 +335,16 @@ export default function LayupScheduler() {
               </div>
             ) : (
               <div className="space-y-2">
-                {orders.map((order, index) => (
-                  <DraggableOrderItem
-                    key={order.orderId}
-                    order={order}
-                    priority={index + 1}
-                    totalOrdersInCell={orders.length}
-                  />
-                ))}
+                {orders
+                  .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
+                  .map((order, index) => (
+                    <DraggableOrderItem
+                      key={order.orderId}
+                      order={order}
+                      priority={index + 1}
+                      totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
+                    />
+                  ))}
               </div>
             )}
           </CardContent>
@@ -743,23 +739,32 @@ export default function LayupScheduler() {
             {molds.filter(m => m.enabled).map(mold => (
               <React.Fragment key={mold.moldId}>
                 {dates.map(date => {
-                  const cellOrders = schedule.filter(s =>
-                    s.moldId === mold.moldId &&
-                    isSameDay(s.scheduledDate, date)
-                  );
-                  const dropId = `${mold.moldId}|${date.toISOString()}`;
+                  const dateString = date.toISOString();
+                  
+                  // Get orders assigned to this mold/date combination
+                  const cellOrders = Object.entries(orderAssignments)
+                    .filter(([orderId, assignment]) => 
+                      assignment.moldId === mold.moldId && 
+                      assignment.date === dateString
+                    )
+                    .map(([orderId]) => {
+                      const order = orders.find(o => o.orderId === orderId);
+                      return {
+                        orderId,
+                        priorityScore: order?.priorityScore || 0
+                      };
+                    });
+
+                  const dropId = `${mold.moldId}|${dateString}`;
 
                   return (
                     <DroppableCell
                       key={dropId}
                       moldId={mold.moldId}
                       date={date}
-                      orders={cellOrders.map(s => ({
-                        orderId: s.orderId,
-                        priorityScore: orders.find(o => o.orderId === s.orderId)?.priorityScore || 0
-                      }))}
+                      orders={cellOrders}
                       onDrop={(orderId, moldId, date) => {
-                        // Handle drop
+                        // Handle drop (this is handled by DndContext now)
                       }}
                     />
                   );

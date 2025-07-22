@@ -100,7 +100,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo }: { 
     >
       <div className={`font-medium ${order.source === 'p1_purchase_order' ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center">
-          {order.orderId}
+          {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1">P1</span>}
         </div>
         {moldInfo && (
@@ -178,6 +178,11 @@ export default function LayupScheduler() {
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+
+  // Debug logging
+  console.log('LayupScheduler - Orders data:', orders);
+  console.log('LayupScheduler - Orders count:', orders?.length);
+  console.log('LayupScheduler - Sample order:', orders?.[0]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

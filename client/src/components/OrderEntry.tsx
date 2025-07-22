@@ -45,6 +45,7 @@ interface FeatureDefinition {
 
 export default function OrderEntry() {
   const { toast } = useToast();
+  const [location] = useLocation();
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -219,13 +220,78 @@ export default function OrderEntry() {
     }).format(amount);
   };
 
+  // Extract order ID from URL if editing existing order
+  const getOrderIdFromUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('draft');
+  };
+
   // Load initial data
   useEffect(() => {
     loadStockModels();
     loadFeatures();
     loadDiscountCodes();
-    generateOrderId();
+    
+    const editOrderId = getOrderIdFromUrl();
+    if (editOrderId) {
+      loadExistingOrder(editOrderId);
+    } else {
+      generateOrderId();
+    }
   }, []);
+
+  // Load existing order data for editing
+  const loadExistingOrder = async (orderIdToEdit: string) => {
+    try {
+      const order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+      if (order) {
+        // Populate form with existing order data
+        setOrderId(order.orderId);
+        setOrderDate(new Date(order.orderDate));
+        setDueDate(new Date(order.dueDate));
+        
+        if (order.customerId) {
+          // Load customer data
+          const customers = await apiRequest('/api/customers');
+          const customer = customers.find((c: any) => c.id.toString() === order.customerId.toString());
+          if (customer) {
+            setCustomer(customer);
+          }
+        }
+        
+        setModelId(order.modelId || '');
+        setFeatures(order.features || {});
+        setCustomerPO(order.customerPO || '');
+        setHasCustomerPO(!!order.customerPO);
+        setFbOrderNumber(order.fbOrderNumber || '');
+        setAgrOrderDetails(order.agrOrderDetails || '');
+        setHasAGROrder(!!order.agrOrderDetails);
+        setHandedness(order.handedness || '');
+        setShipping(order.shipping || 36.95);
+        setIsCustomOrder(order.isCustomOrder === 'yes');
+        setNotes(order.notes || '');
+        setDiscountCode(order.discountCode || '');
+        setCustomDiscountType(order.customDiscountType || 'percent');
+        setCustomDiscountValue(order.customDiscountValue || 0);
+        setShowCustomDiscount(order.showCustomDiscount || false);
+        setPriceOverride(order.priceOverride);
+        setShowPriceOverride(!!order.priceOverride);
+        
+        toast({
+          title: "Order Loaded",
+          description: `Editing order ${order.orderId}`,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load existing order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load order for editing",
+        variant: "destructive",
+      });
+      generateOrderId(); // Fallback to new order
+    }
+  };
 
   const loadStockModels = async () => {
     try {
@@ -518,6 +584,14 @@ export default function OrderEntry() {
     setIsCustomOrder(false);
     setNotes('');
     setErrors({});
+    // Reset payment state
+    setIsPaid(false);
+    setShowPaymentModal(false);
+    setPaymentType('');
+    setPaymentDate(new Date());
+    setPaymentAmount('');
+    setPaymentTimestamp(null);
+    setShowTooltip(false);
     generateOrderId();
   };
 

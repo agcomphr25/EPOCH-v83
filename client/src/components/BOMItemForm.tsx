@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,6 +23,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { toast } from "react-hot-toast";
 import type { InventoryItem } from '@shared/schema';
@@ -92,6 +108,7 @@ const commonCategories = [
 
 export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormProps) {
   const isEditing = !!item;
+  const [open, setOpen] = useState(false);
 
   // Fetch inventory items
   const { data: inventoryItems, isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
@@ -142,24 +159,72 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
           control={form.control}
           name="partName"
           render={({ field }) => (
-            <FormItem>
+            <FormItem className="flex flex-col">
               <FormLabel>Select Inventory Item *</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={isLoadingInventory ? "Loading inventory..." : "Select an inventory item"} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {inventoryItems?.filter(item => item.isActive).map((item) => (
-                    <SelectItem key={item.id} value={item.name}>
-                      {item.agPartNumber} - {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className={cn(
+                        "w-full justify-between",
+                        !field.value && "text-muted-foreground"
+                      )}
+                      disabled={isLoadingInventory}
+                    >
+                      {field.value
+                        ? inventoryItems?.find(
+                            (item) => item.name === field.value
+                          )
+                          ? `${inventoryItems.find(item => item.name === field.value)?.agPartNumber} - ${field.value}`
+                          : field.value
+                        : isLoadingInventory 
+                        ? "Loading inventory..."
+                        : "Select inventory item..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search inventory items..." />
+                    <CommandList>
+                      <CommandEmpty>No inventory items found.</CommandEmpty>
+                      <CommandGroup>
+                        {inventoryItems?.filter(item => item.isActive).map((item) => (
+                          <CommandItem
+                            key={item.id}
+                            value={`${item.agPartNumber} ${item.name}`}
+                            onSelect={() => {
+                              field.onChange(item.name);
+                              setOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                item.name === field.value
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            <div className="flex items-center">
+                              <span className="font-mono text-sm text-muted-foreground mr-2">
+                                {item.agPartNumber}
+                              </span>
+                              <span>{item.name}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <FormDescription>
-                Choose from existing inventory items
+                Search and select from existing inventory items
               </FormDescription>
               <FormMessage />
             </FormItem>

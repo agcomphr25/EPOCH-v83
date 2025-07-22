@@ -486,9 +486,10 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* Customer Selection */}
-              <div className="grid grid-cols-1 gap-4">
+              {/* Customer Selection and Customer PO */}
+              <div className="grid grid-cols-2 gap-6">
                 <div>
+                  <Label htmlFor="customer">Customer</Label>
                   <CustomerSearchInput
                     value={customer}
                     onValueChange={setCustomer}
@@ -497,34 +498,35 @@ export default function OrderEntry() {
                   />
                 </div>
                 
-                {/* Customer PO Checkbox and Input */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="customer-po-checkbox"
-                      checked={hasCustomerPO}
-                      onCheckedChange={(checked) => {
-                        setHasCustomerPO(!!checked);
-                        if (!checked) {
-                          setCustomerPO('');
-                        }
-                      }}
-                    />
-                    <Label 
-                      htmlFor="customer-po-checkbox" 
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Customer PO
-                    </Label>
+                <div>
+                  <Label htmlFor="customer-po">Customer PO</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="customer-po-checkbox"
+                        checked={hasCustomerPO}
+                        onCheckedChange={(checked) => {
+                          setHasCustomerPO(!!checked);
+                          if (!checked) {
+                            setCustomerPO('');
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="customer-po-checkbox" 
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Enable Customer PO
+                      </Label>
+                    </div>
                   </div>
                   
                   {hasCustomerPO && (
-                    <div className="flex-1">
+                    <div className="mt-2">
                       <Input
                         placeholder="Enter Customer PO"
                         value={customerPO}
                         onChange={(e) => setCustomerPO(e.target.value)}
-                        className="max-w-md"
                       />
                     </div>
                   )}

@@ -19,6 +19,8 @@ import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import type { Customer } from '@shared/schema';
+import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
+import { FEATURE_IDS, findFeature, getFeatureOptionDisplay, getPaintFeatures } from '@/utils/featureMapping';
 
 interface StockModel {
   id: string;
@@ -51,6 +53,16 @@ export default function OrderEntry() {
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
+
+  // Feature validation hooks (development only)
+  useFeatureValidation(featureDefs);
+  useFeatureStateValidation(features, {
+    paintOptions,
+    bottomMetal,
+    railAccessory,
+    otherOptions,
+    actionLength
+  });
 
   const [orderDate, setOrderDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now

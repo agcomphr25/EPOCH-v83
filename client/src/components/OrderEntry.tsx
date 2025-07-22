@@ -73,6 +73,13 @@ export default function OrderEntry() {
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
+  
+  // Payment state
+  const [isPaid, setIsPaid] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentType, setPaymentType] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date());
+  const [paymentAmount, setPaymentAmount] = useState('');
 
   // Calculate total price based on selected features
   const calculateTotalPrice = useCallback(() => {
@@ -1156,6 +1163,26 @@ export default function OrderEntry() {
                   <span className="font-bold">Total:</span>
                   <span className="font-bold text-blue-600">${(totalPrice + 36.95).toFixed(2)}</span>
                 </div>
+                
+                {/* Paid Checkbox */}
+                <div className="flex items-center gap-2 pt-2">
+                  <Checkbox 
+                    id="paid-checkbox"
+                    checked={isPaid}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setShowPaymentModal(true);
+                      } else {
+                        setIsPaid(false);
+                        setPaymentType('');
+                        setPaymentAmount('');
+                      }
+                    }}
+                  />
+                  <label htmlFor="paid-checkbox" className="font-medium cursor-pointer">
+                    Paid
+                  </label>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -1184,6 +1211,89 @@ export default function OrderEntry() {
           </Card>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Payment Type */}
+            <div className="space-y-2">
+              <Label htmlFor="payment-type">Payment Type</Label>
+              <Select value={paymentType} onValueChange={setPaymentType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="credit_card">Credit Card</SelectItem>
+                  <SelectItem value="agr">AGR</SelectItem>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="ach">ACH</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Date */}
+            <div className="space-y-2">
+              <Label htmlFor="payment-date">Payment Date</Label>
+              <Input
+                type="date"
+                value={paymentDate.toISOString().split('T')[0]}
+                onChange={(e) => setPaymentDate(new Date(e.target.value))}
+              />
+            </div>
+
+            {/* Payment Amount */}
+            <div className="space-y-2">
+              <Label htmlFor="payment-amount">Payment Amount</Label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                step="0.01"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Modal Buttons */}
+          <div className="flex gap-2 justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowPaymentModal(false);
+                setPaymentType('');
+                setPaymentAmount('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (paymentType && paymentAmount) {
+                  setIsPaid(true);
+                  setShowPaymentModal(false);
+                  toast({
+                    title: "Payment Saved",
+                    description: `Payment of $${paymentAmount} via ${paymentType.replace('_', ' ').toUpperCase()} recorded.`,
+                  });
+                } else {
+                  toast({
+                    title: "Missing Information",
+                    description: "Please select a payment type and enter an amount.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Save Payment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -447,7 +447,7 @@ export default function OrderEntry() {
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
         handedness,
         shipping,
-        status: 'DRAFT',
+        status: 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
         discountCode,
@@ -463,7 +463,7 @@ export default function OrderEntry() {
 
       toast({
         title: "Success",
-        description: "Order saved as draft",
+        description: "Order created successfully",
       });
 
       // Reset form

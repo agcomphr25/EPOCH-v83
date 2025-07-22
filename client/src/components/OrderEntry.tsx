@@ -927,15 +927,43 @@ export default function OrderEntry() {
                   {/* Rails */}
                   <div>
                     <Label>Rails</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select options..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="picatinny">Picatinny Rail</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                      {(() => {
+                        const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
+                        
+                        if (!railsFeature || !railsFeature.options) {
+                          return <div className="text-gray-500 text-sm">No options available</div>;
+                        }
+                        
+                        return railsFeature.options.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`rail-option-${option.value}`}
+                              checked={railAccessory.includes(option.value)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setRailAccessory(prev => [...prev, option.value]);
+                                } else {
+                                  setRailAccessory(prev => prev.filter(item => item !== option.value));
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`rail-option-${option.value}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                            >
+                              {option.label}
+                              {option.price && option.price > 0 && (
+                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
+                              )}
+                            </label>
+                          </div>
+                        ));
+                      })()}
+                      {railAccessory.length === 0 && (
+                        <div className="text-gray-400 text-sm italic">No options selected</div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Swivel Studs */}

@@ -105,18 +105,21 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
         {/* Show Action Length under Order ID */}
-        {order.features?.action_length && (
+        {order.features?.action_length && order.features.action_length !== 'none' && (
           <div className="text-xs opacity-80 mt-0.5 font-medium">
             {order.features.action_length === 'Long' ? 'LA' : 
              order.features.action_length === 'Medium' ? 'MA' : 
-             order.features.action_length === 'Short' ? 'SA' : 
+             order.features.action_length === 'Short' ? 'SA' :
+             order.features.action_length === 'long' ? 'LA' : 
+             order.features.action_length === 'medium' ? 'MA' : 
+             order.features.action_length === 'short' ? 'SA' : 
              order.features.action_length}
           </div>
         )}
-        {/* Debug: Show if we have any features at all */}
-        {!order.features?.action_length && order.features && Object.keys(order.features).length > 0 && (
-          <div className="text-xs opacity-50 mt-0.5">
-            AL: {JSON.stringify(order.features.action_length || 'none')}
+        {/* Debug: Show available feature keys */}
+        {order.features && Object.keys(order.features).length > 0 && (
+          <div className="text-xs opacity-50 mt-0.5" style={{ maxWidth: '120px', wordWrap: 'break-word' }}>
+            Keys: {Object.keys(order.features).join(', ')}
           </div>
         )}
         {/* Show product display name if available */}

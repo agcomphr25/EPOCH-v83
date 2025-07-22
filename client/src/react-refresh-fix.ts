@@ -19,7 +19,6 @@ if (typeof window !== 'undefined') {
     updateRefreshBoundarySignature: () => {},
     setSignature: () => {},
     collectCustomHooksForSignature: () => [],
-    isLikelyComponentType: () => false,
     shouldInvalidateReactRefreshBoundary: () => false,
     shouldUpdateReactRefreshBoundary: () => false,
     getRefreshBoundarySignature: () => null,
@@ -28,12 +27,10 @@ if (typeof window !== 'undefined') {
     injectIntoGlobalHook: () => {},
     hasUnrecoverableErrors: () => false,
     clearRefreshBoundarySignature: () => {},
-    findAffectedHostInstances: () => [],
     markFailedErrorBoundaryForHotReloading: () => {},
     scheduleRefresh: () => {},
     scheduleRoot: () => {},
     setRefreshHandler: () => {},
-    updateRefreshBoundarySignature: () => {},
   };
 
   // Assign the stub to global scope

@@ -49,8 +49,8 @@ export function generateLayupSchedule(
   const totalDailyMoldCapacity = enabledMolds.reduce((sum, m) => sum + m.multiplier, 0);
 
   const employeeDailyCapacities = employeeSettings.reduce((map, emp) => {
-    // Use 10-hour work days for capacity calculation
-    map[emp.employeeId] = emp.rate * 10;
+    // Use actual employee hours (stored in system) for capacity calculation
+    map[emp.employeeId] = emp.rate * (emp.hours || 10); // fallback to 10 hours if not set
     return map;
   }, {} as Record<string, number>);
   
@@ -156,18 +156,20 @@ export function generateLayupSchedule(
 
       const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
-      const hasEmpCapacity = currentEmployeeUsage < totalDailyEmployeeCapacity;
-      
-      // Calculate target daily load for even distribution across 4 work days
-      const idealDailyLoad = Math.ceil(totalDailyEmployeeCapacity * 0.75); // Use 75% of capacity per day to ensure spreading
+      // Set realistic daily targets: 12-15 orders per day
+      const targetMinOrders = 12;
+      const targetMaxOrders = 15;
       const currentDailyLoad = currentEmployeeUsage;
-      const dayNotOverloaded = currentDailyLoad < idealDailyLoad;
+      
+      // Allow scheduling up to target max, but still respect employee individual capacity
+      const hasEmpCapacity = currentEmployeeUsage < Math.min(totalDailyEmployeeCapacity, targetMaxOrders);
+      const dayNotOverloaded = currentDailyLoad < targetMaxOrders;
       
       // More aggressive even distribution: check if we should skip to next day for better balance
       let shouldScheduleHere = true;
       
       // If this day is getting heavily loaded, try to find a lighter day in the same week
-      if (currentDailyLoad >= idealDailyLoad * 0.8) { // 80% threshold
+      if (currentDailyLoad >= targetMaxOrders - 2) { // When approaching max capacity
         const currentWorkWeekDays = getWorkDaysInWeek(attemptDate);
         const weekDayLoads = currentWorkWeekDays.map(day => {
           const dayKey = toKey(day);

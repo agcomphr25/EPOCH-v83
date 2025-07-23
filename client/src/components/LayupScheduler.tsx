@@ -4,7 +4,7 @@ import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
   DragEndEvent,
@@ -37,7 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 
@@ -339,9 +339,27 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
+  const queryClient = useQueryClient();
+  
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+
+  // Auto-schedule mutation
+  const autoScheduleMutation = useMutation({
+    mutationFn: () => apiRequest('/api/layup-schedule/auto-generate', { method: 'POST' }),
+    onSuccess: (data) => {
+      console.log('✅ Auto-schedule generated:', data);
+      // Clear existing assignments and reload data
+      setOrderAssignments({});
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-queue'] });
+      reloadOrders();
+    },
+    onError: (error) => {
+      console.error('❌ Auto-schedule failed:', error);
+    }
+  });
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -1066,6 +1084,18 @@ export default function LayupScheduler() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Auto-Schedule Button */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => autoScheduleMutation.mutate()}
+              disabled={autoScheduleMutation.isPending || !orders.length || !molds.filter(m => m.enabled).length || !employees.length}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              {autoScheduleMutation.isPending ? 'Scheduling...' : 'Auto-Schedule'}
+            </Button>
 
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}

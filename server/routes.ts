@@ -3237,7 +3237,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/molds/:moldId", async (req, res) => {
     try {
-      const mold = await storage.updateMold(req.params.moldId, req.body);
+      // Ensure updatedAt is properly set
+      const updateData = {
+        ...req.body,
+        updatedAt: new Date()
+      };
+      const mold = await storage.updateMold(req.params.moldId, updateData);
       res.json(mold);
     } catch (error) {
       console.error("Mold update error:", error);
@@ -3293,7 +3298,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/employees/layup-settings/:employeeId", async (req, res) => {
     try {
-      const settings = await storage.updateEmployeeLayupSettings(req.params.employeeId, req.body);
+      // Ensure updatedAt is properly set
+      const updateData = {
+        ...req.body,
+        updatedAt: new Date()
+      };
+      const settings = await storage.updateEmployeeLayupSettings(req.params.employeeId, updateData);
       res.json(settings);
     } catch (error) {
       console.error("Employee layup settings update error:", error);
@@ -3386,6 +3396,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Order override error:", error);
       res.status(400).json({ error: "Failed to override order schedule" });
+    }
+  });
+
+  // Auto-schedule layup orders based on molds and employee production rates
+  app.post("/api/layup-schedule/auto-generate", async (req, res) => {
+    try {
+      // Get all required data
+      const orders = await storage.getUnifiedLayupOrders();
+      const molds = await storage.getAllMolds();
+      const employeeSettings = await storage.getAllEmployeeLayupSettings();
+
+      // Convert to scheduler format
+      const layupOrders = orders.map((order: any) => ({
+        orderId: order.orderId,
+        orderDate: new Date(order.orderDate || order.created_at),
+        priorityScore: order.priority || 100,
+        customer: order.customerName || 'Unknown',
+        product: order.stockModelName || order.skuNumber || 'Unknown'
+      }));
+
+      const moldSettings = molds.map((mold: any) => ({
+        moldId: mold.moldId,
+        modelName: mold.modelName,
+        instanceNumber: mold.instanceNumber || 1,
+        enabled: mold.enabled !== false,
+        multiplier: mold.dailyCapacity || 1
+      }));
+
+      const empSettings = employeeSettings.map((emp: any) => ({
+        employeeId: emp.employeeId,
+        name: emp.name || emp.employeeId,
+        rate: emp.productionRate || 1,
+        hours: emp.dailyHours || 8
+      }));
+
+      // Generate schedule using the scheduler utility
+      const schedulerUtils = await import('../client/src/utils/schedulerUtils.js');
+      const generateLayupSchedule = schedulerUtils.generateLayupSchedule || schedulerUtils.default?.generateLayupSchedule;
+      
+      if (!generateLayupSchedule) {
+        throw new Error('generateLayupSchedule function not found');
+      }
+      
+      const scheduleResults = generateLayupSchedule(layupOrders, moldSettings, empSettings);
+
+      // Return the generated schedule (without database persistence for now)
+      console.log(`📋 Generated schedule for ${scheduleResults.length} orders`);
+      
+      // Log schedule details for debugging
+      scheduleResults.forEach(entry => {
+        console.log(`📅 Schedule: ${entry.orderId} → ${entry.moldId} on ${entry.scheduledDate.toDateString()}`);
+      });
+
+      console.log('✅ Auto-schedule generation completed successfully');
+      res.json({ 
+        success: true, 
+        message: `Generated auto-schedule for ${scheduleResults.length} orders`,
+        scheduledOrders: scheduleResults.length,
+        schedules: scheduleResults.map(entry => ({
+          orderId: entry.orderId,
+          scheduledDate: entry.scheduledDate.toISOString(),
+          moldId: entry.moldId,
+          employeeAssignments: entry.employeeAssignments || []
+        }))
+      });
+
+    } catch (error) {
+      console.error("Auto-schedule generation error:", error);
+      res.status(500).json({ error: "Failed to generate auto-schedule" });
     }
   });
 

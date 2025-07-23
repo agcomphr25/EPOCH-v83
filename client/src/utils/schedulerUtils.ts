@@ -1,5 +1,10 @@
 // Layup Scheduler Utilities
-import { addDays } from "date-fns";
+// Fallback implementation for addDays to avoid import issues
+const addDays = (date: Date, days: number) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
 
 export interface LayupOrder {
   orderId: string;
@@ -117,3 +122,6 @@ export function generateLayupSchedule(
 
   return result;
 }
+
+// Export as default for compatibility
+export default { generateLayupSchedule };

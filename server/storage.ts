@@ -1852,6 +1852,80 @@ export class DatabaseStorage implements IStorage {
     await db.delete(layupOrders).where(eq(layupOrders.orderId, orderId));
   }
 
+  // Get unified layup orders (combining regular orders and P1 PO items)
+  async getUnifiedLayupOrders(): Promise<any[]> {
+    try {
+      // Get regular P1 orders (from orderDrafts) that are in Layup department
+      const regularOrders = await db
+        .select()
+        .from(orderDrafts)
+        .where(
+          and(
+            eq(orderDrafts.currentDepartment, 'Layup'),
+            ne(orderDrafts.status, 'SCRAPPED'),
+            ne(orderDrafts.status, 'COMPLETED')
+          )
+        );
+
+      // Get P1 Purchase Order items - simplified query to avoid null/undefined issues
+      let p1Orders: any[] = [];
+      try {
+        p1Orders = await db
+          .select({
+            poId: purchaseOrderItems.poId,
+            itemId: purchaseOrderItems.id,
+            partNumber: purchaseOrderItems.partNumber,
+            quantity: purchaseOrderItems.quantity,
+            status: purchaseOrderItems.status
+          })
+          .from(purchaseOrderItems)
+          .where(ne(purchaseOrderItems.status, 'COMPLETED'));
+      } catch (error) {
+        console.log('Could not fetch P1 orders:', error);
+        p1Orders = [];
+      }
+
+      // Format regular orders
+      const formattedRegularOrders = regularOrders.map(order => ({
+        id: order.id,
+        orderId: order.orderId,
+        orderDate: order.createdAt,
+        customerName: order.customerName || 'Unknown',
+        stockModelId: order.modelId,
+        stockModelName: order.modelId,
+        priority: 50,
+        priorityScore: 50,
+        type: 'regular',
+        features: order.features,
+        customer: order.customerName || 'Unknown',
+        product: order.modelId || 'Unknown'
+      }));
+
+      // Format P1 orders - simplified to avoid database join issues
+      const formattedP1Orders = p1Orders.map((item, index) => ({
+        id: item.itemId || index,
+        orderId: `P1-PO-${item.poId || 'Unknown'}-${item.itemId || index}`,
+        orderDate: new Date(),
+        customerName: 'P1 Customer',
+        stockModelId: item.partNumber || 'Unknown',
+        stockModelName: item.partNumber || 'Unknown',
+        priority: 75, // Default priority for P1 orders
+        priorityScore: 75,
+        type: 'p1_po',
+        features: {},
+        customer: 'P1 Customer',
+        product: item.partNumber || 'Unknown'
+      }));
+
+      // Combine and return all orders
+      return [...formattedRegularOrders, ...formattedP1Orders];
+
+    } catch (error) {
+      console.error('Error getting unified layup orders:', error);
+      return [];
+    }
+  }
+
   // Layup Scheduler: Schedule CRUD
   async getAllLayupSchedule(): Promise<LayupSchedule[]> {
     return await db.select().from(layupSchedule).orderBy(layupSchedule.scheduledDate);
@@ -1877,6 +1951,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLayupSchedule(id: number): Promise<void> {
     await db.delete(layupSchedule).where(eq(layupSchedule.id, id));
+  }
+
+  async deleteLayupScheduleByOrder(orderId: string): Promise<void> {
+    await db.delete(layupSchedule).where(eq(layupSchedule.orderId, orderId));
   }
 
   async overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule> {

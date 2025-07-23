@@ -503,6 +503,10 @@ export default function LayupScheduler() {
   console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
   console.log('🏭 LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
+  
+  // Debug unassigned orders
+  const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
+  console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -733,8 +737,8 @@ export default function LayupScheduler() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex h-full">
-        {/* Sidebar for Order Queue - Temporarily Hidden */}
-        <aside className="hidden w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+        {/* Sidebar for Order Queue */}
+        <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -749,21 +753,28 @@ export default function LayupScheduler() {
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <div className="text-sm">No orders in queue</div>
                   <div className="text-xs mt-1">Orders will appear here when available</div>
+                  <div className="text-xs mt-1 bg-yellow-100 p-2 rounded">Debug: Loading={ordersLoading.toString()}</div>
                 </div>
               ) : (
                 <div className="space-y-2">
+                  <div className="text-xs bg-blue-100 p-2 rounded mb-2">
+                    Debug: {orders.length} total orders, {orders.filter(o => !orderAssignments[o.orderId]).length} unassigned
+                  </div>
                   {orders
                     .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
-                    .map((order, index) => (
-                      <DraggableOrderItem
-                        key={order.orderId}
-                        order={order}
-                        priority={index + 1}
-                        totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
-                        getModelDisplayName={getModelDisplayName}
-                        features={features}
-                      />
-                    ))}
+                    .map((order, index) => {
+                      console.log('🃏 Rendering order card:', order.orderId, order);
+                      return (
+                        <DraggableOrderItem
+                          key={order.orderId}
+                          order={order}
+                          priority={index + 1}
+                          totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
+                          getModelDisplayName={getModelDisplayName}
+                          features={features}
+                        />
+                      );
+                    })}
                 </div>
               )}
             </CardContent>

@@ -881,40 +881,60 @@ export default function LayupScheduler() {
   };
 
   const handleEmployeeChange = (employeeId: string, field: 'rate' | 'hours', value: number) => {
-    setEmployeeChanges(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        [field]: value
-      }
-    }));
+    console.log(`📝 Employee change: ${employeeId} ${field} = ${value}`);
+    
+    setEmployeeChanges(prev => {
+      const newChanges = {
+        ...prev,
+        [employeeId]: {
+          ...prev[employeeId],
+          [field]: value
+        }
+      };
+      console.log('Updated employee changes:', newChanges);
+      return newChanges;
+    });
     setHasUnsavedChanges(true);
+    console.log('Unsaved changes flag set to true');
   };
 
   const handleSaveEmployeeChanges = async () => {
     try {
+      console.log('💾 EMPLOYEE SAVE DEBUG - Starting save process');
+      console.log('Employee changes to save:', employeeChanges);
+      
       // Save all changes
       const savePromises = Object.entries(employeeChanges).map(([employeeId, changes]) => {
         const employee = employees.find(emp => emp.employeeId === employeeId);
+        console.log(`Saving employee ${employeeId}:`, { employee, changes });
+        
         if (employee) {
-          return saveEmployee({
+          const updatedEmployee = {
             ...employee,
             ...changes
-          });
+          };
+          console.log(`Final employee data for ${employeeId}:`, updatedEmployee);
+          return saveEmployee(updatedEmployee);
         }
         return Promise.resolve();
       });
 
+      console.log(`Executing ${savePromises.length} save operations`);
       await Promise.all(savePromises);
+      
+      console.log('✅ All employee changes saved successfully');
       
       // Clear unsaved changes
       setEmployeeChanges({});
       setHasUnsavedChanges(false);
       
       // Refresh the employee list
+      console.log('🔄 Refreshing employee list to verify changes');
       await refetchEmployees();
+      
+      console.log('💾 EMPLOYEE SAVE DEBUG - Complete');
     } catch (error) {
-      console.error('Failed to save employee changes:', error);
+      console.error('❌ Failed to save employee changes:', error);
     }
   };
 
@@ -1458,8 +1478,16 @@ export default function LayupScheduler() {
                 console.log('');
                 console.log('👥 Employees Detail:');
                 employees.forEach(emp => {
-                  console.log(`  • ${emp.employeeId}: ${emp.rate} rate, ${emp.hours}h/day`);
+                  console.log(`  • ${emp.employeeId}: ${emp.rate} rate, ${emp.hours}h/day (active: ${emp.isActive})`);
                 });
+                console.log('');
+                console.log('📊 Employee Production Capacity:');
+                const totalCapacity = employees
+                  .filter(emp => emp.isActive)
+                  .reduce((total, emp) => total + (emp.rate * emp.hours), 0);
+                console.log(`  • Total daily capacity: ${totalCapacity.toFixed(1)} units/day`);
+                console.log(`  • Max orders per day: ${Math.floor(totalCapacity * 0.85)} orders (85% efficiency)`);
+                console.log('');
                 console.log('');
                 console.log('📅 Assignment Details:');
                 Object.entries(orderAssignments).slice(0, 5).forEach(([orderId, assignment]) => {

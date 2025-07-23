@@ -1771,12 +1771,11 @@ export class DatabaseStorage implements IStorage {
         isActive: employeeLayupSettings.isActive,
         createdAt: employeeLayupSettings.createdAt,
         updatedAt: employeeLayupSettings.updatedAt,
-        name: employees.name,
+        name: employeeLayupSettings.employeeId, // Use employeeId as name since they're stored as names
       })
       .from(employeeLayupSettings)
-      .leftJoin(employees, eq(employeeLayupSettings.employeeId, employees.employeeCode))
       .where(eq(employeeLayupSettings.isActive, true))
-      .orderBy(employees.name);
+      .orderBy(employeeLayupSettings.employeeId);
     
     return result.map(r => ({
       ...r,
@@ -1798,11 +1797,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings> {
+    console.log(`🔄 Storage: Updating employee "${employeeId}" with data:`, data);
+    
+    // Check if employee exists first
+    const existing = await this.getEmployeeLayupSettings(employeeId);
+    if (!existing) {
+      console.log(`❌ Employee "${employeeId}" not found in layup settings`);
+      throw new Error(`Employee "${employeeId}" not found in layup settings`);
+    }
+    
     const [result] = await db
       .update(employeeLayupSettings)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(employeeLayupSettings.employeeId, employeeId))
       .returning();
+      
+    console.log(`✅ Storage: Updated employee "${employeeId}":`, result);
     return result;
   }
 

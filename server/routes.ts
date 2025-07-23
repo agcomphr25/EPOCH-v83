@@ -3305,16 +3305,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/employees/layup-settings/:employeeId", async (req, res) => {
     try {
-      // Ensure updatedAt is properly set
+      // Decode URL-encoded employee ID
+      const employeeId = decodeURIComponent(req.params.employeeId);
+      console.log(`💾 API: Updating employee layup settings for: "${employeeId}"`);
+      console.log(`📝 API: Update data:`, req.body);
+      
+      // Validate the data (but be flexible with required fields for updates)
       const updateData = {
-        ...req.body,
+        rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
+        hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
+        department: req.body.department || undefined,
+        isActive: req.body.isActive !== undefined ? req.body.isActive : undefined,
         updatedAt: new Date()
       };
-      const settings = await storage.updateEmployeeLayupSettings(req.params.employeeId, updateData);
+      
+      // Remove undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      );
+      
+      console.log(`🧹 API: Clean update data:`, cleanData);
+      
+      const settings = await storage.updateEmployeeLayupSettings(employeeId, cleanData);
+      console.log(`✅ API: Successfully updated employee layup settings for: "${employeeId}"`);
       res.json(settings);
     } catch (error) {
-      console.error("Employee layup settings update error:", error);
-      res.status(400).json({ error: "Failed to update employee layup settings" });
+      console.error("❌ API: Employee layup settings update error:", error);
+      console.error("❌ API: Error details:", error?.message || error);
+      res.status(400).json({ 
+        error: "Failed to update employee layup settings", 
+        details: error?.message || "Unknown error",
+        employeeId: decodeURIComponent(req.params.employeeId)
+      });
     }
   });
 

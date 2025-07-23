@@ -10,11 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 23, 2025 - Auto-Schedule System Implementation (COMPLETED)**
+**July 23, 2025 - Enhanced Order Display Cards and Auto-Schedule System (COMPLETED)**
+- ✅ **Material Type Indicators**: Added CF (Carbon Fiber) and FG (Fiberglass) badges on order cards for immediate material identification
+- ✅ **Heavy Fill Detection**: Orange badges display when Heavy Fill option is selected in other_options array
+- ✅ **APR Action Type Display**: APR orders now show specific action type (Anti-X Hunter, APR, etc.) instead of action length
 - ✅ **Complete Auto-Schedule System**: Built comprehensive auto-scheduling algorithm for Layup Scheduler based on mold availability and employee production rates
 - ✅ **Order ID Priority System**: Algorithm now prioritizes orders by Order ID (AG001 = highest priority, AG999 = lowest priority) instead of priority scores
 - ✅ **4-Day Work Week**: Scheduling restricted to Monday-Thursday work days only, automatically skipping weekends and Fridays
-- ✅ **10-Hour Work Days**: Employee capacity calculations use 10-hour work days (rate × 10 hours) for accurate daily capacity
+- ✅ **12-15 Orders Per Day Target**: Updated algorithm to target exactly 12-15 orders per day with proper load balancing
 - ✅ **Even Weekly Distribution**: Orders spread evenly across work weeks to prevent overloading specific days
 - ✅ **Smart Capacity Management**: Balances mold capacity, employee capacity, and weekly distribution for optimal scheduling
 - ✅ **Purple Auto-Schedule Button**: Added distinctive purple button with lightning bolt icon for easy identification

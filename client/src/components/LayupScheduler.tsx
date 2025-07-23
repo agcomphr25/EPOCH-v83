@@ -133,7 +133,45 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         
         {/* Show Action Length (Action Inlet) Display */}
         {(() => {
-          // Get Action Inlet display name from Feature Manager (field ID: action-length, Display Name: Action Inlet)
+          const modelId = order.stockModelId || order.modelId;
+          const isAPR = modelId && modelId.toLowerCase().includes('apr');
+          
+          // For APR orders, show action type instead of action length
+          if (isAPR) {
+            const getAPRActionDisplay = (orderFeatures: any) => {
+              if (!orderFeatures) return null;
+              
+              // Check for action_inlet field first (more specific)
+              let actionType = orderFeatures.action_inlet;
+              if (!actionType) {
+                // Fallback to action field
+                actionType = orderFeatures.action;
+              }
+              
+              if (!actionType || actionType === 'none') return null;
+              
+              // Convert common action types to readable format
+              const actionMap: {[key: string]: string} = {
+                'anti_ten_hunter_def': 'Anti-X Hunter',
+                'apr': 'APR',
+                'rem_700': 'Rem 700',
+                'tikka': 'Tikka',
+                'savage': 'Savage'
+              };
+              
+              return actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+            };
+            
+            const aprActionDisplay = getAPRActionDisplay(order.features);
+            
+            return aprActionDisplay ? (
+              <div className="text-xs opacity-80 mt-0.5 font-medium">
+                Action: {aprActionDisplay}
+              </div>
+            ) : null;
+          }
+          
+          // For non-APR orders, show action length
           const getActionInletDisplay = (orderFeatures: any) => {
             if (!orderFeatures || !features) return null;
             

@@ -515,34 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint to ensure cf_prairie_varmint exists
-  app.post("/api/stock-models/ensure-cf-prairie-varmint", async (req, res) => {
-    try {
-      // Check if it already exists
-      const existing = await storage.getStockModel("cf_prairie_varmint");
-      if (existing) {
-        console.log("cf_prairie_varmint already exists:", existing);
-        return res.json({ exists: true, stockModel: existing });
-      }
-
-      // Create it if it doesn't exist
-      const stockModelData = {
-        name: "cf_prairie_varmint",
-        displayName: "CF Prairie Varmint",
-        price: 1250.00,
-        description: "Carbon Fiber Prairie Varmint stock model",
-        isActive: true,
-        sortOrder: 100
-      };
-
-      const stockModel = await storage.createStockModel(stockModelData);
-      console.log("Created cf_prairie_varmint:", stockModel);
-      res.json({ created: true, stockModel });
-    } catch (error) {
-      console.error("Error ensuring cf_prairie_varmint:", error);
-      res.status(500).json({ error: "Failed to ensure cf_prairie_varmint exists" });
-    }
-  });
+  
 
   // Order Drafts API
   app.post("/api/orders/draft", async (req, res) => {

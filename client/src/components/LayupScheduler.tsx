@@ -217,10 +217,17 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 lopValue === 'none' || 
                 lopValue === 'standard' || 
                 lopValue === 'std' ||
-                lopValue === '' || 
+                lopValue === 'std_length' ||
+                lopValue === 'standard_length' ||
                 lopValue === 'no_extra_length' ||
+                lopValue === 'std_no_extra_length' ||
+                lopValue === 'no_lop_change' ||
+                lopValue === '' || 
                 lopValue === '0' ||
-                lopValue === 'normal') {
+                lopValue === 'normal' ||
+                lopValue.toLowerCase().includes('std') ||
+                lopValue.toLowerCase().includes('standard') ||
+                lopValue.toLowerCase().includes('no extra')) {
               return null;
             }
             

@@ -173,6 +173,14 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           
           // For non-APR orders, show action length
           const getActionInletDisplayNonAPR = (orderFeatures: any) => {
+            // Debug logging
+            console.log('Order features for action length detection:', {
+              orderId: order.orderId,
+              orderFeatures,
+              hasFeatures: !!features,
+              featuresCount: features?.length
+            });
+            
             if (!orderFeatures || !features) return null;
             
             // Look for action_length field first

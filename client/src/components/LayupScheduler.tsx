@@ -690,11 +690,13 @@ export default function LayupScheduler() {
                             <SelectValue placeholder="Select a stock model" />
                           </SelectTrigger>
                           <SelectContent>
-                            {stockModels.map((model: any) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.displayName || model.name || model.id}
-                              </SelectItem>
-                            ))}
+                            {stockModels
+                              .filter((model: any) => !model.id.toLowerCase().startsWith('cf') && !model.id.toLowerCase().startsWith('fg'))
+                              .map((model: any) => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  {model.displayName || model.name || model.id}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-500 mt-1">Choose from available stock models</p>

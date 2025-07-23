@@ -587,21 +587,21 @@ export default function LayupScheduler() {
 
       let assigned = false;
 
-      // Find best assignment considering employee capacity and sequential filling
+      // Find the mold with the earliest available slot (no gaps allowed)
       let bestMold = null;
       let bestDateIndex = Infinity;
 
       for (const mold of compatibleMolds) {
         const nextDateIndex = moldNextDate[mold.moldId] || 0;
         
-        // Check if this date is within bounds and under capacity
-        if (nextDateIndex < allWorkDays.length) {
+        // Must fill sequentially - use the EXACT next date for this mold
+        if (nextDateIndex < allWorkDays.length && nextDateIndex < bestDateIndex) {
           const targetDate = allWorkDays[nextDateIndex];
           const dateKey = targetDate.toISOString().split('T')[0];
           const currentDailyLoad = dailyAssignments[dateKey] || 0;
 
           // Only assign if we haven't exceeded daily employee capacity
-          if (currentDailyLoad < maxOrdersPerDay && nextDateIndex < bestDateIndex) {
+          if (currentDailyLoad < maxOrdersPerDay) {
             bestDateIndex = nextDateIndex;
             bestMold = mold;
           }
@@ -635,9 +635,15 @@ export default function LayupScheduler() {
 
     console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
     console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
+    // Show final mold distribution to verify no gaps
+    console.log('🔧 Final mold distribution (next available date index):');
+    Object.entries(moldNextDate).forEach(([moldId, dateIndex]) => {
+      console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
+    });
+    
     console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
       `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
-    ).slice(0, 8)); // Show first 8 days
+    ).slice(0, 8));
     
     setOrderAssignments(newAssignments);
   }, [orders, molds, employees, currentDate]);
@@ -1580,27 +1586,16 @@ export default function LayupScheduler() {
                           const dateString = date.toISOString();
                           const cellDateOnly = dateString.split('T')[0];
                           
-                          console.log(`🔍 Checking cell ${mold.moldId}-${cellDateOnly} for orders`);
-                          
                           const cellOrders = Object.entries(orderAssignments)
                             .filter(([orderId, assignment]) => {
                               const assignmentDateOnly = assignment.date.split('T')[0];
-                              const matches = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                              if (matches) {
-                                console.log(`✅ Found order ${orderId} for cell ${mold.moldId}-${cellDateOnly}`);
-                              }
-                              return matches;
+                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
                             })
                             .map(([orderId]) => {
                               const order = orders.find(o => o.orderId === orderId);
-                              if (!order) {
-                                console.warn(`⚠️ Order ${orderId} not found in orders list`);
-                              }
                               return order;
                             })
                             .filter(order => order !== undefined) as any[];
-                          
-                          console.log(`📋 Cell ${mold.moldId}-${cellDateOnly} has ${cellOrders.length} orders:`, cellOrders.map(o => o?.orderId));
 
                           const dropId = `${mold.moldId}|${dateString}`;
 

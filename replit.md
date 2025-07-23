@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 23, 2025 - Debug and Auto-Schedule Button Cleanup (COMPLETED)**
+- ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request
+- ✅ **Debug Report Button Removed**: Eliminated debug report functionality and button from calendar interface
+- ✅ **generateAutoSchedule Function Removed**: Completely removed the auto-scheduling algorithm function and all related code
+- ✅ **Clean Interface**: Layup Scheduler now displays clean calendar interface without automatic scheduling or debug functionality
+- ✅ **Code Cleanup**: Removed all debugging logs and references to auto-scheduling from component state
+- ✅ **Manual Scheduling Only**: System now relies entirely on manual drag-and-drop scheduling workflow
+
 **July 23, 2025 - Layup Scheduler Layout and Algorithm Optimization (COMPLETED)**
 - ✅ **Order Queue Removed**: Hidden order queue sidebar per user request for full-width calendar view
 - ✅ **Navigation Header Added**: Comprehensive status bar showing Orders count, Active Molds, and Employees with color-coded badges

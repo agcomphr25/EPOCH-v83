@@ -1378,14 +1378,56 @@ export default function LayupScheduler() {
               variant="default"
               size="sm"
               onClick={() => {
-                console.log('🔄 DEBUG: Auto-schedule button clicked');
-                console.log(`  • Orders: ${orders.length}`);
+                console.log('🔄 AUTO-SCHEDULE INITIATED');
+                console.log('═══════════════════════════════');
+                console.log('📊 Pre-Schedule System Status:');
+                console.log(`  • Orders available: ${orders.length}`);
                 console.log(`  • Enabled molds: ${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Employees: ${employees.length}`);
+                console.log(`  • Active employees: ${employees.filter(emp => emp.isActive).length}`);
                 console.log(`  • Current assignments: ${Object.keys(orderAssignments).length}`);
+                console.log('');
+                
+                // Enhanced employee capacity calculation
+                const activeEmployees = employees.filter(emp => emp.isActive);
+                const totalDailyCapacity = activeEmployees.reduce((total, emp) => total + (emp.rate * emp.hours), 0);
+                const estimatedDaysNeeded = Math.ceil(orders.length / (totalDailyCapacity * 0.85)); // 85% efficiency
+                
+                console.log('👥 Employee Production Analysis:');
+                activeEmployees.forEach(emp => {
+                  const dailyOutput = emp.rate * emp.hours;
+                  console.log(`  • ${emp.name}: ${emp.rate}/hr × ${emp.hours}h = ${dailyOutput.toFixed(1)} units/day`);
+                });
+                console.log(`  • Total daily capacity: ${totalDailyCapacity.toFixed(1)} units/day`);
+                console.log(`  • Estimated completion: ${estimatedDaysNeeded} work days`);
+                console.log('');
+                
+                // Enhanced mold compatibility analysis
+                console.log('🔧 Mold Compatibility Analysis:');
+                const compatibleAssignments = {};
+                orders.forEach(order => {
+                  const modelId = order.stockModelId || order.modelId;
+                  const compatibleMolds = molds.filter(mold => 
+                    mold.enabled && mold.stockModels && mold.stockModels.includes(modelId)
+                  );
+                  compatibleAssignments[order.orderId] = compatibleMolds.length;
+                  if (compatibleMolds.length === 0) {
+                    console.log(`  ⚠️ ${order.orderId} (${modelId}): No compatible molds found`);
+                  }
+                });
+                
+                const assignableOrders = orders.filter(order => {
+                  const modelId = order.stockModelId || order.modelId;
+                  return molds.some(mold => 
+                    mold.enabled && mold.stockModels && mold.stockModels.includes(modelId)
+                  );
+                });
+                
+                console.log(`  • Assignable orders: ${assignableOrders.length}/${orders.length}`);
+                console.log('');
+                
                 generateAutoSchedule();
               }}
-              disabled={!orders.length || !molds.filter(m => m.enabled).length || !employees.length}
+              disabled={!orders.length || !molds.filter(m => m.enabled).length || !employees.filter(emp => emp.isActive).length}
               className="bg-purple-600 hover:bg-purple-700 text-white"
             >
               <Zap className="w-4 h-4 mr-2" />

@@ -212,10 +212,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             // Look for length_of_pull field (NOT action_length)
             const lopValue = orderFeatures.length_of_pull;
             
-            // Don't show if empty, none, standard, or any variation indicating no extra length
+            // Don't show if empty, none, standard, std, or any variation indicating no extra length
             if (!lopValue || 
                 lopValue === 'none' || 
                 lopValue === 'standard' || 
+                lopValue === 'std' ||
                 lopValue === '' || 
                 lopValue === 'no_extra_length' ||
                 lopValue === '0' ||

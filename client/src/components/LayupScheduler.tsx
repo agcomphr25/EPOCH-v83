@@ -244,6 +244,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   // Standard action inlet mappings
                   'anti_ten_hunter_def': 'SA', // Short action
                   'def_dev_hunter_rem': 'LA', // Long action based on database data
+                  'def_anti': 'SA', // Defiance Anti action - Short
                   'remington_700': 'SA', // Most common Rem 700 is short action
                   'remington_700_long': 'LA',
                   'rem_700': 'SA',
@@ -257,16 +258,42 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   'savage_110': 'LA',
                   'winchester_70': 'LA',
                   'howa_1500': 'SA',
+                  // Bergara actions
                   'bergara_b14': 'SA',
+                  'bergara_premier': 'SA',
+                  'bergara_hmr': 'SA',
                   'carbon_six_medium': 'MA',
                   // Lone Peak actions
                   'lone_peak_fuzion': 'SA',
                   'lone_peak_razorback': 'SA',
                   'lone_peak_ascent': 'SA',
-                  // Additional common action types
+                  // Defiance actions
                   'defiance_deviant': 'SA',
                   'defiance_rebel': 'SA',
-                  'american_rifle_company': 'SA'
+                  'def_deviant': 'SA',
+                  'def_deviant_hunter': 'SA',
+                  // Mack Bros actions
+                  'mack_bros_evo_ii': 'SA',
+                  'mack_bros_evo': 'SA',
+                  // APR actions
+                  'apr': 'SA',
+                  'american_rifle_company': 'SA',
+                  // Zermatt actions
+                  'zermatt_origin': 'SA',
+                  'zermatt_tl3': 'SA',
+                  // Terminus actions
+                  'terminus_apollo': 'SA',
+                  'terminus_kratos': 'SA',
+                  // Impact actions
+                  'impact_737r': 'SA',
+                  'impact_nbk': 'SA',
+                  // Bighorn actions
+                  'bighorn_origin': 'SA',
+                  'bighorn_tl3': 'SA',
+                  // Curtis actions
+                  'curtis_axiom': 'SA',
+                  // Default fallback for unknown actions (most are short action)
+                  'unknown': 'SA'
                 };
                 
                 actionLengthValue = actionToLengthMap[actionField];
@@ -274,12 +301,32 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               }
             }
             
-            // If still no action length found, try to derive from stock model ID for Alpine Hunter
-            if (!actionLengthValue && modelId) {
-              if (modelId.includes('alpine') || modelId.includes('hunter')) {
-                // For Alpine Hunter models, assume short action unless specified otherwise
+            // If still no action length found, apply comprehensive fallback logic
+            if (!actionLengthValue) {
+              // Skip Tikka orders completely - they shouldn't show action length
+              const isTikka = modelId && (modelId.toLowerCase().includes('tikka') || 
+                              (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
+                              (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka')));
+              
+              if (isTikka) {
+                console.log(`⏭️ Skipping Tikka order ${order.orderId} - no action length needed`);
+                return null;
+              }
+              
+              // For all non-Tikka orders, provide a fallback action length
+              if (modelId) {
+                if (modelId.includes('alpine') || modelId.includes('hunter')) {
+                  actionLengthValue = 'SA';
+                  console.log(`🎯 Defaulting Alpine Hunter ${modelId} to SA (Short Action)`);
+                } else {
+                  // Default fallback for any other non-Tikka order
+                  actionLengthValue = 'SA'; // Most actions are short action
+                  console.log(`🔧 Fallback: Setting ${order.orderId} to SA (default for unknown action)`);
+                }
+              } else {
+                // Final fallback - every non-Tikka order gets SA
                 actionLengthValue = 'SA';
-                console.log(`🎯 Defaulting Alpine Hunter ${modelId} to SA (Short Action)`);
+                console.log(`🔧 Final fallback: Setting ${order.orderId} to SA`);
               }
             }
             

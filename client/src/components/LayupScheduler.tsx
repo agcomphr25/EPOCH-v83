@@ -674,23 +674,7 @@ export default function LayupScheduler() {
             >
               🧪 TEST ASSIGNMENT
             </button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                console.log('🚀 Resetting assignments, applying auto-schedule:', schedule);
-                const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-                schedule.forEach(item => {
-                  autoAssignments[item.orderId] = {
-                    moldId: item.moldId,
-                    date: item.scheduledDate.toISOString()
-                  };
-                });
-                setOrderAssignments(autoAssignments);
-              }}
-            >
-              Auto-Schedule Orders
-            </Button>
+
             <Button 
               variant="outline" 
               size="sm"

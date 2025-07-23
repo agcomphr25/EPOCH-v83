@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 23, 2025 - Auto-Schedule System Implementation (COMPLETED)**
+- ✅ **Complete Auto-Schedule System**: Built comprehensive auto-scheduling algorithm for Layup Scheduler based on mold availability and employee production rates
+- ✅ **Smart Order Distribution**: System optimally schedules 160+ orders across multiple days with proper mold assignment and capacity management
+- ✅ **Employee Capacity Integration**: Incorporates employee production rates and daily hours into scheduling calculations
+- ✅ **Unified Order Processing**: Handles both regular P1 orders and P1 Purchase Order items in single scheduling interface
+- ✅ **Purple Auto-Schedule Button**: Added distinctive purple button with lightning bolt icon for easy identification
+- ✅ **Duplicate Button Fix**: Removed duplicate "Auto-Schedule Orders" button to prevent user confusion
+
 **July 22, 2025 - System-Wide Display Name Implementation (COMPLETED)**
 - ✅ **Comprehensive Display Name Upgrade**: Implemented system-wide replacement of raw stock Feature and Stock Model values with proper Display Names throughout entire application
 - ✅ **AllOrdersList Enhancement**: Updated All Orders List to show stock model display names instead of raw modelId values for better user readability

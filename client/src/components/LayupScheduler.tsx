@@ -366,6 +366,15 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             </div>
           ) : null;
         })()}
+        
+
+        
+        {/* Show Due Date for Queue Cards (when not in calendar) */}
+        {!moldInfo && order.dueDate && (
+          <div className="text-xs opacity-70 mt-0.5 font-medium">
+            Due: {format(new Date(order.dueDate), 'MM/dd')}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -854,9 +863,7 @@ export default function LayupScheduler() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-xs bg-blue-100 p-2 rounded mb-2">
-                    Debug: {orders.length} total orders, {orders.filter(o => !orderAssignments[o.orderId]).length} unassigned
-                  </div>
+
                   {orders
                     .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
                     .map((order, index) => {
@@ -866,7 +873,8 @@ export default function LayupScheduler() {
                           key={order.orderId}
                           order={order}
                           priority={index + 1}
-                          totalOrdersInCell={orders.filter(o => !orderAssignments[o.orderId]).length}
+                          totalOrdersInCell={1} // Force consistent sizing for queue cards
+                          moldInfo={undefined} // No mold info in queue
                           getModelDisplayName={getModelDisplayName}
                           features={features}
                         />

@@ -3414,13 +3414,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const molds = await storage.getAllMolds();
       const employeeSettings = await storage.getAllEmployeeLayupSettings();
 
-      // Convert to scheduler format
+      // Convert to scheduler format with proper stock model mapping
       const layupOrders = orders.map((order: any) => ({
         orderId: order.orderId,
         orderDate: new Date(order.orderDate || order.created_at),
         priorityScore: order.priority || 100,
         customer: order.customerName || 'Unknown',
-        product: order.stockModelName || order.skuNumber || 'Unknown'
+        product: order.stockModelName || order.skuNumber || 'Unknown',
+        modelId: order.modelId || order.stockModelId, // Include model ID for mold matching
+        stockModelId: order.modelId || order.stockModelId // Ensure both fields are available
       }));
 
       const moldSettings = molds.map((mold: any) => ({
@@ -3428,7 +3430,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         modelName: mold.modelName,
         instanceNumber: mold.instanceNumber || 1,
         enabled: mold.enabled !== false,
-        multiplier: mold.dailyCapacity || 1
+        multiplier: mold.dailyCapacity || mold.multiplier || 1,
+        stockModels: mold.stockModels || [] // Include stock model compatibility for proper matching
       }));
 
       const empSettings = employeeSettings.map((emp: any) => ({

@@ -166,7 +166,7 @@ export function generateLayupSchedule(
       
       // First filter for compatible molds based on stock model
       const compatibleMolds = enabledMolds.filter(m => {
-        if (m.stockModels && Array.isArray(m.stockModels)) {
+        if (m.stockModels && Array.isArray(m.stockModels) && orderStockModel) {
           const isCompatible = m.stockModels.includes(orderStockModel);
           if (isCompatible) {
             console.log(`✅ Mold ${m.moldId} supports ${orderStockModel}`);

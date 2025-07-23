@@ -569,17 +569,38 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
+  // Generate date ranges based on view type
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
     if (viewType === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 });
       return eachDayOfInterval({ start, end: addDays(start, 6) });
     }
-    // month
+    // month - organize by weeks
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     return eachDayOfInterval({ start, end });
   }, [viewType, currentDate]);
+
+  // For week-based organization, group dates into weekly sections
+  const weekGroups = useMemo(() => {
+    if (viewType !== 'month') return null;
+    
+    const weeks: Date[][] = [];
+    let currentWeek: Date[] = [];
+    
+    dates.forEach((date, index) => {
+      currentWeek.push(date);
+      
+      // If it's Sunday (end of week) or last date, complete the week
+      if (date.getDay() === 0 || index === dates.length - 1) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    });
+    
+    return weeks;
+  }, [dates, viewType]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -1248,79 +1269,139 @@ export default function LayupScheduler() {
           </div>
         </div>
 
-          <div
-            className="grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-          >
-            {/* Header */}
-            {dates.map(date => (
-              <div
-                key={date.toISOString()}
-                className="p-3 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center font-semibold text-sm"
-              >
-                {format(date, 'MM/dd')}
-              </div>
-            ))}
+          {/* Week-based Calendar Layout */}
+          {viewType === 'week' || viewType === 'day' ? (
+            <div
+              className="grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+            >
+              {/* Header */}
+              {dates.map(date => (
+                <div
+                  key={date.toISOString()}
+                  className="p-3 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center font-semibold text-sm"
+                >
+                  {format(date, 'MM/dd')}
+                  <div className="text-xs text-gray-500 mt-1">
+                    {format(date, 'EEE')}
+                  </div>
+                </div>
+              ))}
 
-            {/* Rows for each mold */}
-            {molds.filter(m => m.enabled).map(mold => (
-              <React.Fragment key={mold.moldId}>
-                {dates.map(date => {
-                  const dateString = date.toISOString();
+              {/* Rows for each mold */}
+              {molds.filter(m => m.enabled).map(mold => (
+                <React.Fragment key={mold.moldId}>
+                  {dates.map(date => {
+                    const dateString = date.toISOString();
+                    
+                    // Get orders assigned to this mold/date combination
+                    const cellOrders = Object.entries(orderAssignments)
+                      .filter(([orderId, assignment]) => {
+                        const assignmentDateOnly = assignment.date.split('T')[0];
+                        const cellDateOnly = dateString.split('T')[0];
+                        return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                      })
+                      .map(([orderId]) => {
+                        const order = orders.find(o => o.orderId === orderId);
+                        return order;
+                      })
+                      .filter(order => order !== undefined) as any[];
+
+                    const dropId = `${mold.moldId}|${dateString}`;
+
+                    return (
+                      <DroppableCell
+                        key={dropId}
+                        moldId={mold.moldId}
+                        date={date}
+                        orders={cellOrders}
+                        onDrop={(orderId, moldId, date) => {
+                          // Handle drop (this is handled by DndContext now)
+                        }}
+                        moldInfo={{
+                          moldId: mold.moldId,
+                          instanceNumber: mold.instanceNumber
+                        }}
+                        getModelDisplayName={getModelDisplayName}
+                        features={features}
+                      />
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          ) : (
+            /* Month view - organized by weeks */
+            <div className="space-y-4">
+              {weekGroups?.map((week, weekIndex) => (
+                <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  {/* Week Header */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                      Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
+                    </h3>
+                  </div>
                   
-                  // Get orders assigned to this mold/date combination
-                  const cellOrders = Object.entries(orderAssignments)
-                    .filter(([orderId, assignment]) => {
-                      const assignmentDateOnly = assignment.date.split('T')[0]; // Get YYYY-MM-DD part only
-                      const cellDateOnly = dateString.split('T')[0];
-                      const matches = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                      
-                      if (matches) {
-                        console.log(`🎯 MATCH FOUND: Order ${orderId} assigned to ${assignment.moldId} on ${assignmentDateOnly} matches cell ${mold.moldId}|${cellDateOnly}`);
-                      }
-                      
-                      return matches;
-                    })
-                    .map(([orderId]) => {
-                      const order = orders.find(o => o.orderId === orderId);
-                      console.log(`📦 Finding order ${orderId}:`, order ? 'FOUND' : 'NOT FOUND', order);
-                      return order;
-                    })
-                    .filter(order => order !== undefined) as any[];
+                  {/* Week Calendar Grid */}
+                  <div
+                    className="grid gap-1"
+                    style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
+                  >
+                    {/* Day Headers */}
+                    {week.map(date => (
+                      <div
+                        key={date.toISOString()}
+                        className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
+                      >
+                        {format(date, 'EEE MM/dd')}
+                      </div>
+                    ))}
 
-                  // Enhanced debug logging for all cells
-                  console.log(`📅 Cell [${mold.moldId}|${format(date, 'MM/dd')}]:`, {
-                    dateString: dateString.substring(0, 10), // Show just date part
-                    assignmentsForThisMold: Object.entries(orderAssignments).filter(([_, assignment]) => assignment.moldId === mold.moldId),
-                    cellOrdersCount: cellOrders.length,
-                    cellOrderIds: cellOrders.map(o => o?.orderId),
-                    allOrders: orders?.map(o => o.orderId),
-                    allAssignments: Object.keys(orderAssignments)
-                  });
+                    {/* Mold Rows for this week */}
+                    {molds.filter(m => m.enabled).map(mold => (
+                      <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
+                        {week.map(date => {
+                          const dateString = date.toISOString();
+                          
+                          const cellOrders = Object.entries(orderAssignments)
+                            .filter(([orderId, assignment]) => {
+                              const assignmentDateOnly = assignment.date.split('T')[0];
+                              const cellDateOnly = dateString.split('T')[0];
+                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                            })
+                            .map(([orderId]) => {
+                              const order = orders.find(o => o.orderId === orderId);
+                              return order;
+                            })
+                            .filter(order => order !== undefined) as any[];
 
-                  const dropId = `${mold.moldId}|${dateString}`;
+                          const dropId = `${mold.moldId}|${dateString}`;
 
-                  return (
-                    <DroppableCell
-                      key={dropId}
-                      moldId={mold.moldId}
-                      date={date}
-                      orders={cellOrders}
-                      onDrop={(orderId, moldId, date) => {
-                        // Handle drop (this is handled by DndContext now)
-                      }}
-                      moldInfo={{
-                        moldId: mold.moldId,
-                        instanceNumber: mold.instanceNumber
-                      }}
-                      getModelDisplayName={getModelDisplayName}
-                      features={features}
-                    />
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
+                          return (
+                            <DroppableCell
+                              key={dropId}
+                              moldId={mold.moldId}
+                              date={date}
+                              orders={cellOrders}
+                              onDrop={(orderId, moldId, date) => {
+                                // Handle drop (this is handled by DndContext now)
+                              }}
+                              moldInfo={{
+                                moldId: mold.moldId,
+                                instanceNumber: mold.instanceNumber
+                              }}
+                              getModelDisplayName={getModelDisplayName}
+                              features={features}
+                            />
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
         </main>
       </div>

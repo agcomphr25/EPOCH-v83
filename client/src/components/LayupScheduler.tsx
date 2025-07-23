@@ -158,11 +158,48 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           ) : null;
         })()}
 
-        {/* Show Mold Name from mold configuration */}
+        {/* Show Mold Name with Action Length prefix from mold configuration */}
         {moldInfo && (
           <div className="text-xs font-semibold opacity-80 mt-0.5">
-            {moldInfo.moldId}
-            {moldInfo.instanceNumber && ` #${moldInfo.instanceNumber}`}
+            {(() => {
+              // Get action length prefix
+              const getActionPrefix = (orderFeatures: any) => {
+                if (!orderFeatures || !features) return '';
+                
+                const actionLengthValue = orderFeatures.action_length;
+                if (!actionLengthValue || actionLengthValue === 'none') return '';
+                
+                // Find the action-length feature definition in Feature Manager
+                const actionLengthFeature = features.find((f: any) => f.id === 'action-length');
+                
+                if (!actionLengthFeature || !actionLengthFeature.options) {
+                  // Fallback to abbreviations if Feature Manager data not available
+                  const displayMap: {[key: string]: string} = {
+                    'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+                    'long': 'LA', 'medium': 'MA', 'short': 'SA'
+                  };
+                  return displayMap[actionLengthValue] || actionLengthValue;
+                }
+                
+                // Use Feature Manager option label and convert to abbreviation
+                const option = actionLengthFeature.options.find((opt: any) => opt.value === actionLengthValue);
+                if (option && option.label) {
+                  const label = option.label;
+                  if (label.toLowerCase().includes('long')) return 'LA';
+                  if (label.toLowerCase().includes('medium')) return 'MA';
+                  if (label.toLowerCase().includes('short')) return 'SA';
+                  return label.substring(0, 2).toUpperCase(); // First 2 chars as fallback
+                }
+                
+                return actionLengthValue;
+              };
+
+              const actionPrefix = getActionPrefix(order.features);
+              const moldName = moldInfo.moldId;
+              const instanceText = moldInfo.instanceNumber ? ` #${moldInfo.instanceNumber}` : '';
+              
+              return actionPrefix ? `${actionPrefix} ${moldName}${instanceText}` : `${moldName}${instanceText}`;
+            })()}
           </div>
         )}
 

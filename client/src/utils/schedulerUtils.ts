@@ -119,7 +119,6 @@ export function generateLayupSchedule(
 
   // 6. Allocate orders with even weekly distribution
   const result: ScheduleResult[] = [];
-  let currentWeekStart = new Date();
   
   for (const order of sortedOrders) {
     let scheduled = false;
@@ -159,12 +158,37 @@ export function generateLayupSchedule(
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
       const hasEmpCapacity = currentEmployeeUsage < totalDailyEmployeeCapacity;
       
-      // Even distribution: prefer days/weeks with fewer assignments
-      const currentWeekLoad = weeklyDistribution[weekKey];
-      const avgWeeklyLoad = Object.values(weeklyDistribution).reduce((a, b) => a + b, 0) / Math.max(1, Object.keys(weeklyDistribution).length);
-      const weekNotOverloaded = currentWeekLoad <= avgWeeklyLoad + 2; // Allow some variance
+      // Calculate target daily load for even distribution across 4 work days
+      const idealDailyLoad = Math.ceil(totalDailyEmployeeCapacity * 0.75); // Use 75% of capacity per day to ensure spreading
+      const currentDailyLoad = currentEmployeeUsage;
+      const dayNotOverloaded = currentDailyLoad < idealDailyLoad;
+      
+      // More aggressive even distribution: check if we should skip to next day for better balance
+      let shouldScheduleHere = true;
+      
+      // If this day is getting heavily loaded, try to find a lighter day in the same week
+      if (currentDailyLoad >= idealDailyLoad * 0.8) { // 80% threshold
+        const currentWorkWeekDays = getWorkDaysInWeek(attemptDate);
+        const weekDayLoads = currentWorkWeekDays.map(day => {
+          const dayKey = toKey(day);
+          const dayUsage = dateEmployeeUsage[dayKey] ? Object.values(dateEmployeeUsage[dayKey]).reduce((a, b) => a + b, 0) : 0;
+          return { date: day, load: dayUsage };
+        });
+        
+        // Find the lightest loaded day in this week
+        const lightestDay = weekDayLoads.reduce((min, current) => 
+          current.load < min.load ? current : min
+        );
+        
+        // If there's a much lighter day available, skip to it
+        if (lightestDay.load < currentDailyLoad - 3) {
+          shouldScheduleHere = false;
+          attemptDate = new Date(lightestDay.date);
+          continue; // Skip to next iteration with the lighter day
+        }
+      }
 
-      if (hasMoldCapacity && hasEmpCapacity && moldSlot && weekNotOverloaded) {
+      if (hasMoldCapacity && hasEmpCapacity && moldSlot && dayNotOverloaded && shouldScheduleHere) {
         // Assign to mold slot
         dateMoldUsage[dateKey][moldSlot.moldId]++;
         dateMoldUsage[dateKey].totalUsed++;

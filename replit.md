@@ -19,6 +19,9 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Full-Width Calendar**: Calendar now utilizes entire screen width without sidebar constraints
 - ✅ **Mold Compatibility Matching**: Algorithm properly matches orders to compatible molds based on stock model associations
 - ✅ **Work Week Navigation**: Maintains Monday-Friday display format with automatic weekend skipping
+- ✅ **React Hooks Error Fixed**: Resolved critical hooks rule violation by removing conditional useMemo calls
+- ✅ **Test/Debug Button Cleanup**: Removed test assignment and clear schedule buttons with all related code per user request
+- ✅ **Employee Configuration Debugging**: Added comprehensive logging for employee save operations and production capacity calculations
 
 **July 23, 2025 - Enhanced Order Display Cards and Due Date Priority Scheduling (COMPLETED)**
 - ✅ **Material Type Indicators**: Added CF (Carbon Fiber) and FG (Fiberglass) badges on order cards for immediate material identification

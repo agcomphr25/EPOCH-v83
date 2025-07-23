@@ -980,67 +980,6 @@ export default function LayupScheduler() {
         <main className="flex-1 p-6 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
-            <button 
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-              onClick={(e) => {
-                console.log('🔧 BUTTON CLICKED - START');
-                
-                console.log('Current orderAssignments before:', orderAssignments);
-                console.log('Orders available:', orders?.length, orders?.map(o => o.orderId));
-                console.log('Molds available:', molds?.length, molds?.map(m => m.moldId));
-                
-                // Force assignment regardless of data checks
-                const testAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-                const today = new Date();
-                
-                if (orders && orders.length > 0 && molds && molds.length > 0) {
-                  const firstMold = molds.find(m => m.enabled);
-                  console.log('Using mold:', firstMold?.moldId);
-                  
-                  orders.forEach((order, index) => {
-                    if (firstMold) {
-                      const assignDate = new Date(today);
-                      assignDate.setDate(today.getDate() + index);
-                      testAssignments[order.orderId] = {
-                        moldId: firstMold.moldId,
-                        date: assignDate.toISOString()
-                      };
-                      console.log(`Assigning ${order.orderId} to ${firstMold.moldId} on ${assignDate.toDateString()}`);
-                    }
-                  });
-                } else {
-                  // Force a test assignment even with dummy data
-                  testAssignments['AG389'] = {
-                    moldId: 'Alpine Hunter-1',
-                    date: today.toISOString()
-                  };
-                  console.log('Force assigning AG389 to Alpine Hunter-1');
-                }
-                
-                console.log('Test assignments to set:', testAssignments);
-                setOrderAssignments(testAssignments);
-                
-                // Check assignments after setting
-                setTimeout(() => {
-                  console.log('Assignments after setState:', testAssignments);
-                }, 100);
-                
-                console.log('🔧 BUTTON CLICKED - END');
-              }}
-            >
-              🧪 TEST ASSIGNMENT
-            </button>
-
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                console.log('Clearing all assignments');
-                setOrderAssignments({});
-              }}
-            >
-              Clear Schedule
-            </Button>
             <Button 
               variant="default" 
               size="sm"

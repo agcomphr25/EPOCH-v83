@@ -10,13 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 23, 2025 - Debug and Auto-Schedule Button Cleanup (COMPLETED)**
+**July 23, 2025 - Auto-Schedule Function Restoration Without UI Buttons (COMPLETED)**
 - ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request
 - ✅ **Debug Report Button Removed**: Eliminated debug report functionality and button from calendar interface
-- ✅ **generateAutoSchedule Function Removed**: Completely removed the auto-scheduling algorithm function and all related code
-- ✅ **Clean Interface**: Layup Scheduler now displays clean calendar interface without automatic scheduling or debug functionality
-- ✅ **Code Cleanup**: Removed all debugging logs and references to auto-scheduling from component state
-- ✅ **Manual Scheduling Only**: System now relies entirely on manual drag-and-drop scheduling workflow
+- ✅ **Auto-Fill Function Restored**: Restored generateAutoSchedule function to automatically assign orders when data loads
+- ✅ **Background Auto-Assignment**: System automatically runs scheduling algorithm when orders, molds, and employees are loaded
+- ✅ **Clean Interface**: Calendar displays without manual buttons while maintaining automatic scheduling capability
+- ✅ **Hybrid Approach**: Combines automatic initial scheduling with manual drag-and-drop adjustment capability
 
 **July 23, 2025 - Layup Scheduler Layout and Algorithm Optimization (COMPLETED)**
 - ✅ **Order Queue Removed**: Hidden order queue sidebar per user request for full-width calendar view

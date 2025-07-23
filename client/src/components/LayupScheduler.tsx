@@ -498,6 +498,175 @@ export default function LayupScheduler() {
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
+  // Auto-schedule system using local data
+  const generateAutoSchedule = useCallback(() => {
+    if (!orders.length || !molds.length || !employees.length) {
+      console.log('❌ Cannot generate schedule: missing data');
+      return;
+    }
+
+    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
+    
+    // Get work days for current and next week
+    const getWorkDaysInWeek = (startDate: Date) => {
+      const workDays: Date[] = [];
+      let current = new Date(startDate);
+      
+      // Find Monday of current week
+      while (current.getDay() !== 1) {
+        current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
+      }
+      
+      // Add Monday through Thursday
+      for (let i = 0; i < 4; i++) {
+        workDays.push(new Date(current));
+        current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+      }
+      
+      return workDays;
+    };
+
+    const currentWeekDays = getWorkDaysInWeek(currentDate);
+    const nextWeekDays = getWorkDaysInWeek(new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000));
+    const allWorkDays = [...currentWeekDays, ...nextWeekDays];
+
+    // Sort orders by due date priority
+    const sortedOrders = [...orders].sort((a, b) => {
+      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+      return aDueDate - bDueDate;
+    });
+
+    // Find compatible molds for each order
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.stockModelId || order.modelId;
+      if (!modelId) {
+        console.log('⚠️ Order has no modelId:', order.orderId);
+        return [];
+      }
+      
+      const compatibleMolds = molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) {
+          console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
+          return true; // No restrictions
+        }
+        const isCompatible = mold.stockModels.includes(modelId);
+        if (!isCompatible) {
+          console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
+        }
+        return isCompatible;
+      });
+      
+      console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
+      return compatibleMolds;
+    };
+
+    // Track cell assignments to ensure ONE ORDER PER CELL
+    const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
+    const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
+
+    console.log('🎯 Starting single-card-per-cell assignment algorithm');
+    console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
+    
+    // Debug mold configurations
+    molds.filter(m => m.enabled).forEach(mold => {
+      console.log(`🔧 Mold ${mold.moldId}: ${mold.stockModels?.length || 0} stock models configured`);
+    });
+
+    // Calculate total daily employee capacity (orders per day)
+    const totalEmployeeCapacity = employees.reduce((total, emp) => {
+      return total + (emp.rate || 1.5) * (emp.hours || 8);
+    }, 0);
+
+    const maxOrdersPerDay = Math.floor(totalEmployeeCapacity); // Convert to whole orders
+    console.log(`👥 Employee capacity: ${totalEmployeeCapacity.toFixed(1)} → ${maxOrdersPerDay} orders per day max`);
+
+    // Track assignments per day and per mold
+    const dailyAssignments: { [dateKey: string]: number } = {};
+    const moldNextDate: { [moldId: string]: number } = {};
+    
+    // Initialize tracking
+    allWorkDays.forEach(date => {
+      const dateKey = date.toISOString().split('T')[0];
+      dailyAssignments[dateKey] = 0;
+    });
+
+    molds.filter(m => m.enabled).forEach(mold => {
+      moldNextDate[mold.moldId] = 0;
+    });
+
+    sortedOrders.forEach((order, index) => {
+      const compatibleMolds = getCompatibleMolds(order);
+      
+      if (compatibleMolds.length === 0) {
+        console.log('⚠️ No compatible molds for order:', order.orderId);
+        return;
+      }
+
+      let assigned = false;
+
+      // Find the mold with the earliest available slot (no gaps allowed)
+      let bestMold = null;
+      let bestDateIndex = Infinity;
+
+      for (const mold of compatibleMolds) {
+        const nextDateIndex = moldNextDate[mold.moldId] || 0;
+        
+        // Must fill sequentially - use the EXACT next date for this mold
+        if (nextDateIndex < allWorkDays.length && nextDateIndex < bestDateIndex) {
+          const targetDate = allWorkDays[nextDateIndex];
+          const dateKey = targetDate.toISOString().split('T')[0];
+          const currentDailyLoad = dailyAssignments[dateKey] || 0;
+
+          // Only assign if we haven't exceeded daily employee capacity
+          if (currentDailyLoad < maxOrdersPerDay) {
+            bestDateIndex = nextDateIndex;
+            bestMold = mold;
+          }
+        }
+      }
+
+      if (bestMold && bestDateIndex < allWorkDays.length) {
+        const targetDate = allWorkDays[bestDateIndex];
+        const dateKey = targetDate.toISOString().split('T')[0];
+        const cellKey = `${bestMold.moldId}-${dateKey}`;
+
+        // Assign order to this cell
+        newAssignments[order.orderId] = {
+          moldId: bestMold.moldId,
+          date: targetDate.toISOString()
+        };
+
+        // Update tracking
+        cellAssignments.add(cellKey);
+        dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
+        moldNextDate[bestMold.moldId] = bestDateIndex + 1;
+        
+        assigned = true;
+        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
+      }
+
+      if (!assigned) {
+        console.warn(`❌ Could not find available cell for order: ${order.orderId} - may exceed employee capacity`);
+      }
+    });
+
+    console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
+    console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
+    // Show final mold distribution to verify no gaps
+    console.log('🔧 Final mold distribution (next available date index):');
+    Object.entries(moldNextDate).forEach(([moldId, dateIndex]) => {
+      console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
+    });
+    
+    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
+      `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
+    ).slice(0, 8));
+    
+    setOrderAssignments(newAssignments);
+  }, [orders, molds, employees, currentDate]);
+
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
@@ -525,6 +694,14 @@ export default function LayupScheduler() {
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
 
+
+  // Auto-generate schedule when data is loaded
+  useEffect(() => {
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
+      console.log("🚀 Auto-running initial schedule generation");
+      setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
+    }
+  }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
 
 
 

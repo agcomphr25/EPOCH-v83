@@ -619,10 +619,27 @@ export class DatabaseStorage implements IStorage {
 
   async createStockModel(data: InsertStockModel): Promise<StockModel> {
     // Generate ID from name if not provided
-    const id = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const stockModelData = { ...data, id };
-    const [stockModel] = await db.insert(stockModels).values(stockModelData).returning();
-    return stockModel;
+    let baseId = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    let id = baseId;
+    let counter = 1;
+    
+    // Check for existing ID and increment if needed
+    while (true) {
+      try {
+        const stockModelData = { ...data, id };
+        const [stockModel] = await db.insert(stockModels).values(stockModelData).returning();
+        return stockModel;
+      } catch (error: any) {
+        // If duplicate key error, try with incremented suffix
+        if (error.code === '23505' && error.constraint === 'stock_models_pkey') {
+          counter++;
+          id = `${baseId}_${counter}`;
+          continue;
+        }
+        // If it's a different error, throw it
+        throw error;
+      }
+    }
   }
 
   async updateStockModel(id: string, data: Partial<InsertStockModel>): Promise<StockModel> {

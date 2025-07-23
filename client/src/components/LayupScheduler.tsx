@@ -1419,7 +1419,11 @@ export default function LayupScheduler() {
               variant="default"
               size="sm"
               onClick={() => {
-                console.log('🔄 Auto-schedule button clicked');
+                console.log('🔄 DEBUG: Auto-schedule button clicked');
+                console.log(`  • Orders: ${orders.length}`);
+                console.log(`  • Enabled molds: ${molds.filter(m => m.enabled).length}`);
+                console.log(`  • Employees: ${employees.length}`);
+                console.log(`  • Current assignments: ${Object.keys(orderAssignments).length}`);
                 generateAutoSchedule();
               }}
               disabled={!orders.length || !molds.filter(m => m.enabled).length || !employees.length}
@@ -1427,6 +1431,45 @@ export default function LayupScheduler() {
             >
               <Zap className="w-4 h-4 mr-2" />
               Auto-Schedule
+            </Button>
+
+            {/* Debug Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                console.log('🐛 COMPREHENSIVE DEBUG REPORT');
+                console.log('═══════════════════════════════');
+                console.log('📊 Current State Summary:');
+                console.log(`  • Orders loaded: ${orders.length}`);
+                console.log(`  • Molds loaded: ${molds.length} (${molds.filter(m => m.enabled).length} enabled)`);
+                console.log(`  • Employees loaded: ${employees.length}`);
+                console.log(`  • Order assignments: ${Object.keys(orderAssignments).length}`);
+                console.log('');
+                console.log('📦 Orders Detail:');
+                orders.slice(0, 3).forEach(order => {
+                  console.log(`  • ${order.orderId}: ${order.stockModelId || order.modelId || 'no-model'} (${order.source || 'regular'})`);
+                });
+                console.log('');
+                console.log('🔧 Molds Detail:');
+                molds.filter(m => m.enabled).forEach(mold => {
+                  console.log(`  • ${mold.moldId} (${mold.modelName}): ${mold.stockModels?.length || 0} compatible models`);
+                });
+                console.log('');
+                console.log('👥 Employees Detail:');
+                employees.forEach(emp => {
+                  console.log(`  • ${emp.employeeId}: ${emp.rate} rate, ${emp.hours}h/day`);
+                });
+                console.log('');
+                console.log('📅 Assignment Details:');
+                Object.entries(orderAssignments).slice(0, 5).forEach(([orderId, assignment]) => {
+                  console.log(`  • ${orderId} → ${assignment.moldId} on ${assignment.date.split('T')[0]}`);
+                });
+                console.log('═══════════════════════════════');
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs"
+            >
+              Debug Report
             </Button>
 
             <Button
@@ -1530,12 +1573,22 @@ export default function LayupScheduler() {
               ))}
 
               {/* Rows for each mold - Only show molds with assigned orders */}
-              {React.useMemo(() => {
+              {(() => {
                 // Get molds that have orders assigned to them
                 const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
                 const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                 
-                console.log(`📊 Showing ${activeMolds.length} molds with orders out of ${molds.filter(m => m.enabled).length} enabled molds`);
+                console.log(`📊 DEBUG: Calendar Display Summary`);
+                console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
+                console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
+                console.log(`  • Used mold IDs:`, Array.from(usedMoldIds));
+                console.log(`  • Active molds with orders: ${activeMolds.length}`);
+                console.log(`  • Active mold details:`, activeMolds.map(m => ({ moldId: m.moldId, modelName: m.modelName })));
+                
+                if (activeMolds.length === 0 && Object.keys(orderAssignments).length > 0) {
+                  console.log(`❌ MISMATCH: Have ${Object.keys(orderAssignments).length} assignments but no active molds!`);
+                  console.log(`  • Assignment details:`, Object.entries(orderAssignments).slice(0, 5));
+                }
                 
                 return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>
@@ -1577,7 +1630,7 @@ export default function LayupScheduler() {
                   })}
                 </React.Fragment>
                 ));
-              }, [orderAssignments, molds, dates, orders, getModelDisplayName, features])}
+              })()}
             </div>
           ) : (
             /* Month view - organized by weeks */
@@ -1607,7 +1660,7 @@ export default function LayupScheduler() {
                     ))}
 
                     {/* Mold Rows for this week - Only show molds with assigned orders */}
-                    {React.useMemo(() => {
+                    {(() => {
                       // Get molds that have orders assigned to them
                       const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
                       const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
@@ -1651,7 +1704,7 @@ export default function LayupScheduler() {
                         })}
                       </React.Fragment>
                       ));
-                    }, [orderAssignments, molds, week, orders, getModelDisplayName, features, weekIndex])}
+                    })()}
                   </div>
                 </div>
               ))}

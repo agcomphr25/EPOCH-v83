@@ -330,6 +330,8 @@ export default function LayupScheduler() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
+  const [bulkMoldCount, setBulkMoldCount] = useState(1);
+  const [isBulkMode, setIsBulkMode] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -464,16 +466,35 @@ export default function LayupScheduler() {
   const handleAddMold = async () => {
     if (!newMold.moldName.trim()) return;
     
-    const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
-    await saveMold({
-      moldId,
-      modelName: newMold.moldName,
-      stockModels: newMold.stockModels,
-      instanceNumber: newMold.instanceNumber,
-      multiplier: newMold.multiplier,
-      enabled: true
-    });
+    if (isBulkMode && bulkMoldCount > 1) {
+      // Create multiple molds with different instance numbers
+      for (let i = 1; i <= bulkMoldCount; i++) {
+        const moldId = `${newMold.moldName}-${i}`;
+        await saveMold({
+          moldId,
+          modelName: newMold.moldName,
+          stockModels: newMold.stockModels,
+          instanceNumber: i,
+          multiplier: newMold.multiplier,
+          enabled: true
+        });
+      }
+    } else {
+      // Create single mold
+      const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
+      await saveMold({
+        moldId,
+        modelName: newMold.moldName,
+        stockModels: newMold.stockModels,
+        instanceNumber: newMold.instanceNumber,
+        multiplier: newMold.multiplier,
+        enabled: true
+      });
+    }
+    
     setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
+    setBulkMoldCount(1);
+    setIsBulkMode(false);
   };
 
   const handleAddEmployee = async () => {
@@ -723,19 +744,55 @@ export default function LayupScheduler() {
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Instance Number</label>
-                          <Input
-                            type="number"
-                            placeholder="1"
-                            value={newMold.instanceNumber}
-                            min={1}
-                            onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
+                      {/* Bulk Creation Option */}
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="bulk-mode"
+                            checked={isBulkMode}
+                            onCheckedChange={(checked) => setIsBulkMode(!!checked)}
                           />
-                          <p className="text-xs text-gray-500 mt-1">If you have multiple molds of the same model (e.g., M001-1, M001-2)</p>
+                          <label 
+                            htmlFor="bulk-mode" 
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            Create multiple molds at once
+                          </label>
                         </div>
-                        <div>
+                        
+                        {isBulkMode && (
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Number of Molds</label>
+                            <Input
+                              type="number"
+                              placeholder="14"
+                              value={bulkMoldCount}
+                              min={1}
+                              max={50}
+                              onChange={(e) => setBulkMoldCount(+e.target.value)}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {!isBulkMode && (
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Instance Number</label>
+                            <Input
+                              type="number"
+                              placeholder="1"
+                              value={newMold.instanceNumber}
+                              min={1}
+                              onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">For single molds with custom instance numbers</p>
+                          </div>
+                        )}
+                        <div className={isBulkMode ? 'col-span-2' : ''}>
                           <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
                           <Input
                             type="number"
@@ -744,7 +801,7 @@ export default function LayupScheduler() {
                             min={1}
                             onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
                           />
-                          <p className="text-xs text-gray-500 mt-1">Units this mold can produce per day</p>
+                          <p className="text-xs text-gray-500 mt-1">Units each mold can produce per day</p>
                         </div>
                       </div>
                     </div>
@@ -754,7 +811,7 @@ export default function LayupScheduler() {
                       size="sm"
                       disabled={!newMold.moldName.trim()}
                     >
-                      Add Mold
+                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
                     </Button>
                   </div>
 

@@ -105,14 +105,30 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
-        {/* Show stock model display name */}
+        {/* Show stock model display name with material type */}
         {(() => {
           const modelId = order.stockModelId || order.modelId; // P1 orders use stockModelId, regular orders use modelId
-          return getModelDisplayName && modelId ? (
+          if (!getModelDisplayName || !modelId) return null;
+          
+          const displayName = getModelDisplayName(modelId);
+          
+          // Determine material type from model ID
+          const getMaterialType = (id: string) => {
+            if (id.startsWith('cf_')) return 'CF';
+            if (id.startsWith('fg_')) return 'FG';
+            if (id.includes('carbon')) return 'CF';
+            if (id.includes('fiberglass')) return 'FG';
+            return null;
+          };
+          
+          const materialType = getMaterialType(modelId);
+          
+          return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {getModelDisplayName(modelId)}
+              {materialType && <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">{materialType}</span>}
+              {displayName}
             </div>
-          ) : null;
+          );
         })()}
         
         {/* Show Action Length (Action Inlet) Display */}
@@ -251,6 +267,44 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           return lopDisplay ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               LOP: {lopDisplay}
+            </div>
+          ) : null;
+        })()}
+        
+        {/* Show Heavy Fill if selected */}
+        {(() => {
+          const getHeavyFillDisplay = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+            
+            // Check if heavy_fill is in the other_options array
+            const otherOptions = orderFeatures.other_options;
+            if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
+              return 'Heavy Fill';
+            }
+            
+            // Fallback: check direct field for backward compatibility
+            const heavyFillValue = orderFeatures.heavy_fill || 
+                                   orderFeatures.heavyFill || 
+                                   orderFeatures.heavy_fill_option ||
+                                   orderFeatures['heavy-fill'];
+            
+            if (heavyFillValue === 'true' || 
+                heavyFillValue === true || 
+                heavyFillValue === 'yes' ||
+                heavyFillValue === 'heavy_fill') {
+              return 'Heavy Fill';
+            }
+            
+            return null;
+          };
+          
+          const heavyFillDisplay = getHeavyFillDisplay(order.features);
+          
+          return heavyFillDisplay ? (
+            <div className="text-xs mt-0.5">
+              <span className="bg-orange-200 dark:bg-orange-700 px-1 rounded text-xs font-bold">
+                {heavyFillDisplay}
+              </span>
             </div>
           ) : null;
         })()}

@@ -166,14 +166,24 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           </div>
         )}
 
-        {/* Show LOP (Length of Pull) if different than standard */}
+        {/* Show LOP (Length of Pull) only if there's an extra length specified */}
         {(() => {
           const getLOPDisplay = (orderFeatures: any) => {
             if (!orderFeatures || !features) return null;
             
             // Look for length_of_pull field (NOT action_length)
             const lopValue = orderFeatures.length_of_pull;
-            if (!lopValue || lopValue === 'none' || lopValue === 'standard') return null;
+            
+            // Don't show if empty, none, standard, or any variation indicating no extra length
+            if (!lopValue || 
+                lopValue === 'none' || 
+                lopValue === 'standard' || 
+                lopValue === '' || 
+                lopValue === 'no_extra_length' ||
+                lopValue === '0' ||
+                lopValue === 'normal') {
+              return null;
+            }
             
             // Find the length_of_pull feature definition in Feature Manager
             const lopFeature = features.find((f: any) => f.id === 'length_of_pull');
@@ -186,7 +196,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               }
             }
             
-            // Return raw value as fallback
+            // Return raw value as fallback only if it indicates extra length
             return lopValue;
           };
           

@@ -43,11 +43,58 @@ export interface ScheduleResult {
   }[];
 }
 
+// Function to generate daily Mesa Universal orders (8 per work day)
+function generateDailyMesaUniversalOrders(startDate: Date, weeks: number = 4): LayupOrder[] {
+  const mesaOrders: LayupOrder[] = [];
+  let current = new Date(startDate);
+  
+  // Find the start of the current work week (Monday)
+  while (current.getDay() !== 1) {
+    current = addDays(current, -1);
+  }
+  
+  const isWorkDay = (date: Date) => {
+    const dayOfWeek = date.getDay();
+    return dayOfWeek >= 1 && dayOfWeek <= 4; // Monday-Thursday
+  };
+  
+  for (let week = 0; week < weeks; week++) {
+    for (let day = 0; day < 7; day++) {
+      const workDate = addDays(current, week * 7 + day);
+      
+      if (isWorkDay(workDate)) {
+        // Generate 8 Mesa Universal orders for this work day
+        for (let i = 1; i <= 8; i++) {
+          mesaOrders.push({
+            orderId: `MESA-${workDate.toISOString().slice(0, 10)}-${i.toString().padStart(2, '0')}`,
+            orderDate: workDate,
+            dueDate: workDate,
+            priorityScore: 5, // Standard priority
+            customer: 'Mesa Universal Production',
+            product: 'Mesa Universal',
+            modelId: 'mesa_universal',
+            stockModelId: 'mesa_universal'
+          });
+        }
+      }
+    }
+  }
+  
+  console.log(`🏭 Generated ${mesaOrders.length} Mesa Universal orders for ${weeks} weeks`);
+  return mesaOrders;
+}
+
 export function generateLayupSchedule(
   orders: LayupOrder[],
   moldSettings: MoldSettings[],
   employeeSettings: EmployeeSettings[]
 ): ScheduleResult[] {
+  // 0. Generate and add Mesa Universal orders to the schedule (8 per work day)
+  const mesaUniversalOrders = generateDailyMesaUniversalOrders(new Date(), 6); // 6 weeks of Mesa Universal orders
+  const allOrders = [...orders, ...mesaUniversalOrders];
+  
+  console.log(`📋 Total orders to schedule: ${orders.length} regular + ${mesaUniversalOrders.length} Mesa Universal = ${allOrders.length}`);
+
   // 1. Compute capacities with 10-hour work days
   const enabledMolds = moldSettings.filter(m => m.enabled);
   const totalDailyMoldCapacity = enabledMolds.reduce((sum, m) => sum + m.multiplier, 0);
@@ -61,7 +108,7 @@ export function generateLayupSchedule(
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
   // 2. Sort orders by due date priority (earliest due dates first), with high priority override
-  const sortedOrders = [...orders].sort((a, b) => {
+  const sortedOrders = [...allOrders].sort((a, b) => {
     // First check for high priority flag override
     const aHighPriority = a.priorityScore && a.priorityScore > 8; // High priority threshold
     const bHighPriority = b.priorityScore && b.priorityScore > 8;
@@ -195,9 +242,9 @@ export function generateLayupSchedule(
 
       const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
-      // Set realistic daily targets: 12-15 orders per day
-      const targetMinOrders = 12;
-      const targetMaxOrders = 15;
+      // Set realistic daily targets: 12-15 regular orders + 8 Mesa Universal = 20-23 total per day
+      const targetMinOrders = 20; // Includes 8 Mesa Universal
+      const targetMaxOrders = 23; // Includes 8 Mesa Universal
       const currentDailyLoad = currentEmployeeUsage;
       
       // Allow scheduling up to target max, but still respect employee individual capacity

@@ -303,13 +303,16 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             
             // If still no action length found, apply comprehensive fallback logic
             if (!actionLengthValue) {
-              // Skip Tikka orders completely - they shouldn't show action length
-              const isTikka = modelId && (modelId.toLowerCase().includes('tikka') || 
-                              (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
-                              (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka')));
+              // Skip orders that don't need action length display
+              const skipActionLength = modelId && (
+                modelId.toLowerCase().includes('tikka') || 
+                modelId.toLowerCase().includes('mesa_universal') ||
+                (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
+                (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka'))
+              );
               
-              if (isTikka) {
-                console.log(`⏭️ Skipping Tikka order ${order.orderId} - no action length needed`);
+              if (skipActionLength) {
+                console.log(`⏭️ Skipping ${modelId} order ${order.orderId} - no action length needed`);
                 return null;
               }
               

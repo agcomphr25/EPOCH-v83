@@ -39,6 +39,38 @@ export default function StockModelManager() {
   const queryClient = useQueryClient();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Function to ensure cf_prairie_varmint exists
+  const ensureCfPrairieVarmint = async () => {
+    try {
+      const response = await apiRequest('/api/stock-models/ensure-cf-prairie-varmint', {
+        method: 'POST'
+      });
+      console.log("Ensure cf_prairie_varmint response:", response);
+      
+      // Force refresh the stock models list
+      queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
+      
+      if (response.created) {
+        toast({
+          title: "Success",
+          description: "CF Prairie Varmint stock model created successfully",
+        });
+      } else if (response.exists) {
+        toast({
+          title: "Info", 
+          description: "CF Prairie Varmint already exists",
+        });
+      }
+    } catch (error) {
+      console.error("Error ensuring cf_prairie_varmint:", error);
+      toast({
+        title: "Error",
+        description: "Failed to ensure CF Prairie Varmint exists",
+        variant: "destructive",
+      });
+    }
+  };
   const [editingModel, setEditingModel] = useState<StockModel | null>(null);
   const [modelForm, setModelForm] = useState<StockModelFormData>({
     name: '',
@@ -208,13 +240,23 @@ export default function StockModelManager() {
           <h2 className="text-2xl font-bold">Stock Model Manager</h2>
           <p className="text-gray-600">Manage your stock models, prices, and descriptions</p>
         </div>
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Stock Model
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] })} 
+            variant="outline"
+          >
+            Refresh List
+          </Button>
+          <Button onClick={ensureCfPrairieVarmint} variant="outline">
+            Ensure CF Prairie Varmint
+          </Button>
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}></div>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Stock Model
+              </Button>
+            </DialogTrigger></div>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Stock Model</DialogTitle>

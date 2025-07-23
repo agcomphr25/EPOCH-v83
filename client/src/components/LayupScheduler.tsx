@@ -555,12 +555,26 @@ export default function LayupScheduler() {
 
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
 
-    // Track next available date for each mold to ensure no skipped cells
+    // Calculate total daily employee capacity (orders per day)
+    const totalEmployeeCapacity = employees.reduce((total, emp) => {
+      return total + (emp.rate || 1.5) * (emp.hours || 8);
+    }, 0);
+
+    const maxOrdersPerDay = Math.floor(totalEmployeeCapacity); // Convert to whole orders
+    console.log(`👥 Employee capacity: ${totalEmployeeCapacity.toFixed(1)} → ${maxOrdersPerDay} orders per day max`);
+
+    // Track assignments per day and per mold
+    const dailyAssignments: { [dateKey: string]: number } = {};
     const moldNextDate: { [moldId: string]: number } = {};
     
-    // Initialize each mold's next date to start of work days
+    // Initialize tracking
+    allWorkDays.forEach(date => {
+      const dateKey = date.toISOString().split('T')[0];
+      dailyAssignments[dateKey] = 0;
+    });
+
     molds.filter(m => m.enabled).forEach(mold => {
-      moldNextDate[mold.moldId] = 0; // Start with first work day
+      moldNextDate[mold.moldId] = 0;
     });
 
     sortedOrders.forEach((order, index) => {
@@ -573,20 +587,29 @@ export default function LayupScheduler() {
 
       let assigned = false;
 
-      // Find the mold with the earliest next available date
+      // Find best assignment considering employee capacity and sequential filling
       let bestMold = null;
-      let earliestDateIndex = Infinity;
+      let bestDateIndex = Infinity;
 
       for (const mold of compatibleMolds) {
         const nextDateIndex = moldNextDate[mold.moldId] || 0;
-        if (nextDateIndex < earliestDateIndex && nextDateIndex < allWorkDays.length) {
-          earliestDateIndex = nextDateIndex;
-          bestMold = mold;
+        
+        // Check if this date is within bounds and under capacity
+        if (nextDateIndex < allWorkDays.length) {
+          const targetDate = allWorkDays[nextDateIndex];
+          const dateKey = targetDate.toISOString().split('T')[0];
+          const currentDailyLoad = dailyAssignments[dateKey] || 0;
+
+          // Only assign if we haven't exceeded daily employee capacity
+          if (currentDailyLoad < maxOrdersPerDay && nextDateIndex < bestDateIndex) {
+            bestDateIndex = nextDateIndex;
+            bestMold = mold;
+          }
         }
       }
 
-      if (bestMold && earliestDateIndex < allWorkDays.length) {
-        const targetDate = allWorkDays[earliestDateIndex];
+      if (bestMold && bestDateIndex < allWorkDays.length) {
+        const targetDate = allWorkDays[bestDateIndex];
         const dateKey = targetDate.toISOString().split('T')[0];
         const cellKey = `${bestMold.moldId}-${dateKey}`;
 
@@ -596,24 +619,25 @@ export default function LayupScheduler() {
           date: targetDate.toISOString()
         };
 
-        // Mark this cell as occupied
+        // Update tracking
         cellAssignments.add(cellKey);
-        
-        // Advance this mold's next available date
-        moldNextDate[bestMold.moldId] = earliestDateIndex + 1;
+        dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
+        moldNextDate[bestMold.moldId] = bestDateIndex + 1;
         
         assigned = true;
-        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (no gaps)`);
+        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
       }
 
       if (!assigned) {
-        console.warn(`❌ Could not find available cell for order: ${order.orderId}`);
+        console.warn(`❌ Could not find available cell for order: ${order.orderId} - may exceed employee capacity`);
       }
     });
 
     console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
     console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
-    console.log('📊 Assignment details:', Array.from(cellAssignments).slice(0, 10)); // Show first 10
+    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
+      `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
+    ).slice(0, 8)); // Show first 8 days
     
     setOrderAssignments(newAssignments);
   }, [orders, molds, employees, currentDate]);

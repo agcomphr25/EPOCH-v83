@@ -2915,11 +2915,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Unified Layup Queue endpoint - combines regular orders and P1 PO orders
   app.get("/api/layup-queue", async (req, res) => {
     try {
-      // Get regular orders from main database (existing logic)
+      // Get regular orders from main database - all finalized orders need layup processing
       const regularOrders = await storage.getAllOrderDrafts();
       const layupOrders = regularOrders.filter(order => 
-        order.status === 'FINALIZED' && 
-        ((order as any).department === 'Layup' || (order as any).currentDepartment === 'Layup')
+        order.status === 'FINALIZED'
+        // All finalized orders go through layup department, no need to filter by department
       );
       
       // Add debug logging for features

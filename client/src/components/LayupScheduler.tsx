@@ -1529,8 +1529,15 @@ export default function LayupScheduler() {
                 </div>
               ))}
 
-              {/* Rows for each mold */}
-              {molds.filter(m => m.enabled).map(mold => (
+              {/* Rows for each mold - Only show molds with assigned orders */}
+              {React.useMemo(() => {
+                // Get molds that have orders assigned to them
+                const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
+                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                
+                console.log(`📊 Showing ${activeMolds.length} molds with orders out of ${molds.filter(m => m.enabled).length} enabled molds`);
+                
+                return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>
                   {dates.map(date => {
                     const dateString = date.toISOString();
@@ -1569,7 +1576,8 @@ export default function LayupScheduler() {
                     );
                   })}
                 </React.Fragment>
-              ))}
+                ));
+              }, [orderAssignments, molds, dates, orders, getModelDisplayName, features])}
             </div>
           ) : (
             /* Month view - organized by weeks */
@@ -1598,8 +1606,13 @@ export default function LayupScheduler() {
                       </div>
                     ))}
 
-                    {/* Mold Rows for this week */}
-                    {molds.filter(m => m.enabled).map(mold => (
+                    {/* Mold Rows for this week - Only show molds with assigned orders */}
+                    {React.useMemo(() => {
+                      // Get molds that have orders assigned to them
+                      const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
+                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                      
+                      return activeMolds.map(mold => (
                       <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
                         {week.map(date => {
                           const dateString = date.toISOString();
@@ -1637,7 +1650,8 @@ export default function LayupScheduler() {
                           );
                         })}
                       </React.Fragment>
-                    ))}
+                      ));
+                    }, [orderAssignments, molds, week, orders, getModelDisplayName, features, weekIndex])}
                   </div>
                 </div>
               ))}

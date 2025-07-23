@@ -549,13 +549,11 @@ export default function LayupScheduler() {
       });
     };
 
-    // Track daily assignments per mold
-    const dailyMoldUsage: { [dateKey: string]: { [moldId: string]: number } } = {};
+    // Track cell assignments to ensure ONE ORDER PER CELL
+    const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
-    // Target 12-15 orders per day, distribute evenly
-    const targetOrdersPerDay = 14;
-    let currentDayIndex = 0;
+    console.log('🎯 Starting single-card-per-cell assignment algorithm');
 
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
@@ -565,40 +563,44 @@ export default function LayupScheduler() {
         return;
       }
 
-      // Cycle through work days to distribute evenly
-      const targetDate = allWorkDays[currentDayIndex % allWorkDays.length];
-      const dateKey = targetDate.toISOString().split('T')[0];
+      let assigned = false;
 
-      // Initialize daily usage tracking
-      if (!dailyMoldUsage[dateKey]) {
-        dailyMoldUsage[dateKey] = {};
+      // Try each work day until we find an available cell
+      for (const targetDate of allWorkDays) {
+        if (assigned) break;
+        
+        const dateKey = targetDate.toISOString().split('T')[0];
+
+        // Try each compatible mold for this date
+        for (const mold of compatibleMolds) {
+          const cellKey = `${mold.moldId}-${dateKey}`;
+          
+          // Check if this cell is available (one order per cell)
+          if (!cellAssignments.has(cellKey)) {
+            // Assign order to this cell
+            newAssignments[order.orderId] = {
+              moldId: mold.moldId,
+              date: targetDate.toISOString()
+            };
+
+            // Mark this cell as occupied
+            cellAssignments.add(cellKey);
+            assigned = true;
+            
+            console.log(`✅ Assigned ${order.orderId} to cell ${cellKey} (${format(targetDate, 'MM/dd')})`);
+            break;
+          }
+        }
       }
 
-      // Find best mold (least used on this day)
-      const bestMold = compatibleMolds.reduce((best, mold) => {
-        const currentUsage = dailyMoldUsage[dateKey][mold.moldId] || 0;
-        const bestUsage = dailyMoldUsage[dateKey][best.moldId] || 0;
-        return currentUsage < bestUsage ? mold : best;
-      });
-
-      // Assign order to mold and date
-      newAssignments[order.orderId] = {
-        moldId: bestMold.moldId,
-        date: targetDate.toISOString()
-      };
-
-      // Update usage tracking
-      dailyMoldUsage[dateKey][bestMold.moldId] = (dailyMoldUsage[dateKey][bestMold.moldId] || 0) + 1;
-
-      // Move to next day when we hit target orders per day
-      const totalOrdersOnThisDay = Object.values(dailyMoldUsage[dateKey]).reduce((sum, count) => sum + count, 0);
-      if (totalOrdersOnThisDay >= targetOrdersPerDay) {
-        currentDayIndex++;
+      if (!assigned) {
+        console.warn(`❌ Could not find available cell for order: ${order.orderId}`);
       }
     });
 
-    console.log('📅 Generated schedule assignments:', newAssignments);
-    console.log('📊 Daily distribution:', dailyMoldUsage);
+    console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
+    console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
+    console.log('📊 Assignment details:', Array.from(cellAssignments).slice(0, 10)); // Show first 10
     
     setOrderAssignments(newAssignments);
   }, [orders, molds, employees, currentDate]);

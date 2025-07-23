@@ -540,13 +540,26 @@ export default function LayupScheduler() {
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
       const modelId = order.stockModelId || order.modelId;
-      if (!modelId) return [];
+      if (!modelId) {
+        console.log('⚠️ Order has no modelId:', order.orderId);
+        return [];
+      }
       
-      return molds.filter(mold => {
+      const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
-        if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
-        return mold.stockModels.includes(modelId);
+        if (!mold.stockModels || mold.stockModels.length === 0) {
+          console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
+          return true; // No restrictions
+        }
+        const isCompatible = mold.stockModels.includes(modelId);
+        if (!isCompatible) {
+          console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
+        }
+        return isCompatible;
       });
+      
+      console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
+      return compatibleMolds;
     };
 
     // Track cell assignments to ensure ONE ORDER PER CELL
@@ -554,6 +567,12 @@ export default function LayupScheduler() {
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
+    console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
+    
+    // Debug mold configurations
+    molds.filter(m => m.enabled).forEach(mold => {
+      console.log(`🔧 Mold ${mold.moldId}: ${mold.stockModels?.length || 0} stock models configured`);
+    });
 
     // Calculate total daily employee capacity (orders per day)
     const totalEmployeeCapacity = employees.reduce((total, emp) => {

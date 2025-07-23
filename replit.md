@@ -10,18 +10,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 23, 2025 - Enhanced Order Display Cards and Auto-Schedule System (COMPLETED)**
+**July 23, 2025 - Enhanced Order Display Cards and Due Date Priority Scheduling (COMPLETED)**
 - ✅ **Material Type Indicators**: Added CF (Carbon Fiber) and FG (Fiberglass) badges on order cards for immediate material identification
 - ✅ **Heavy Fill Detection**: Orange badges display when Heavy Fill option is selected in other_options array
 - ✅ **APR Action Type Display**: APR orders now show specific action type (Anti-X Hunter, APR, etc.) instead of action length
+- ✅ **Due Date Priority System**: Algorithm now prioritizes orders by due date (earliest first) with high priority score override capability
+- ✅ **Daily Mold Capacity Reset**: Each mold's capacity resets daily with detailed debugging logs for capacity tracking
 - ✅ **Complete Auto-Schedule System**: Built comprehensive auto-scheduling algorithm for Layup Scheduler based on mold availability and employee production rates
-- ✅ **Order ID Priority System**: Algorithm now prioritizes orders by Order ID (AG001 = highest priority, AG999 = lowest priority) instead of priority scores
 - ✅ **4-Day Work Week**: Scheduling restricted to Monday-Thursday work days only, automatically skipping weekends and Fridays
 - ✅ **12-15 Orders Per Day Target**: Updated algorithm to target exactly 12-15 orders per day with proper load balancing
 - ✅ **Even Weekly Distribution**: Orders spread evenly across work weeks to prevent overloading specific days
 - ✅ **Smart Capacity Management**: Balances mold capacity, employee capacity, and weekly distribution for optimal scheduling
 - ✅ **Purple Auto-Schedule Button**: Added distinctive purple button with lightning bolt icon for easy identification
-- ✅ **Duplicate Button Fix**: Removed duplicate "Auto-Schedule Orders" button to prevent user confusion
 
 **July 22, 2025 - System-Wide Display Name Implementation (COMPLETED)**
 - ✅ **Comprehensive Display Name Upgrade**: Implemented system-wide replacement of raw stock Feature and Stock Model values with proper Display Names throughout entire application

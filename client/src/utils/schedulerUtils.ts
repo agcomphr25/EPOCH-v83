@@ -9,7 +9,8 @@ const addDays = (date: Date, days: number) => {
 export interface LayupOrder {
   orderId: string;
   orderDate: Date;
-  priorityScore: number;
+  dueDate?: Date;
+  priorityScore?: number;
   customer: string;
   product: string;
 }
@@ -56,17 +57,21 @@ export function generateLayupSchedule(
   
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
-  // 2. Sort orders by Order ID priority (AG001 = highest priority, AG999 = lowest)
+  // 2. Sort orders by due date priority (earliest due dates first), with high priority override
   const sortedOrders = [...orders].sort((a, b) => {
-    // Extract numeric part from order ID (AG001 -> 1, AG123 -> 123)
-    const getOrderNumber = (orderId: string) => {
-      const match = orderId.match(/\d+/);
-      return match ? parseInt(match[0], 10) : 0;
-    };
+    // First check for high priority flag override
+    const aHighPriority = a.priorityScore && a.priorityScore > 8; // High priority threshold
+    const bHighPriority = b.priorityScore && b.priorityScore > 8;
     
-    const aNum = getOrderNumber(a.orderId);
-    const bNum = getOrderNumber(b.orderId);
-    return aNum - bNum; // Lower order numbers = higher priority
+    if (aHighPriority && !bHighPriority) return -1; // A has high priority, comes first
+    if (!aHighPriority && bHighPriority) return 1;  // B has high priority, comes first
+    
+    // If both or neither have high priority, sort by due date
+    const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+    const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+    
+    // Earlier due dates = higher priority
+    return aDueDate - bDueDate;
   });
 
   // 3. Helper functions for 4-day work week (Monday-Thursday)

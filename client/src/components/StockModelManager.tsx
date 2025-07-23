@@ -174,16 +174,8 @@ export default function StockModelManager() {
 
   const onCreateSubmit = (data: StockModelFormData) => {
     // Map form data to match server schema
-    const submitData = {
-      name: data.name,
-      displayName: data.displayName,
-      price: data.price,
-      description: data.description || null,
-      isActive: data.isActive,
-      sortOrder: data.sortOrder
-    };
-    console.log("Submitting stock model data:", submitData);
-    createMutation.mutate(submitData);
+    console.log("Submitting stock model data:", data);
+    createMutation.mutate(data);
   };
 
   const onEditSubmit = (data: StockModelFormData) => {
@@ -250,13 +242,13 @@ export default function StockModelManager() {
           <Button onClick={ensureCfPrairieVarmint} variant="outline">
             Ensure CF Prairie Varmint
           </Button>
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}></div>
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Stock Model
               </Button>
-            </DialogTrigger></div>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Stock Model</DialogTitle>
@@ -342,6 +334,7 @@ export default function StockModelManager() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4">

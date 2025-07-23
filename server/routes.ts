@@ -283,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Concurrent test error:", error);
-      res.status(500).json({ error: "Test failed", details: error.message });
+      res.status(500).json({ error: "Test failed", details: (error as any).message });
     }
   });
 
@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Cleanup error:", error);
-      res.status(500).json({ error: "Cleanup failed", details: error.message });
+      res.status(500).json({ error: "Cleanup failed", details: (error as any).message });
     }
   });
 
@@ -307,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(orders);
     } catch (error) {
       console.error('Error retrieving orders:', error);
-      res.status(500).json({ error: "Failed to retrieve orders", details: error.message });
+      res.status(500).json({ error: "Failed to retrieve orders", details: (error as any).message });
     }
   });
 
@@ -587,13 +587,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Order draft creation error:", error);
-      console.error("Error details:", error.message);
+      console.error("Error details:", (error as any).message);
       
       let errorMessage = "Invalid order draft data";
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.issues && error.issues.length > 0) {
-        errorMessage = error.issues[0].message;
+      if ((error as any).message) {
+        errorMessage = (error as any).message;
+      } else if ((error as any).issues && (error as any).issues.length > 0) {
+        errorMessage = (error as any).issues[0].message;
       }
       
       res.status(400).json({ error: errorMessage });
@@ -1952,7 +1952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("SmartyStreets validation error:", error);
       res.status(500).json({ 
         error: "Failed to validate address with SmartyStreets",
-        details: error.message 
+        details: (error as any).message 
       });
     }
   });
@@ -2007,7 +2007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("SmartyStreets autocomplete error:", error);
       res.status(500).json({ 
         error: "Failed to get address suggestions",
-        details: error.message 
+        details: (error as any).message 
       });
     }
   });
@@ -2946,7 +2946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const regularOrders = await storage.getAllOrderDrafts();
       const layupOrders = regularOrders.filter(order => 
         order.status === 'FINALIZED' && 
-        (order.department === 'Layup' || order.currentDepartment === 'Layup')
+        ((order as any).department === 'Layup' || (order as any).currentDepartment === 'Layup')
       );
 
       // Get P1 Purchase Orders with stock model items
@@ -3009,15 +3009,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...order, 
           source: 'main_orders',
           // Ensure features object is included for action length display
-          features: order.features || {},
-          modelId: order.stockModel
+          features: (order as any).features || {},
+          modelId: (order as any).stockModel
         })),
         ...p1LayupOrders.map(order => ({
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
           modelId: order.stockModelId
         }))
-      ].sort((a, b) => (a.priorityScore || 50) - (b.priorityScore || 50));
+      ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
       res.json(combinedOrders);
     } catch (error) {

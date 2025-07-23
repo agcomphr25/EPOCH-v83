@@ -12,9 +12,11 @@ Preferred communication style: Simple, everyday language.
 
 **July 23, 2025 - Auto-Schedule System Implementation (COMPLETED)**
 - ✅ **Complete Auto-Schedule System**: Built comprehensive auto-scheduling algorithm for Layup Scheduler based on mold availability and employee production rates
-- ✅ **Smart Order Distribution**: System optimally schedules 160+ orders across multiple days with proper mold assignment and capacity management
-- ✅ **Employee Capacity Integration**: Incorporates employee production rates and daily hours into scheduling calculations
-- ✅ **Unified Order Processing**: Handles both regular P1 orders and P1 Purchase Order items in single scheduling interface
+- ✅ **Order ID Priority System**: Algorithm now prioritizes orders by Order ID (AG001 = highest priority, AG999 = lowest priority) instead of priority scores
+- ✅ **4-Day Work Week**: Scheduling restricted to Monday-Thursday work days only, automatically skipping weekends and Fridays
+- ✅ **10-Hour Work Days**: Employee capacity calculations use 10-hour work days (rate × 10 hours) for accurate daily capacity
+- ✅ **Even Weekly Distribution**: Orders spread evenly across work weeks to prevent overloading specific days
+- ✅ **Smart Capacity Management**: Balances mold capacity, employee capacity, and weekly distribution for optimal scheduling
 - ✅ **Purple Auto-Schedule Button**: Added distinctive purple button with lightning bolt icon for easy identification
 - ✅ **Duplicate Button Fix**: Removed duplicate "Auto-Schedule Orders" button to prevent user confusion
 

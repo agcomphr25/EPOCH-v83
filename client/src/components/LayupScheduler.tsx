@@ -219,7 +219,17 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           
           // For non-APR orders, show action length
           const getActionInletDisplayNonAPR = (orderFeatures: any) => {
-            if (!orderFeatures) return null;
+            if (!orderFeatures) {
+              console.log(`❌ No features for order ${order.orderId}`);
+              return null;
+            }
+            
+            console.log(`🔍 Checking action length for ${order.orderId}:`, {
+              action_length: orderFeatures.action_length,
+              action_inlet: orderFeatures.action_inlet,
+              action: orderFeatures.action,
+              modelId: modelId
+            });
             
             // Look for action_length field first
             let actionLengthValue = orderFeatures.action_length;
@@ -260,6 +270,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 };
                 
                 actionLengthValue = actionToLengthMap[actionField];
+                console.log(`🎯 Mapped ${actionField} to ${actionLengthValue}`);
               }
             }
             
@@ -272,7 +283,10 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               }
             }
             
-            if (!actionLengthValue || actionLengthValue === 'none') return null;
+            if (!actionLengthValue || actionLengthValue === 'none') {
+              console.log(`❌ No action length found for ${order.orderId}`);
+              return null;
+            }
             
             // Simple abbreviation mapping without depending on features API
             const displayMap: {[key: string]: string} = {
@@ -281,7 +295,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
             };
             
-            return displayMap[actionLengthValue] || actionLengthValue;
+            const result = displayMap[actionLengthValue] || actionLengthValue;
+            console.log(`✅ Final action length for ${order.orderId}: ${result}`);
+            return result;
           };
           
           const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);

@@ -136,10 +136,13 @@ export function generateLayupSchedule(
       const dateKey = toKey(attemptDate);
       const weekKey = getWeekKey(attemptDate);
       
-      // Initialize tracking if needed
+      // Initialize tracking if needed - each day starts fresh with 0 usage for all molds
       if (!dateMoldUsage[dateKey]) {
         dateMoldUsage[dateKey] = { totalUsed: 0 };
         enabledMolds.forEach(m => dateMoldUsage[dateKey][m.moldId] = 0);
+        
+        // Debug logging for mold capacity reset
+        console.log(`🔄 New day ${dateKey}: Initialized ${enabledMolds.length} molds with fresh capacity`);
       }
       if (!dateEmployeeUsage[dateKey]) {
         dateEmployeeUsage[dateKey] = {};
@@ -149,10 +152,18 @@ export function generateLayupSchedule(
         weeklyDistribution[weekKey] = 0;
       }
 
-      // Check if this day/week has capacity and isn't overloaded
-      const moldSlot = enabledMolds.find(m =>
-        dateMoldUsage[dateKey][m.moldId] < m.multiplier
-      );
+      // Check if this day has capacity - each mold can handle up to its multiplier value per day
+      const moldSlot = enabledMolds.find(m => {
+        const currentUsage = dateMoldUsage[dateKey][m.moldId];
+        const availableCapacity = m.multiplier - currentUsage;
+        
+        // Debug logging for mold availability
+        if (availableCapacity > 0) {
+          console.log(`🔧 Mold ${m.moldId} available on ${dateKey}: ${currentUsage}/${m.multiplier} used`);
+        }
+        
+        return currentUsage < m.multiplier;
+      });
 
       const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
@@ -191,10 +202,13 @@ export function generateLayupSchedule(
       }
 
       if (hasMoldCapacity && hasEmpCapacity && moldSlot && dayNotOverloaded && shouldScheduleHere) {
-        // Assign to mold slot
+        // Assign to mold slot - increment usage for this specific day only
         dateMoldUsage[dateKey][moldSlot.moldId]++;
         dateMoldUsage[dateKey].totalUsed++;
         weeklyDistribution[weekKey]++;
+        
+        // Debug logging for successful assignment
+        console.log(`✅ Assigned ${order.orderId} to mold ${moldSlot.moldId} on ${dateKey} (now ${dateMoldUsage[dateKey][moldSlot.moldId]}/${moldSlot.multiplier})`);
 
         // Assign to employee with most available capacity
         const availableEmployee = employeeSettings

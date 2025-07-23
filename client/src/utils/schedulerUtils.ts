@@ -13,6 +13,8 @@ export interface LayupOrder {
   priorityScore?: number;
   customer: string;
   product: string;
+  modelId?: string;
+  stockModelId?: string;
 }
 
 export interface MoldSettings {
@@ -21,6 +23,7 @@ export interface MoldSettings {
   instanceNumber: number;
   enabled: boolean;
   multiplier: number;
+  stockModels?: string[]; // supported stock model IDs
 }
 
 export interface EmployeeSettings {
@@ -157,18 +160,38 @@ export function generateLayupSchedule(
         weeklyDistribution[weekKey] = 0;
       }
 
-      // Check if this day has capacity - each mold can handle up to its multiplier value per day
-      const moldSlot = enabledMolds.find(m => {
+      // Check if this day has capacity - find compatible molds based on stock model
+      const orderStockModel = order.stockModelId || order.modelId;
+      console.log(`🔍 Finding molds for order ${order.orderId} with stock model: ${orderStockModel}`);
+      
+      // First filter for compatible molds based on stock model
+      const compatibleMolds = enabledMolds.filter(m => {
+        if (m.stockModels && Array.isArray(m.stockModels)) {
+          const isCompatible = m.stockModels.includes(orderStockModel);
+          if (isCompatible) {
+            console.log(`✅ Mold ${m.moldId} supports ${orderStockModel}`);
+          }
+          return isCompatible;
+        }
+        return false;
+      });
+      
+      // Then find available capacity among compatible molds
+      const moldSlot = compatibleMolds.find(m => {
         const currentUsage = dateMoldUsage[dateKey][m.moldId];
         const availableCapacity = m.multiplier - currentUsage;
         
         // Debug logging for mold availability
         if (availableCapacity > 0) {
-          console.log(`🔧 Mold ${m.moldId} available on ${dateKey}: ${currentUsage}/${m.multiplier} used`);
+          console.log(`🔧 Compatible mold ${m.moldId} available on ${dateKey}: ${currentUsage}/${m.multiplier} used`);
         }
         
         return currentUsage < m.multiplier;
       });
+      
+      if (!moldSlot && compatibleMolds.length === 0) {
+        console.warn(`⚠️ No compatible molds found for stock model ${orderStockModel} on order ${order.orderId}`);
+      }
 
       const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
@@ -222,6 +245,29 @@ export function generateLayupSchedule(
 
         if (availableEmployee) {
           dateEmployeeUsage[dateKey][availableEmployee.employeeId]++;
+
+          // Check FG stock limiting (3-5 FG stocks per day)
+          const orderStockModel = order.stockModelId || order.modelId;
+          const isFGStock = orderStockModel && (orderStockModel.startsWith('fg_') || orderStockModel.includes('fiberglass'));
+          
+          if (isFGStock) {
+            // Count existing FG orders for this day
+            const existingFGCount = result.filter(r => {
+              const sameDate = toKey(r.scheduledDate) === dateKey;
+              const orderModel = orders.find(o => o.orderId === r.orderId)?.stockModelId || orders.find(o => o.orderId === r.orderId)?.modelId;
+              return sameDate && orderModel && (orderModel.startsWith('fg_') || orderModel.includes('fiberglass'));
+            }).length;
+            
+            if (existingFGCount >= 5) {
+              console.log(`🚫 FG limit reached for ${dateKey}: ${existingFGCount}/5 FG stocks already scheduled`);
+              // Skip to next day for FG orders
+              attemptDate = getNextWorkDay(attemptDate);
+              maxAttempts--;
+              continue;
+            } else {
+              console.log(`✅ FG stock ${order.orderId} scheduled: ${existingFGCount + 1}/5 for ${dateKey}`);
+            }
+          }
 
           result.push({
             orderId: order.orderId,

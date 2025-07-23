@@ -468,11 +468,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stock-models", async (req, res) => {
     try {
+      console.log("Stock model creation request body:", req.body);
       const result = insertStockModelSchema.parse(req.body);
+      console.log("Parsed stock model data:", result);
       const stockModel = await storage.createStockModel(result);
       res.json(stockModel);
     } catch (error) {
-      res.status(400).json({ error: "Invalid stock model data" });
+      console.error("Stock model creation error:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      res.status(400).json({ 
+        error: "Invalid stock model data", 
+        details: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 

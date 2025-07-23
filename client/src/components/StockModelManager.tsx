@@ -57,10 +57,13 @@ export default function StockModelManager() {
 
   // Create stock model mutation
   const createMutation = useMutation({
-    mutationFn: (data: StockModelFormData) => apiRequest('/api/stock-models', {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: (data: StockModelFormData) => {
+      console.log("Sending stock model data:", data);
+      return apiRequest('/api/stock-models', {
+        method: 'POST',
+        body: data,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/stock-models'] });
       toast({
@@ -71,9 +74,11 @@ export default function StockModelManager() {
       resetForm();
     },
     onError: (error: any) => {
+      console.error("Stock model creation error:", error);
+      const errorMessage = error.response?.data?.details || error.response?.data?.error || "Failed to create stock model";
       toast({
         title: "Error",
-        description: error.response?.data?.error || "Failed to create stock model",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -136,7 +141,17 @@ export default function StockModelManager() {
   };
 
   const onCreateSubmit = (data: StockModelFormData) => {
-    createMutation.mutate(data);
+    // Map form data to match server schema
+    const submitData = {
+      name: data.name,
+      displayName: data.displayName,
+      price: data.price,
+      description: data.description || null,
+      isActive: data.isActive,
+      sortOrder: data.sortOrder
+    };
+    console.log("Submitting stock model data:", submitData);
+    createMutation.mutate(submitData);
   };
 
   const onEditSubmit = (data: StockModelFormData) => {

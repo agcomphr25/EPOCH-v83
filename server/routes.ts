@@ -2983,7 +2983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: 'main_orders',
           // Ensure features object is included for action length display
           features: (order as any).features || {},
-          modelId: (order as any).stockModel
+          modelId: (order as any).modelId || (order as any).stockModel
         })),
         ...p1LayupOrders.map(order => ({
           ...order,

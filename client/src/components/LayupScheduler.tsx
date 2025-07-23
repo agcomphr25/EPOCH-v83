@@ -172,11 +172,30 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           }
           
           // For non-APR orders, show action length
-          const getActionInletDisplay = (orderFeatures: any) => {
+          const getActionInletDisplayNonAPR = (orderFeatures: any) => {
             if (!orderFeatures || !features) return null;
             
-            // Look specifically for action_length field (NOT length_of_pull)
-            const actionLengthValue = orderFeatures.action_length;
+            // Look for action_length field first
+            let actionLengthValue = orderFeatures.action_length;
+            
+            // If action_length is empty, try to derive from action_inlet
+            if (!actionLengthValue && orderFeatures.action_inlet) {
+              const actionInlet = orderFeatures.action_inlet;
+              
+              // Map common action inlets to action lengths
+              const inletToLengthMap: {[key: string]: string} = {
+                'anti_ten_hunter_def': 'SA', // Short action
+                'rem_700_short': 'SA',
+                'rem_700_long': 'LA', 
+                'tikka_short': 'SA',
+                'tikka_long': 'LA',
+                'savage_short': 'SA',
+                'savage_long': 'LA'
+              };
+              
+              actionLengthValue = inletToLengthMap[actionInlet];
+            }
+            
             if (!actionLengthValue || actionLengthValue === 'none') return null;
             
             // Find the action-length feature definition in Feature Manager
@@ -204,13 +223,14 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             return actionLengthValue;
           };
           
-          const actionInletDisplay = getActionInletDisplay(order.features);
+          const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
           
-          return actionInletDisplay ? (
+          return actionInletDisplayNonAPR ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
-              Action: {actionInletDisplay}
+              Action: {actionInletDisplayNonAPR}
             </div>
           ) : null;
+
         })()}
 
         {/* Show Mold Name with Action Length prefix from mold configuration */}

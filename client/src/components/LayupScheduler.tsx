@@ -91,6 +91,40 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
   };
 
   const sizing = getCardSizing(totalOrdersInCell || 1);
+  
+  // Determine material type for styling
+  const getMaterialType = (modelId: string) => {
+    if (modelId.startsWith('cf_')) return 'CF';
+    if (modelId.startsWith('fg_')) return 'FG';
+    if (modelId.includes('carbon')) return 'CF';
+    if (modelId.includes('fiberglass')) return 'FG';
+    return null;
+  };
+  
+  const modelId = order.stockModelId || order.modelId;
+  const materialType = getMaterialType(modelId || '');
+  
+  // Determine card styling based on source and material
+  const getCardStyling = () => {
+    if (order.source === 'p1_purchase_order') {
+      return {
+        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
+        text: 'text-green-800 dark:text-green-200'
+      };
+    } else if (materialType === 'FG') {
+      return {
+        bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
+        text: 'text-white dark:text-blue-100'
+      };
+    } else {
+      return {
+        bg: 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600',
+        text: 'text-blue-800 dark:text-blue-200'
+      };
+    }
+  };
+  
+  const cardStyling = getCardStyling();
 
   return (
     <div
@@ -98,30 +132,18 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       style={style}
       {...attributes}
       {...listeners}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${order.source === 'p1_purchase_order' ? 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600' : 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600'} rounded-lg shadow-md cursor-grab transition-all duration-200`}
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md cursor-grab transition-all duration-200`}
     >
-      <div className={`${order.source === 'p1_purchase_order' ? 'text-green-800 dark:text-green-200' : 'text-blue-800 dark:text-blue-200'} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
+      <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
         {/* Show stock model display name with material type */}
         {(() => {
-          const modelId = order.stockModelId || order.modelId; // P1 orders use stockModelId, regular orders use modelId
           if (!getModelDisplayName || !modelId) return null;
           
           const displayName = getModelDisplayName(modelId);
-          
-          // Determine material type from model ID
-          const getMaterialType = (id: string) => {
-            if (id.startsWith('cf_')) return 'CF';
-            if (id.startsWith('fg_')) return 'FG';
-            if (id.includes('carbon')) return 'CF';
-            if (id.includes('fiberglass')) return 'FG';
-            return null;
-          };
-          
-          const materialType = getMaterialType(modelId);
           
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">

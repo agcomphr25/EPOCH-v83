@@ -465,21 +465,110 @@ export default function LayupScheduler() {
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Auto-schedule mutation
-  const autoScheduleMutation = useMutation({
-    mutationFn: () => apiRequest('/api/layup-schedule/auto-generate', { method: 'POST' }),
-    onSuccess: (data) => {
-      console.log('✅ Auto-schedule generated:', data);
-      // Clear existing assignments and reload data
-      setOrderAssignments({});
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-queue'] });
-      reloadOrders();
-    },
-    onError: (error) => {
-      console.error('❌ Auto-schedule failed:', error);
+  // Auto-schedule system using local data
+  const generateAutoSchedule = useCallback(() => {
+    if (!orders.length || !molds.length || !employees.length) {
+      console.log('❌ Cannot generate schedule: missing data');
+      return;
     }
-  });
+
+    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
+    
+    // Get work days for current and next week
+    const getWorkDaysInWeek = (startDate: Date) => {
+      const workDays: Date[] = [];
+      let current = new Date(startDate);
+      
+      // Find Monday of current week
+      while (current.getDay() !== 1) {
+        current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
+      }
+      
+      // Add Monday through Thursday
+      for (let i = 0; i < 4; i++) {
+        workDays.push(new Date(current));
+        current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+      }
+      
+      return workDays;
+    };
+
+    const currentWeekDays = getWorkDaysInWeek(currentDate);
+    const nextWeekDays = getWorkDaysInWeek(new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000));
+    const allWorkDays = [...currentWeekDays, ...nextWeekDays];
+
+    // Sort orders by due date priority
+    const sortedOrders = [...orders].sort((a, b) => {
+      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+      return aDueDate - bDueDate;
+    });
+
+    // Find compatible molds for each order
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.modelId || order.stockModelId;
+      if (!modelId) return [];
+      
+      return molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
+        return mold.stockModels.includes(modelId);
+      });
+    };
+
+    // Track daily assignments per mold
+    const dailyMoldUsage: { [dateKey: string]: { [moldId: string]: number } } = {};
+    const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
+
+    // Target 12-15 orders per day, distribute evenly
+    const targetOrdersPerDay = 14;
+    let currentDayIndex = 0;
+
+    sortedOrders.forEach((order, index) => {
+      const compatibleMolds = getCompatibleMolds(order);
+      
+      if (compatibleMolds.length === 0) {
+        console.log('⚠️ No compatible molds for order:', order.orderId);
+        return;
+      }
+
+      // Cycle through work days to distribute evenly
+      const targetDate = allWorkDays[currentDayIndex % allWorkDays.length];
+      const dateKey = targetDate.toISOString().split('T')[0];
+
+      // Initialize daily usage tracking
+      if (!dailyMoldUsage[dateKey]) {
+        dailyMoldUsage[dateKey] = {};
+      }
+
+      // Find best mold (least used on this day)
+      const bestMold = compatibleMolds.reduce((best, mold) => {
+        const currentUsage = dailyMoldUsage[dateKey][mold.moldId] || 0;
+        const bestUsage = dailyMoldUsage[dateKey][best.moldId] || 0;
+        return currentUsage < bestUsage ? mold : best;
+      });
+
+      // Assign order to mold and date
+      newAssignments[order.orderId] = {
+        moldId: bestMold.moldId,
+        date: targetDate.toISOString()
+      };
+
+      // Update usage tracking
+      dailyMoldUsage[dateKey][bestMold.moldId] = (dailyMoldUsage[dateKey][bestMold.moldId] || 0) + 1;
+
+      // Move to next day when we hit target orders per day
+      const totalOrdersOnThisDay = Object.values(dailyMoldUsage[dateKey]).reduce((sum, count) => sum + count, 0);
+      if (totalOrdersOnThisDay >= targetOrdersPerDay) {
+        currentDayIndex++;
+      }
+    });
+
+    console.log('📅 Generated schedule assignments:', newAssignments);
+    console.log('📊 Daily distribution:', dailyMoldUsage);
+    
+    setOrderAssignments(newAssignments);
+  }, [orders, molds, employees, currentDate]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -507,6 +596,14 @@ export default function LayupScheduler() {
   // Debug unassigned orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
+
+  // Auto-generate schedule when data is loaded
+  useEffect(() => {
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
+      console.log('🚀 Auto-running initial schedule generation');
+      setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
+    }
+  }, [orders.length, molds.length, employees.length]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1234,12 +1331,15 @@ export default function LayupScheduler() {
             <Button
               variant="default"
               size="sm"
-              onClick={() => autoScheduleMutation.mutate()}
-              disabled={autoScheduleMutation.isPending || !orders.length || !molds.filter(m => m.enabled).length || !employees.length}
+              onClick={() => {
+                console.log('🔄 Auto-schedule button clicked');
+                generateAutoSchedule();
+              }}
+              disabled={!orders.length || !molds.filter(m => m.enabled).length || !employees.length}
               className="bg-purple-600 hover:bg-purple-700 text-white"
             >
               <Zap className="w-4 h-4 mr-2" />
-              {autoScheduleMutation.isPending ? 'Scheduling...' : 'Auto-Schedule'}
+              Auto-Schedule
             </Button>
 
             <Button
@@ -1305,6 +1405,21 @@ export default function LayupScheduler() {
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
+            
+            {/* Quick Next Week Button */}
+            {viewType === 'week' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
+                  setCurrentDate(nextWeekStart);
+                }}
+                className="ml-2 text-xs"
+              >
+                Next Week
+              </Button>
+            )}
           </div>
         </div>
 

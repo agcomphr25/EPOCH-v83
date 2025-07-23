@@ -329,7 +329,7 @@ export default function LayupScheduler() {
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [newMold, setNewMold] = useState({ modelName: '', instanceNumber: 1, multiplier: 2 });
+  const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -462,17 +462,18 @@ export default function LayupScheduler() {
   };
 
   const handleAddMold = async () => {
-    if (!newMold.modelName.trim()) return;
+    if (!newMold.moldName.trim()) return;
     
-    const moldId = `${newMold.modelName}-${newMold.instanceNumber}`;
+    const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
     await saveMold({
       moldId,
-      modelName: newMold.modelName,
+      modelName: newMold.moldName,
+      stockModels: newMold.stockModels,
       instanceNumber: newMold.instanceNumber,
       multiplier: newMold.multiplier,
       enabled: true
     });
-    setNewMold({ modelName: '', instanceNumber: 1, multiplier: 2 });
+    setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
   };
 
   const handleAddEmployee = async () => {
@@ -681,25 +682,46 @@ export default function LayupScheduler() {
                     </div>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium mb-1 block">Stock Model</label>
-                        <Select
-                          value={newMold.modelName}
-                          onValueChange={(value) => setNewMold(prev => ({...prev, modelName: value}))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a stock model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {stockModels
-                              .filter((model: any) => !model.id.toLowerCase().startsWith('cf') && !model.id.toLowerCase().startsWith('fg'))
-                              .map((model: any) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  {model.displayName || model.name || model.id}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-gray-500 mt-1">Choose from available stock models</p>
+                        <label className="text-sm font-medium mb-1 block">Mold Name</label>
+                        <Input
+                          placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
+                          value={newMold.moldName}
+                          onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Associated Stock Models</label>
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                          {stockModels.map((model: any) => (
+                            <div key={model.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`stock-${model.id}`}
+                                checked={newMold.stockModels.includes(model.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setNewMold(prev => ({
+                                      ...prev,
+                                      stockModels: [...prev.stockModels, model.id]
+                                    }));
+                                  } else {
+                                    setNewMold(prev => ({
+                                      ...prev,
+                                      stockModels: prev.stockModels.filter(id => id !== model.id)
+                                    }));
+                                  }
+                                }}
+                              />
+                              <label 
+                                htmlFor={`stock-${model.id}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                {model.displayName || model.name || model.id}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -730,7 +752,7 @@ export default function LayupScheduler() {
                       onClick={handleAddMold} 
                       className="mt-3" 
                       size="sm"
-                      disabled={!newMold.modelName.trim()}
+                      disabled={!newMold.moldName.trim()}
                     >
                       Add Mold
                     </Button>

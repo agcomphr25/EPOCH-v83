@@ -744,6 +744,7 @@ export const molds = pgTable("molds", {
   id: serial("id").primaryKey(),
   moldId: text("mold_id").notNull().unique(),
   modelName: text("model_name").notNull(),
+  stockModels: text("stock_models").array().default([]), // Array of associated stock model IDs
   instanceNumber: integer("instance_number").notNull(),
   enabled: boolean("enabled").default(true),
   multiplier: integer("multiplier").default(1).notNull(), // Daily capacity multiplier

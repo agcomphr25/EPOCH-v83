@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { generateLayupSchedule } from '../utils/schedulerUtils';
 import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
@@ -136,7 +136,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           const modelId = order.stockModelId || order.modelId;
           const isAPR = modelId && modelId.toLowerCase().includes('apr');
           
-          // For APR orders, show action type instead of action length
+          // For APR orders, show both action type AND action length
           if (isAPR) {
             const getAPRActionDisplay = (orderFeatures: any) => {
               if (!orderFeatures) return null;
@@ -148,7 +148,28 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 actionType = orderFeatures.action;
               }
               
-              if (!actionType || actionType === 'none') return null;
+              // Get action length for APR orders
+              let actionLength = orderFeatures.action_length;
+              if (!actionLength || actionLength === 'none') {
+                // Try to derive from action_inlet
+                if (actionType && actionType.includes('short')) actionLength = 'SA';
+                else if (actionType && actionType.includes('long')) actionLength = 'LA';
+                else actionLength = 'SA'; // Default for APR
+              }
+              
+              // Convert action length to abbreviation
+              const lengthMap: {[key: string]: string} = {
+                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+                'long': 'LA', 'medium': 'MA', 'short': 'SA',
+                'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+              };
+              
+              const actionLengthAbbr = lengthMap[actionLength] || actionLength;
+              
+              if (!actionType || actionType === 'none') {
+                // Show just action length if no action type
+                return actionLengthAbbr;
+              }
               
               // Convert common action types to readable format
               const actionMap: {[key: string]: string} = {
@@ -159,14 +180,17 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 'savage': 'Savage'
               };
               
-              return actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+              const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+              
+              // Combine action length and action type for APR orders
+              return `${actionLengthAbbr} ${actionDisplay}`;
             };
             
             const aprActionDisplay = getAPRActionDisplay(order.features);
             
             return aprActionDisplay ? (
               <div className="text-xs opacity-80 mt-0.5 font-medium">
-                Action: {aprActionDisplay}
+                {aprActionDisplay}
               </div>
             ) : null;
           }
@@ -515,7 +539,7 @@ export default function LayupScheduler() {
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
-      const modelId = order.modelId || order.stockModelId;
+      const modelId = order.stockModelId || order.modelId;
       if (!modelId) return [];
       
       return molds.filter(mold => {
@@ -606,13 +630,15 @@ export default function LayupScheduler() {
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
 
+
+
   // Auto-generate schedule when data is loaded
   useEffect(() => {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log('🚀 Auto-running initial schedule generation');
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
-  }, [orders.length, molds.length, employees.length]);
+  }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -837,57 +863,37 @@ export default function LayupScheduler() {
   }
 
   return (
+    <div className="h-full">
+      {/* Navigation Header */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
+          </div>
+          <div className="flex items-center space-x-4 text-sm">
+            <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
+              <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
+              <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
     <DndContext 
       sensors={sensors} 
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full">
-        {/* Sidebar for Order Queue */}
-        <aside className="w-80 p-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Order Queue</CardTitle>
-                <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                  {orders.filter(o => !orderAssignments[o.orderId]).length} orders
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {orders.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <div className="text-sm">No orders in queue</div>
-                  <div className="text-xs mt-1">Orders will appear here when available</div>
-                  <div className="text-xs mt-1 bg-yellow-100 p-2 rounded">Debug: Loading={ordersLoading.toString()}</div>
-                </div>
-              ) : (
-                <div className="space-y-2">
+      <div className="flex h-full">{/* Order queue removed per user request */}
 
-                  {orders
-                    .filter(order => !orderAssignments[order.orderId]) // Only show unassigned orders in queue
-                    .map((order, index) => {
-                      console.log('🃏 Rendering order card:', order.orderId, order);
-                      return (
-                        <DraggableOrderItem
-                          key={order.orderId}
-                          order={order}
-                          priority={index + 1}
-                          totalOrdersInCell={1} // Force consistent sizing for queue cards
-                          moldInfo={undefined} // No mold info in queue
-                          getModelDisplayName={getModelDisplayName}
-                          features={features}
-                        />
-                      );
-                    })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </aside>
-
-        {/* Calendar */}
-        <main className="flex-1 p-4 overflow-auto">
+        {/* Calendar - Full Width */}
+        <main className="flex-1 p-6 overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-2">
             <button 
@@ -950,6 +956,15 @@ export default function LayupScheduler() {
               }}
             >
               Clear Schedule
+            </Button>
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={generateAutoSchedule}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Auto-Schedule
             </Button>
             <Dialog>
               <DialogTrigger asChild>
@@ -1576,5 +1591,6 @@ export default function LayupScheduler() {
         ) : null}
       </DragOverlay>
     </DndContext>
+    </div>
   );
 }

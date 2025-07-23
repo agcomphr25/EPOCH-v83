@@ -10,6 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 23, 2025 - Layup Scheduler Layout and Algorithm Optimization (COMPLETED)**
+- ✅ **Order Queue Removed**: Hidden order queue sidebar per user request for full-width calendar view
+- ✅ **Navigation Header Added**: Comprehensive status bar showing Orders count, Active Molds, and Employees with color-coded badges
+- ✅ **Enhanced Auto-Scheduling Algorithm**: Rebuilt algorithm with proper Monday-Thursday work week distribution and 12-15 orders per day targeting
+- ✅ **APR Action Length Enhancement**: APR orders now display both action length abbreviation (LA/MA/SA) AND action type (e.g., "SA Anti-X Hunter")
+- ✅ **Due Date Priority System**: Orders sorted by due date with earliest orders scheduled first for optimal workflow
+- ✅ **Full-Width Calendar**: Calendar now utilizes entire screen width without sidebar constraints
+- ✅ **Mold Compatibility Matching**: Algorithm properly matches orders to compatible molds based on stock model associations
+- ✅ **Work Week Navigation**: Maintains Monday-Friday display format with automatic weekend skipping
+
 **July 23, 2025 - Enhanced Order Display Cards and Due Date Priority Scheduling (COMPLETED)**
 - ✅ **Material Type Indicators**: Added CF (Carbon Fiber) and FG (Fiberglass) badges on order cards for immediate material identification
 - ✅ **Heavy Fill Detection**: Orange badges display when Heavy Fill option is selected in other_options array

@@ -104,7 +104,17 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
         </div>
-        {/* Show Action Inlet (Action Length) Display Name under Order ID */}
+        {/* Show stock model display name */}
+        {(() => {
+          const modelId = order.stockModelId || order.modelId; // P1 orders use stockModelId, regular orders use modelId
+          return getModelDisplayName && modelId ? (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              {getModelDisplayName(modelId)}
+            </div>
+          ) : null;
+        })()}
+        
+        {/* Show Action Length (Action Inlet) Display */}
         {(() => {
           // Get Action Inlet display name from Feature Manager (field ID: action-length, Display Name: Action Inlet)
           const getActionInletDisplay = (orderFeatures: any) => {
@@ -143,21 +153,51 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           
           return actionInletDisplay ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {actionInletDisplay}
+              Action: {actionInletDisplay}
             </div>
           ) : null;
         })()}
-        {/* Show product display name if available */}
-        {getModelDisplayName && order.modelId && (
-          <div className="text-xs opacity-80 mt-0.5">
-            {getModelDisplayName(order.modelId)}
-          </div>
-        )}
+
+        {/* Show Mold Name from mold configuration */}
         {moldInfo && (
           <div className="text-xs font-semibold opacity-80 mt-0.5">
-            {moldInfo.instanceNumber ? `Mold ${moldInfo.instanceNumber}` : moldInfo.moldId}
+            {moldInfo.moldId}
+            {moldInfo.instanceNumber && ` #${moldInfo.instanceNumber}`}
           </div>
         )}
+
+        {/* Show LOP (Length of Pull) if different than standard */}
+        {(() => {
+          const getLOPDisplay = (orderFeatures: any) => {
+            if (!orderFeatures || !features) return null;
+            
+            // Look for length_of_pull field (NOT action_length)
+            const lopValue = orderFeatures.length_of_pull;
+            if (!lopValue || lopValue === 'none' || lopValue === 'standard') return null;
+            
+            // Find the length_of_pull feature definition in Feature Manager
+            const lopFeature = features.find((f: any) => f.id === 'length_of_pull');
+            
+            if (lopFeature && lopFeature.options) {
+              // Use Feature Manager option label
+              const option = lopFeature.options.find((opt: any) => opt.value === lopValue);
+              if (option && option.label) {
+                return option.label;
+              }
+            }
+            
+            // Return raw value as fallback
+            return lopValue;
+          };
+          
+          const lopDisplay = getLOPDisplay(order.features);
+          
+          return lopDisplay ? (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              LOP: {lopDisplay}
+            </div>
+          ) : null;
+        })()}
       </div>
     </div>
   );

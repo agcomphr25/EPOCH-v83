@@ -1578,18 +1578,29 @@ export default function LayupScheduler() {
                       <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
                         {week.map(date => {
                           const dateString = date.toISOString();
+                          const cellDateOnly = dateString.split('T')[0];
+                          
+                          console.log(`🔍 Checking cell ${mold.moldId}-${cellDateOnly} for orders`);
                           
                           const cellOrders = Object.entries(orderAssignments)
                             .filter(([orderId, assignment]) => {
                               const assignmentDateOnly = assignment.date.split('T')[0];
-                              const cellDateOnly = dateString.split('T')[0];
-                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                              const matches = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                              if (matches) {
+                                console.log(`✅ Found order ${orderId} for cell ${mold.moldId}-${cellDateOnly}`);
+                              }
+                              return matches;
                             })
                             .map(([orderId]) => {
                               const order = orders.find(o => o.orderId === orderId);
+                              if (!order) {
+                                console.warn(`⚠️ Order ${orderId} not found in orders list`);
+                              }
                               return order;
                             })
                             .filter(order => order !== undefined) as any[];
+                          
+                          console.log(`📋 Cell ${mold.moldId}-${cellDateOnly} has ${cellOrders.length} orders:`, cellOrders.map(o => o?.orderId));
 
                           const dropId = `${mold.moldId}|${dateString}`;
 

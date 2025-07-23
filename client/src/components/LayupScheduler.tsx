@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -343,7 +344,7 @@ export default function LayupScheduler() {
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
-  });
+  }) as { data: any[] };
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
@@ -680,12 +681,23 @@ export default function LayupScheduler() {
                     </div>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium mb-1 block">Model Name</label>
-                        <Input
-                          placeholder="e.g., M001, CF_Tactical, etc."
+                        <label className="text-sm font-medium mb-1 block">Stock Model</label>
+                        <Select
                           value={newMold.modelName}
-                          onChange={(e) => setNewMold(prev => ({...prev, modelName: e.target.value}))}
-                        />
+                          onValueChange={(value) => setNewMold(prev => ({...prev, modelName: value}))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a stock model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {stockModels.map((model: any) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                {model.displayName || model.name || model.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-500 mt-1">Choose from available stock models</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>

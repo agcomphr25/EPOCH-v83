@@ -555,6 +555,14 @@ export default function LayupScheduler() {
 
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
 
+    // Track next available date for each mold to ensure no skipped cells
+    const moldNextDate: { [moldId: string]: number } = {};
+    
+    // Initialize each mold's next date to start of work days
+    molds.filter(m => m.enabled).forEach(mold => {
+      moldNextDate[mold.moldId] = 0; // Start with first work day
+    });
+
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
       
@@ -565,32 +573,37 @@ export default function LayupScheduler() {
 
       let assigned = false;
 
-      // Try each work day until we find an available cell
-      for (const targetDate of allWorkDays) {
-        if (assigned) break;
-        
-        const dateKey = targetDate.toISOString().split('T')[0];
+      // Find the mold with the earliest next available date
+      let bestMold = null;
+      let earliestDateIndex = Infinity;
 
-        // Try each compatible mold for this date
-        for (const mold of compatibleMolds) {
-          const cellKey = `${mold.moldId}-${dateKey}`;
-          
-          // Check if this cell is available (one order per cell)
-          if (!cellAssignments.has(cellKey)) {
-            // Assign order to this cell
-            newAssignments[order.orderId] = {
-              moldId: mold.moldId,
-              date: targetDate.toISOString()
-            };
-
-            // Mark this cell as occupied
-            cellAssignments.add(cellKey);
-            assigned = true;
-            
-            console.log(`✅ Assigned ${order.orderId} to cell ${cellKey} (${format(targetDate, 'MM/dd')})`);
-            break;
-          }
+      for (const mold of compatibleMolds) {
+        const nextDateIndex = moldNextDate[mold.moldId] || 0;
+        if (nextDateIndex < earliestDateIndex && nextDateIndex < allWorkDays.length) {
+          earliestDateIndex = nextDateIndex;
+          bestMold = mold;
         }
+      }
+
+      if (bestMold && earliestDateIndex < allWorkDays.length) {
+        const targetDate = allWorkDays[earliestDateIndex];
+        const dateKey = targetDate.toISOString().split('T')[0];
+        const cellKey = `${bestMold.moldId}-${dateKey}`;
+
+        // Assign order to this cell
+        newAssignments[order.orderId] = {
+          moldId: bestMold.moldId,
+          date: targetDate.toISOString()
+        };
+
+        // Mark this cell as occupied
+        cellAssignments.add(cellKey);
+        
+        // Advance this mold's next available date
+        moldNextDate[bestMold.moldId] = earliestDateIndex + 1;
+        
+        assigned = true;
+        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (no gaps)`);
       }
 
       if (!assigned) {

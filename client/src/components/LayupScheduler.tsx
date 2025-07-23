@@ -224,31 +224,52 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             // Look for action_length field first
             let actionLengthValue = orderFeatures.action_length;
             
-            // If action_length is empty or 'none', try to derive from action_inlet
-            if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
-              const actionInlet = orderFeatures.action_inlet;
+            // If action_length is empty or 'none', try to derive from action_inlet or action field
+            if (!actionLengthValue || actionLengthValue === 'none') {
+              const actionField = orderFeatures.action_inlet || orderFeatures.action;
               
-              // Map common action inlets to action lengths based on actual data patterns
-              const inletToLengthMap: {[key: string]: string} = {
-                'anti_ten_hunter_def': 'SA', // Short action
-                'remington_700': 'SA', // Most common Rem 700 is short action
-                'remington_700_long': 'LA',
-                'rem_700': 'SA',
-                'rem_700_short': 'SA',
-                'rem_700_long': 'LA', 
-                'tikka_t3': 'SA',
-                'tikka_short': 'SA',
-                'tikka_long': 'LA',
-                'savage_short': 'SA',
-                'savage_long': 'LA',
-                'savage_110': 'LA',
-                'winchester_70': 'LA',
-                'howa_1500': 'SA',
-                'bergara_b14': 'SA',
-                'carbon_six_medium': 'MA'
-              };
-              
-              actionLengthValue = inletToLengthMap[actionInlet] || 'SA'; // Default to SA if not found
+              if (actionField) {
+                // Map common action inlets/actions to action lengths based on actual data patterns
+                const actionToLengthMap: {[key: string]: string} = {
+                  // Standard action inlet mappings
+                  'anti_ten_hunter_def': 'SA', // Short action
+                  'def_dev_hunter_rem': 'LA', // Long action based on database data
+                  'remington_700': 'SA', // Most common Rem 700 is short action
+                  'remington_700_long': 'LA',
+                  'rem_700': 'SA',
+                  'rem_700_short': 'SA',
+                  'rem_700_long': 'LA', 
+                  'tikka_t3': 'SA',
+                  'tikka_short': 'SA',
+                  'tikka_long': 'LA',
+                  'savage_short': 'SA',
+                  'savage_long': 'LA',
+                  'savage_110': 'LA',
+                  'winchester_70': 'LA',
+                  'howa_1500': 'SA',
+                  'bergara_b14': 'SA',
+                  'carbon_six_medium': 'MA',
+                  // Lone Peak actions
+                  'lone_peak_fuzion': 'SA',
+                  'lone_peak_razorback': 'SA',
+                  'lone_peak_ascent': 'SA',
+                  // Additional common action types
+                  'defiance_deviant': 'SA',
+                  'defiance_rebel': 'SA',
+                  'american_rifle_company': 'SA'
+                };
+                
+                actionLengthValue = actionToLengthMap[actionField];
+              }
+            }
+            
+            // If still no action length found, try to derive from stock model ID for Alpine Hunter
+            if (!actionLengthValue && modelId) {
+              if (modelId.includes('alpine') || modelId.includes('hunter')) {
+                // For Alpine Hunter models, assume short action unless specified otherwise
+                actionLengthValue = 'SA';
+                console.log(`🎯 Defaulting Alpine Hunter ${modelId} to SA (Short Action)`);
+              }
             }
             
             if (!actionLengthValue || actionLengthValue === 'none') return null;

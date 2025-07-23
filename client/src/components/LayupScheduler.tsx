@@ -178,10 +178,12 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               orderId: order.orderId,
               orderFeatures,
               hasFeatures: !!features,
-              featuresCount: features?.length
+              featuresCount: features?.length,
+              actionInlet: orderFeatures?.action_inlet,
+              actionLength: orderFeatures?.action_length
             });
             
-            if (!orderFeatures || !features) return null;
+            if (!orderFeatures) return null;
             
             // Look for action_length field first
             let actionLengthValue = orderFeatures.action_length;
@@ -190,15 +192,17 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             if (!actionLengthValue && orderFeatures.action_inlet) {
               const actionInlet = orderFeatures.action_inlet;
               
-              // Map common action inlets to action lengths
+              // Map common action inlets to action lengths based on actual data patterns
               const inletToLengthMap: {[key: string]: string} = {
                 'anti_ten_hunter_def': 'SA', // Short action
+                'remington_700': 'SA', // Most common Rem 700 is short action
                 'rem_700_short': 'SA',
                 'rem_700_long': 'LA', 
                 'tikka_short': 'SA',
                 'tikka_long': 'LA',
                 'savage_short': 'SA',
-                'savage_long': 'LA'
+                'savage_long': 'LA',
+                'carbon_six_medium': 'SA' // Based on barrel inlet patterns
               };
               
               actionLengthValue = inletToLengthMap[actionInlet];
@@ -206,29 +210,14 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             
             if (!actionLengthValue || actionLengthValue === 'none') return null;
             
-            // Find the action-length feature definition in Feature Manager
-            const actionLengthFeature = features.find((f: any) => f.id === 'action-length');
+            // Simple abbreviation mapping without depending on features API
+            const displayMap: {[key: string]: string} = {
+              'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+              'long': 'LA', 'medium': 'MA', 'short': 'SA',
+              'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+            };
             
-            if (!actionLengthFeature || !actionLengthFeature.options) {
-              // Fallback to abbreviations if Feature Manager data not available
-              const displayMap: {[key: string]: string} = {
-                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
-                'long': 'LA', 'medium': 'MA', 'short': 'SA'
-              };
-              return displayMap[actionLengthValue] || actionLengthValue;
-            }
-            
-            // Use Feature Manager option label and convert to abbreviation
-            const option = actionLengthFeature.options.find((opt: any) => opt.value === actionLengthValue);
-            if (option && option.label) {
-              const label = option.label;
-              if (label.toLowerCase().includes('long')) return 'LA';
-              if (label.toLowerCase().includes('medium')) return 'MA';
-              if (label.toLowerCase().includes('short')) return 'SA';
-              return label.substring(0, 2).toUpperCase(); // First 2 chars as fallback
-            }
-            
-            return actionLengthValue;
+            return displayMap[actionLengthValue] || actionLengthValue;
           };
           
           const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
@@ -340,6 +329,12 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {
+            console.log('Heavy Fill detection for order:', {
+              orderId: order.orderId,
+              orderFeatures,
+              otherOptions: orderFeatures?.other_options
+            });
+            
             if (!orderFeatures) return null;
             
             // Check if heavy_fill is in the other_options array

@@ -2921,6 +2921,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         order.status === 'FINALIZED' && 
         ((order as any).department === 'Layup' || (order as any).currentDepartment === 'Layup')
       );
+      
+      // Add debug logging for features
+      console.log('Sample layup order features:', {
+        orderId: layupOrders[0]?.orderId,
+        features: layupOrders[0]?.features,
+        modelId: layupOrders[0]?.modelId
+      });
 
       // Get P1 Purchase Orders with stock model items
       const pos = await storage.getAllPurchaseOrders();
@@ -2983,7 +2990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: 'main_orders',
           // Ensure features object is included for action length display
           features: (order as any).features || {},
-          modelId: (order as any).modelId || (order as any).stockModel
+          modelId: (order as any).modelId
         })),
         ...p1LayupOrders.map(order => ({
           ...order,

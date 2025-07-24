@@ -611,13 +611,15 @@ export default function LayupScheduler() {
       
       // Extra debugging for production orders
       if (order.source === 'production_order') {
-        console.log('🏭 Checking compatibility for production order:', {
+        console.log('🏭 DETAILED PRODUCTION ORDER COMPATIBILITY CHECK:', {
           orderId: order.orderId,
+          product: order.product,
           modelId,
           stockModelId: order.stockModelId,
           availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
           moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId),
-          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels?.slice(0, 3) }))
+          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })),
+          compatibilityTest: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).length > 0 ? 'SHOULD BE COMPATIBLE' : 'NO COMPATIBLE MOLDS'
         });
       }
       
@@ -628,7 +630,10 @@ export default function LayupScheduler() {
           return true; // No restrictions
         }
         const isCompatible = mold.stockModels.includes(modelId);
-        if (!isCompatible) {
+        if (order.source === 'production_order') {
+          console.log(`🏭 MOLD CHECK: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (${mold.stockModels?.join(', ')}) = ${isCompatible ? '✅ COMPATIBLE' : '❌ NOT COMPATIBLE'}`);
+        }
+        if (!isCompatible && order.source !== 'production_order') {
           console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
         }
         return isCompatible;

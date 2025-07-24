@@ -129,6 +129,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(req.user);
   });
 
+  // Session endpoint for frontend compatibility
+  app.get("/api/auth/session", authenticateToken, async (req, res) => {
+    res.json(req.user);
+  });
+
+  app.get("/api/auth/user", authenticateToken, async (req, res) => {
+    res.json(req.user);
+  });
+
   app.post("/api/auth/change-password", authenticateToken, async (req, res) => {
     try {
       const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);

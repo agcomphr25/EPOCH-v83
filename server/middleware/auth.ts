@@ -30,7 +30,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     const sessionToken = token || cookieToken;
 
     if (!sessionToken) {
-      return res.status(401).json({ error: 'Access token required' });
+      return res.status(401).json({ error: 'No session token' });
     }
 
     const user = await AuthService.getUserBySession(sessionToken);

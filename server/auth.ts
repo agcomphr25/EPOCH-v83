@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { db } from './db';
 import { users, userSessions, employeeAuditLog } from './schema';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, lt, gt } from 'drizzle-orm';
 
 const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -65,10 +65,10 @@ export class AuthService {
         and(
           eq(userSessions.sessionToken, sessionToken),
           eq(userSessions.isActive, true),
-          lt(userSessions.expiresAt, new Date())
+          gt(userSessions.expiresAt, new Date())
         )
       );
-
+    
     if (!session) {
       return null;
     }

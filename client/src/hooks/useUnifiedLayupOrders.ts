@@ -16,6 +16,10 @@ export interface LayupOrder {
   poId?: number;
   poItemId?: number;
   stockModelId?: string;
+  modelId?: string;
+  productionOrderId?: number;
+  specifications?: any;
+  features?: any;
   createdAt: string;
   updatedAt: string;
 }

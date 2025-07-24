@@ -615,7 +615,8 @@ export default function LayupScheduler() {
           orderId: order.orderId,
           modelId,
           stockModelId: order.stockModelId,
-          availableMolds: molds.filter(m => m.enabled).map(m => m.moldId)
+          availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
+          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId)
         });
       }
       

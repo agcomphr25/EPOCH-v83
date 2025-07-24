@@ -72,11 +72,21 @@ export interface IStorage {
   // User authentication methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User>;
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
   generatePortalToken(employeeId: number): Promise<string>;
   validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }>;
+  
+  // Time clock methods for portal
+  getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined>;
+  clockIn(employeeId: string): Promise<TimeClockEntry>;
+  clockOut(employeeId: string): Promise<TimeClockEntry>;
+  
+  // Daily checklist methods for portal
+  getDailyChecklist(employeeId: string, date: string): Promise<ChecklistItem[]>;
+  updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]>;
   saveCSVData(data: InsertCSVData): Promise<CSVData>;
   getLatestCSVData(): Promise<CSVData | undefined>;
   clearCSVData(): Promise<void>;
@@ -3176,6 +3186,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Authentication methods
+  async getAllUsers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .orderBy(users.username);
+  }
+
   async updateUser(id: number, data: Partial<InsertUser>): Promise<User> {
     const [user] = await db
       .update(users)
@@ -3241,6 +3258,115 @@ export class DatabaseStorage implements IStorage {
       console.error('Portal token validation error:', error);
       return { employeeId: 0, isValid: false };
     }
+  }
+
+  // Time clock methods for portal
+  async getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(and(
+        eq(timeClockEntries.employeeId, employeeId),
+        eq(timeClockEntries.date, date)
+      ));
+    return entry;
+  }
+
+  async clockIn(employeeId: string): Promise<TimeClockEntry> {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Check if already clocked in today
+    const existingEntry = await this.getTimeClockEntry(employeeId, today);
+    
+    if (existingEntry && existingEntry.clockIn && !existingEntry.clockOut) {
+      throw new Error('Already clocked in');
+    }
+
+    if (existingEntry) {
+      // Update existing entry
+      const [updated] = await db
+        .update(timeClockEntries)
+        .set({ clockIn: now, clockOut: null })
+        .where(eq(timeClockEntries.id, existingEntry.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new entry
+      const [created] = await db
+        .insert(timeClockEntries)
+        .values({
+          employeeId,
+          clockIn: now,
+          clockOut: null,
+          date: today
+        })
+        .returning();
+      return created;
+    }
+  }
+
+  async clockOut(employeeId: string): Promise<TimeClockEntry> {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    const existingEntry = await this.getTimeClockEntry(employeeId, today);
+    
+    if (!existingEntry || !existingEntry.clockIn) {
+      throw new Error('Must clock in first');
+    }
+
+    if (existingEntry.clockOut) {
+      throw new Error('Already clocked out');
+    }
+
+    const [updated] = await db
+      .update(timeClockEntries)
+      .set({ clockOut: now })
+      .where(eq(timeClockEntries.id, existingEntry.id))
+      .returning();
+    return updated;
+  }
+
+  // Daily checklist methods for portal
+  async getDailyChecklist(employeeId: string, date: string): Promise<ChecklistItem[]> {
+    return await db
+      .select()
+      .from(checklistItems)
+      .where(and(
+        eq(checklistItems.employeeId, employeeId),
+        eq(checklistItems.date, date)
+      ))
+      .orderBy(checklistItems.id);
+  }
+
+  async updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]> {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Delete existing entries for today
+    await db
+      .delete(checklistItems)
+      .where(and(
+        eq(checklistItems.employeeId, employeeId),
+        eq(checklistItems.date, today)
+      ));
+
+    // Insert new entries
+    if (data.items && data.items.length > 0) {
+      const itemsToInsert = data.items.map((item: any) => ({
+        employeeId,
+        date: today,
+        label: item.label,
+        type: item.type,
+        options: item.options || null,
+        value: item.value || null,
+        required: item.required || false
+      }));
+
+      await db.insert(checklistItems).values(itemsToInsert);
+    }
+
+    return this.getDailyChecklist(employeeId, today);
   }
 
 }

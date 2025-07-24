@@ -12,7 +12,6 @@ import crypto from "crypto";
 import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from "./utils/fileUpload";
 import { authenticateToken, requireRole, requireEmployeeAccess, authenticatePortalToken } from "./middleware/auth";
 import { AuthService } from "./auth";
-import { loginSchema, changePasswordSchema, insertUserSchema } from "./schema";
 import cookieParser from 'cookie-parser';
 
 
@@ -65,7 +64,11 @@ import {
   insertEvaluationSchema,
   insertUserSessionSchema,
   insertEmployeeDocumentSchema,
-  insertEmployeeAuditLogSchema
+  insertEmployeeAuditLogSchema,
+  // Authentication schemas
+  insertUserSchema,
+  loginSchema,
+  changePasswordSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {

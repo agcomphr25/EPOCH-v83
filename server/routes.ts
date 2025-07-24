@@ -2915,6 +2915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Unified Layup Queue endpoint - combines regular orders and P1 PO orders
   app.get("/api/layup-queue", async (req, res) => {
     try {
+      console.log('🏭 Starting layup queue processing...');
       // Get regular orders from main database - all finalized orders need layup processing
       const regularOrders = await storage.getAllOrderDrafts();
       const layupOrders = regularOrders.filter(order => 
@@ -2936,15 +2937,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const p1LayupOrders = [];
 
       // Get Production Orders generated from Purchase Orders
-      const productionOrders = await storage.getAllProductionOrders();
-      const pendingProductionOrders = productionOrders.filter(po => 
-        po.productionStatus === 'PENDING' && po.orderId.startsWith('PUR')
-      );
+      let pendingProductionOrders = [];
+      try {
+        const productionOrders = await storage.getAllProductionOrders();
+        console.log(`🏭 Found ${productionOrders.length} total production orders`);
+        
+        pendingProductionOrders = productionOrders.filter(po => 
+          po.productionStatus === 'PENDING' && po.orderId.startsWith('PUR')
+        );
+        console.log(`🏭 Found ${pendingProductionOrders.length} pending PUR production orders`);
+        if (pendingProductionOrders.length > 0) {
+          console.log('🏭 Sample production order:', {
+            orderId: pendingProductionOrders[0].orderId,
+            productionStatus: pendingProductionOrders[0].productionStatus,
+            itemName: pendingProductionOrders[0].itemName,
+            customerName: pendingProductionOrders[0].customerName
+          });
+        }
+      } catch (prodOrderError) {
+        console.error('❌ Error fetching production orders:', prodOrderError);
+        pendingProductionOrders = [];
+      }
       
       // Process each active PO for layup-required items
-      for (const po of activePos) {
-        const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems = items.filter(item => item.itemType === 'stock_model');
+      console.log(`🏭 Processing ${activePos.length} active P1 Purchase Orders`);
+      try {
+        for (const po of activePos) {
+          try {
+            const items = await storage.getPurchaseOrderItems(po.id);
+            console.log(`🏭 PO ${po.poNumber} has ${items?.length || 0} items`);
+            const stockModelItems = (items || []).filter(item => item?.itemType === 'stock_model');
+            console.log(`🏭 PO ${po.poNumber} has ${stockModelItems?.length || 0} stock model items`);
         
         for (const item of stockModelItems) {
           // Calculate priority score for P1 PO items
@@ -2985,12 +3008,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updatedAt: po.updatedAt
           };
           
-          p1LayupOrders.push(layupOrder);
+            p1LayupOrders.push(layupOrder);
+          }
+          } catch (poItemError) {
+            console.error(`❌ Error processing PO ${po.poNumber}:`, poItemError);
+          }
         }
+      } catch (p1PoError) {
+        console.error('❌ Error processing P1 Purchase Orders:', p1PoError);
       }
 
       // Convert Production Orders to layup queue format
-      const productionLayupOrders = pendingProductionOrders.map(po => ({
+      console.log('🏭 Processing production orders for layup queue, array type:', typeof pendingProductionOrders, 'length:', pendingProductionOrders?.length);
+      const productionLayupOrders = (pendingProductionOrders || []).map(po => ({
         id: `production-${po.id}`,
         orderId: po.orderId,
         orderDate: po.orderDate,
@@ -3011,8 +3041,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
 
       // Combine and sort all orders by priority score (lower = higher priority)
+      console.log('🏭 Combining orders:', {
+        layupOrders: layupOrders?.length || 0,
+        p1LayupOrders: p1LayupOrders?.length || 0,
+        productionLayupOrders: productionLayupOrders?.length || 0
+      });
       const combinedOrders = [
-        ...layupOrders.map(order => ({ 
+        ...(layupOrders || []).map(order => ({ 
           ...order, 
           source: 'main_orders',
           // Ensure features object is included for action length display
@@ -3363,10 +3398,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       console.error("❌ API: Employee layup settings update error:", error);
-      console.error("❌ API: Error details:", error?.message || error);
+      console.error("❌ API: Error details:", (error as any)?.message || error);
       res.status(400).json({ 
         error: "Failed to update employee layup settings", 
-        details: error?.message || "Unknown error",
+        details: (error as any)?.message || "Unknown error",
         employeeId: decodeURIComponent(req.params.employeeId)
       });
     }

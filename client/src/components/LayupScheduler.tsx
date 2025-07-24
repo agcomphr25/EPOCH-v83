@@ -533,6 +533,12 @@ export default function LayupScheduler() {
     console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
     if (productionOrders.length > 0) {
       console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
+      console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId,
+        customer: o.customer
+      })));
     }
     
     // Log all order sources
@@ -541,7 +547,18 @@ export default function LayupScheduler() {
       return acc;
     }, {} as {[key: string]: number});
     console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
-  }, [orders]);
+    
+    // Log when auto-schedule should run
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+      console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
+    } else {
+      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+        orders: orders.length,
+        molds: molds.length,
+        employees: employees.length
+      });
+    }
+  }, [orders, molds, employees]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {

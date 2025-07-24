@@ -70,6 +70,18 @@ export default function AGBottomMetalReport() {
       .join(' ');
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      return format(date, 'MM/dd/yyyy');
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
   // Function to export to CSV
   const exportToCSV = () => {
     const headers = [
@@ -88,8 +100,8 @@ export default function AGBottomMetalReport() {
 
     const csvData = filteredOrders.map(order => [
       order.order_id,
-      format(new Date(order.order_date), 'MM/dd/yyyy'),
-      format(new Date(order.due_date), 'MM/dd/yyyy'),
+      formatDate(order.order_date),
+      formatDate(order.due_date),
       order.customer_id || 'N/A',
       order.customer_po || 'N/A',
       order.fb_order_number || 'N/A',
@@ -223,10 +235,10 @@ export default function AGBottomMetalReport() {
                         {order.order_id}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(order.order_date), 'MM/dd/yyyy')}
+                        {formatDate(order.order_date)}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(order.due_date), 'MM/dd/yyyy')}
+                        {formatDate(order.due_date)}
                       </TableCell>
                       <TableCell>{order.customer_id || 'N/A'}</TableCell>
                       <TableCell>{order.customer_po || 'N/A'}</TableCell>

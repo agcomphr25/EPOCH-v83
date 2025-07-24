@@ -3121,7 +3121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customer: (po as any).customerName || 'Production Order',
           product: displayProductName,
           quantity: 1,
-          status: (po as any).productionStatus || 'PENDING', // Use actual production status
+          status: 'FINALIZED', // Production orders ready for layup scheduling
           department: 'Layup',
           currentDepartment: 'Layup',
           priorityScore: priority, // High priority to meet due dates

@@ -15,6 +15,7 @@ export interface LayupOrder {
   product: string;
   modelId?: string;
   stockModelId?: string;
+  features?: any; // Include features for LOP detection
 }
 
 export interface MoldSettings {
@@ -84,6 +85,34 @@ function generateDailyMesaUniversalOrders(startDate: Date, weeks: number = 4): L
   return mesaOrders;
 }
 
+// Function to detect if an order requires LOP (Length of Pull) adjustment
+function hasLOPAdjustment(order: LayupOrder): boolean {
+  if (!order.features) return false;
+  
+  const lopValue = order.features.length_of_pull;
+  
+  // Return true if there's an actual LOP adjustment (not standard/none/etc.)
+  if (!lopValue || 
+      lopValue === 'none' || 
+      lopValue === 'standard' || 
+      lopValue === 'std' ||
+      lopValue === 'std_length' ||
+      lopValue === 'standard_length' ||
+      lopValue === 'no_extra_length' ||
+      lopValue === 'std_no_extra_length' ||
+      lopValue === 'no_lop_change' ||
+      lopValue === '' || 
+      lopValue === '0' ||
+      lopValue === 'normal' ||
+      lopValue.toLowerCase().includes('std') ||
+      lopValue.toLowerCase().includes('standard') ||
+      lopValue.toLowerCase().includes('no extra')) {
+    return false;
+  }
+  
+  return true;
+}
+
 export function generateLayupSchedule(
   orders: LayupOrder[],
   moldSettings: MoldSettings[],
@@ -103,8 +132,17 @@ export function generateLayupSchedule(
   
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
-  // 2. Sort orders by due date priority (earliest due dates first), with high priority override
-  const sortedOrders = [...orders].sort((a, b) => {
+  // 2. Separate LOP adjustment orders for Monday-only scheduling
+  const lopOrders = orders.filter(order => hasLOPAdjustment(order));
+  const regularOrders = orders.filter(order => !hasLOPAdjustment(order));
+  
+  console.log(`📏 Found ${lopOrders.length} LOP adjustment orders (Monday-only scheduling)`);
+  lopOrders.forEach(order => {
+    console.log(`📏 LOP Order: ${order.orderId} - LOP: ${order.features?.length_of_pull}`);
+  });
+
+  // Sort both groups by due date priority (earliest due dates first), with high priority override
+  const sortLopOrders = (orderList: LayupOrder[]) => [...orderList].sort((a, b) => {
     // First check for high priority flag override
     const aHighPriority = a.priorityScore && a.priorityScore > 8; // High priority threshold
     const bHighPriority = b.priorityScore && b.priorityScore > 8;
@@ -119,6 +157,9 @@ export function generateLayupSchedule(
     // Earlier due dates = higher priority
     return aDueDate - bDueDate;
   });
+
+  const sortedLopOrders = sortLopOrders(lopOrders);
+  const sortedRegularOrders = sortLopOrders(regularOrders);
 
   // 3. Helper functions for 4-day work week (Monday-Thursday)
   const isWorkDay = (date: Date) => {
@@ -168,10 +209,125 @@ export function generateLayupSchedule(
     return toKey(monday);
   };
 
-  // 6. Allocate orders with even weekly distribution
+  // Helper function to find next Monday from a given date
+  const getNextMonday = (date: Date): Date => {
+    let nextMonday = new Date(date);
+    const dayOfWeek = nextMonday.getDay();
+    const daysToAdd = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7; // Calculate days to next Monday
+    
+    if (daysToAdd === 0 && dayOfWeek === 1) {
+      // If already Monday, use this Monday
+      return nextMonday;
+    }
+    
+    nextMonday.setDate(nextMonday.getDate() + daysToAdd);
+    return nextMonday;
+  };
+
+  // 6. Schedule LOP orders first (Monday-only), then regular orders
   const result: ScheduleResult[] = [];
   
-  for (const order of sortedOrders) {
+  // Schedule LOP adjustment orders on Mondays only
+  console.log(`📅 Scheduling ${sortedLopOrders.length} LOP orders on Mondays only`);
+  for (const order of sortedLopOrders) {
+    let scheduled = false;
+    let attemptDate = getNextMonday(new Date(order.orderDate));
+    
+    // Try to schedule on Mondays within reasonable timeframe (up to 8 weeks out)
+    let maxAttempts = 8; // 8 Mondays
+    
+    while (!scheduled && maxAttempts > 0) {
+      const dateKey = toKey(attemptDate);
+      const weekKey = getWeekKey(attemptDate);
+      
+      // Only attempt on Mondays for LOP orders
+      if (attemptDate.getDay() !== 1) {
+        attemptDate = getNextMonday(attemptDate);
+        maxAttempts--;
+        continue;
+      }
+      
+      // Initialize tracking if needed - each day starts fresh with 0 usage for all molds
+      if (!dateMoldUsage[dateKey]) {
+        dateMoldUsage[dateKey] = { totalUsed: 0 };
+        enabledMolds.forEach(m => dateMoldUsage[dateKey][m.moldId] = 0);
+        console.log(`🔄 New Monday ${dateKey}: Initialized ${enabledMolds.length} molds for LOP scheduling`);
+      }
+      if (!dateEmployeeUsage[dateKey]) {
+        dateEmployeeUsage[dateKey] = {};
+        employeeSettings.forEach(emp => dateEmployeeUsage[dateKey][emp.employeeId] = 0);
+      }
+      if (!(weekKey in weeklyDistribution)) {
+        weeklyDistribution[weekKey] = 0;
+      }
+
+      // Check if this Monday has capacity - find compatible molds based on stock model
+      const orderStockModel = order.stockModelId || order.modelId;
+      console.log(`📏 Scheduling LOP order ${order.orderId} on Monday ${dateKey} with stock model: ${orderStockModel}`);
+      
+      // First filter for compatible molds based on stock model
+      const compatibleMolds = enabledMolds.filter(m => {
+        if (m.stockModels && Array.isArray(m.stockModels) && orderStockModel) {
+          const isCompatible = m.stockModels.includes(orderStockModel);
+          return isCompatible;
+        }
+        return false;
+      });
+      
+      // Then find available capacity among compatible molds
+      const moldSlot = compatibleMolds.find(m => {
+        const currentUsage = dateMoldUsage[dateKey][m.moldId];
+        return currentUsage < m.multiplier;
+      });
+      
+      if (moldSlot) {
+        // Reserve the mold slot
+        dateMoldUsage[dateKey][moldSlot.moldId]++;
+        dateMoldUsage[dateKey].totalUsed++;
+        weeklyDistribution[weekKey]++;
+        
+        // Distribute employee workload
+        const employeeAssignments: {employeeId: string; workload: number}[] = [];
+        for (const emp of employeeSettings) {
+          const currentLoad = dateEmployeeUsage[dateKey][emp.employeeId];
+          const dailyCapacity = employeeDailyCapacities[emp.employeeId];
+          
+          if (currentLoad < dailyCapacity) {
+            const workload = Math.min(1, dailyCapacity - currentLoad);
+            employeeAssignments.push({
+              employeeId: emp.employeeId,
+              workload: workload
+            });
+            dateEmployeeUsage[dateKey][emp.employeeId] += workload;
+            break; // Assign to first available employee
+          }
+        }
+        
+        result.push({
+          orderId: order.orderId,
+          scheduledDate: new Date(attemptDate),
+          moldId: moldSlot.moldId,
+          employeeAssignments
+        });
+        
+        console.log(`📏✅ LOP Order ${order.orderId} scheduled on Monday ${dateKey} with mold ${moldSlot.moldId}`);
+        scheduled = true;
+      } else {
+        console.log(`📏❌ No compatible mold available for LOP order ${order.orderId} on Monday ${dateKey}`);
+        // Try next Monday
+        attemptDate = addDays(attemptDate, 7);
+        maxAttempts--;
+      }
+    }
+    
+    if (!scheduled) {
+      console.log(`📏⚠️ Could not schedule LOP order ${order.orderId} on any Monday within 8 weeks`);
+    }
+  }
+  
+  // Now schedule regular orders on any work day (Monday-Thursday)
+  console.log(`📅 Scheduling ${sortedRegularOrders.length} regular orders on Monday-Thursday`);
+  for (const order of sortedRegularOrders) {
     let scheduled = false;
     let attemptDate = new Date(order.orderDate);
     

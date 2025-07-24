@@ -3055,16 +3055,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...layupOrders.map(order => ({ 
           ...order, 
           source: 'main_orders',
-          // Ensure features object is included for action length display
+          // Ensure features object is included for LOP detection and action length display
           features: (order as any).features || {},
           modelId: (order as any).modelId
         })),
         ...p1LayupOrders.map(order => ({
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
+          features: {}, // Empty features object for consistency
           modelId: order.stockModelId
         })),
-        ...p2LayupOrders
+        ...p2LayupOrders.map(order => ({
+          ...order,
+          // P2 orders don't have features but we can add modelId for consistency
+          features: {}, // Empty features object for consistency  
+          modelId: order.stockModelId
+        }))
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
       res.json(combinedOrders);

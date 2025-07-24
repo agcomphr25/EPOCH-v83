@@ -109,7 +109,7 @@ export default function OrderEntry() {
   const [paymentTimestamp, setPaymentTimestamp] = useState<Date | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Calculate total price based on selected features
+  // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
     let total = 0;
 
@@ -119,7 +119,7 @@ export default function OrderEntry() {
       total += priceOverride !== null ? priceOverride : (selectedModel.price || 0);
     }
 
-    // Add feature prices
+    // Add feature prices from features object
     Object.entries(features).forEach(([featureId, value]) => {
       if (value && value !== 'none') {
         const feature = featureDefs.find(f => f.id === featureId);
@@ -143,7 +143,43 @@ export default function OrderEntry() {
       }
     });
 
-    // Add rail accessory prices
+    // Add bottom metal price (separate state variable)
+    if (bottomMetal) {
+      const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
+      if (bottomMetalFeature?.options) {
+        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
+        if (option?.price) {
+          total += option.price;
+        }
+      }
+    }
+
+    // Add paint options price (separate state variable)
+    if (paintOptions && paintOptions !== 'none') {
+      const paintFeatures = featureDefs.filter(f => 
+        f.displayName === 'Premium Options' ||
+        f.displayName === 'Terrain Options' ||
+        f.displayName === 'Rogue Options' ||
+        f.displayName === 'Standard Options' ||
+        f.displayName === 'Carbon Camo Ready' ||
+        f.displayName === 'Camo Options' ||
+        f.id === 'metallic_finishes' ||
+        f.name === 'metallic_finishes' ||
+        f.category === 'paint_options'
+      );
+      
+      for (const feature of paintFeatures) {
+        if (feature.options) {
+          const option = feature.options.find(opt => opt.value === paintOptions);
+          if (option?.price) {
+            total += option.price;
+            break; // Only add price once
+          }
+        }
+      }
+    }
+
+    // Add rail accessory prices (separate state variable)
     if (railAccessory && railAccessory.length > 0) {
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
       if (railFeature?.options) {
@@ -156,7 +192,7 @@ export default function OrderEntry() {
       }
     }
 
-    // Add other options prices
+    // Add other options prices (separate state variable)
     if (otherOptions && otherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
@@ -170,7 +206,7 @@ export default function OrderEntry() {
     }
 
     return total;
-  }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, bottomMetal, paintOptions, railAccessory, otherOptions]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -473,95 +509,9 @@ export default function OrderEntry() {
     }
   };
 
-  // Calculate order total
-  const calculateTotal = useCallback(() => {
-    const selectedModel = modelOptions.find(m => m.id === modelId);
-    // Use price override if set, otherwise use original model price
-    const basePrice = priceOverride !== null ? priceOverride : (selectedModel?.price || 0);
-    
-    let featureCost = 0;
-    
-    // Calculate cost from features state
-    Object.entries(features).forEach(([featureId, value]) => {
-      const feature = featureDefs.find(f => f.id === featureId);
-      if (feature?.options) {
-        const option = feature.options.find(opt => opt.value === value);
-        featureCost += option?.price || 0;
-      }
-    });
-    
-    // Add cost from bottom metal selection
-    if (bottomMetal) {
-      const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
-      if (bottomMetalFeature?.options) {
-        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
-        featureCost += option?.price || 0;
-      }
-    }
-    
-    // Add cost from paint options
-    if (paintOptions && paintOptions !== 'none') {
-      const paintFeatures = featureDefs.filter(f => 
-        f.displayName === 'Cerakote Options' ||
-        f.displayName === 'Terrain Options' ||
-        f.displayName === 'Rogue Options' ||
-        f.displayName === 'Standard Options' ||
-        f.displayName === 'Carbon Camo Ready' ||
-        f.displayName === 'Camo Options' ||
-        f.id === 'metallic_finishes' ||
-        f.name === 'metallic_finishes'
-      );
-      
-      for (const feature of paintFeatures) {
-        if (feature.options) {
-          const option = feature.options.find(opt => opt.value === paintOptions);
-          if (option) {
-            featureCost += option.price || 0;
-            break;
-          }
-        }
-      }
-    }
-    
-    // Add cost from other options (multiselect)
-    if (otherOptions && otherOptions.length > 0) {
-      const feature = featureDefs.find(f => f.id === 'other_options');
-      if (feature?.options) {
-        otherOptions.forEach(optionValue => {
-          const option = feature.options!.find(opt => opt.value === optionValue);
-          if (option) {
-            featureCost += option.price || 0;
-          }
-        });
-      }
-    }
-    
-    // Add cost from rail accessory (multiselect)
-    if (railAccessory && railAccessory.length > 0) {
-      const feature = featureDefs.find(f => f.id === 'rail_accessory');
-      if (feature?.options) {
-        railAccessory.forEach(optionValue => {
-          const option = feature.options!.find(opt => opt.value === optionValue);
-          if (option) {
-            featureCost += option.price || 0;
-          }
-        });
-      }
-    }
-
-    const subtotal = basePrice + featureCost;
-    const total = subtotal + shipping;
-
-    return {
-      basePrice,
-      featureCost,
-      subtotal,
-      shipping,
-      total
-    };
-  }, [modelId, modelOptions, features, featureDefs, shipping, bottomMetal, paintOptions, otherOptions, railAccessory, priceOverride]);
-
-  const pricing = calculateTotal();
+  // Use unified pricing calculation
+  const subtotalPrice = calculateTotalPrice();
+  const totalPrice = subtotalPrice + shipping;
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) {
@@ -1367,7 +1317,7 @@ export default function OrderEntry() {
               <div className="text-center space-y-2 border-b pb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-3xl font-bold">1</span>
-                  <span className="text-3xl font-bold text-blue-600">${pricing.total.toFixed(2)}</span>
+                  <span className="text-3xl font-bold text-blue-600">${totalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Items</span>

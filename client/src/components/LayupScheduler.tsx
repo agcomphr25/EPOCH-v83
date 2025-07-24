@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -1068,6 +1069,22 @@ export default function LayupScheduler() {
     );
   }
 
+  // Filter orders by type
+  const p1Orders = orders.filter(order => 
+    order.source === 'main_orders' || order.source === 'p1_purchase_order' || !order.source
+  );
+  const p2Orders = orders.filter(order => 
+    order.source === 'p2_production_order'
+  );
+
+  console.log('📊 Order Distribution:', {
+    total: orders.length,
+    p1Orders: p1Orders.length, 
+    p2Orders: p2Orders.length,
+    p1Sample: p1Orders.slice(0, 2).map(o => ({ orderId: o.orderId, source: (o as any).source })),
+    p2Sample: p2Orders.slice(0, 2).map(o => ({ orderId: o.orderId, source: (o as any).source }))
+  });
+
   return (
     <div className="h-full">
       {/* Navigation Header */}
@@ -1075,11 +1092,11 @@ export default function LayupScheduler() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Production Scheduling Management</p>
           </div>
           <div className="flex items-center space-x-4 text-sm">
             <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
+              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
               <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
@@ -1091,656 +1108,37 @@ export default function LayupScheduler() {
         </div>
       </div>
 
-    <DndContext 
-      sensors={sensors} 
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex h-full">{/* Order queue removed per user request */}
-
-        {/* Calendar - Full Width */}
-        <main className="flex-1 p-6 overflow-auto">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex space-x-2">
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Mold Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Mold Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {/* Add New Mold Form */}
-                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <Plus className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Add New Mold</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Mold Name</label>
-                        <Input
-                          placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
-                          value={newMold.moldName}
-                          onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Associated Stock Models</label>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
-                          {stockModels.map((model: any) => (
-                            <div key={model.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`stock-${model.id}`}
-                                checked={newMold.stockModels.includes(model.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setNewMold(prev => ({
-                                      ...prev,
-                                      stockModels: [...prev.stockModels, model.id]
-                                    }));
-                                  } else {
-                                    setNewMold(prev => ({
-                                      ...prev,
-                                      stockModels: prev.stockModels.filter(id => id !== model.id)
-                                    }));
-                                  }
-                                }}
-                              />
-                              <label 
-                                htmlFor={`stock-${model.id}`}
-                                className="text-sm cursor-pointer"
-                              >
-                                {model.displayName || model.name || model.id}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
-                      </div>
-                      {/* Bulk Creation Option */}
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="bulk-mode"
-                            checked={isBulkMode}
-                            onCheckedChange={(checked) => setIsBulkMode(!!checked)}
-                          />
-                          <label 
-                            htmlFor="bulk-mode" 
-                            className="text-sm font-medium cursor-pointer"
-                          >
-                            Create multiple molds at once
-                          </label>
-                        </div>
-                        
-                        {isBulkMode && (
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Number of Molds</label>
-                            <Input
-                              type="number"
-                              placeholder="14"
-                              value={bulkMoldCount}
-                              min={1}
-                              max={50}
-                              onChange={(e) => setBulkMoldCount(+e.target.value)}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {!isBulkMode && (
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Instance Number</label>
-                            <Input
-                              type="number"
-                              placeholder="1"
-                              value={newMold.instanceNumber}
-                              min={1}
-                              onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">For single molds with custom instance numbers</p>
-                          </div>
-                        )}
-                        <div className={isBulkMode ? 'col-span-2' : ''}>
-                          <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
-                          <Input
-                            type="number"
-                            placeholder="2"
-                            value={newMold.multiplier}
-                            min={1}
-                            onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Units each mold can produce per day</p>
-                        </div>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={handleAddMold} 
-                      className="mt-3" 
-                      size="sm"
-                      disabled={!newMold.moldName.trim()}
-                    >
-                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
-                    </Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Existing Molds */}
-                  {molds.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No molds configured yet. Use the form above to add your first mold.
-                    </div>
-                  ) : (
-                    molds.map(mold => (
-                      <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                        <Checkbox
-                          checked={mold.enabled ?? true}
-                          onCheckedChange={(checked) => 
-                            saveMold({ ...mold, enabled: !!checked })
-                          }
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <div className="font-medium text-base">
-                              {mold.modelName} #{mold.instanceNumber}
-                            </div>
-                            <Badge variant={mold.isActive ? "default" : "secondary"}>
-                              {mold.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Mold ID: {mold.moldId}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="text-sm font-medium">Daily Capacity:</label>
-                          <Input
-                            type="number"
-                            value={mold.multiplier}
-                            min={1}
-                            onChange={(e) =>
-                              saveMold({ ...mold, multiplier: +e.target.value })
-                            }
-                            className="w-24"
-                          />
-                          <span className="text-sm text-gray-600">units/day</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleMoldStatus(mold.moldId, !mold.isActive)}
-                            className={mold.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
-                          >
-                            {mold.isActive ? "Mark Inactive" : "Reactivate"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteMold(mold.moldId)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-                      <strong>How to Add Molds:</strong>
-                    </p>
-                    <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
-                      <li><strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")</li>
-                      <li><strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on</li>
-                      <li><strong>Daily Capacity:</strong> How many units this specific mold can produce in one day</li>
-                    </ul>
-                    {molds.length > 0 && (
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
-                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
-                        Adjust daily capacity to reflect each mold's production capability.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Users className="w-4 h-4 mr-2" />
-                  Employee Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Employee Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {/* Add New Employee Form */}
-                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <Plus className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Add New Employee</span>
-                    </div>
-                    <div className="mb-3">
-                      <Input
-                        placeholder="Employee ID (e.g., EMP004)"
-                        value={newEmployee.employeeId}
-                        onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Rate:</label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          placeholder="1.5"
-                          value={newEmployee.rate}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">units/hr</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Hours:</label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          placeholder="8"
-                          value={newEmployee.hours}
-                          min={1}
-                          max={12}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">hrs/day</span>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={handleAddEmployee} 
-                      className="mt-3" 
-                      size="sm"
-                      disabled={!newEmployee.employeeId.trim()}
-                    >
-                      Add Employee
-                    </Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Existing Employees */}
-                  {employees.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No employees configured yet. Use the form above to add your first employee.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {employees.map(emp => {
-                        const changes = employeeChanges[emp.employeeId];
-                        const currentRate = changes?.rate ?? emp.rate;
-                        const currentHours = changes?.hours ?? emp.hours;
-                        
-                        return (
-                          <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                            <div className="flex items-center justify-between mb-3">
-                              <div>
-                                <div className="font-medium text-base">{emp.name}</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                  Employee ID: {emp.employeeId} | Department: {emp.department}
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Badge variant={emp.isActive ? "default" : "secondary"}>
-                                  {emp.isActive ? "Active" : "Inactive"}
-                                </Badge>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toggleEmployeeStatus(emp.employeeId, !emp.isActive)}
-                                  className={emp.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
-                                >
-                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => deleteEmployee(emp.employeeId)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Production Rate:</label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  value={currentRate}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'rate', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">units/hr</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Daily Hours:</label>
-                                <Input
-                                  type="number"
-                                  step="0.5"
-                                  value={currentHours}
-                                  min={1}
-                                  max={12}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'hours', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">hrs/day</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      
-                      {/* Save Button */}
-                      {hasUnsavedChanges && (
-                        <div className="flex justify-center pt-4 border-t">
-                          <Button 
-                            onClick={handleSaveEmployeeChanges}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                          >
-                            Save Changes
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {employees.length > 0 && (
-                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
-                        The system will automatically distribute work based on these settings.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-
-
-
-
-
-            <Button
-              variant={viewType === 'day' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('day')}
-            >
-              <Calendar1 className="w-4 h-4 mr-1" />
-              Day
-            </Button>
-            <Button
-              variant={viewType === 'week' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('week')}
-            >
-              <Calendar className="w-4 h-4 mr-1" />
-              Week
-            </Button>
-            <Button
-              variant={viewType === 'month' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('month')}
-            >
-              <Grid3X3 className="w-4 h-4 mr-1" />
-              Month
-            </Button>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (viewType === 'week') {
-                  // Jump to previous work week (skip weekends)
-                  const prevWeekStart = startOfWeek(addDays(currentDate, -7), { weekStartsOn: 1 });
-                  setCurrentDate(prevWeekStart);
-                } else {
-                  setCurrentDate(prev => addDays(prev, -1));
-                }
-              }}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="px-3 text-sm font-medium">
-              {viewType === 'week' 
-                ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
-                : format(currentDate, 'MMMM yyyy')
-              }
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (viewType === 'week') {
-                  // Jump to next work week (skip weekends)
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
-                } else {
-                  setCurrentDate(prev => addDays(prev, 1));
-                }
-              }}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-            
-            {/* Quick Next Week Button */}
-            {viewType === 'week' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
-                }}
-                className="ml-2 text-xs"
-              >
-                Next Week
-              </Button>
-            )}
-          </div>
+      {/* Tabbed Interface */}
+      <Tabs defaultValue="p1" className="h-full flex flex-col">
+        <div className="bg-gray-50 dark:bg-gray-800 px-6 py-2 border-b border-gray-200 dark:border-gray-700">
+          <TabsList className="grid w-auto grid-cols-2">
+            <TabsTrigger value="p1" className="flex items-center space-x-2">
+              <span>P1 Layup Scheduler</span>
+              <Badge variant="secondary" className="ml-2">{p1Orders.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="p2" className="flex items-center space-x-2">
+              <span>P2 Layup Scheduler</span>
+              <Badge variant="secondary" className="ml-2">{p2Orders.length}</Badge>
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-          {/* Week-based Calendar Layout */}
-          {viewType === 'week' || viewType === 'day' ? (
-            <div
-              className="grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-            >
-              {/* Header */}
-              {dates.map(date => (
-                <div
-                  key={date.toISOString()}
-                  className="p-3 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center font-semibold text-sm"
-                >
-                  {format(date, 'MM/dd')}
-                  <div className="text-xs text-gray-500 mt-1">
-                    {format(date, 'EEE')}
-                  </div>
-                </div>
-              ))}
-
-              {/* Rows for each mold - Only show molds with assigned orders */}
-              {(() => {
-                // Get molds that have orders assigned to them
-                const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                
-                console.log(`📊 DEBUG: Calendar Display Summary`);
-                console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
-                console.log(`  • Used mold IDs:`, Array.from(usedMoldIds));
-                console.log(`  • Active molds with orders: ${activeMolds.length}`);
-                console.log(`  • Active mold details:`, activeMolds.map(m => ({ moldId: m.moldId, modelName: m.modelName })));
-                
-                if (activeMolds.length === 0 && Object.keys(orderAssignments).length > 0) {
-                  console.log(`❌ MISMATCH: Have ${Object.keys(orderAssignments).length} assignments but no active molds!`);
-                  console.log(`  • Assignment details:`, Object.entries(orderAssignments).slice(0, 5));
-                }
-                
-                return activeMolds.map(mold => (
-                <React.Fragment key={mold.moldId}>
-                  {dates.map(date => {
-                    const dateString = date.toISOString();
-                    
-                    // Get orders assigned to this mold/date combination
-                    const cellOrders = Object.entries(orderAssignments)
-                      .filter(([orderId, assignment]) => {
-                        const assignmentDateOnly = assignment.date.split('T')[0];
-                        const cellDateOnly = dateString.split('T')[0];
-                        return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                      })
-                      .map(([orderId]) => {
-                        const order = orders.find(o => o.orderId === orderId);
-                        return order;
-                      })
-                      .filter(order => order !== undefined) as any[];
-
-                    const dropId = `${mold.moldId}|${dateString}`;
-
-                    return (
-                      <DroppableCell
-                        key={dropId}
-                        moldId={mold.moldId}
-                        date={date}
-                        orders={cellOrders}
-                        onDrop={(orderId, moldId, date) => {
-                          // Handle drop (this is handled by DndContext now)
-                        }}
-                        moldInfo={{
-                          moldId: mold.moldId,
-                          instanceNumber: mold.instanceNumber
-                        }}
-                        getModelDisplayName={getModelDisplayName}
-                        features={features}
-                      />
-                    );
-                  })}
-                </React.Fragment>
-                ));
-              })()}
-            </div>
-          ) : (
-            /* Month view - organized by weeks */
-            <div className="space-y-4">
-              {weekGroups?.map((week, weekIndex) => (
-                <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                  {/* Week Header */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                      Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
-                    </h3>
-                  </div>
-                  
-                  {/* Week Calendar Grid */}
-                  <div
-                    className="grid gap-1"
-                    style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
-                  >
-                    {/* Day Headers */}
-                    {week.map(date => (
-                      <div
-                        key={date.toISOString()}
-                        className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
-                      >
-                        {format(date, 'EEE MM/dd')}
-                      </div>
-                    ))}
-
-                    {/* Mold Rows for this week - Only show molds with assigned orders */}
-                    {(() => {
-                      // Get molds that have orders assigned to them
-                      const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                      
-                      return activeMolds.map(mold => (
-                      <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
-                        {week.map(date => {
-                          const dateString = date.toISOString();
-                          const cellDateOnly = dateString.split('T')[0];
-                          
-                          const cellOrders = Object.entries(orderAssignments)
-                            .filter(([orderId, assignment]) => {
-                              const assignmentDateOnly = assignment.date.split('T')[0];
-                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                            })
-                            .map(([orderId]) => {
-                              const order = orders.find(o => o.orderId === orderId);
-                              return order;
-                            })
-                            .filter(order => order !== undefined) as any[];
-
-                          const dropId = `${mold.moldId}|${dateString}`;
-
-                          return (
-                            <DroppableCell
-                              key={dropId}
-                              moldId={mold.moldId}
-                              date={date}
-                              orders={cellOrders}
-                              onDrop={(orderId, moldId, date) => {
-                                // Handle drop (this is handled by DndContext now)
-                              }}
-                              moldInfo={{
-                                moldId: mold.moldId,
-                                instanceNumber: mold.instanceNumber
-                              }}
-                              getModelDisplayName={getModelDisplayName}
-                              features={features}
-                            />
-                          );
-                        })}
-                      </React.Fragment>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-        </main>
-      </div>
-      
-      <DragOverlay>
-        {activeId ? (
-          <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-            {activeId}
+        {/* P1 Layup Scheduler Tab */}
+        <TabsContent value="p1" className="flex-1 overflow-hidden">
+          <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20">
+            <p className="text-blue-700 dark:text-blue-300">P1 Layup Scheduler - {p1Orders.length} orders</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Full scheduler implementation coming next...</p>
           </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        </TabsContent>
+
+        {/* P2 Layup Scheduler Tab */}
+        <TabsContent value="p2" className="flex-1 overflow-hidden">
+          <div className="text-center py-4 bg-green-50 dark:bg-green-900/20">
+            <p className="text-green-700 dark:text-green-300">P2 Layup Scheduler - {p2Orders.length} orders</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Full scheduler implementation coming next...</p>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -2942,18 +2942,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const productionOrders = await storage.getAllProductionOrders();
         console.log(`🏭 Found ${productionOrders.length} total production orders`);
         
-        pendingProductionOrders = productionOrders.filter(po => 
-          (po as any).production_status === 'PENDING' && (po as any).order_id?.startsWith('PUR')
-        );
+        // Debug all production orders first - show ALL properties
+        console.log('🔍 Debug first production order - ALL PROPERTIES:', JSON.stringify(productionOrders[0], null, 2));
+        
+        pendingProductionOrders = productionOrders.filter(po => {
+          const status = (po as any).productionStatus;
+          const orderId = (po as any).orderId;
+          const isPending = status === 'PENDING';
+          const isPUR = orderId?.startsWith('PUR');
+          
+          if (isPending && isPUR) {
+            console.log(`✅ Production order ${orderId} matches criteria: status=${status}, starts with PUR=${isPUR}`);
+          } else {
+            console.log(`❌ Production order ${orderId} filtered out: status=${status}, starts with PUR=${isPUR}`);
+          }
+          
+          return isPending && isPUR;
+        });
         console.log(`🏭 Found ${pendingProductionOrders.length} pending PUR production orders`);
         if (pendingProductionOrders.length > 0) {
           console.log('🏭 Sample production order:', {
-            orderId: (pendingProductionOrders[0] as any).order_id,
-            productionStatus: (pendingProductionOrders[0] as any).production_status,
-            itemName: (pendingProductionOrders[0] as any).item_name,
-            itemId: (pendingProductionOrders[0] as any).item_id,
-            stockModelId: (pendingProductionOrders[0] as any).item_id,
-            customerName: (pendingProductionOrders[0] as any).customer_name
+            orderId: (pendingProductionOrders[0] as any).orderId,
+            productionStatus: (pendingProductionOrders[0] as any).productionStatus,
+            itemName: (pendingProductionOrders[0] as any).itemName,
+            itemId: (pendingProductionOrders[0] as any).itemId,
+            stockModelId: (pendingProductionOrders[0] as any).itemId,
+            customerName: (pendingProductionOrders[0] as any).customerName
           });
         }
       } catch (prodOrderError) {
@@ -3046,8 +3060,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const productionLayupOrders = (pendingProductionOrders || []).map(po => {
-        const mappedStockModelId = mapItemNameToStockModel((po as any).item_name);
-        console.log(`🏭 Production order mapping: "${(po as any).item_name}" → "${mappedStockModelId}"`);
+        const mappedStockModelId = mapItemNameToStockModel((po as any).itemName);
+        console.log(`🏭 Production order mapping: "${(po as any).itemName}" → "${mappedStockModelId}"`);
         
         // Calculate high priority for production orders to meet P1 purchase order due dates
         const calculateProductionPriority = (dueDate: Date) => {
@@ -3061,21 +3075,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return 35; // Still higher than regular orders (50+)
         };
         
-        const priority = calculateProductionPriority(new Date((po as any).due_date));
-        console.log(`🏭 Production order ${(po as any).order_id} priority: ${priority} (due: ${(po as any).due_date})`);
+        const priority = calculateProductionPriority(new Date((po as any).dueDate));
+        console.log(`🏭 Production order ${(po as any).orderId} priority: ${priority} (due: ${(po as any).dueDate})`);
         
         return {
           id: `production-${(po as any).id}`,
-          orderId: (po as any).order_id,
-          orderDate: (po as any).order_date,
-          customer: (po as any).customer_name || 'Production Order',
-          product: (po as any).item_name || 'Production Item',
+          orderId: (po as any).orderId,
+          orderDate: (po as any).orderDate,
+          customer: (po as any).customerName || 'Production Order',
+          product: (po as any).itemName || 'Production Item',
           quantity: 1,
           status: 'FINALIZED',
           department: 'Layup',
           currentDepartment: 'Layup',
           priorityScore: priority, // High priority to meet due dates
-          dueDate: (po as any).due_date,
+          dueDate: (po as any).dueDate,
           source: 'production_order',
           productionOrderId: (po as any).id,
           stockModelId: mappedStockModelId,

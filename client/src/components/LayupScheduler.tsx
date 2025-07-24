@@ -774,41 +774,9 @@ export default function LayupScheduler() {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log("🚀 Auto-running initial schedule generation");
       console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
-      
-      // Simplified test: assign first 5 orders to see if calendar displays anything
-      const testAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      const today = new Date();
-      
-      // Try assigning regular orders first
-      const regularOrders = orders.filter(order => order.source !== 'production_order').slice(0, 3);
-      const productionOrders = orders.filter(order => order.source === 'production_order').slice(0, 2);
-      
-      let dayOffset = 1;
-      [...regularOrders, ...productionOrders].forEach((order, index) => {
-        const testDate = new Date(today);
-        testDate.setDate(today.getDate() + dayOffset);
-        
-        // Ensure it's a work day (Monday-Thursday)
-        while (testDate.getDay() === 0 || testDate.getDay() === 5 || testDate.getDay() === 6) {
-          testDate.setDate(testDate.getDate() + 1);
-        }
-        
-        const moldId = order.source === 'production_order' ? 'APR-1' : 'APR-2';
-        
-        testAssignments[order.orderId] = {
-          moldId: moldId,
-          date: testDate.toISOString()
-        };
-        
-        dayOffset++;
-      });
-      
-      console.log('🧪 Test assignments created:', testAssignments);
-      console.log('🧪 Assignment count:', Object.keys(testAssignments).length);
-      setOrderAssignments(testAssignments);
-      return; // Skip complex auto-schedule for now
+      setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
-  }, [orders.length, molds.length, employees.length]);
+  }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
 
 
 
@@ -851,31 +819,31 @@ export default function LayupScheduler() {
     return generateLayupSchedule(orderData, moldData, employeeData);
   }, [orders, molds, employees]);
 
-  // DISABLED: This auto-schedule effect was conflicting with the manual test assignments
-  // React.useEffect(() => {
-  //   if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
-  //     console.log('🚀 Applying automatic schedule:', schedule);
-  //     const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-  //     
-  //     schedule.forEach(item => {
-  //       console.log(`📋 Assigning ${item.orderId} to mold ${item.moldId} on ${item.scheduledDate}`);
-  //       autoAssignments[item.orderId] = {
-  //         moldId: item.moldId,
-  //         date: item.scheduledDate.toISOString()
-  //       };
-  //     });
-  //     
-  //     setOrderAssignments(autoAssignments);
-  //     console.log('✅ Auto-assigned orders:', autoAssignments);
-  //     console.log('🔢 Total assignments made:', Object.keys(autoAssignments).length);
-  //   } else {
-  //     console.log('❌ Not applying auto-schedule:', {
-  //       scheduleLength: schedule.length,
-  //       existingAssignments: Object.keys(orderAssignments).length,
-  //       schedule: schedule
-  //     });
-  //   }
-  // }, [schedule, orderAssignments]);
+  // Apply automatic schedule to orderAssignments when schedule changes
+  React.useEffect(() => {
+    if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
+      console.log('🚀 Applying automatic schedule:', schedule);
+      const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      schedule.forEach(item => {
+        console.log(`📋 Assigning ${item.orderId} to mold ${item.moldId} on ${item.scheduledDate}`);
+        autoAssignments[item.orderId] = {
+          moldId: item.moldId,
+          date: item.scheduledDate.toISOString()
+        };
+      });
+      
+      setOrderAssignments(autoAssignments);
+      console.log('✅ Auto-assigned orders:', autoAssignments);
+      console.log('🔢 Total assignments made:', Object.keys(autoAssignments).length);
+    } else {
+      console.log('❌ Not applying auto-schedule:', {
+        scheduleLength: schedule.length,
+        existingAssignments: Object.keys(orderAssignments).length,
+        schedule: schedule
+      });
+    }
+  }, [schedule, orderAssignments]);
 
   // Build date columns
   // Generate date ranges based on view type - work week focus (Mon-Fri only)

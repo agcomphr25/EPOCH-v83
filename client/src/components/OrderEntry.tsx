@@ -377,6 +377,29 @@ export default function OrderEntry() {
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
         
+        // CRITICAL FIX: Load discount details after setting discount code
+        if (order.discountCode && order.discountCode !== 'none') {
+          const loadDiscountDetailsForEdit = async () => {
+            try {
+              if (order.discountCode.startsWith('persistent_')) {
+                const discountId = order.discountCode.replace('persistent_', '');
+                const persistentDiscounts = await apiRequest('/api/persistent-discounts');
+                const discount = persistentDiscounts.find((d: any) => d.id.toString() === discountId);
+                setDiscountDetails(discount || null);
+              } else if (order.discountCode.startsWith('short_term_')) {
+                const saleId = order.discountCode.replace('short_term_', '');
+                const shortTermSales = await apiRequest('/api/short-term-sales');
+                const sale = shortTermSales.find((s: any) => s.id.toString() === saleId);
+                setDiscountDetails(sale ? { ...sale, appliesTo: sale.appliesTo || 'total_order' } : null);
+              }
+            } catch (error) {
+              console.error('Failed to load discount details for edit:', error);
+              setDiscountDetails(null);
+            }
+          };
+          loadDiscountDetailsForEdit();
+        }
+        
         // Reset payment state (orders don't store payment info currently)
         setIsPaid(false);
         setShowPaymentModal(false);

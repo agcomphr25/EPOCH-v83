@@ -240,9 +240,9 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="stock_model">Stock Model</SelectItem>
+                      <SelectItem value="stock_model">Pre-Defined Stock Model</SelectItem>
                       <SelectItem value="feature_item">Feature Item</SelectItem>
-                      <SelectItem value="custom_model">Custom Model</SelectItem>
+                      <SelectItem value="custom_model">Stock Model</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -291,12 +291,12 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
 
                 {formData.itemType === 'custom_model' && (
                   <div className="space-y-2">
-                    <Label htmlFor="customName">Custom Model Name</Label>
+                    <Label htmlFor="customName">Stock Model Name</Label>
                     <Input
                       id="customName"
                       value={formData.itemName}
                       onChange={(e) => setFormData(prev => ({...prev, itemName: e.target.value, itemId: e.target.value}))}
-                      placeholder="Enter custom model name"
+                      placeholder="Enter stock model name"
                       required
                     />
                   </div>

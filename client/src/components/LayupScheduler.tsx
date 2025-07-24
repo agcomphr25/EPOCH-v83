@@ -766,6 +766,13 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - Production orders:', productionOrders.length);
   if (productionOrders.length > 0) {
     console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
+    console.log('🏭 LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
+    console.log('🏭 LayupScheduler - Production order modelId:', productionOrders[0].modelId);
+  }
+  
+  // Force auto-schedule trigger when production orders are loaded
+  if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
+    console.log('🏭 Triggering auto-schedule for production orders...');
   }
   
   // Debug Mesa Universal molds
@@ -808,9 +815,13 @@ export default function LayupScheduler() {
     const orderData = orders.map(order => ({
       orderId: order.orderId,
       orderDate: new Date(order.orderDate),
+      dueDate: order.dueDate ? new Date(order.dueDate) : undefined,
       priorityScore: order.priorityScore,
       customer: order.customer,
       product: order.product,
+      modelId: order.modelId,
+      stockModelId: order.stockModelId,
+      source: order.source, // Include source field for production order detection
     }));
 
     const moldData = molds.map(mold => ({
@@ -834,11 +845,24 @@ export default function LayupScheduler() {
   // Apply automatic schedule to orderAssignments when schedule changes
   React.useEffect(() => {
     if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log('🚀 Applying automatic schedule:', schedule);
+      console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
+      
+      // Debug production orders in schedule
+      const productionScheduleItems = schedule.filter(item => {
+        const order = orders.find(o => o.orderId === item.orderId);
+        return order?.source === 'production_order';
+      });
+      console.log('🏭 Production orders in schedule:', productionScheduleItems.length);
+      
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
       
       schedule.forEach(item => {
-        console.log(`📋 Assigning ${item.orderId} to mold ${item.moldId} on ${item.scheduledDate}`);
+        const order = orders.find(o => o.orderId === item.orderId);
+        const isProduction = order?.source === 'production_order';
+        if (isProduction) {
+          console.log(`🏭 PRODUCTION ORDER ASSIGNMENT: ${item.orderId} → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
+        }
+        
         autoAssignments[item.orderId] = {
           moldId: item.moldId,
           date: item.scheduledDate.toISOString()
@@ -846,13 +870,15 @@ export default function LayupScheduler() {
       });
       
       setOrderAssignments(autoAssignments);
-      console.log('✅ Auto-assigned orders:', autoAssignments);
-      console.log('🔢 Total assignments made:', Object.keys(autoAssignments).length);
+      console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
+      console.log('✅ Production orders assigned:', Object.keys(autoAssignments).filter(orderId => {
+        const order = orders.find(o => o.orderId === orderId);
+        return order?.source === 'production_order';
+      }).length);
     } else {
       console.log('❌ Not applying auto-schedule:', {
         scheduleLength: schedule.length,
-        existingAssignments: Object.keys(orderAssignments).length,
-        schedule: schedule
+        existingAssignments: Object.keys(orderAssignments).length
       });
     }
   }, [schedule, orderAssignments]);

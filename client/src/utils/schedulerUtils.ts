@@ -15,6 +15,7 @@ export interface LayupOrder {
   product: string;
   modelId?: string;
   stockModelId?: string;
+  source?: string;
 }
 
 export interface MoldSettings {
@@ -162,6 +163,13 @@ export function generateLayupSchedule(
 
       // Check if this day has capacity - find compatible molds based on stock model
       const orderStockModel = order.stockModelId || order.modelId;
+      
+      // Debug production orders specifically
+      if (order.source === 'production_order') {
+        console.log(`🏭 PRODUCTION ORDER SCHEDULING: ${order.orderId}`);
+        console.log(`🏭 Order stock model: ${orderStockModel} (stockModelId: ${order.stockModelId}, modelId: ${order.modelId})`);
+        console.log(`🏭 Available molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+      }
       console.log(`🔍 Finding molds for order ${order.orderId} with stock model: ${orderStockModel}`);
       
       // First filter for compatible molds based on stock model

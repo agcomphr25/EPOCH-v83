@@ -3020,14 +3020,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log('📋 P1 Purchase Orders - PO count:', p1PurchaseOrders.length);
-      console.log('📋 P1 Purchase Orders - Sample PO:', p1PurchaseOrders[0]);
-      p1PurchaseOrders.forEach(po => {
-        console.log(`📋 PO ${po.poNumber}: ${po.poItems?.length || 0} items`);
-        po.poItems?.forEach(item => {
-          console.log(`  - Item ${item.id}: ${item.itemName} (${item.itemId}) qty:${item.quantity}`);
-        });
-      });
+      // Get P2 Production Orders that are assigned to Layup department
+      const p2ProductionOrders = await storage.getAllP2ProductionOrders();
+      const p2LayupOrders = p2ProductionOrders
+        .filter(order => order.department === 'Layup' && order.status === 'PENDING')
+        .map(order => ({
+          id: `p2-prod-${order.id}`,
+          orderId: order.orderId,
+          orderDate: order.createdAt,
+          customer: `P2 Production (${order.sku})`,
+          product: order.partName,
+          quantity: order.quantity,
+          status: 'FINALIZED',
+          department: 'Layup',
+          currentDepartment: 'Layup',
+          priorityScore: order.priority || 50,
+          dueDate: order.dueDate || order.createdAt,
+          source: 'p2_production_order',
+          stockModelId: 'mesa_universal', // All P2 production orders use Mesa Universal molds
+          modelId: 'mesa_universal',
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt
+        }));
+
+      console.log('📋 P1 Purchase Orders - PO count:', activePos.length);
+      console.log('📋 P2 Production Orders - Layup count:', p2LayupOrders.length);
+      console.log('📋 P1 layup orders generated:', p1LayupOrders.length);
+      if (p2LayupOrders.length > 0) {
+        console.log('📋 Sample P2 layup order:', p2LayupOrders[0]);
+      }
 
       // Combine and sort all orders by priority score (lower = higher priority)
       const combinedOrders = [
@@ -3042,7 +3063,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
           modelId: order.stockModelId
-        }))
+        })),
+        ...p2LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
       res.json(combinedOrders);

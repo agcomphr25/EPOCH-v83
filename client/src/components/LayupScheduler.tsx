@@ -892,6 +892,12 @@ export default function LayupScheduler() {
         !lopValue.toLowerCase().includes('standard') &&
         !lopValue.toLowerCase().includes('no extra');
 
+      // Block Friday drops entirely - Friday is not a work day
+      if (targetDate.getDay() === 5) { // Friday = 5
+        console.warn(`🚫 Order ${orderId} cannot be scheduled on Friday - Not a work day`);
+        return; // Prevent the drop
+      }
+
       // If it's a LOP order, only allow Monday drops
       if (isLOPOrder && targetDate.getDay() !== 1) { // Monday = 1
         console.warn(`🚫 LOP order ${orderId} (LOP: ${lopValue}) cannot be scheduled on ${format(targetDate, 'EEEE')} - LOP orders must be scheduled on Monday only`);
@@ -1376,6 +1382,15 @@ export default function LayupScheduler() {
                             const assignmentDateOnly = assignment.date.split('T')[0];
                             const cellDateOnly = dateString.split('T')[0];
                             const orderInP1 = p1Orders.some(o => o.orderId === orderId);
+                            
+                            // Block Friday assignments (day 5) - not a work day
+                            const assignmentDate = new Date(assignment.date);
+                            const isFriday = assignmentDate.getDay() === 5;
+                            if (isFriday) {
+                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
+                              return false;
+                            }
+                            
                             return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
                           })
                           .map(([orderId]) => {
@@ -1451,6 +1466,15 @@ export default function LayupScheduler() {
                                 .filter(([orderId, assignment]) => {
                                   const assignmentDateOnly = assignment.date.split('T')[0];
                                   const orderInP1 = p1Orders.some(o => o.orderId === orderId);
+                                  
+                                  // Block Friday assignments (day 5) - not a work day
+                                  const assignmentDate = new Date(assignment.date);
+                                  const isFriday = assignmentDate.getDay() === 5;
+                                  if (isFriday) {
+                                    console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
+                                    return false;
+                                  }
+                                  
                                   return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
                                 })
                                 .map(([orderId]) => p1Orders.find(o => o.orderId === orderId))
@@ -1686,6 +1710,15 @@ export default function LayupScheduler() {
                             const assignmentDateOnly = assignment.date.split('T')[0];
                             const cellDateOnly = dateString.split('T')[0];
                             const orderInP2 = p2Orders.some(o => o.orderId === orderId);
+                            
+                            // Block Friday assignments (day 5) - not a work day
+                            const assignmentDate = new Date(assignment.date);
+                            const isFriday = assignmentDate.getDay() === 5;
+                            if (isFriday) {
+                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
+                              return false;
+                            }
+                            
                             return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
                           })
                           .map(([orderId]) => {
@@ -1761,6 +1794,15 @@ export default function LayupScheduler() {
                                 .filter(([orderId, assignment]) => {
                                   const assignmentDateOnly = assignment.date.split('T')[0];
                                   const orderInP2 = p2Orders.some(o => o.orderId === orderId);
+                                  
+                                  // Block Friday assignments (day 5) - not a work day
+                                  const assignmentDate = new Date(assignment.date);
+                                  const isFriday = assignmentDate.getDay() === 5;
+                                  if (isFriday) {
+                                    console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
+                                    return false;
+                                  }
+                                  
                                   return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
                                 })
                                 .map(([orderId]) => p2Orders.find(o => o.orderId === orderId))

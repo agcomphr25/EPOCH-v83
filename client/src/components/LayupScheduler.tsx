@@ -680,6 +680,19 @@ export default function LayupScheduler() {
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
       
+      // Special logging for production orders
+      if (order.source === 'production_order') {
+        console.log(`🏭 PROCESSING PRODUCTION ORDER ${order.orderId}:`, {
+          stockModelId: order.stockModelId,
+          modelId: order.modelId,
+          product: order.product,
+          compatibleMolds: compatibleMolds.length,
+          compatibleMoldIds: compatibleMolds.map(m => m.moldId),
+          allEnabledMolds: molds.filter(m => m.enabled).length,
+          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).length
+        });
+      }
+      
       if (compatibleMolds.length === 0) {
         console.log('⚠️ No compatible molds for order:', order.orderId, 'Source:', order.source);
         if (order.source === 'production_order') {
@@ -817,15 +830,24 @@ export default function LayupScheduler() {
   console.log('🏭 Unassigned PRODUCTION orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
-  // Auto-generate schedule when data is loaded
+  // Auto-generate schedule when data is loaded OR when production orders are present
   useEffect(() => {
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log("🚀 Auto-running initial schedule generation");
+    const productionOrders = orders.filter(o => o.source === 'production_order');
+    const unassignedProductionOrders = productionOrders.filter(o => !orderAssignments[o.orderId]);
+    
+    const shouldRunAutoSchedule = orders.length > 0 && molds.length > 0 && employees.length > 0 && (
+      Object.keys(orderAssignments).length === 0 || // Initial run
+      unassignedProductionOrders.length > 0 // New production orders need assignment
+    );
+    
+    if (shouldRunAutoSchedule) {
+      console.log("🚀 Auto-running schedule generation");
       console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
-      console.log("🏭 Production orders in data:", orders.filter(o => o.source === 'production_order').length);
+      console.log("🏭 Production orders in data:", productionOrders.length);
+      console.log("🏭 Unassigned production orders:", unassignedProductionOrders.length);
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
-  }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
+  }, [orders.length, molds.length, employees.length, orderAssignments, generateAutoSchedule]);
 
 
 

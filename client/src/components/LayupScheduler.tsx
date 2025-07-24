@@ -1360,11 +1360,10 @@ export default function LayupScheduler() {
                     </div>
                   ))}
 
-                  {/* Rows for each mold - Only show molds with assigned orders */}
+                  {/* Rows for each mold - Show all enabled molds */}
                   {(() => {
-                    // Get molds that have orders assigned to them  
-                    const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                    // Show all enabled molds, not just those with orders
+                    const activeMolds = molds.filter(m => m.enabled);
                     
                     return activeMolds.map(mold => (
                     <React.Fragment key={mold.moldId}>
@@ -1438,8 +1437,8 @@ export default function LayupScheduler() {
 
                         {/* Mold Rows for this week */}
                         {(() => {
-                          const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                          // Show all enabled molds, not just those with orders
+                          const activeMolds = molds.filter(m => m.enabled);
                           
                           return activeMolds.map(mold => (
                           <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
@@ -1673,9 +1672,8 @@ export default function LayupScheduler() {
 
                   {/* Rows for each mold - P2 Orders */}
                   {(() => {
-                    // Get molds that have P2 orders assigned to them  
-                    const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                    // Show all enabled molds, not just those with orders
+                    const activeMolds = molds.filter(m => m.enabled);
                     
                     return activeMolds.map(mold => (
                     <React.Fragment key={mold.moldId}>
@@ -1749,8 +1747,8 @@ export default function LayupScheduler() {
 
                         {/* Mold Rows for this week - P2 Orders */}
                         {(() => {
-                          const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                          // Show all enabled molds, not just those with orders
+                          const activeMolds = molds.filter(m => m.enabled);
                           
                           return activeMolds.map(mold => (
                           <React.Fragment key={`${weekIndex}-${mold.moldId}`}>

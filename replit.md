@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 24, 2025 - Fixed Layup Scheduler Cell Skipping Issue (COMPLETED)**
+- ✅ **Calendar Grid Fix**: Fixed layup scheduler calendar to display ALL enabled molds, not just those with assigned orders
+- ✅ **Week View Correction**: Removed filtering logic that only showed molds with orders, preventing cell skipping in week view
+- ✅ **Month View Correction**: Applied same fix to month view to ensure complete calendar grid displays
+- ✅ **P1 and P2 Tab Consistency**: Fixed both P1 and P2 scheduler tabs to show complete grid layouts
+- ✅ **Complete Grid Display**: All calendar cells now display properly regardless of whether they contain orders
+- ✅ **No More Missing Cells**: Resolved issue where empty molds were being filtered out, causing incomplete calendar views
+
 **July 24, 2025 - LOP Monday-Only Scheduling Implementation (COMPLETED)**
 - ✅ **LOP Detection Function**: Added hasLOPAdjustment() function to identify orders with Length of Pull adjustments
 - ✅ **Week-Based LOP Grouping**: Groups all LOP orders by week and schedules them exclusively on Monday of their respective week

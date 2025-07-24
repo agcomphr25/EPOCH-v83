@@ -773,6 +773,25 @@ export default function LayupScheduler() {
   useEffect(() => {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log("🚀 Auto-running initial schedule generation");
+      
+      // Quick test: manually assign first production order to see if it displays
+      const productionOrders = orders.filter(order => order.source === 'production_order');
+      if (productionOrders.length > 0) {
+        const testDate = new Date();
+        testDate.setDate(testDate.getDate() + 1); // Tomorrow
+        
+        const testAssignments = {
+          [productionOrders[0].orderId]: {
+            moldId: 'Mesa Universal-1',
+            date: testDate.toISOString()
+          }
+        };
+        
+        console.log('🧪 Test assignment for production order:', testAssignments);
+        setOrderAssignments(testAssignments);
+        return; // Skip auto-schedule for now
+      }
+      
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
   }, [orders.length, molds.length, employees.length, generateAutoSchedule]);

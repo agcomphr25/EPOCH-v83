@@ -2951,6 +2951,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orderId: pendingProductionOrders[0].orderId,
             productionStatus: pendingProductionOrders[0].productionStatus,
             itemName: pendingProductionOrders[0].itemName,
+            itemId: pendingProductionOrders[0].itemId,
+            stockModelId: pendingProductionOrders[0].itemId,
             customerName: pendingProductionOrders[0].customerName
           });
         }
@@ -3020,25 +3022,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Convert Production Orders to layup queue format
       console.log('🏭 Processing production orders for layup queue, array type:', typeof pendingProductionOrders, 'length:', pendingProductionOrders?.length);
-      const productionLayupOrders = (pendingProductionOrders || []).map(po => ({
-        id: `production-${po.id}`,
-        orderId: po.orderId,
-        orderDate: po.orderDate,
-        customer: po.customerName || 'Production Order',
-        product: po.itemName || 'Production Item',
-        quantity: 1,
-        status: 'FINALIZED',
-        department: 'Layup',
-        currentDepartment: 'Layup',
-        priorityScore: 60, // Medium priority for production orders
-        dueDate: po.dueDate,
-        source: 'production_order',
-        productionOrderId: po.id,
-        stockModelId: po.itemId,
-        createdAt: po.createdAt,
-        updatedAt: po.updatedAt,
-        specifications: po.specifications
-      }));
+      console.log('🏭 About to apply stock model mapping to production orders');
+      
+      // Map production order item names to stock model IDs
+      const mapItemNameToStockModel = (itemName: string): string => {
+        if (!itemName) return 'cf_tactical'; // Default fallback
+        
+        const name = itemName.toLowerCase();
+        
+        // Map common production items to stock models
+        if (name.includes('altitude') || name.includes('universal')) return 'cf_tactical';
+        if (name.includes('privateer')) return 'cf_privateer';
+        if (name.includes('alpine') && name.includes('hunter')) return 'cf_adj_alp_hunter';
+        if (name.includes('visigoth')) return 'cf_visigoth';
+        if (name.includes('armor')) return 'cf_adj_armor';
+        if (name.includes('chalk') && name.includes('branch')) return 'cf_adj_chalk_branch';
+        if (name.includes('k2')) return 'cf_k2';
+        if (name.includes('apr')) return 'apr_hunter';
+        if (name.includes('cat')) return 'cf_cat';
+        
+        // Default to a common stock model for unmatched items
+        return 'cf_tactical';
+      };
+      
+      const productionLayupOrders = (pendingProductionOrders || []).map(po => {
+        const mappedStockModelId = mapItemNameToStockModel(po.itemName);
+        console.log(`🏭 Production order mapping: "${po.itemName}" → "${mappedStockModelId}"`);
+        
+        return {
+          id: `production-${po.id}`,
+          orderId: po.orderId,
+          orderDate: po.orderDate,
+          customer: po.customerName || 'Production Order',
+          product: po.itemName || 'Production Item',
+          quantity: 1,
+          status: 'FINALIZED',
+          department: 'Layup',
+          currentDepartment: 'Layup',
+          priorityScore: 60, // Medium priority for production orders
+          dueDate: po.dueDate,
+          source: 'production_order',
+          productionOrderId: po.id,
+          stockModelId: mappedStockModelId,
+          createdAt: po.createdAt,
+          updatedAt: po.updatedAt,
+          specifications: po.specifications
+        };
+      });
 
       // Combine and sort all orders by priority score (lower = higher priority)
       console.log('🏭 Combining orders:', {

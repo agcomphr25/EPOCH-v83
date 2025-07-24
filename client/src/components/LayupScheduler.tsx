@@ -525,6 +525,23 @@ export default function LayupScheduler() {
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  
+  // Debug production orders specifically
+  useEffect(() => {
+    const productionOrders = orders.filter(order => order.source === 'production_order');
+    console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
+    console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
+    if (productionOrders.length > 0) {
+      console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
+    }
+    
+    // Log all order sources
+    const sourceCounts = orders.reduce((acc, order) => {
+      acc[order.source] = (acc[order.source] || 0) + 1;
+      return acc;
+    }, {} as {[key: string]: number});
+    console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
+  }, [orders]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
@@ -532,6 +549,8 @@ export default function LayupScheduler() {
       console.log('❌ Cannot generate schedule: missing data');
       return;
     }
+    
+    // Re-enabled auto-scheduling to place production orders in calendar
 
     console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
     
@@ -569,8 +588,18 @@ export default function LayupScheduler() {
     const getCompatibleMolds = (order: any) => {
       const modelId = order.stockModelId || order.modelId;
       if (!modelId) {
-        console.log('⚠️ Order has no modelId:', order.orderId);
+        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
+      }
+      
+      // Extra debugging for production orders
+      if (order.source === 'production_order') {
+        console.log('🏭 Checking compatibility for production order:', {
+          orderId: order.orderId,
+          modelId,
+          stockModelId: order.stockModelId,
+          availableMolds: molds.filter(m => m.enabled).map(m => m.moldId)
+        });
       }
       
       const compatibleMolds = molds.filter(mold => {

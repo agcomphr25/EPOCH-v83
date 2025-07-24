@@ -2983,6 +2983,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Generate Mesa Universal orders (8 per work day for 6 weeks)
+      const generateMesaUniversalOrders = () => {
+        const mesaOrders = [];
+        const today = new Date();
+        
+        // Generate for next 6 weeks
+        for (let week = 0; week < 6; week++) {
+          for (let day = 0; day < 7; day++) {
+            const workDate = new Date(today);
+            workDate.setDate(today.getDate() + (week * 7) + day);
+            
+            // Only work days (Monday=1, Tuesday=2, Wednesday=3, Thursday=4)
+            const dayOfWeek = workDate.getDay();
+            if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+              // Generate 8 Mesa Universal orders for this work day
+              for (let i = 1; i <= 8; i++) {
+                mesaOrders.push({
+                  id: `mesa-${workDate.toISOString().slice(0, 10)}-${i.toString().padStart(2, '0')}`,
+                  orderId: `MESA-${workDate.toISOString().slice(0, 10)}-${i.toString().padStart(2, '0')}`,
+                  orderDate: workDate.toISOString().slice(0, 10),
+                  customer: 'Mesa Universal Production',
+                  product: 'Mesa Universal',
+                  quantity: 1,
+                  status: 'FINALIZED',
+                  department: 'Layup',
+                  currentDepartment: 'Layup',
+                  priorityScore: 25, // Medium priority
+                  dueDate: workDate.toISOString().slice(0, 10),
+                  source: 'mesa_universal',
+                  stockModelId: 'mesa_universal',
+                  modelId: 'mesa_universal',
+                  features: {}, // No features needed for Mesa Universal
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            }
+          }
+        }
+        return mesaOrders;
+      };
+
+      const mesaUniversalOrders = generateMesaUniversalOrders();
+
       // Combine and sort all orders by priority score (lower = higher priority)
       const combinedOrders = [
         ...layupOrders.map(order => ({ 
@@ -2996,7 +3040,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
           modelId: order.stockModelId
-        }))
+        })),
+        ...mesaUniversalOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
       res.json(combinedOrders);

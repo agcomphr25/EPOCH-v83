@@ -89,11 +89,7 @@ export function generateLayupSchedule(
   moldSettings: MoldSettings[],
   employeeSettings: EmployeeSettings[]
 ): ScheduleResult[] {
-  // 0. Generate and add Mesa Universal orders to the schedule (8 per work day)
-  const mesaUniversalOrders = generateDailyMesaUniversalOrders(new Date(), 6); // 6 weeks of Mesa Universal orders
-  const allOrders = [...orders, ...mesaUniversalOrders];
-  
-  console.log(`📋 Total orders to schedule: ${orders.length} regular + ${mesaUniversalOrders.length} Mesa Universal = ${allOrders.length}`);
+  console.log(`📋 Total orders to schedule: ${orders.length}`);
 
   // 1. Compute capacities with 10-hour work days
   const enabledMolds = moldSettings.filter(m => m.enabled);
@@ -108,7 +104,7 @@ export function generateLayupSchedule(
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
   // 2. Sort orders by due date priority (earliest due dates first), with high priority override
-  const sortedOrders = [...allOrders].sort((a, b) => {
+  const sortedOrders = [...orders].sort((a, b) => {
     // First check for high priority flag override
     const aHighPriority = a.priorityScore && a.priorityScore > 8; // High priority threshold
     const bHighPriority = b.priorityScore && b.priorityScore > 8;

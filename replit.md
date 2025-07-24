@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 24, 2025 - Ashley Tandy Order Deletion Task (COMPLETED)**
+- ✅ **Order Identification**: Successfully identified Ashley Tandy as customer ID 192 with 12 total orders
+- ✅ **Complete Order Deletion**: Deleted all 12 orders for Ashley Tandy from the system using API endpoints
+- ✅ **Order Details**: Removed orders AG239, AG236, AG233, AG230, AG229, AG221, AG214, AG213, AG212, AG202, AG201, AG200
+- ✅ **Verification**: Confirmed all orders removed from database - zero orders remain for customer ID 192
+- ✅ **Status Mix**: Successfully removed both FINALIZED (10) and DRAFT (2) status orders
+
 **July 24, 2025 - Hybrid JWT + Session Authentication System Implementation (COMPLETED)**
 - ✅ **JWT Authentication Integration**: Added JSON Web Token support alongside existing session-based authentication with 2-hour token expiration, secure JWT secret configuration, and Bearer token header parsing
 - ✅ **Hybrid Authentication Middleware**: Enhanced authentication middleware to support both JWT Bearer tokens and session cookies, with automatic fallback from JWT to session authentication for maximum compatibility

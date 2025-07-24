@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -18,6 +20,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import TimeClockModal from '@/components/employee/TimeClockModal';
+import DailyChecklistModal from '@/components/employee/DailyChecklistModal';
+import HandbookModal from '@/components/employee/HandbookModal';
 
 interface Employee {
   id: number;
@@ -49,9 +54,12 @@ interface Evaluation {
   status: string;
 }
 
-export default function EmployeePortal() {
+export default function EmployeePortal() {  
   const { portalId } = useParams();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [timeClockOpen, setTimeClockOpen] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [handbookOpen, setHandbookOpen] = useState(false);
 
   // Update time every second for clock display
   useEffect(() => {
@@ -214,7 +222,10 @@ export default function EmployeePortal() {
         {/* Main Portal Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Employee Handbook */}
-          <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group">
+          <Card 
+            className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
+            onClick={() => setHandbookOpen(true)}
+          >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <BookOpen className="w-5 h-5 text-blue-600" />
@@ -226,11 +237,24 @@ export default function EmployeePortal() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" className="w-full" disabled>
+              <div className="space-y-2 mb-4 text-sm">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <span>Company Policies</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-green-400" />
+                  <span>Safety Procedures</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Award className="w-4 h-4 text-purple-400" />
+                  <span>Benefits Guide</span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full">
                 <BookOpen className="w-4 h-4 mr-2" />
                 View Handbook
               </Button>
-              <p className="text-xs text-gray-500 mt-2 text-center">Coming Soon</p>
             </CardContent>
           </Card>
 
@@ -304,7 +328,10 @@ export default function EmployeePortal() {
           </Card>
 
           {/* Time Clock */}
-          <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group">
+          <Card 
+            className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
+            onClick={() => setTimeClockOpen(true)}
+          >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-indigo-600" />
@@ -320,20 +347,18 @@ export default function EmployeePortal() {
                 <div className="text-2xl font-bold text-indigo-600">{formatTime(currentTime)}</div>
                 <p className="text-sm text-gray-500">{currentTime.toLocaleDateString()}</p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" disabled>
-                  Clock In
-                </Button>
-                <Button variant="outline" size="sm" disabled>
-                  Clock Out
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-2 text-center">Coming Soon</p>
+              <Button variant="outline" className="w-full">
+                <Clock className="w-4 h-4 mr-2" />
+                Open Time Clock
+              </Button>
             </CardContent>
           </Card>
 
           {/* Checklist */}
-          <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group">
+          <Card 
+            className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
+            onClick={() => setChecklistOpen(true)}
+          >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <CheckSquare className="w-5 h-5 text-orange-600" />
@@ -347,8 +372,8 @@ export default function EmployeePortal() {
             <CardContent>
               <div className="space-y-2 mb-4">
                 <div className="flex items-center space-x-2 text-sm">
-                  <CheckSquare className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-500">Safety inspection</span>
+                  <CheckSquare className="w-4 h-4 text-green-400" />
+                  <span className="text-gray-600">Safety inspection</span>
                 </div>
                 <div className="flex items-center space-x-2 text-sm">
                   <CheckSquare className="w-4 h-4 text-gray-400" />
@@ -359,11 +384,10 @@ export default function EmployeePortal() {
                   <span className="text-gray-500">Quality review</span>
                 </div>
               </div>
-              <Button variant="outline" className="w-full" disabled>
+              <Button variant="outline" className="w-full">
                 <CheckSquare className="w-4 h-4 mr-2" />
                 Open Checklist
               </Button>
-              <p className="text-xs text-gray-500 mt-2 text-center">Coming Soon</p>
             </CardContent>
           </Card>
 
@@ -446,6 +470,25 @@ export default function EmployeePortal() {
           <p className="mt-1">For technical support, contact IT or HR</p>
         </div>
       </div>
+
+      {/* Modals */}
+      <TimeClockModal
+        employeeId={employee?.id?.toString() || ''}
+        isOpen={timeClockOpen}
+        onClose={() => setTimeClockOpen(false)}
+      />
+      
+      <DailyChecklistModal
+        employeeId={employee?.id || 0}
+        department={employee?.department || 'General'}
+        isOpen={checklistOpen}
+        onClose={() => setChecklistOpen(false)}
+      />
+      
+      <HandbookModal
+        isOpen={handbookOpen}
+        onClose={() => setHandbookOpen(false)}
+      />
     </div>
   );
 }

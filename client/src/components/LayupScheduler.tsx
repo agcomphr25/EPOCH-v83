@@ -682,7 +682,9 @@ export default function LayupScheduler() {
             orderId: order.orderId,
             stockModelId: order.stockModelId,
             modelId: order.modelId,
-            enabledMolds: molds.filter(m => m.enabled).length
+            enabledMolds: molds.filter(m => m.enabled).length,
+            moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId),
+            allMoldsDetail: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels }))
           });
         }
         return;
@@ -803,9 +805,11 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
   
-  // Debug unassigned orders
+  // Debug unassigned orders - especially production orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
+  const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order');
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
+  console.log('🏭 Unassigned PRODUCTION orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
   // Auto-generate schedule when data is loaded

@@ -2641,35 +2641,53 @@ export class DatabaseStorage implements IStorage {
 
   private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'at-risk' | 'behind' {
     const isAdjusted = order.modelId?.includes('Adj') || false;
-    let standardDays: number;
-
-    // Get standard processing time for current department
-    switch (order.currentDepartment) {
-      case 'Layup':
-        standardDays = 35; // 5 weeks
-        break;
-      case 'Finish':
-        standardDays = isAdjusted ? 14 : 7; // 2 weeks for Adj, 1 week for regular
-        break;
-      case 'Gunsmith':
-        standardDays = isAdjusted ? 14 : 7; // 2 weeks for Adj, 1 week for regular
-        break;
-      case 'Plugging':
-      case 'CNC':
-      case 'Paint':
-      case 'QC':
-      case 'Shipping':
-      default:
-        standardDays = 7; // 1 week
-        break;
+    const now = new Date();
+    const dueDate = new Date(order.dueDate);
+    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Define standard processing times for each department
+    const departmentTimes = {
+      'Layup': 35,
+      'Plugging': 7,
+      'CNC': 7,
+      'Finish': isAdjusted ? 14 : 7,
+      'Gunsmith': isAdjusted ? 14 : 7,
+      'Paint': 7,
+      'QC': 7,
+      'Shipping': 7
+    };
+    
+    // Define department sequence
+    const departmentSequence = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+    
+    // Calculate remaining time needed from current department onward
+    const currentDeptIndex = departmentSequence.indexOf(order.currentDepartment);
+    if (currentDeptIndex === -1) {
+      // Unknown department, fallback to old logic
+      const standardDays = departmentTimes[order.currentDepartment] || 7;
+      if (daysInDept > standardDays) return 'behind';
+      if (daysInDept > standardDays * 0.8) return 'at-risk';
+      return 'on-schedule';
     }
-
-    // Calculate status
-    if (daysInDept > standardDays) {
+    
+    // Sum up remaining processing time from current department to end
+    let remainingProcessingDays = 0;
+    for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
+      const dept = departmentSequence[i];
+      remainingProcessingDays += departmentTimes[dept] || 7;
+    }
+    
+    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, currently in ${order.currentDepartment}`);
+    
+    // Determine status based on due date feasibility
+    if (remainingProcessingDays > daysUntilDue) {
+      console.log(`🔴 Order ${order.orderId}: BEHIND - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
       return 'behind';
-    } else if (daysInDept > standardDays * 0.8) {
+    } else if (remainingProcessingDays > daysUntilDue * 0.8) {
+      console.log(`🟡 Order ${order.orderId}: AT-RISK - Tight timeline (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
       return 'at-risk';
     } else {
+      console.log(`🟢 Order ${order.orderId}: ON-SCHEDULE - Sufficient time (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
       return 'on-schedule';
     }
   }

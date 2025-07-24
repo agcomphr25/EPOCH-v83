@@ -3141,7 +3141,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productionLayupOrders: productionLayupOrders?.length || 0
       });
       
-      console.log('🔍 Sample production layup order structure:', productionLayupOrders[0] || 'None found');
+      // Debug first production order with ALL properties
+      if (productionLayupOrders && productionLayupOrders.length > 0) {
+        const firstPO = productionLayupOrders[0];
+        console.log('🔍 FIRST PRODUCTION ORDER - ALL PROPERTIES:');
+        console.log('='.repeat(60));
+        Object.keys(firstPO).forEach(key => {
+          console.log(`${key}:`, firstPO[key]);
+        });
+        console.log('='.repeat(60));
+        console.log('🔍 First production order JSON:', JSON.stringify(firstPO, null, 2));
+      } else {
+        console.log('🔍 No production orders found');
+      }
       
       const combinedOrders = [
         ...(layupOrders || []).map(order => ({ 

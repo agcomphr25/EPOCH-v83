@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 24, 2025 - Production Orders Integration and Stock Model Mapping (COMPLETED)**
+- ✅ **Production Orders Mapping Fix**: Fixed critical issue preventing 400 production orders from displaying in Layup Scheduler
+- ✅ **Stock Model ID Mapping**: Implemented intelligent mapping from production order item names to valid stock model IDs
+- ✅ **Mesa Universal Compatibility**: "Altitude - Universal" production orders now properly map to "mesa_universal" stock model
+- ✅ **Orange Card Display**: Production orders now appear as orange "PO" labeled cards in Layup Scheduler interface
+- ✅ **Mold Compatibility**: Production orders can now be assigned to compatible molds through auto-scheduling algorithm
+- ✅ **Complete Integration**: All 400 production orders successfully integrated into unified layup queue system
+
 **July 23, 2025 - Auto-Schedule Function Restoration Without UI Buttons (COMPLETED)**
 - ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request
 - ✅ **Debug Report Button Removed**: Eliminated debug report functionality and button from calendar interface

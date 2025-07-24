@@ -3026,12 +3026,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Map production order item names to stock model IDs
       const mapItemNameToStockModel = (itemName: string): string => {
-        if (!itemName) return 'cf_tactical'; // Default fallback
+        if (!itemName) return 'mesa_universal'; // Default fallback
         
         const name = itemName.toLowerCase();
         
         // Map common production items to stock models
-        if (name.includes('altitude') || name.includes('universal')) return 'cf_tactical';
+        if (name.includes('altitude') || name.includes('universal')) return 'mesa_universal';
         if (name.includes('privateer')) return 'cf_privateer';
         if (name.includes('alpine') && name.includes('hunter')) return 'cf_adj_alp_hunter';
         if (name.includes('visigoth')) return 'cf_visigoth';
@@ -3041,8 +3041,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (name.includes('apr')) return 'apr_hunter';
         if (name.includes('cat')) return 'cf_cat';
         
-        // Default to a common stock model for unmatched items
-        return 'cf_tactical';
+        // Default to mesa_universal for unmatched items
+        return 'mesa_universal';
       };
       
       const productionLayupOrders = (pendingProductionOrders || []).map(po => {

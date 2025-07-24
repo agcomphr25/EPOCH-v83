@@ -717,10 +717,20 @@ export default function LayupScheduler() {
   // Auto-generate schedule when data is loaded
   useEffect(() => {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log("🚀 Auto-running initial schedule generation");
+      console.log("🚀 Auto-running initial schedule generation with LOP Monday-only constraints");
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
   }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
+
+  // Force clear assignments and regenerate schedule for testing LOP constraints
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('clearSchedule') === 'true') {
+      console.log('🔄 Clearing schedule and regenerating with LOP constraints...');
+      setOrderAssignments({});
+      setTimeout(() => generateAutoSchedule(), 500);
+    }
+  }, [generateAutoSchedule]);
 
 
 

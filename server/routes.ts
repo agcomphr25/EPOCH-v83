@@ -2934,6 +2934,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activePos = pos.filter(po => po.status === 'OPEN');
       
       const p1LayupOrders = [];
+
+      // Get Production Orders generated from Purchase Orders
+      const productionOrders = await storage.getAllProductionOrders();
+      const pendingProductionOrders = productionOrders.filter(po => 
+        po.productionStatus === 'PENDING' && po.orderId.startsWith('PUR')
+      );
       
       // Process each active PO for layup-required items
       for (const po of activePos) {
@@ -2983,6 +2989,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Convert Production Orders to layup queue format
+      const productionLayupOrders = pendingProductionOrders.map(po => ({
+        id: `production-${po.id}`,
+        orderId: po.orderId,
+        orderDate: po.orderDate,
+        customer: po.customerName || 'Production Order',
+        product: po.itemName || 'Production Item',
+        quantity: 1,
+        status: 'FINALIZED',
+        department: 'Layup',
+        currentDepartment: 'Layup',
+        priorityScore: 60, // Medium priority for production orders
+        dueDate: po.dueDate,
+        source: 'production_order',
+        productionOrderId: po.id,
+        stockModelId: po.itemId,
+        createdAt: po.createdAt,
+        updatedAt: po.updatedAt,
+        specifications: po.specifications
+      }));
+
       // Combine and sort all orders by priority score (lower = higher priority)
       const combinedOrders = [
         ...layupOrders.map(order => ({ 
@@ -2996,6 +3023,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
           modelId: order.stockModelId
+        })),
+        ...productionLayupOrders.map(order => ({
+          ...order,
+          // Production orders may not have stock model but include item ID
+          modelId: order.stockModelId || order.product
         }))
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 

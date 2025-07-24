@@ -12,7 +12,7 @@ export interface LayupOrder {
   currentDepartment: string;
   priorityScore: number;
   dueDate?: string;
-  source: 'main_orders' | 'p1_purchase_order';
+  source: 'main_orders' | 'p1_purchase_order' | 'production_order';
   poId?: number;
   poItemId?: number;
   stockModelId?: string;

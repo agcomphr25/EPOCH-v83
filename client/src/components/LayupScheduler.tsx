@@ -111,6 +111,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
         text: 'text-green-800 dark:text-green-200'
       };
+    } else if (order.source === 'production_order') {
+      return {
+        bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
+        text: 'text-orange-800 dark:text-orange-200'
+      };
     } else if (materialType === 'FG') {
       return {
         bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
@@ -138,6 +143,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         <div className="flex items-center font-bold">
           {order.orderId || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
+          {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
         </div>
         {/* Show stock model display name with material type */}
         {(() => {

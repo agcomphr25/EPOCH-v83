@@ -63,6 +63,7 @@ import {
 import { db } from "./db";
 import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import bcrypt from 'bcrypt';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -439,9 +440,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    // Hash the password before inserting
+    const passwordHash = await bcrypt.hash(insertUser.password, 12);
+    
+    // Create user data with hashed password
+    const userData = {
+      username: insertUser.username,
+      passwordHash,
+      role: insertUser.role,
+      canOverridePrices: insertUser.canOverridePrices,
+      employeeId: insertUser.employeeId,
+      isActive: insertUser.isActive,
+    };
+
     const [user] = await db
       .insert(users)
-      .values(insertUser)
+      .values(userData)
       .returning();
     return user;
   }
@@ -747,7 +761,7 @@ export class DatabaseStorage implements IStorage {
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);
-      throw new Error(`Failed to create order draft: ${error.message}`);
+      throw new Error(`Failed to create order draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1017,14 +1031,25 @@ export class DatabaseStorage implements IStorage {
     return item || undefined;
   }
 
+  async getInventoryItemByCode(code: string): Promise<InventoryItem | undefined> {
+    const [item] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, code));
+    return item || undefined;
+  }
+
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
-    const [item] = await db.insert(inventoryItems).values(data).returning();
+    const [item] = await db.insert(inventoryItems).values([data]).returning();
     return item;
   }
 
   async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.orderDate instanceof Date) {
+      updateData.orderDate = updateData.orderDate.toISOString();
+    }
+    
     const [item] = await db.update(inventoryItems)
-      .set(data)
+      .set(updateData)
       .where(eq(inventoryItems.id, id))
       .returning();
     return item;
@@ -1046,7 +1071,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
-    const [scan] = await db.insert(inventoryScans).values(data).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expirationDate instanceof Date) {
+      insertData.expirationDate = insertData.expirationDate.toISOString();
+    }
+    if (insertData.manufactureDate instanceof Date) {
+      insertData.manufactureDate = insertData.manufactureDate.toISOString();
+    }
+    // Remove scannedAt handling as it's not in the InsertInventoryScan type
+    
+    const [scan] = await db.insert(inventoryScans).values([insertData]).returning();
     // Note: Inventory scans are now for tracking only, not affecting inventory levels
     // since the new inventory schema doesn't track onHand/committed quantities
     return scan;
@@ -1067,13 +1102,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
-    const [request] = await db.insert(partsRequests).values(data).returning();
+    const [request] = await db.insert(partsRequests).values([data]).returning();
     return request;
   }
 
   async updatePartsRequest(id: number, data: Partial<InsertPartsRequest>): Promise<PartsRequest> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.expectedDelivery instanceof Date) {
+      updateData.expectedDelivery = updateData.expectedDelivery.toISOString();
+    }
+    if (updateData.actualDelivery instanceof Date) {
+      updateData.actualDelivery = updateData.actualDelivery.toISOString();
+    }
+    
     const [request] = await db.update(partsRequests)
-      .set(data)
+      .set(updateData)
       .where(eq(partsRequests.id, id))
       .returning();
     return request;
@@ -1112,13 +1156,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values(data).returning();
+    const [employee] = await db.insert(employees).values([data]).returning();
     return employee;
   }
 
   async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.hireDate instanceof Date) {
+      updateData.hireDate = updateData.hireDate.toISOString();
+    }
+    
     const [employee] = await db.update(employees)
-      .set(data)
+      .set(updateData)
       .where(eq(employees.id, id))
       .returning();
     return employee;
@@ -1220,13 +1270,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification> {
-    const [empCert] = await db.insert(employeeCertifications).values(data).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.dateObtained instanceof Date) {
+      insertData.dateObtained = insertData.dateObtained.toISOString();
+    }
+    if (insertData.expiryDate instanceof Date) {
+      insertData.expiryDate = insertData.expiryDate.toISOString();
+    }
+    
+    const [empCert] = await db.insert(employeeCertifications).values([insertData]).returning();
     return empCert;
   }
 
   async updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.dateObtained instanceof Date) {
+      updateData.dateObtained = updateData.dateObtained.toISOString();
+    }
+    if (updateData.expiryDate instanceof Date) {
+      updateData.expiryDate = updateData.expiryDate.toISOString();
+    }
+    
     const [empCert] = await db.update(employeeCertifications)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeCertifications.id, id))
       .returning();
     return empCert;
@@ -1245,8 +1313,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeCertifications)
       .where(and(
         eq(employeeCertifications.isActive, true),
-        lte(employeeCertifications.expiryDate, futureDate),
-        gte(employeeCertifications.expiryDate, new Date())
+        lte(employeeCertifications.expiryDate, futureDate.toISOString()),
+        gte(employeeCertifications.expiryDate, new Date().toISOString())
       ))
       .orderBy(employeeCertifications.expiryDate);
   }
@@ -1276,13 +1344,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
-    const [evaluation] = await db.insert(evaluations).values(data).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.evaluationPeriodStart instanceof Date) {
+      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString();
+    }
+    if (insertData.evaluationPeriodEnd instanceof Date) {
+      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString();
+    }
+    if (insertData.submittedAt instanceof Date) {
+      insertData.submittedAt = insertData.submittedAt.toISOString();
+    }
+    if (insertData.reviewedAt instanceof Date) {
+      insertData.reviewedAt = insertData.reviewedAt.toISOString();
+    }
+    
+    const [evaluation] = await db.insert(evaluations).values([insertData]).returning();
     return evaluation;
   }
 
   async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
+    // Convert Date objects to ISO strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.evaluationPeriodStart instanceof Date) {
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString();
+    }
+    if (updateData.evaluationPeriodEnd instanceof Date) {
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString();
+    }
+    if (updateData.submittedAt instanceof Date) {
+      updateData.submittedAt = updateData.submittedAt.toISOString();
+    }
+    if (updateData.reviewedAt instanceof Date) {
+      updateData.reviewedAt = updateData.reviewedAt.toISOString();
+    }
+    
     const [evaluation] = await db.update(evaluations)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(evaluations.id, id))
       .returning();
     return evaluation;

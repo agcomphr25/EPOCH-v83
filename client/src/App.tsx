@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -63,11 +63,12 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
-        <div className="min-h-screen bg-gray-50">
-          <Navigation />
-          <OfflineIndicator />
-          <main className="container mx-auto px-4 py-8">
-                <Switch>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
+            <Navigation />
+            <OfflineIndicator />
+            <main className="container mx-auto px-4 py-8">
+                  <Switch>
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route path="/order-entry" component={OrderEntry} />
@@ -134,6 +135,7 @@ function App() {
           </div>
           <Toaster />
           <HotToaster />
+        </Router>
       </QueryClientProvider>
     );
   } catch (error) {

@@ -2833,15 +2833,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const poId = parseInt(req.params.poId);
       const orders = await storage.generateProductionOrders(poId);
       
-      console.log(`🏭 Generated ${orders.length} production orders from PO ${poId}`);
-      console.log(`🏭 Production orders will be auto-scheduled based on due dates and priority scores`);
-      console.log(`🏭 Orders created:`, orders.map(o => ({ orderId: o.orderId, dueDate: o.dueDate, itemName: o.itemName })));
+      const isNewGeneration = orders.length > 0 && orders[0].createdAt && 
+                              new Date().getTime() - new Date(orders[0].createdAt).getTime() < 10000; // Within 10 seconds
+      
+      if (isNewGeneration) {
+        console.log(`🏭 Generated ${orders.length} NEW production orders from PO ${poId}`);
+        console.log(`🏭 Production orders will be auto-scheduled based on due dates and priority scores`);
+      } else {
+        console.log(`🏭 Retrieved ${orders.length} existing production orders from PO ${poId}`);
+      }
       
       res.json({ 
         success: true, 
-        message: `Generated ${orders.length} production orders from PO - Auto-scheduling will prioritize these orders based on due dates`, 
+        message: isNewGeneration 
+          ? `Generated ${orders.length} production orders from PO - Auto-scheduling will prioritize these orders based on due dates`
+          : `Found ${orders.length} existing production orders from this PO - they are already integrated into the layup scheduler`, 
         orders,
-        autoScheduleTrigger: true // Signal to frontend to refresh layup scheduler
+        autoScheduleTrigger: true, // Signal to frontend to refresh layup scheduler
+        isExisting: !isNewGeneration
       });
     } catch (error) {
       console.error("Generate production orders error:", error);

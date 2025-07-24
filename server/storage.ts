@@ -1671,7 +1671,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(productionOrders.poId, poId));
     
     if (existingOrders.length > 0) {
-      throw new Error('Production orders have already been generated for this Purchase Order');
+      console.log(`🏭 Found ${existingOrders.length} existing production orders for PO ${poId}`);
+      console.log(`🏭 Returning existing production orders instead of creating duplicates`);
+      return existingOrders;
     }
 
     // Get customer from the main customers table

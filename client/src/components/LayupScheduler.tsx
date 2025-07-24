@@ -760,8 +760,20 @@ export default function LayupScheduler() {
   console.log('🎯 LayupScheduler - Orders data:', orders);
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
+  
+  // Debug production orders specifically
+  const productionOrders = orders.filter(order => order.source === 'production_order');
+  console.log('🏭 LayupScheduler - Production orders:', productionOrders.length);
+  if (productionOrders.length > 0) {
+    console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
+  }
+  
+  // Debug Mesa Universal molds
+  const mesaMolds = molds?.filter(m => m.moldId.includes('Mesa'));
+  console.log('🏔️ LayupScheduler - Mesa molds:', mesaMolds?.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+  
   console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
-  console.log('🏭 LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
+  console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
   
   // Debug unassigned orders

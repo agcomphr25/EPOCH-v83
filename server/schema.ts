@@ -294,8 +294,10 @@ export const employees = pgTable("employees", {
   address: text("address"),
   emergencyContact: text("emergency_contact"),
   emergencyPhone: text("emergency_phone"),
-  salary: real("salary"),
-  hourlyRate: real("hourly_rate"),
+  gateCardNumber: text("gate_card_number"),
+  vehicleType: text("vehicle_type"),
+  buildingKeyAccess: boolean("building_key_access").default(false),
+  tciAccess: boolean("tci_access").default(false),
   employmentType: text("employment_type").default("FULL_TIME"), // FULL_TIME, PART_TIME, CONTRACT
   portalToken: text("portal_token").unique(), // UUID for employee portal access
   portalTokenExpiry: timestamp("portal_token_expiry"),

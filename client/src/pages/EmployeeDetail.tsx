@@ -424,34 +424,31 @@ export default function EmployeeDetail() {
                     </div>
 
                     <div>
-                      <Label>Annual Salary</Label>
+                      <Label>Gate Card #</Label>
                       {isEditing ? (
                         <Input
-                          type="number"
-                          value={editData.salary || ''}
-                          onChange={(e) => setEditData(prev => ({ ...prev, salary: parseFloat(e.target.value) || 0 }))}
-                          placeholder="Annual salary"
+                          value={editData.gateCardNumber || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, gateCardNumber: e.target.value }))}
+                          placeholder="Gate card number"
                         />
                       ) : (
                         <p className="text-sm text-gray-600">
-                          {employee.salary ? `$${employee.salary.toLocaleString()}` : 'Not specified'}
+                          {employee.gateCardNumber || 'Not specified'}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <Label>Hourly Rate</Label>
+                      <Label>Vehicle Type</Label>
                       {isEditing ? (
                         <Input
-                          type="number"
-                          step="0.01"
-                          value={editData.hourlyRate || ''}
-                          onChange={(e) => setEditData(prev => ({ ...prev, hourlyRate: parseFloat(e.target.value) || 0 }))}
-                          placeholder="Hourly rate"
+                          value={editData.vehicleType || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, vehicleType: e.target.value }))}
+                          placeholder="Vehicle type"
                         />
                       ) : (
                         <p className="text-sm text-gray-600">
-                          {employee.hourlyRate ? `$${employee.hourlyRate}/hr` : 'Not specified'}
+                          {employee.vehicleType || 'Not specified'}
                         </p>
                       )}
                     </div>
@@ -494,6 +491,47 @@ export default function EmployeeDetail() {
                         />
                       ) : (
                         <p className="text-sm text-gray-600">{employee.emergencyPhone || 'Not specified'}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Access Control Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Building Key Access</Label>
+                      {isEditing ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={editData.buildingKeyAccess || false}
+                            onChange={(e) => setEditData(prev => ({ ...prev, buildingKeyAccess: e.target.checked }))}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm">Has building key access</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {employee.buildingKeyAccess ? 'Yes' : 'No'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>TCI Access</Label>
+                      {isEditing ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={editData.tciAccess || false}
+                            onChange={(e) => setEditData(prev => ({ ...prev, tciAccess: e.target.checked }))}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm">Has TCI access</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {employee.tciAccess ? 'Yes' : 'No'}
+                        </p>
                       )}
                     </div>
                   </div>

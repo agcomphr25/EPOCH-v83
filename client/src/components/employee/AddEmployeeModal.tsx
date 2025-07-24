@@ -23,8 +23,10 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     emergencyContact: '',
     emergencyPhone: '',
     address: '',
-    salary: '',
-    hourlyRate: '',
+    gateCardNumber: '',
+    vehicleType: '',
+    buildingKeyAccess: false,
+    tciAccess: false,
   });
   
   const [credentials, setCredentials] = useState({
@@ -85,8 +87,6 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
     const submissionData = {
       ...formData,
-      salary: formData.salary ? parseFloat(formData.salary) : undefined,
-      hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : undefined,
       hireDate: formData.hireDate || undefined,
     };
 
@@ -94,7 +94,11 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'buildingKeyAccess' || field === 'tciAccess') {
+      setFormData(prev => ({ ...prev, [field]: value === 'true' }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   return (
@@ -193,25 +197,22 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
         </div>
 
         <div>
-          <Label htmlFor="salary">Annual Salary ($)</Label>
+          <Label htmlFor="gateCardNumber">Gate Card #</Label>
           <Input
-            id="salary"
-            type="number"
-            value={formData.salary}
-            onChange={(e) => handleInputChange('salary', e.target.value)}
-            placeholder="50000"
+            id="gateCardNumber"
+            value={formData.gateCardNumber}
+            onChange={(e) => handleInputChange('gateCardNumber', e.target.value)}
+            placeholder="Card number"
           />
         </div>
 
         <div>
-          <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+          <Label htmlFor="vehicleType">Vehicle Type</Label>
           <Input
-            id="hourlyRate"
-            type="number"
-            step="0.01"
-            value={formData.hourlyRate}
-            onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
-            placeholder="25.00"
+            id="vehicleType"
+            value={formData.vehicleType}
+            onChange={(e) => handleInputChange('vehicleType', e.target.value)}
+            placeholder="e.g., Sedan, Truck, SUV"
           />
         </div>
       </div>
@@ -246,6 +247,31 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               onChange={(e) => handleInputChange('emergencyPhone', e.target.value)}
               placeholder="(555) 987-6543"
             />
+          </div>
+        </div>
+
+        {/* Access permissions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="buildingKeyAccess"
+              checked={formData.buildingKeyAccess}
+              onChange={(e) => handleInputChange('buildingKeyAccess', e.target.checked.toString())}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <Label htmlFor="buildingKeyAccess">Building Key Access</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="tciAccess"
+              checked={formData.tciAccess}
+              onChange={(e) => handleInputChange('tciAccess', e.target.checked.toString())}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <Label htmlFor="tciAccess">TCI Access</Label>
           </div>
         </div>
       </div>

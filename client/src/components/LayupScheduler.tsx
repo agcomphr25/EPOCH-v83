@@ -653,6 +653,16 @@ export default function LayupScheduler() {
       console.log('🔧 Calling generateLayupSchedule with Monday-only LOP constraints...');
       console.log(`📊 Input data: ${layupOrders.length} orders, ${moldSettings.length} molds, ${employeeSettings.length} employees`);
       
+      // Debug: Show order distribution by source
+      const ordersBySource = layupOrders.reduce((acc, order) => {
+        const source = order.source || 'unknown';
+        acc[source] = (acc[source] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('📊 Orders by source:', ordersBySource);
+      console.log('📋 Sample P1 orders:', layupOrders.filter(o => o.source === 'p1_purchase_order').slice(0, 3).map(o => ({ orderId: o.orderId, customer: o.customer })));
+      console.log('📋 Sample P2 orders:', layupOrders.filter(o => o.source === 'p2_production_order').slice(0, 3).map(o => ({ orderId: o.orderId, customer: o.customer })));
+      
       // Use the proper scheduler utility with LOP Monday-only logic
       const scheduleResults = generateLayupSchedule(layupOrders, moldSettings, employeeSettings);
       
@@ -838,8 +848,8 @@ export default function LayupScheduler() {
         currentWeek.push(date);
       }
       
-      // Complete the week on Friday (5) or at the end
-      if (dayOfWeek === 5 || index === dates.length - 1) {
+      // Complete the week on Thursday (4) or at the end
+      if (dayOfWeek === 4 || index === dates.length - 1) {
         if (currentWeek.length > 0) {
           weeks.push(currentWeek);
           currentWeek = [];
@@ -1096,11 +1106,14 @@ export default function LayupScheduler() {
                       console.log('Current molds:', molds.length);
                       console.log('Current employees:', employees.length);
                       console.log('Current assignments before clear:', Object.keys(orderAssignments).length);
+                      
+                      // Force clear assignments immediately
                       setOrderAssignments({});
+                      
                       setTimeout(() => {
-                        console.log('🔄 About to call generateAutoSchedule...');
+                        console.log('🔄 About to call generateAutoSchedule after force clear...');
                         generateAutoSchedule();
-                      }, 100);
+                      }, 200);
                     }}
                     className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
                   >

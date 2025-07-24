@@ -3112,6 +3112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const displayProductName = getProductDisplayName((po as any).itemName);
         console.log(`🏭 Product display name mapping: "${(po as any).itemName}" → "${displayProductName}"`);
+        console.log(`🏭 Production order status: ${(po as any).productionStatus}`);
         
         return {
           id: `production-${(po as any).id}`,
@@ -3120,7 +3121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customer: (po as any).customerName || 'Production Order',
           product: displayProductName,
           quantity: 1,
-          status: 'FINALIZED',
+          status: (po as any).productionStatus || 'PENDING', // Use actual production status
           department: 'Layup',
           currentDepartment: 'Layup',
           priorityScore: priority, // High priority to meet due dates

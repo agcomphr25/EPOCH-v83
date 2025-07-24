@@ -10,17 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 24, 2025 - Fixed Layup Scheduler Cell Skipping Issue + Friday Work Day Blocking (COMPLETED)**
-- ✅ **Calendar Grid Fix**: Fixed layup scheduler calendar to display ALL enabled molds, not just those with assigned orders
-- ✅ **Week View Correction**: Removed filtering logic that only showed molds with orders, preventing cell skipping in week view
-- ✅ **Month View Correction**: Applied same fix to month view to ensure complete calendar grid displays
-- ✅ **P1 and P2 Tab Consistency**: Fixed both P1 and P2 scheduler tabs to show complete grid layouts
-- ✅ **Complete Grid Display**: All calendar cells now display properly regardless of whether they contain orders
-- ✅ **No More Missing Cells**: Resolved issue where empty molds were being filtered out, causing incomplete calendar views
+**July 24, 2025 - Layup Scheduler Compact View + Friday Work Day Blocking (COMPLETED)**
+- ✅ **Compact Calendar Display**: Changed layup scheduler to only show molds that have assigned orders (no empty mold rows)
+- ✅ **Empty Cell Elimination**: Removed empty mold cells from display to create cleaner, more focused calendar view
+- ✅ **P1 and P2 Filtering**: Applied intelligent filtering to both P1 and P2 scheduler tabs showing only active molds
+- ✅ **No Cell Skipping**: Ensured all assigned orders display properly without missing cells in compact view
 - ✅ **Friday Blocking Implementation**: Added comprehensive Friday blocking to prevent any order scheduling on Friday (not a work day)
 - ✅ **Drag & Drop Friday Prevention**: Blocks all attempts to drag orders to Friday cells with clear warning messages
 - ✅ **Assignment Display Filtering**: Filters out any existing Friday assignments from calendar display across all views
 - ✅ **4-Day Work Week Enforcement**: Enforces Monday-Thursday work schedule throughout the entire scheduling system
+- ✅ **Space Optimization**: Calendar now shows only relevant molds with orders, maximizing screen real estate efficiency
 
 **July 24, 2025 - LOP Monday-Only Scheduling Implementation (COMPLETED)**
 - ✅ **LOP Detection Function**: Added hasLOPAdjustment() function to identify orders with Length of Pull adjustments

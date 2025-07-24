@@ -1366,10 +1366,23 @@ export default function LayupScheduler() {
                     </div>
                   ))}
 
-                  {/* Rows for each mold - Show all enabled molds */}
+                  {/* Rows for each mold - Only show molds with assigned orders */}
                   {(() => {
-                    // Show all enabled molds, not just those with orders
-                    const activeMolds = molds.filter(m => m.enabled);
+                    // Get molds that have P1 orders assigned to them
+                    const usedMoldIds = new Set(
+                      Object.entries(orderAssignments)
+                        .filter(([orderId, assignment]) => {
+                          // Only include non-Friday assignments
+                          const assignmentDate = new Date(assignment.date);
+                          const isFriday = assignmentDate.getDay() === 5;
+                          if (isFriday) return false;
+                          
+                          // Only include P1 orders
+                          return p1Orders.some(o => o.orderId === orderId);
+                        })
+                        .map(([, assignment]) => assignment.moldId)
+                    );
+                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                     
                     return activeMolds.map(mold => (
                     <React.Fragment key={mold.moldId}>
@@ -1452,8 +1465,21 @@ export default function LayupScheduler() {
 
                         {/* Mold Rows for this week */}
                         {(() => {
-                          // Show all enabled molds, not just those with orders
-                          const activeMolds = molds.filter(m => m.enabled);
+                          // Only show molds that have P1 orders assigned to them
+                          const usedMoldIds = new Set(
+                            Object.entries(orderAssignments)
+                              .filter(([orderId, assignment]) => {
+                                // Only include non-Friday assignments
+                                const assignmentDate = new Date(assignment.date);
+                                const isFriday = assignmentDate.getDay() === 5;
+                                if (isFriday) return false;
+                                
+                                // Only include P1 orders
+                                return p1Orders.some(o => o.orderId === orderId);
+                              })
+                              .map(([, assignment]) => assignment.moldId)
+                          );
+                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                           
                           return activeMolds.map(mold => (
                           <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
@@ -1696,8 +1722,21 @@ export default function LayupScheduler() {
 
                   {/* Rows for each mold - P2 Orders */}
                   {(() => {
-                    // Show all enabled molds, not just those with orders
-                    const activeMolds = molds.filter(m => m.enabled);
+                    // Get molds that have P2 orders assigned to them
+                    const usedMoldIds = new Set(
+                      Object.entries(orderAssignments)
+                        .filter(([orderId, assignment]) => {
+                          // Only include non-Friday assignments
+                          const assignmentDate = new Date(assignment.date);
+                          const isFriday = assignmentDate.getDay() === 5;
+                          if (isFriday) return false;
+                          
+                          // Only include P2 orders
+                          return p2Orders.some(o => o.orderId === orderId);
+                        })
+                        .map(([, assignment]) => assignment.moldId)
+                    );
+                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                     
                     return activeMolds.map(mold => (
                     <React.Fragment key={mold.moldId}>
@@ -1780,8 +1819,21 @@ export default function LayupScheduler() {
 
                         {/* Mold Rows for this week - P2 Orders */}
                         {(() => {
-                          // Show all enabled molds, not just those with orders
-                          const activeMolds = molds.filter(m => m.enabled);
+                          // Only show molds that have P2 orders assigned to them
+                          const usedMoldIds = new Set(
+                            Object.entries(orderAssignments)
+                              .filter(([orderId, assignment]) => {
+                                // Only include non-Friday assignments
+                                const assignmentDate = new Date(assignment.date);
+                                const isFriday = assignmentDate.getDay() === 5;
+                                if (isFriday) return false;
+                                
+                                // Only include P2 orders
+                                return p2Orders.some(o => o.orderId === orderId);
+                              })
+                              .map(([, assignment]) => assignment.moldId)
+                          );
+                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                           
                           return activeMolds.map(mold => (
                           <React.Fragment key={`${weekIndex}-${mold.moldId}`}>

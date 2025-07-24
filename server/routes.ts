@@ -3102,12 +3102,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const priority = calculateProductionPriority(new Date((po as any).dueDate));
         console.log(`🏭 Production order ${(po as any).orderId} priority: ${priority} (due: ${(po as any).dueDate})`);
         
+        // Map product display name to match mold configuration
+        const getProductDisplayName = (itemName: string) => {
+          if (itemName === 'Altitude - Universal') {
+            return 'Mesa - Universal';
+          }
+          return itemName || 'Production Item';
+        };
+
+        const displayProductName = getProductDisplayName((po as any).itemName);
+        console.log(`🏭 Product display name mapping: "${(po as any).itemName}" → "${displayProductName}"`);
+        
         return {
           id: `production-${(po as any).id}`,
           orderId: (po as any).orderId,
           orderDate: (po as any).orderDate,
           customer: (po as any).customerName || 'Production Order',
-          product: (po as any).itemName || 'Production Item',
+          product: displayProductName,
           quantity: 1,
           status: 'FINALIZED',
           department: 'Layup',

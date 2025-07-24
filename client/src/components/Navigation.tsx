@@ -149,6 +149,12 @@ export default function Navigation() {
       label: 'Enhanced Reports',
       icon: PieChart,
       description: 'Advanced reporting with PDF/CSV export'
+    },
+    {
+      path: '/ag-bottom-metal-report',
+      label: 'AG Bottom Metal Report',
+      icon: FileText,
+      description: 'Orders with AG bottom metal specifications'
     }
   ];
 

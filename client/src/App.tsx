@@ -48,6 +48,7 @@ import AGTestDashboard from "./pages/AGTestDashboard";
 import ADMINTestDashboard from "./pages/GLENNTestDashboard";
 import STACITestDashboard from "./pages/STACITestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
+import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
@@ -88,6 +89,7 @@ function App() {
                   <Route path="/finance/dashboard" component={FinanceDashboardPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
+                  <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
                   <Route path="/forms/render/:formId" component={FormRendererPage} />
                   <Route path="/documentation" component={DocumentationPageNew} />
                   <Route path="/customers" component={CustomerManagement} />

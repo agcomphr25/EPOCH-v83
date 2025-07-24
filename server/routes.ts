@@ -2832,10 +2832,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const poId = parseInt(req.params.poId);
       const orders = await storage.generateProductionOrders(poId);
+      
+      console.log(`🏭 Generated ${orders.length} production orders from PO ${poId}`);
+      console.log(`🏭 Production orders will be auto-scheduled based on due dates and priority scores`);
+      console.log(`🏭 Orders created:`, orders.map(o => ({ orderId: o.orderId, dueDate: o.dueDate, itemName: o.itemName })));
+      
       res.json({ 
         success: true, 
-        message: `Generated ${orders.length} production orders from PO`, 
-        orders 
+        message: `Generated ${orders.length} production orders from PO - Auto-scheduling will prioritize these orders based on due dates`, 
+        orders,
+        autoScheduleTrigger: true // Signal to frontend to refresh layup scheduler
       });
     } catch (error) {
       console.error("Generate production orders error:", error);

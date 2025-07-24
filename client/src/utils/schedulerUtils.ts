@@ -61,20 +61,21 @@ export function generateLayupSchedule(
   
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
-  // 2. Sort orders by due date priority (earliest due dates first), with high priority override
+  // 2. Sort orders by priority score first, then due date (enhanced for production orders)
   const sortedOrders = [...orders].sort((a, b) => {
-    // First check for high priority flag override
-    const aHighPriority = a.priorityScore && a.priorityScore > 8; // High priority threshold
-    const bHighPriority = b.priorityScore && b.priorityScore > 8;
+    // Production orders have priority scores 20-35 (urgent), regular orders 50+
+    const aPriority = a.priorityScore || 99; // Default to lowest priority if not set
+    const bPriority = b.priorityScore || 99;
     
-    if (aHighPriority && !bHighPriority) return -1; // A has high priority, comes first
-    if (!aHighPriority && bHighPriority) return 1;  // B has high priority, comes first
+    // Lower priority score = higher priority (20 is more urgent than 50)
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
     
-    // If both or neither have high priority, sort by due date
+    // If same priority score, sort by due date (earliest first)
     const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
     const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
     
-    // Earlier due dates = higher priority
     return aDueDate - bDueDate;
   });
 
@@ -131,7 +132,17 @@ export function generateLayupSchedule(
   
   for (const order of sortedOrders) {
     let scheduled = false;
-    let attemptDate = new Date(order.orderDate);
+    
+    // Start scheduling date logic: production orders should start ASAP to meet due dates
+    let attemptDate = new Date();
+    if (order.source === 'production_order' && order.dueDate) {
+      // For production orders, start from current date to meet due date
+      attemptDate = new Date();
+      console.log(`🏭 Production order ${order.orderId} due ${order.dueDate} - starting schedule from today`);
+    } else {
+      // Regular orders can start from order date
+      attemptDate = new Date(order.orderDate);
+    }
     
     // Ensure we start on a work day
     if (!isWorkDay(attemptDate)) {

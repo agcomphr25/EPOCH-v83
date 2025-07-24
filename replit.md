@@ -10,13 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 24, 2025 - Production Orders Integration and Stock Model Mapping (COMPLETED)**
-- ✅ **Production Orders Mapping Fix**: Fixed critical issue preventing 400 production orders from displaying in Layup Scheduler
-- ✅ **Stock Model ID Mapping**: Implemented intelligent mapping from production order item names to valid stock model IDs
-- ✅ **Mesa Universal Compatibility**: "Altitude - Universal" production orders now properly map to "mesa_universal" stock model
-- ✅ **Orange Card Display**: Production orders now appear as orange "PO" labeled cards in Layup Scheduler interface
-- ✅ **Mold Compatibility**: Production orders can now be assigned to compatible molds through auto-scheduling algorithm
-- ✅ **Complete Integration**: All 400 production orders successfully integrated into unified layup queue system
+**July 24, 2025 - Enhanced Auto-Scheduling for Production Orders (COMPLETED)**
+- ✅ **Production Orders Mapping Fix**: Fixed critical database property mapping from snake_case to camelCase (productionStatus, orderId, itemName, dueDate)
+- ✅ **Complete Integration**: All 400 production orders successfully integrated into unified layup queue system appearing as orange cards
+- ✅ **Enhanced Priority Algorithm**: Updated scheduling to prioritize by priority score first (production orders: 20-35, regular orders: 50+), then by due date
+- ✅ **Automatic Schedule Generation**: Production orders now automatically trigger optimal schedule generation when created from purchase orders
+- ✅ **Due Date Optimization**: Production orders start scheduling from current date to meet purchase order due dates
+- ✅ **Purchase Order Integration**: Enhanced generation API to signal auto-scheduling trigger and provide detailed logging for production orders
+- ✅ **Stock Model Mapping**: "Altitude - Universal" production orders properly map to "mesa_universal" with high priority scores
+- ✅ **4-Day Work Week Distribution**: Maintains Monday-Thursday scheduling with proper mold capacity and employee production rate consideration
 
 **July 23, 2025 - Auto-Schedule Function Restoration Without UI Buttons (COMPLETED)**
 - ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request

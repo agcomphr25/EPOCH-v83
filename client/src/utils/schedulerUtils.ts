@@ -140,6 +140,16 @@ export function generateLayupSchedule(
   lopOrders.forEach(order => {
     console.log(`📏 LOP Order: ${order.orderId} - LOP: ${order.features?.length_of_pull}`);
   });
+  
+  // Debug: Log all orders with their LOP status
+  console.log(`🔍 LOP Detection Results:`);
+  orders.forEach(order => {
+    const isLOP = hasLOPAdjustment(order);
+    const lopValue = order.features?.length_of_pull;
+    if (lopValue && lopValue !== 'no_lop_change') {
+      console.log(`🔍 Order ${order.orderId}: LOP="${lopValue}" → ${isLOP ? 'LOP ORDER (Monday-only)' : 'Regular order'}`);
+    }
+  });
 
   // Sort both groups by due date priority (earliest due dates first), with high priority override
   const sortLopOrders = (orderList: LayupOrder[]) => [...orderList].sort((a, b) => {

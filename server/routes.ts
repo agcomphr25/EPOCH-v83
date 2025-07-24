@@ -3049,6 +3049,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const mappedStockModelId = mapItemNameToStockModel(po.itemName);
         console.log(`🏭 Production order mapping: "${po.itemName}" → "${mappedStockModelId}"`);
         
+        // Calculate high priority for production orders to meet P1 purchase order due dates
+        const calculateProductionPriority = (dueDate: Date) => {
+          const now = new Date();
+          const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // High priority (20-40) for production orders, based on urgency
+          if (daysUntilDue <= 7) return 20;   // Very urgent
+          if (daysUntilDue <= 14) return 25;  // Urgent
+          if (daysUntilDue <= 21) return 30;  // High priority
+          return 35; // Still higher than regular orders (50+)
+        };
+        
+        const priority = calculateProductionPriority(new Date(po.dueDate));
+        console.log(`🏭 Production order ${po.orderId} priority: ${priority} (due: ${po.dueDate})`);
+        
         return {
           id: `production-${po.id}`,
           orderId: po.orderId,
@@ -3059,7 +3074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'FINALIZED',
           department: 'Layup',
           currentDepartment: 'Layup',
-          priorityScore: 60, // Medium priority for production orders
+          priorityScore: priority, // High priority to meet due dates
           dueDate: po.dueDate,
           source: 'production_order',
           productionOrderId: po.id,

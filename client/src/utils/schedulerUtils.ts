@@ -176,6 +176,17 @@ export function generateLayupSchedule(
         return false;
       });
       
+      // Enhanced debug logging for production orders
+      if (order.source === 'production_order') {
+        console.log(`🏭 PRODUCTION ORDER DEBUG: ${order.orderId}`);
+        console.log(`🏭 Stock Model: ${orderStockModel}`);
+        console.log(`🏭 All enabled molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+        console.log(`🏭 Compatible molds found: ${compatibleMolds.length}`, compatibleMolds.map(m => m.moldId));
+        if (compatibleMolds.length === 0) {
+          console.error(`🏭 ❌ NO COMPATIBLE MOLDS for production order ${order.orderId} with stock model ${orderStockModel}`);
+        }
+      }
+      
       // Then find available capacity among compatible molds
       const moldSlot = compatibleMolds.find(m => {
         const currentUsage = dateMoldUsage[dateKey][m.moldId];

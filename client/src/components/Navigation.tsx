@@ -175,9 +175,15 @@ export default function Navigation() {
 
   const employeesItems = [
     {
+      path: '/employee',
+      label: 'Employee Management',
+      icon: Users,
+      description: 'Manage employee profiles, certifications, and evaluations'
+    },
+    {
       path: '/employee-portal',
       label: 'Employee Portal',
-      icon: Users,
+      icon: User,
       description: 'Employee time tracking and onboarding'
     },
     {

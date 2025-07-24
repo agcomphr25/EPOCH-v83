@@ -49,6 +49,11 @@ import ADMINTestDashboard from "./pages/GLENNTestDashboard";
 import STACITestDashboard from "./pages/STACITestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
+import EmployeeDashboard from "./pages/EmployeeDashboard";
+import EmployeeDetail from "./pages/EmployeeDetail";
+import EmployeePortal from "./pages/EmployeePortal";
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -104,6 +109,25 @@ function App() {
                   <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
                   <Route path="/stacitest-dashboard" component={STACITestDashboard} />
+                  
+                  {/* Employee Management Routes */}
+                  <Route path="/login" component={LoginPage} />
+                  <Route path="/employee">
+                    {() => (
+                      <ProtectedRoute requiredRole={['ADMIN', 'HR Manager']}>
+                        <EmployeeDashboard />
+                      </ProtectedRoute>
+                    )}
+                  </Route>
+                  <Route path="/employee/:id">
+                    {(params) => (
+                      <ProtectedRoute requiredRole={['ADMIN', 'HR Manager']}>
+                        <EmployeeDetail />
+                      </ProtectedRoute>
+                    )}
+                  </Route>
+                  <Route path="/employee-portal/:portalId" component={EmployeePortal} />
+                  
                   <Route component={NotFound} />
                 </Switch>
               </main>

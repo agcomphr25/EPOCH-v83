@@ -616,7 +616,8 @@ export default function LayupScheduler() {
           modelId,
           stockModelId: order.stockModelId,
           availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
-          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId)
+          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId),
+          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels?.slice(0, 3) }))
         });
       }
       
@@ -675,7 +676,15 @@ export default function LayupScheduler() {
       const compatibleMolds = getCompatibleMolds(order);
       
       if (compatibleMolds.length === 0) {
-        console.log('⚠️ No compatible molds for order:', order.orderId);
+        console.log('⚠️ No compatible molds for order:', order.orderId, 'Source:', order.source);
+        if (order.source === 'production_order') {
+          console.log('❌ CRITICAL: Production order has no compatible molds!', {
+            orderId: order.orderId,
+            stockModelId: order.stockModelId,
+            modelId: order.modelId,
+            enabledMolds: molds.filter(m => m.enabled).length
+          });
+        }
         return;
       }
 
@@ -719,7 +728,8 @@ export default function LayupScheduler() {
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
         
         assigned = true;
-        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
+        const logPrefix = order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
+        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
       }
 
       if (!assigned) {
@@ -769,6 +779,15 @@ export default function LayupScheduler() {
     console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
     console.log('🏭 LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
     console.log('🏭 LayupScheduler - Production order modelId:', productionOrders[0].modelId);
+    
+    // Check if production orders are being assigned
+    const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
+    console.log('🏭 LayupScheduler - Assigned production orders:', assignedProductionOrders.length);
+    if (assignedProductionOrders.length === 0) {
+      console.log('❌ NO PRODUCTION ORDERS ASSIGNED! This is why they are not visible');
+    } else {
+      console.log('✅ Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
+    }
   }
   
   // Force auto-schedule trigger when production orders are loaded

@@ -2938,9 +2938,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process each active PO for layup-required items
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems = items.filter(item => item.itemType === 'stock_model');
+        const layupItems = items.filter(item => 
+          item.itemType === 'stock_model' || 
+          (item.itemType === 'custom_model' && (item.itemId === 'Mesa - Universal' || item.itemName === 'Mesa - Universal'))
+        );
         
-        for (const item of stockModelItems) {
+        for (const item of layupItems) {
           // Calculate priority score for P1 PO items
           const calculateP1Priority = (po: any, item: any) => {
             let baseScore = 50; // Default medium priority
@@ -2958,74 +2961,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return Math.max(1, baseScore + urgencyScore + customerScore);
           };
 
-          // Create layup order entry for each P1 PO item
-          const layupOrder = {
-            id: `p1-po-${po.id}-${item.id}`, // Unique identifier
-            orderId: `${po.poNumber}-${item.id}`, // Display identifier
-            orderDate: po.poDate,
-            customer: po.customerName,
-            product: item.itemName,
-            quantity: item.quantity,
-            status: 'FINALIZED',
-            department: 'Layup',
-            currentDepartment: 'Layup',
-            priorityScore: calculateP1Priority(po, item),
-            dueDate: po.expectedDelivery,
-            source: 'p1_purchase_order', // Track source for identification
-            poId: po.id,
-            poItemId: item.id,
-            stockModelId: item.itemId, // For mold mapping
-            createdAt: po.createdAt,
-            updatedAt: po.updatedAt
-          };
+          // Map Mesa Universal variants to proper stock model ID
+          let stockModelId = item.itemId;
+          if (item.itemId === "Mesa - Universal" || item.itemName === "Mesa - Universal") {
+            stockModelId = "mesa_universal";
+          }
           
-          p1LayupOrders.push(layupOrder);
+          // For Mesa Universal with high quantity, create multiple individual orders
+          if (stockModelId === "mesa_universal" && item.quantity > 1) {
+            // Create individual orders for each Mesa Universal unit (limit to avoid overload)
+            const maxOrders = Math.min(item.quantity, 50); // Limit to 50 individual orders
+            for (let i = 1; i <= maxOrders; i++) {
+              const layupOrder = {
+                id: `p1-po-${po.id}-${item.id}-${i.toString().padStart(3, '0')}`,
+                orderId: `${po.poNumber}-${item.id}-${i.toString().padStart(3, '0')}`,
+                orderDate: po.poDate,
+                customer: po.customerName,
+                product: `${item.itemName} #${i}`,
+                quantity: 1, // Individual unit
+                status: 'FINALIZED',
+                department: 'Layup',
+                currentDepartment: 'Layup',
+                priorityScore: calculateP1Priority(po, item),
+                dueDate: po.expectedDelivery,
+                source: 'p1_purchase_order',
+                poId: po.id,
+                poItemId: item.id,
+                stockModelId: stockModelId,
+                createdAt: po.createdAt,
+                updatedAt: po.updatedAt
+              };
+              p1LayupOrders.push(layupOrder);
+            }
+          } else {
+            // Create layup order entry for each P1 PO item (normal case)
+            const layupOrder = {
+              id: `p1-po-${po.id}-${item.id}`, // Unique identifier
+              orderId: `${po.poNumber}-${item.id}`, // Display identifier
+              orderDate: po.poDate,
+              customer: po.customerName,
+              product: item.itemName,
+              quantity: item.quantity,
+              status: 'FINALIZED',
+              department: 'Layup',
+              currentDepartment: 'Layup',
+              priorityScore: calculateP1Priority(po, item),
+              dueDate: po.expectedDelivery,
+              source: 'p1_purchase_order', // Track source for identification
+              poId: po.id,
+              poItemId: item.id,
+              stockModelId: stockModelId, // For mold mapping
+              createdAt: po.createdAt,
+              updatedAt: po.updatedAt
+            };
+            
+            p1LayupOrders.push(layupOrder);
+          }
         }
       }
 
-      // Generate Mesa Universal orders (8 per work day for 6 weeks)
-      const generateMesaUniversalOrders = () => {
-        const mesaOrders = [];
-        const today = new Date();
-        
-        // Generate for next 6 weeks
-        for (let week = 0; week < 6; week++) {
-          for (let day = 0; day < 7; day++) {
-            const workDate = new Date(today);
-            workDate.setDate(today.getDate() + (week * 7) + day);
-            
-            // Only work days (Monday=1, Tuesday=2, Wednesday=3, Thursday=4)
-            const dayOfWeek = workDate.getDay();
-            if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-              // Generate 8 Mesa Universal orders for this work day
-              for (let i = 1; i <= 8; i++) {
-                mesaOrders.push({
-                  id: `mesa-${workDate.toISOString().slice(0, 10)}-${i.toString().padStart(2, '0')}`,
-                  orderId: `MESA-${workDate.toISOString().slice(0, 10)}-${i.toString().padStart(2, '0')}`,
-                  orderDate: workDate.toISOString().slice(0, 10),
-                  customer: 'Mesa Universal Production',
-                  product: 'Mesa Universal',
-                  quantity: 1,
-                  status: 'FINALIZED',
-                  department: 'Layup',
-                  currentDepartment: 'Layup',
-                  priorityScore: 25, // Medium priority
-                  dueDate: workDate.toISOString().slice(0, 10),
-                  source: 'mesa_universal',
-                  stockModelId: 'mesa_universal',
-                  modelId: 'mesa_universal',
-                  features: {}, // No features needed for Mesa Universal
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                });
-              }
-            }
-          }
-        }
-        return mesaOrders;
-      };
-
-      const mesaUniversalOrders = generateMesaUniversalOrders();
+      console.log('📋 P1 Purchase Orders - PO count:', p1PurchaseOrders.length);
+      console.log('📋 P1 Purchase Orders - Sample PO:', p1PurchaseOrders[0]);
+      p1PurchaseOrders.forEach(po => {
+        console.log(`📋 PO ${po.poNumber}: ${po.poItems?.length || 0} items`);
+        po.poItems?.forEach(item => {
+          console.log(`  - Item ${item.id}: ${item.itemName} (${item.itemId}) qty:${item.quantity}`);
+        });
+      });
 
       // Combine and sort all orders by priority score (lower = higher priority)
       const combinedOrders = [
@@ -3040,8 +3042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
           modelId: order.stockModelId
-        })),
-        ...mesaUniversalOrders
+        }))
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
       res.json(combinedOrders);

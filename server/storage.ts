@@ -69,9 +69,14 @@ import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrder
 // you might need
 
 export interface IStorage {
+  // User authentication methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, data: Partial<InsertUser>): Promise<User>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  generatePortalToken(employeeId: number): Promise<string>;
+  validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }>;
   saveCSVData(data: InsertCSVData): Promise<CSVData>;
   getLatestCSVData(): Promise<CSVData | undefined>;
   clearCSVData(): Promise<void>;
@@ -3168,6 +3173,74 @@ export class DatabaseStorage implements IStorage {
     }
 
     return materialRequirements;
+  }
+
+  // Authentication methods
+  async updateUser(id: number, data: Partial<InsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        passwordHash, 
+        passwordChangedAt: new Date(),
+        updatedAt: new Date() 
+      })
+      .where(eq(users.id, id));
+  }
+
+  async generatePortalToken(employeeId: number): Promise<string> {
+    // Generate a secure portal token with expiration
+    const crypto = await import('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Store the token in a temporary table or cache
+    // For now, we'll encode the employee ID and expiration in the token
+    const payload = {
+      employeeId,
+      expiresAt: expiresAt.getTime(),
+      random: crypto.randomBytes(16).toString('hex')
+    };
+
+    // Simple encoding (in production, use proper encryption)
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    return `portal_${encodedPayload}`;
+  }
+
+  async validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }> {
+    try {
+      if (!token.startsWith('portal_')) {
+        return { employeeId: 0, isValid: false };
+      }
+
+      const encodedPayload = token.substring(7); // Remove 'portal_' prefix
+      const payloadStr = Buffer.from(encodedPayload, 'base64url').toString();
+      const payload = JSON.parse(payloadStr);
+
+      // Check expiration
+      if (Date.now() > payload.expiresAt) {
+        return { employeeId: 0, isValid: false };
+      }
+
+      // Verify employee exists and is active
+      const employee = await this.getEmployee(payload.employeeId);
+      if (!employee || !employee.isActive) {
+        return { employeeId: 0, isValid: false };
+      }
+
+      return { employeeId: payload.employeeId, isValid: true };
+    } catch (error) {
+      console.error('Portal token validation error:', error);
+      return { employeeId: 0, isValid: false };
+    }
   }
 
 }

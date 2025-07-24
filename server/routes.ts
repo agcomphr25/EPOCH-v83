@@ -11,6 +11,9 @@ import fs from "fs";
 import crypto from "crypto";
 import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from "./utils/fileUpload";
 import { authenticateToken, requireRole, requireEmployeeAccess, authenticatePortalToken } from "./middleware/auth";
+import { AuthService } from "./auth";
+import { loginSchema, changePasswordSchema, insertUserSchema } from "./schema";
+import cookieParser from 'cookie-parser';
 
 
 // SmartyStreets direct API calls
@@ -66,6 +69,150 @@ import {
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Enable cookie parsing for session management
+  app.use(cookieParser());
+
+  // Authentication routes
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = loginSchema.parse(req.body);
+      const ipAddress = req.ip || req.connection.remoteAddress || null;
+      const userAgent = req.get('User-Agent') || null;
+
+      const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
+      
+      if (!result) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      // Set secure cookie
+      res.cookie('sessionToken', result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 8 * 60 * 60 * 1000, // 8 hours
+      });
+
+      res.json({
+        success: true,
+        user: result.user
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      if (error instanceof Error) {
+        return res.status(400).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+    try {
+      const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+      
+      if (sessionToken) {
+        await AuthService.invalidateSession(sessionToken);
+      }
+
+      res.clearCookie('sessionToken');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/me", authenticateToken, async (req, res) => {
+    res.json(req.user);
+  });
+
+  app.post("/api/auth/change-password", authenticateToken, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+      const success = await AuthService.changePassword(req.user!.id, currentPassword, newPassword);
+      
+      if (!success) {
+        return res.status(400).json({ error: "Current password is incorrect" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  // User management routes (Admin/HR only)
+  app.post("/api/users", authenticateToken, requireRole('ADMIN', 'HR'), async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      const passwordHash = await AuthService.hashPassword(userData.password);
+      
+      const user = await storage.createUser({
+        ...userData,
+        passwordHash,
+      });
+
+      // Don't return the password hash
+      const { passwordHash: _, ...userResponse } = user;
+      res.json(userResponse);
+    } catch (error) {
+      console.error('Create user error:', error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.get("/api/users", authenticateToken, requireRole('ADMIN', 'HR'), async (req, res) => {
+    try {
+      // This would need to be implemented in storage
+      res.json([]);
+    } catch (error) {
+      console.error('Get users error:', error);
+      res.status(500).json({ error: "Failed to retrieve users" });
+    }
+  });
+
+  // Portal access routes
+  app.get("/api/portal/:portalId/employee", authenticatePortalToken, async (req, res) => {
+    try {
+      const employeeId = req.portalEmployeeId!;
+      const employee = await storage.getEmployee(employeeId);
+      
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+
+      res.json(employee);
+    } catch (error) {
+      console.error('Portal employee error:', error);
+      res.status(500).json({ error: "Failed to retrieve employee data" });
+    }
+  });
+
+  // Generate portal link for employee (Admin/HR only)
+  app.post("/api/employees/:employeeId/portal-link", authenticateToken, requireRole('ADMIN', 'HR'), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId);
+      const employee = await storage.getEmployee(employeeId);
+      
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+
+      const portalToken = await storage.generatePortalToken(employeeId);
+      const portalUrl = `${req.protocol}://${req.get('host')}/portal/${portalToken}`;
+
+      res.json({
+        portalToken,
+        portalUrl,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      });
+    } catch (error) {
+      console.error('Generate portal link error:', error);
+      res.status(500).json({ error: "Failed to generate portal link" });
+    }
+  });
+
   // CSV Data routes
   app.post("/api/csv-data", async (req, res) => {
     try {

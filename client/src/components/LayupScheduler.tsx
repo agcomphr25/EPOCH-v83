@@ -799,6 +799,17 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
   
+  // Debug Mesa Universal orders specifically
+  const mesaOrders = orders.filter(order => order.orderId?.includes('MESA'));
+  console.log('🏔️ Mesa Universal orders found:', mesaOrders.length);
+  if (mesaOrders.length > 0) {
+    console.log('🏔️ Mesa orders sample:', mesaOrders.slice(0, 3).map(o => ({ 
+      orderId: o.orderId, 
+      stockModelId: o.stockModelId,
+      source: (o as any).source 
+    })));
+  }
+  
   // Debug unassigned orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));

@@ -1351,22 +1351,8 @@ export default function LayupScheduler() {
                   </div>
                 </div>
               ) : viewType === 'week' ? (
-                /* Week view - grid layout */
-                <div
-                  className="grid border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-                >
-                  {/* Day Headers */}
-                  {dates.map(date => (
-                    <div
-                      key={date.toISOString()}
-                      className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-sm font-medium"
-                    >
-                      {format(date, 'EEE MM/dd')}
-                    </div>
-                  ))}
-
-                  {/* Rows for each mold - Only show molds with assigned orders */}
+                /* Week view - compact layout showing only molds with orders */
+                <div className="space-y-4">
                   {(() => {
                     // Get molds that have P1 orders assigned to them
                     const usedMoldIds = new Set(
@@ -1384,56 +1370,92 @@ export default function LayupScheduler() {
                     );
                     const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                     
-                    return activeMolds.map(mold => (
-                    <React.Fragment key={mold.moldId}>
-                      {dates.map(date => {
+                    return activeMolds.map(mold => {
+                      // Get all dates that have orders for this mold
+                      const moldDatesWithOrders = dates.filter(date => {
                         const dateString = date.toISOString();
-                        
-                        // Get orders assigned to this mold/date combination using p1Orders for filtering
                         const cellOrders = Object.entries(orderAssignments)
                           .filter(([orderId, assignment]) => {
                             const assignmentDateOnly = assignment.date.split('T')[0];
                             const cellDateOnly = dateString.split('T')[0];
                             const orderInP1 = p1Orders.some(o => o.orderId === orderId);
                             
-                            // Block Friday assignments (day 5) - not a work day
+                            // Block Friday assignments
                             const assignmentDate = new Date(assignment.date);
                             const isFriday = assignmentDate.getDay() === 5;
-                            if (isFriday) {
-                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
-                              return false;
-                            }
+                            if (isFriday) return false;
                             
                             return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                          })
-                          .map(([orderId]) => {
-                            const order = p1Orders.find(o => o.orderId === orderId);
-                            return order;
-                          })
-                          .filter(order => order !== undefined) as any[];
+                          });
+                        return cellOrders.length > 0;
+                      });
 
-                        const dropId = `${mold.moldId}|${dateString}`;
+                      if (moldDatesWithOrders.length === 0) return null;
 
-                        return (
-                          <DroppableCell
-                            key={dropId}
-                            moldId={mold.moldId}
-                            date={date}
-                            orders={cellOrders}
-                            onDrop={(orderId, moldId, date) => {
-                              // Handle drop (this is handled by DndContext now)
-                            }}
-                            moldInfo={{
-                              moldId: mold.moldId,
-                              instanceNumber: mold.instanceNumber
-                            }}
-                            getModelDisplayName={getModelDisplayName}
-                            features={features}
-                          />
-                        );
-                      })}
-                    </React.Fragment>
-                    ));
+                      return (
+                        <div key={mold.moldId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                          {/* Mold Header */}
+                          <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                              {mold.moldId} ({mold.instanceNumber})
+                            </h3>
+                          </div>
+                          
+                          {/* Orders for this mold - flex layout */}
+                          <div className="p-4">
+                            <div className="flex flex-wrap gap-4">
+                              {moldDatesWithOrders.map(date => {
+                                const dateString = date.toISOString();
+                                
+                                // Get orders for this mold/date
+                                const cellOrders = Object.entries(orderAssignments)
+                                  .filter(([orderId, assignment]) => {
+                                    const assignmentDateOnly = assignment.date.split('T')[0];
+                                    const cellDateOnly = dateString.split('T')[0];
+                                    const orderInP1 = p1Orders.some(o => o.orderId === orderId);
+                                    
+                                    // Block Friday assignments
+                                    const assignmentDate = new Date(assignment.date);
+                                    const isFriday = assignmentDate.getDay() === 5;
+                                    if (isFriday) return false;
+                                    
+                                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
+                                  })
+                                  .map(([orderId]) => {
+                                    const order = p1Orders.find(o => o.orderId === orderId);
+                                    return order;
+                                  })
+                                  .filter(order => order !== undefined) as any[];
+
+                                const dropId = `${mold.moldId}|${dateString}`;
+
+                                return (
+                                  <div key={dropId} className="flex-shrink-0">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                      {format(date, 'EEE MM/dd')}
+                                    </div>
+                                    <DroppableCell
+                                      moldId={mold.moldId}
+                                      date={date}
+                                      orders={cellOrders}
+                                      onDrop={(orderId, moldId, date) => {
+                                        // Handle drop (this is handled by DndContext now)
+                                      }}
+                                      moldInfo={{
+                                        moldId: mold.moldId,
+                                        instanceNumber: mold.instanceNumber
+                                      }}
+                                      getModelDisplayName={getModelDisplayName}
+                                      features={features}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }).filter(Boolean);
                   })()}
                 </div>
               ) : (
@@ -1463,69 +1485,109 @@ export default function LayupScheduler() {
                           </div>
                         ))}
 
-                        {/* Mold Rows for this week */}
+                        {/* Month P1 Orders - compact layout */}
                         {(() => {
-                          // Only show molds that have P1 orders assigned to them
+                          // Get molds that have P1 orders assigned in this week
                           const usedMoldIds = new Set(
                             Object.entries(orderAssignments)
                               .filter(([orderId, assignment]) => {
-                                // Only include non-Friday assignments
+                                // Only include non-Friday assignments in this week
                                 const assignmentDate = new Date(assignment.date);
                                 const isFriday = assignmentDate.getDay() === 5;
                                 if (isFriday) return false;
                                 
+                                // Check if assignment date is within this week
+                                const isInWeek = week.some(weekDate => {
+                                  const assignmentDateOnly = assignment.date.split('T')[0];
+                                  const weekDateOnly = weekDate.toISOString().split('T')[0];
+                                  return assignmentDateOnly === weekDateOnly;
+                                });
+                                
                                 // Only include P1 orders
-                                return p1Orders.some(o => o.orderId === orderId);
+                                return isInWeek && p1Orders.some(o => o.orderId === orderId);
                               })
                               .map(([, assignment]) => assignment.moldId)
                           );
                           const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                           
-                          return activeMolds.map(mold => (
-                          <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
-                            {week.map(date => {
+                          return activeMolds.map(mold => {
+                            // Get all dates in this week that have orders for this mold
+                            const moldDatesWithOrders = week.filter(date => {
                               const dateString = date.toISOString();
-                              const cellDateOnly = dateString.split('T')[0];
-                              
-                              // Get orders assigned to this mold/date using p1Orders
                               const cellOrders = Object.entries(orderAssignments)
                                 .filter(([orderId, assignment]) => {
                                   const assignmentDateOnly = assignment.date.split('T')[0];
+                                  const cellDateOnly = dateString.split('T')[0];
                                   const orderInP1 = p1Orders.some(o => o.orderId === orderId);
                                   
-                                  // Block Friday assignments (day 5) - not a work day
+                                  // Block Friday assignments
                                   const assignmentDate = new Date(assignment.date);
                                   const isFriday = assignmentDate.getDay() === 5;
-                                  if (isFriday) {
-                                    console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
-                                    return false;
-                                  }
+                                  if (isFriday) return false;
                                   
                                   return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                                })
-                                .map(([orderId]) => p1Orders.find(o => o.orderId === orderId))
-                                .filter(order => order !== undefined) as any[];
+                                });
+                              return cellOrders.length > 0;
+                            });
 
-                              return (
-                                <DroppableCell
-                                  key={`${weekIndex}-${mold.moldId}-${date.toISOString()}`}
-                                  moldId={mold.moldId}
-                                  date={date}
-                                  orders={cellOrders}
-                                  onDrop={(orderId, moldId, date) => {
-                                    // Handle drop
-                                  }}
-                                  moldInfo={{
-                                    moldId: mold.moldId,
-                                    instanceNumber: mold.instanceNumber
-                                  }}
-                                  getModelDisplayName={getModelDisplayName}
-                                  features={features}
-                                />
-                              );
-                            })}
-                          </React.Fragment>
-                          ));
+                            if (moldDatesWithOrders.length === 0) return null;
+
+                            return (
+                              <div key={`${weekIndex}-${mold.moldId}`} className="col-span-full border border-blue-200 dark:border-blue-700 rounded-lg overflow-hidden mb-2">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-1 border-b border-blue-200 dark:border-blue-700">
+                                  <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-100">
+                                    {mold.moldId} ({mold.instanceNumber})
+                                  </h4>
+                                </div>
+                                <div className="p-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {moldDatesWithOrders.map(date => {
+                                      const dateString = date.toISOString();
+                                      
+                                      // Get orders for this mold/date
+                                      const cellOrders = Object.entries(orderAssignments)
+                                        .filter(([orderId, assignment]) => {
+                                          const assignmentDateOnly = assignment.date.split('T')[0];
+                                          const cellDateOnly = dateString.split('T')[0];
+                                          const orderInP1 = p1Orders.some(o => o.orderId === orderId);
+                                          
+                                          // Block Friday assignments
+                                          const assignmentDate = new Date(assignment.date);
+                                          const isFriday = assignmentDate.getDay() === 5;
+                                          if (isFriday) return false;
+                                          
+                                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
+                                        })
+                                        .map(([orderId]) => p1Orders.find(o => o.orderId === orderId))
+                                        .filter(order => order !== undefined) as any[];
+
+                                      return (
+                                        <div key={`${weekIndex}-${mold.moldId}-${date.toISOString()}`} className="flex-shrink-0">
+                                          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                            {format(date, 'MM/dd')}
+                                          </div>
+                                          <DroppableCell
+                                            moldId={mold.moldId}
+                                            date={date}
+                                            orders={cellOrders}
+                                            onDrop={(orderId, moldId, date) => {
+                                              // Handle drop
+                                            }}
+                                            moldInfo={{
+                                              moldId: mold.moldId,
+                                              instanceNumber: mold.instanceNumber
+                                            }}
+                                            getModelDisplayName={getModelDisplayName}
+                                            features={features}
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }).filter(Boolean);
                         })()}
                       </div>
                     </div>
@@ -1720,7 +1782,7 @@ export default function LayupScheduler() {
                     </div>
                   ))}
 
-                  {/* Rows for each mold - P2 Orders */}
+                  {/* P2 Orders - compact layout showing only molds with orders */}
                   {(() => {
                     // Get molds that have P2 orders assigned to them
                     const usedMoldIds = new Set(
@@ -1738,56 +1800,92 @@ export default function LayupScheduler() {
                     );
                     const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                     
-                    return activeMolds.map(mold => (
-                    <React.Fragment key={mold.moldId}>
-                      {dates.map(date => {
+                    return activeMolds.map(mold => {
+                      // Get all dates that have P2 orders for this mold
+                      const moldDatesWithOrders = dates.filter(date => {
                         const dateString = date.toISOString();
-                        
-                        // Get P2 orders assigned to this mold/date combination
                         const cellOrders = Object.entries(orderAssignments)
                           .filter(([orderId, assignment]) => {
                             const assignmentDateOnly = assignment.date.split('T')[0];
                             const cellDateOnly = dateString.split('T')[0];
                             const orderInP2 = p2Orders.some(o => o.orderId === orderId);
                             
-                            // Block Friday assignments (day 5) - not a work day
+                            // Block Friday assignments
                             const assignmentDate = new Date(assignment.date);
                             const isFriday = assignmentDate.getDay() === 5;
-                            if (isFriday) {
-                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
-                              return false;
-                            }
+                            if (isFriday) return false;
                             
                             return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                          })
-                          .map(([orderId]) => {
-                            const order = p2Orders.find(o => o.orderId === orderId);
-                            return order;
-                          })
-                          .filter(order => order !== undefined) as any[];
+                          });
+                        return cellOrders.length > 0;
+                      });
 
-                        const dropId = `${mold.moldId}|${dateString}`;
+                      if (moldDatesWithOrders.length === 0) return null;
 
-                        return (
-                          <DroppableCell
-                            key={dropId}
-                            moldId={mold.moldId}
-                            date={date}
-                            orders={cellOrders}
-                            onDrop={(orderId, moldId, date) => {
-                              // Handle drop (this is handled by DndContext now)
-                            }}
-                            moldInfo={{
-                              moldId: mold.moldId,
-                              instanceNumber: mold.instanceNumber
-                            }}
-                            getModelDisplayName={getModelDisplayName}
-                            features={features}
-                          />
-                        );
-                      })}
-                    </React.Fragment>
-                    ));
+                      return (
+                        <div key={mold.moldId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                          {/* Mold Header */}
+                          <div className="bg-green-50 dark:bg-green-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-green-900 dark:text-green-100">
+                              {mold.moldId} ({mold.instanceNumber}) - P2
+                            </h3>
+                          </div>
+                          
+                          {/* P2 Orders for this mold - flex layout */}
+                          <div className="p-4">
+                            <div className="flex flex-wrap gap-4">
+                              {moldDatesWithOrders.map(date => {
+                                const dateString = date.toISOString();
+                                
+                                // Get P2 orders for this mold/date
+                                const cellOrders = Object.entries(orderAssignments)
+                                  .filter(([orderId, assignment]) => {
+                                    const assignmentDateOnly = assignment.date.split('T')[0];
+                                    const cellDateOnly = dateString.split('T')[0];
+                                    const orderInP2 = p2Orders.some(o => o.orderId === orderId);
+                                    
+                                    // Block Friday assignments
+                                    const assignmentDate = new Date(assignment.date);
+                                    const isFriday = assignmentDate.getDay() === 5;
+                                    if (isFriday) return false;
+                                    
+                                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
+                                  })
+                                  .map(([orderId]) => {
+                                    const order = p2Orders.find(o => o.orderId === orderId);
+                                    return order;
+                                  })
+                                  .filter(order => order !== undefined) as any[];
+
+                                const dropId = `${mold.moldId}|${dateString}`;
+
+                                return (
+                                  <div key={dropId} className="flex-shrink-0">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                      {format(date, 'EEE MM/dd')}
+                                    </div>
+                                    <DroppableCell
+                                      moldId={mold.moldId}
+                                      date={date}
+                                      orders={cellOrders}
+                                      onDrop={(orderId, moldId, date) => {
+                                        // Handle drop (this is handled by DndContext now)
+                                      }}
+                                      moldInfo={{
+                                        moldId: mold.moldId,
+                                        instanceNumber: mold.instanceNumber
+                                      }}
+                                      getModelDisplayName={getModelDisplayName}
+                                      features={features}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }).filter(Boolean);
                   })()}
                 </div>
               ) : (
@@ -1817,69 +1915,109 @@ export default function LayupScheduler() {
                           </div>
                         ))}
 
-                        {/* Mold Rows for this week - P2 Orders */}
+                        {/* Month P2 Orders - compact layout */}
                         {(() => {
-                          // Only show molds that have P2 orders assigned to them
+                          // Get molds that have P2 orders assigned in this week
                           const usedMoldIds = new Set(
                             Object.entries(orderAssignments)
                               .filter(([orderId, assignment]) => {
-                                // Only include non-Friday assignments
+                                // Only include non-Friday assignments in this week
                                 const assignmentDate = new Date(assignment.date);
                                 const isFriday = assignmentDate.getDay() === 5;
                                 if (isFriday) return false;
                                 
+                                // Check if assignment date is within this week
+                                const isInWeek = week.some(weekDate => {
+                                  const assignmentDateOnly = assignment.date.split('T')[0];
+                                  const weekDateOnly = weekDate.toISOString().split('T')[0];
+                                  return assignmentDateOnly === weekDateOnly;
+                                });
+                                
                                 // Only include P2 orders
-                                return p2Orders.some(o => o.orderId === orderId);
+                                return isInWeek && p2Orders.some(o => o.orderId === orderId);
                               })
                               .map(([, assignment]) => assignment.moldId)
                           );
                           const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                           
-                          return activeMolds.map(mold => (
-                          <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
-                            {week.map(date => {
+                          return activeMolds.map(mold => {
+                            // Get all dates in this week that have P2 orders for this mold
+                            const moldDatesWithOrders = week.filter(date => {
                               const dateString = date.toISOString();
-                              const cellDateOnly = dateString.split('T')[0];
-                              
-                              // Get P2 orders assigned to this mold/date
                               const cellOrders = Object.entries(orderAssignments)
                                 .filter(([orderId, assignment]) => {
                                   const assignmentDateOnly = assignment.date.split('T')[0];
+                                  const cellDateOnly = dateString.split('T')[0];
                                   const orderInP2 = p2Orders.some(o => o.orderId === orderId);
                                   
-                                  // Block Friday assignments (day 5) - not a work day
+                                  // Block Friday assignments
                                   const assignmentDate = new Date(assignment.date);
                                   const isFriday = assignmentDate.getDay() === 5;
-                                  if (isFriday) {
-                                    console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
-                                    return false;
-                                  }
+                                  if (isFriday) return false;
                                   
                                   return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                                })
-                                .map(([orderId]) => p2Orders.find(o => o.orderId === orderId))
-                                .filter(order => order !== undefined) as any[];
+                                });
+                              return cellOrders.length > 0;
+                            });
 
-                              return (
-                                <DroppableCell
-                                  key={`${weekIndex}-${mold.moldId}-${date.toISOString()}`}
-                                  moldId={mold.moldId}
-                                  date={date}
-                                  orders={cellOrders}
-                                  onDrop={(orderId, moldId, date) => {
-                                    // Handle drop
-                                  }}
-                                  moldInfo={{
-                                    moldId: mold.moldId,
-                                    instanceNumber: mold.instanceNumber
-                                  }}
-                                  getModelDisplayName={getModelDisplayName}
-                                  features={features}
-                                />
-                              );
-                            })}
-                          </React.Fragment>
-                          ));
+                            if (moldDatesWithOrders.length === 0) return null;
+
+                            return (
+                              <div key={`${weekIndex}-${mold.moldId}-p2`} className="col-span-full border border-green-200 dark:border-green-700 rounded-lg overflow-hidden mb-2">
+                                <div className="bg-green-50 dark:bg-green-900/20 px-3 py-1 border-b border-green-200 dark:border-green-700">
+                                  <h4 className="text-xs font-semibold text-green-900 dark:text-green-100">
+                                    {mold.moldId} ({mold.instanceNumber}) - P2
+                                  </h4>
+                                </div>
+                                <div className="p-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {moldDatesWithOrders.map(date => {
+                                      const dateString = date.toISOString();
+                                      
+                                      // Get P2 orders for this mold/date
+                                      const cellOrders = Object.entries(orderAssignments)
+                                        .filter(([orderId, assignment]) => {
+                                          const assignmentDateOnly = assignment.date.split('T')[0];
+                                          const cellDateOnly = dateString.split('T')[0];
+                                          const orderInP2 = p2Orders.some(o => o.orderId === orderId);
+                                          
+                                          // Block Friday assignments
+                                          const assignmentDate = new Date(assignment.date);
+                                          const isFriday = assignmentDate.getDay() === 5;
+                                          if (isFriday) return false;
+                                          
+                                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
+                                        })
+                                        .map(([orderId]) => p2Orders.find(o => o.orderId === orderId))
+                                        .filter(order => order !== undefined) as any[];
+
+                                      return (
+                                        <div key={`${weekIndex}-${mold.moldId}-${date.toISOString()}-p2`} className="flex-shrink-0">
+                                          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                            {format(date, 'MM/dd')}
+                                          </div>
+                                          <DroppableCell
+                                            moldId={mold.moldId}
+                                            date={date}
+                                            orders={cellOrders}
+                                            onDrop={(orderId, moldId, date) => {
+                                              // Handle drop
+                                            }}
+                                            moldInfo={{
+                                              moldId: mold.moldId,
+                                              instanceNumber: mold.instanceNumber
+                                            }}
+                                            getModelDisplayName={getModelDisplayName}
+                                            features={features}
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }).filter(Boolean);
                         })()}
                       </div>
                     </div>

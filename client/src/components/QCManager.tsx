@@ -46,16 +46,16 @@ export default function QCManager() {
     if (editingSubmission) {
       form.reset({
         orderId: editingSubmission.orderId,
-        line: editingSubmission.line as "P1" | "P2",
+        line: editingSubmission.line,
         department: editingSubmission.department,
         sku: editingSubmission.sku,
-        final: editingSubmission.final ?? false,
-        data: editingSubmission.data || {},
-        status: editingSubmission.status ?? 'pending',
-        summary: editingSubmission.summary as "PASS" | "FAIL" | null,
-        signature: editingSubmission.signature ?? undefined,
-        dueDate: editingSubmission.dueDate ?? undefined,
-        submittedBy: editingSubmission.submittedBy ?? undefined,
+        final: editingSubmission.final,
+        data: editingSubmission.data,
+        status: editingSubmission.status,
+        summary: editingSubmission.summary,
+        signature: editingSubmission.signature,
+        dueDate: editingSubmission.dueDate,
+        submittedBy: editingSubmission.submittedBy,
       });
     } else {
       form.reset({
@@ -173,9 +173,8 @@ export default function QCManager() {
     }
   };
 
-  const formatDate = (dateInput: string | Date) => {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    return date.toLocaleDateString('en-US', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

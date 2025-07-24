@@ -2938,12 +2938,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process each active PO for layup-required items
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        const layupItems = items.filter(item => 
-          item.itemType === 'stock_model' || 
-          (item.itemType === 'custom_model' && (item.itemId === 'Mesa - Universal' || item.itemName === 'Mesa - Universal'))
-        );
+        const stockModelItems = items.filter(item => item.itemType === 'stock_model');
         
-        for (const item of layupItems) {
+        for (const item of stockModelItems) {
           // Calculate priority score for P1 PO items
           const calculateP1Priority = (po: any, item: any) => {
             let baseScore = 50; // Default medium priority
@@ -2961,93 +2958,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return Math.max(1, baseScore + urgencyScore + customerScore);
           };
 
-          // Map Mesa Universal variants to proper stock model ID
-          let stockModelId = item.itemId;
-          if (item.itemId === "Mesa - Universal" || item.itemName === "Mesa - Universal") {
-            stockModelId = "mesa_universal";
-          }
+          // Create layup order entry for each P1 PO item
+          const layupOrder = {
+            id: `p1-po-${po.id}-${item.id}`, // Unique identifier
+            orderId: `${po.poNumber}-${item.id}`, // Display identifier
+            orderDate: po.poDate,
+            customer: po.customerName,
+            product: item.itemName,
+            quantity: item.quantity,
+            status: 'FINALIZED',
+            department: 'Layup',
+            currentDepartment: 'Layup',
+            priorityScore: calculateP1Priority(po, item),
+            dueDate: po.expectedDelivery,
+            source: 'p1_purchase_order', // Track source for identification
+            poId: po.id,
+            poItemId: item.id,
+            stockModelId: item.itemId, // For mold mapping
+            createdAt: po.createdAt,
+            updatedAt: po.updatedAt
+          };
           
-          // For Mesa Universal with high quantity, create multiple individual orders
-          if (stockModelId === "mesa_universal" && item.quantity > 1) {
-            // Create individual orders for each Mesa Universal unit (limit to avoid overload)
-            const maxOrders = Math.min(item.quantity, 50); // Limit to 50 individual orders
-            for (let i = 1; i <= maxOrders; i++) {
-              const layupOrder = {
-                id: `p1-po-${po.id}-${item.id}-${i.toString().padStart(3, '0')}`,
-                orderId: `${po.poNumber}-${item.id}-${i.toString().padStart(3, '0')}`,
-                orderDate: po.poDate,
-                customer: po.customerName,
-                product: `${item.itemName} #${i}`,
-                quantity: 1, // Individual unit
-                status: 'FINALIZED',
-                department: 'Layup',
-                currentDepartment: 'Layup',
-                priorityScore: calculateP1Priority(po, item),
-                dueDate: po.expectedDelivery,
-                source: 'p1_purchase_order',
-                poId: po.id,
-                poItemId: item.id,
-                stockModelId: stockModelId,
-                createdAt: po.createdAt,
-                updatedAt: po.updatedAt
-              };
-              p1LayupOrders.push(layupOrder);
-            }
-          } else {
-            // Create layup order entry for each P1 PO item (normal case)
-            const layupOrder = {
-              id: `p1-po-${po.id}-${item.id}`, // Unique identifier
-              orderId: `${po.poNumber}-${item.id}`, // Display identifier
-              orderDate: po.poDate,
-              customer: po.customerName,
-              product: item.itemName,
-              quantity: item.quantity,
-              status: 'FINALIZED',
-              department: 'Layup',
-              currentDepartment: 'Layup',
-              priorityScore: calculateP1Priority(po, item),
-              dueDate: po.expectedDelivery,
-              source: 'p1_purchase_order', // Track source for identification
-              poId: po.id,
-              poItemId: item.id,
-              stockModelId: stockModelId, // For mold mapping
-              createdAt: po.createdAt,
-              updatedAt: po.updatedAt
-            };
-            
-            p1LayupOrders.push(layupOrder);
-          }
+          p1LayupOrders.push(layupOrder);
         }
-      }
-
-      // Get P2 Production Orders that are assigned to Layup department
-      const p2ProductionOrders = await storage.getAllP2ProductionOrders();
-      const p2LayupOrders = p2ProductionOrders
-        .filter(order => order.department === 'Layup' && order.status === 'PENDING')
-        .map(order => ({
-          id: `p2-prod-${order.id}`,
-          orderId: order.orderId,
-          orderDate: order.createdAt,
-          customer: `P2 Production (${order.sku})`,
-          product: order.partName,
-          quantity: order.quantity,
-          status: 'FINALIZED',
-          department: 'Layup',
-          currentDepartment: 'Layup',
-          priorityScore: order.priority || 50,
-          dueDate: order.dueDate || order.createdAt,
-          source: 'p2_production_order',
-          stockModelId: 'mesa_universal', // All P2 production orders use Mesa Universal molds
-          modelId: 'mesa_universal',
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt
-        }));
-
-      console.log('📋 P1 Purchase Orders - PO count:', activePos.length);
-      console.log('📋 P2 Production Orders - Layup count:', p2LayupOrders.length);
-      console.log('📋 P1 layup orders generated:', p1LayupOrders.length);
-      if (p2LayupOrders.length > 0) {
-        console.log('📋 Sample P2 layup order:', p2LayupOrders[0]);
       }
 
       // Combine and sort all orders by priority score (lower = higher priority)
@@ -3055,20 +2988,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...layupOrders.map(order => ({ 
           ...order, 
           source: 'main_orders',
-          // Ensure features object is included for LOP detection and action length display
+          // Ensure features object is included for action length display
           features: (order as any).features || {},
           modelId: (order as any).modelId
         })),
         ...p1LayupOrders.map(order => ({
           ...order,
           // P1 orders don't have features but we can add modelId for consistency  
-          features: {}, // Empty features object for consistency
-          modelId: order.stockModelId
-        })),
-        ...p2LayupOrders.map(order => ({
-          ...order,
-          // P2 orders don't have features but we can add modelId for consistency
-          features: {}, // Empty features object for consistency  
           modelId: order.stockModelId
         }))
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));

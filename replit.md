@@ -10,29 +10,6 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 24, 2025 - Layup Scheduler Compact View + Friday Work Day Blocking (COMPLETED)**
-- ✅ **Complete Empty Cell Elimination**: Implemented comprehensive compact layout removing ALL empty cells from calendar display
-- ✅ **Flexible Layout System**: Replaced fixed grid with flexible layout showing only molds and dates with actual orders
-- ✅ **Week View Optimization**: Week view now displays mold sections with flex-wrapped order cards, no empty grid cells
-- ✅ **Month View Optimization**: Month view uses compact mold sections spanning full width with organized date groupings
-- ✅ **P1 and P2 Separation**: Clear visual distinction with blue headers for P1 orders and green headers for P2 orders
-- ✅ **No Wasted Space**: Calendar maximizes efficiency by only showing relevant combinations of molds, dates, and orders
-- ✅ **Friday Blocking Implementation**: Added comprehensive Friday blocking to prevent any order scheduling on Friday (not a work day)
-- ✅ **Drag & Drop Friday Prevention**: Blocks all attempts to drag orders to Friday cells with clear warning messages
-- ✅ **Assignment Display Filtering**: Filters out any existing Friday assignments from calendar display across all views
-- ✅ **4-Day Work Week Enforcement**: Enforces Monday-Thursday work schedule throughout the entire scheduling system
-- ✅ **Responsive Design**: Compact layout adapts to different screen sizes with proper flex wrapping and spacing
-
-**July 24, 2025 - LOP Monday-Only Scheduling Implementation (COMPLETED)**
-- ✅ **LOP Detection Function**: Added hasLOPAdjustment() function to identify orders with Length of Pull adjustments
-- ✅ **Week-Based LOP Grouping**: Groups all LOP orders by week and schedules them exclusively on Monday of their respective week
-- ✅ **Monday-Only Constraint**: LOP adjustment orders are restricted to Monday scheduling only, never Tuesday-Thursday
-- ✅ **Fallback Logic**: If a Monday is at capacity, LOP orders fall back to subsequent Mondays with detailed logging
-- ✅ **Separated Order Streams**: LOP orders processed first (Monday-only), then regular orders (Monday-Thursday)
-- ✅ **Enhanced Debugging**: Added comprehensive logging for LOP order identification and Monday scheduling verification
-- ✅ **API Enhancement**: Updated layup queue API to include features object for proper LOP detection
-- ✅ **Algorithm Optimization**: Modified scheduler to prioritize LOP orders for Monday placement before regular order distribution
-
 **July 23, 2025 - Auto-Schedule Function Restoration Without UI Buttons (COMPLETED)**
 - ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request
 - ✅ **Debug Report Button Removed**: Eliminated debug report functionality and button from calendar interface

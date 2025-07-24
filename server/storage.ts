@@ -2122,15 +2122,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'at-risk' | 'behind' {
-    const now = new Date();
-    const dueDate = new Date(order.dueDate);
-    
-    // First check: If past due date, always show as behind (red)
-    if (now > dueDate) {
-      return 'behind';
-    }
-    
-    // Second check: Department-specific timing
     const isAdjusted = order.modelId?.includes('Adj') || false;
     let standardDays: number;
 
@@ -2155,15 +2146,7 @@ export class DatabaseStorage implements IStorage {
         break;
     }
 
-    // Third check: Days remaining vs days in department
-    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    // If very close to due date (within 3 days), show as at-risk
-    if (daysUntilDue <= 3) {
-      return 'at-risk';
-    }
-
-    // Department timing check
+    // Calculate status
     if (daysInDept > standardDays) {
       return 'behind';
     } else if (daysInDept > standardDays * 0.8) {

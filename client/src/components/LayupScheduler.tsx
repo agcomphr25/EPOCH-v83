@@ -37,7 +37,6 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -304,16 +303,13 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             
             // If still no action length found, apply comprehensive fallback logic
             if (!actionLengthValue) {
-              // Skip orders that don't need action length display
-              const skipActionLength = modelId && (
-                modelId.toLowerCase().includes('tikka') || 
-                modelId.toLowerCase().includes('mesa_universal') ||
-                (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
-                (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka'))
-              );
+              // Skip Tikka orders completely - they shouldn't show action length
+              const isTikka = modelId && (modelId.toLowerCase().includes('tikka') || 
+                              (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
+                              (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka')));
               
-              if (skipActionLength) {
-                console.log(`⏭️ Skipping ${modelId} order ${order.orderId} - no action length needed`);
+              if (isTikka) {
+                console.log(`⏭️ Skipping Tikka order ${order.orderId} - no action length needed`);
                 return null;
               }
               
@@ -608,85 +604,173 @@ export default function LayupScheduler() {
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Auto-schedule system using Monday-only LOP constraints
+  // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
     if (!orders.length || !molds.length || !employees.length) {
       console.log('❌ Cannot generate schedule: missing data');
       return;
     }
 
-    console.log('🚀 Generating auto-schedule with LOP Monday-only constraints for', orders.length, 'orders');
+    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
     
-    try {
-      // Convert orders to scheduler format with proper feature inclusion
-      const layupOrders = orders.map(order => ({
-        orderId: order.orderId,
-        orderDate: new Date(order.orderDate),
-        dueDate: new Date(order.dueDate || order.orderDate),
-        priorityScore: order.priorityScore || 5,
-        customer: order.customer,
-        product: order.product,
-        modelId: (order as any).stockModelId || (order as any).modelId,
-        stockModelId: (order as any).stockModelId || (order as any).modelId,
-        features: (order as any).features || {}, // Include features for LOP detection
-        source: (order as any).source || 'main_orders'
-      }));
+    // Get work days for current and next week
+    const getWorkDaysInWeek = (startDate: Date) => {
+      const workDays: Date[] = [];
+      let current = new Date(startDate);
+      
+      // Find Monday of current week
+      while (current.getDay() !== 1) {
+        current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
+      }
+      
+      // Add Monday through Thursday
+      for (let i = 0; i < 4; i++) {
+        workDays.push(new Date(current));
+        current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+      }
+      
+      return workDays;
+    };
 
-      // Convert molds to scheduler format
-      const moldSettings = molds.filter(m => m.enabled).map(mold => ({
-        moldId: mold.moldId,
-        modelName: mold.modelName,
-        instanceNumber: mold.instanceNumber || 1,
-        enabled: true,
-        multiplier: mold.multiplier || 1,
-        stockModels: mold.stockModels || []
-      }));
+    const currentWeekDays = getWorkDaysInWeek(currentDate);
+    const nextWeekDays = getWorkDaysInWeek(new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000));
+    const allWorkDays = [...currentWeekDays, ...nextWeekDays];
 
-      // Convert employees to scheduler format
-      const employeeSettings = employees.map(emp => ({
-        employeeId: emp.employeeId,
-        name: emp.name || emp.employeeId,
-        rate: emp.rate || 1.5,
-        hours: emp.hours || 8
-      }));
+    // Sort orders by due date priority
+    const sortedOrders = [...orders].sort((a, b) => {
+      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+      return aDueDate - bDueDate;
+    });
 
-      console.log('🔧 Calling generateLayupSchedule with Monday-only LOP constraints...');
-      console.log(`📊 Input data: ${layupOrders.length} orders, ${moldSettings.length} molds, ${employeeSettings.length} employees`);
+    // Find compatible molds for each order
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.stockModelId || order.modelId;
+      if (!modelId) {
+        console.log('⚠️ Order has no modelId:', order.orderId);
+        return [];
+      }
       
-      // Debug: Show order distribution by source
-      const ordersBySource = layupOrders.reduce((acc, order) => {
-        const source = order.source || 'unknown';
-        acc[source] = (acc[source] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      console.log('📊 Orders by source:', ordersBySource);
-      console.log('📋 Sample P1 orders:', layupOrders.filter(o => o.source === 'p1_purchase_order').slice(0, 3).map(o => ({ orderId: o.orderId, customer: o.customer })));
-      console.log('📋 Sample P2 orders:', layupOrders.filter(o => o.source === 'p2_production_order').slice(0, 3).map(o => ({ orderId: o.orderId, customer: o.customer })));
-      
-      // Use the proper scheduler utility with LOP Monday-only logic
-      const scheduleResults = generateLayupSchedule(layupOrders, moldSettings, employeeSettings);
-      
-      console.log(`📊 Raw scheduler response:`, scheduleResults);
-      
-      console.log(`📅 Scheduler returned ${scheduleResults.length} assignments`);
-
-      // Convert schedule results to assignment format
-      const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
-      
-      scheduleResults.forEach(result => {
-        newAssignments[result.orderId] = {
-          moldId: result.moldId,
-          date: result.scheduledDate.toISOString()
-        };
-        console.log(`📌 Assignment: ${result.orderId} → ${result.moldId} on ${format(result.scheduledDate, 'MM/dd (EEEE)')}`);
+      const compatibleMolds = molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) {
+          console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
+          return true; // No restrictions
+        }
+        const isCompatible = mold.stockModels.includes(modelId);
+        if (!isCompatible) {
+          console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
+        }
+        return isCompatible;
       });
       
-      console.log('✅ Schedule generation complete with LOP Monday-only constraints applied');
-      setOrderAssignments(newAssignments);
+      console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
+      return compatibleMolds;
+    };
+
+    // Track cell assignments to ensure ONE ORDER PER CELL
+    const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
+    const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
+
+    console.log('🎯 Starting single-card-per-cell assignment algorithm');
+    console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
+    
+    // Debug mold configurations
+    molds.filter(m => m.enabled).forEach(mold => {
+      console.log(`🔧 Mold ${mold.moldId}: ${mold.stockModels?.length || 0} stock models configured`);
+    });
+
+    // Calculate total daily employee capacity (orders per day)
+    const totalEmployeeCapacity = employees.reduce((total, emp) => {
+      return total + (emp.rate || 1.5) * (emp.hours || 8);
+    }, 0);
+
+    const maxOrdersPerDay = Math.floor(totalEmployeeCapacity); // Convert to whole orders
+    console.log(`👥 Employee capacity: ${totalEmployeeCapacity.toFixed(1)} → ${maxOrdersPerDay} orders per day max`);
+
+    // Track assignments per day and per mold
+    const dailyAssignments: { [dateKey: string]: number } = {};
+    const moldNextDate: { [moldId: string]: number } = {};
+    
+    // Initialize tracking
+    allWorkDays.forEach(date => {
+      const dateKey = date.toISOString().split('T')[0];
+      dailyAssignments[dateKey] = 0;
+    });
+
+    molds.filter(m => m.enabled).forEach(mold => {
+      moldNextDate[mold.moldId] = 0;
+    });
+
+    sortedOrders.forEach((order, index) => {
+      const compatibleMolds = getCompatibleMolds(order);
       
-    } catch (error) {
-      console.error('❌ Error in auto-schedule generation:', error);
-    }
+      if (compatibleMolds.length === 0) {
+        console.log('⚠️ No compatible molds for order:', order.orderId);
+        return;
+      }
+
+      let assigned = false;
+
+      // Find the mold with the earliest available slot (no gaps allowed)
+      let bestMold = null;
+      let bestDateIndex = Infinity;
+
+      for (const mold of compatibleMolds) {
+        const nextDateIndex = moldNextDate[mold.moldId] || 0;
+        
+        // Must fill sequentially - use the EXACT next date for this mold
+        if (nextDateIndex < allWorkDays.length && nextDateIndex < bestDateIndex) {
+          const targetDate = allWorkDays[nextDateIndex];
+          const dateKey = targetDate.toISOString().split('T')[0];
+          const currentDailyLoad = dailyAssignments[dateKey] || 0;
+
+          // Only assign if we haven't exceeded daily employee capacity
+          if (currentDailyLoad < maxOrdersPerDay) {
+            bestDateIndex = nextDateIndex;
+            bestMold = mold;
+          }
+        }
+      }
+
+      if (bestMold && bestDateIndex < allWorkDays.length) {
+        const targetDate = allWorkDays[bestDateIndex];
+        const dateKey = targetDate.toISOString().split('T')[0];
+        const cellKey = `${bestMold.moldId}-${dateKey}`;
+
+        // Assign order to this cell
+        newAssignments[order.orderId] = {
+          moldId: bestMold.moldId,
+          date: targetDate.toISOString()
+        };
+
+        // Update tracking
+        cellAssignments.add(cellKey);
+        dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
+        moldNextDate[bestMold.moldId] = bestDateIndex + 1;
+        
+        assigned = true;
+        console.log(`✅ Assigned ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
+      }
+
+      if (!assigned) {
+        console.warn(`❌ Could not find available cell for order: ${order.orderId} - may exceed employee capacity`);
+      }
+    });
+
+    console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
+    console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
+    // Show final mold distribution to verify no gaps
+    console.log('🔧 Final mold distribution (next available date index):');
+    Object.entries(moldNextDate).forEach(([moldId, dateIndex]) => {
+      console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
+    });
+    
+    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
+      `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
+    ).slice(0, 8));
+    
+    setOrderAssignments(newAssignments);
   }, [orders, molds, employees, currentDate]);
 
   // Fetch stock models to get display names
@@ -712,17 +796,6 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
   
-  // Debug Mesa Universal orders specifically
-  const mesaOrders = orders.filter(order => order.orderId?.includes('MESA'));
-  console.log('🏔️ Mesa Universal orders found:', mesaOrders.length);
-  if (mesaOrders.length > 0) {
-    console.log('🏔️ Mesa orders sample:', mesaOrders.slice(0, 3).map(o => ({ 
-      orderId: o.orderId, 
-      stockModelId: o.stockModelId,
-      source: (o as any).source 
-    })));
-  }
-  
   // Debug unassigned orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
@@ -730,25 +803,11 @@ export default function LayupScheduler() {
 
   // Auto-generate schedule when data is loaded
   useEffect(() => {
-    console.log(`🔍 Schedule check: orders=${orders.length}, molds=${molds.length}, employees=${employees.length}, assignments=${Object.keys(orderAssignments).length}`);
-    
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log("🚀 Auto-running schedule generation with LOP Monday-only constraints");
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
+      console.log("🚀 Auto-running initial schedule generation");
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
-    } else {
-      console.log("⏳ Waiting for data to load before generating schedule");
     }
   }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
-
-  // Force clear assignments and regenerate schedule for testing LOP constraints
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('clearSchedule') === 'true') {
-      console.log('🔄 Clearing schedule and regenerating with LOP constraints...');
-      setOrderAssignments({});
-      setTimeout(() => generateAutoSchedule(), 500);
-    }
-  }, [generateAutoSchedule]);
 
 
 
@@ -822,9 +881,9 @@ export default function LayupScheduler() {
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
     if (viewType === 'week') {
-      // Show work week only: Monday through Thursday (4-day work week)
+      // Show work week only: Monday through Friday
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      return eachDayOfInterval({ start, end: addDays(start, 3) }); // Only 4 days (Mon-Thu)
+      return eachDayOfInterval({ start, end: addDays(start, 4) }); // Only 5 days (Mon-Fri)
     }
     // month - organize by weeks
     const start = startOfMonth(currentDate);
@@ -840,16 +899,16 @@ export default function LayupScheduler() {
     let currentWeek: Date[] = [];
     
     dates.forEach((date, index) => {
-      // Only include work days (Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4)
+      // Only include work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
       const dayOfWeek = date.getDay();
-      const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 4;
+      const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
       
       if (isWorkDay) {
         currentWeek.push(date);
       }
       
-      // Complete the week on Thursday (4) or at the end
-      if (dayOfWeek === 4 || index === dates.length - 1) {
+      // Complete the week on Friday (5) or at the end
+      if (dayOfWeek === 5 || index === dates.length - 1) {
         if (currentWeek.length > 0) {
           weeks.push(currentWeek);
           currentWeek = [];
@@ -868,46 +927,6 @@ export default function LayupScheduler() {
 
     const orderId = active.id as string;
     const [moldId, dateIso] = (over.id as string).split('|');
-    const targetDate = new Date(dateIso);
-
-    // Find the order being dragged to check if it's a LOP order
-    const draggedOrder = orders.find(order => order.orderId === orderId);
-    
-    if (draggedOrder) {
-      // Check if this is a LOP adjustment order
-      const lopValue = (draggedOrder as any).features?.length_of_pull;
-      const isLOPOrder = lopValue && 
-        lopValue !== 'none' && 
-        lopValue !== 'standard' && 
-        lopValue !== 'std' &&
-        lopValue !== 'std_length' &&
-        lopValue !== 'standard_length' &&
-        lopValue !== 'no_extra_length' &&
-        lopValue !== 'std_no_extra_length' &&
-        lopValue !== 'no_lop_change' &&
-        lopValue !== '' && 
-        lopValue !== '0' &&
-        lopValue !== 'normal' &&
-        !lopValue.toLowerCase().includes('std') &&
-        !lopValue.toLowerCase().includes('standard') &&
-        !lopValue.toLowerCase().includes('no extra');
-
-      // Block Friday drops entirely - Friday is not a work day
-      if (targetDate.getDay() === 5) { // Friday = 5
-        console.warn(`🚫 Order ${orderId} cannot be scheduled on Friday - Not a work day`);
-        return; // Prevent the drop
-      }
-
-      // If it's a LOP order, only allow Monday drops
-      if (isLOPOrder && targetDate.getDay() !== 1) { // Monday = 1
-        console.warn(`🚫 LOP order ${orderId} (LOP: ${lopValue}) cannot be scheduled on ${format(targetDate, 'EEEE')} - LOP orders must be scheduled on Monday only`);
-        return; // Prevent the drop
-      }
-
-      if (isLOPOrder) {
-        console.log(`✅ LOP order ${orderId} (LOP: ${lopValue}) correctly placed on Monday ${format(targetDate, 'MM/dd')}`);
-      }
-    }
 
     // Update local assignment state
     setOrderAssignments(prev => ({
@@ -1035,22 +1054,6 @@ export default function LayupScheduler() {
     );
   }
 
-  // Filter orders by type
-  const p1Orders = orders.filter(order => 
-    (order as any).source === 'main_orders' || (order as any).source === 'p1_purchase_order' || !(order as any).source
-  );
-  const p2Orders = orders.filter(order => 
-    (order as any).source === 'p2_production_order'
-  );
-
-  console.log('📊 Order Distribution:', {
-    total: orders.length,
-    p1Orders: p1Orders.length, 
-    p2Orders: p2Orders.length,
-    p1Sample: p1Orders.slice(0, 2).map(o => ({ orderId: o.orderId, source: (o as any).source })),
-    p2Sample: p2Orders.slice(0, 2).map(o => ({ orderId: o.orderId, source: (o as any).source }))
-  });
-
   return (
     <div className="h-full">
       {/* Navigation Header */}
@@ -1058,11 +1061,11 @@ export default function LayupScheduler() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Production Scheduling Management</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
           </div>
           <div className="flex items-center space-x-4 text-sm">
             <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
+              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
               <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
@@ -1074,948 +1077,656 @@ export default function LayupScheduler() {
         </div>
       </div>
 
-      {/* Tabbed Interface */}
-      <Tabs defaultValue="p1" className="h-full flex flex-col">
-        <div className="bg-gray-50 dark:bg-gray-800 px-6 py-2 border-b border-gray-200 dark:border-gray-700">
-          <TabsList className="grid w-auto grid-cols-2">
-            <TabsTrigger value="p1" className="flex items-center space-x-2">
-              <span>P1 Layup Scheduler</span>
-              <Badge variant="secondary" className="ml-2">{p1Orders.length}</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="p2" className="flex items-center space-x-2">
-              <span>P2 Layup Scheduler</span>
-              <Badge variant="secondary" className="ml-2">{p2Orders.length}</Badge>
-            </TabsTrigger>
-          </TabsList>
-        </div>
+    <DndContext 
+      sensors={sensors} 
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex h-full">{/* Order queue removed per user request */}
 
-        {/* P1 Layup Scheduler Tab */}
-        <TabsContent value="p1" className="flex-1 overflow-hidden">
-          <DndContext 
-            sensors={sensors} 
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex h-full">{/* Order queue removed per user request */}
+        {/* Calendar - Full Width */}
+        <main className="flex-1 p-6 overflow-auto">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex space-x-2">
 
-              {/* Calendar - Full Width */}
-              <main className="flex-1 p-6 overflow-auto">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex space-x-2">
-                  {/* Temporary debug button to force schedule regeneration */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      console.log('🔄 FORCE CLEAR AND REGENERATE SCHEDULE - BUTTON CLICKED');
-                      console.log('Current orders:', orders.length);
-                      console.log('Current molds:', molds.length);
-                      console.log('Current employees:', employees.length);
-                      console.log('Current assignments before clear:', Object.keys(orderAssignments).length);
-                      
-                      // Force clear assignments immediately
-                      setOrderAssignments({});
-                      
-                      setTimeout(() => {
-                        console.log('🔄 About to call generateAutoSchedule after force clear...');
-                        generateAutoSchedule();
-                      }, 200);
-                    }}
-                    className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    Force Regenerate
-                  </Button>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Mold Settings
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Mold Configuration</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        {/* Add New Mold Form */}
-                        <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                          <div className="flex items-center mb-3">
-                            <Plus className="w-4 h-4 mr-2" />
-                            <span className="font-medium">Add New Mold</span>
-                          </div>
-                          <div className="space-y-3">
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Mold Name</label>
-                              <Input
-                                placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
-                                value={newMold.moldName}
-                                onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Associated Stock Models</label>
-                              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
-                                {stockModels.map((model: any) => (
-                                  <div key={model.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`stock-${model.id}`}
-                                      checked={newMold.stockModels.includes(model.id)}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setNewMold(prev => ({
-                                            ...prev,
-                                            stockModels: [...prev.stockModels, model.id]
-                                          }));
-                                        } else {
-                                          setNewMold(prev => ({
-                                            ...prev,
-                                            stockModels: prev.stockModels.filter(id => id !== model.id)
-                                          }));
-                                        }
-                                      }}
-                                    />
-                                    <label 
-                                      htmlFor={`stock-${model.id}`}
-                                      className="text-sm cursor-pointer"
-                                    >
-                                      {model.displayName || model.name || model.id}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
-                            </div>
-                          </div>
-                          <Button 
-                            onClick={handleAddMold} 
-                            className="mt-3" 
-                            size="sm"
-                            disabled={!newMold.moldName.trim()}
-                          >
-                            Add Mold
-                          </Button>
-                        </div>
-                        
-                        <Separator />
-                        
-                        {/* Show existing molds if any */}
-                        {molds.length > 0 && molds.map(mold => (
-                          <div key={mold.moldId} className="flex items-center justify-between p-3 border rounded">
-                            <span>{mold.modelName} #{mold.instanceNumber}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deleteMold(mold.moldId)}
-                              className="text-red-600"
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Users className="w-4 h-4 mr-2" />
-                        Employee Settings
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Employee Configuration</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                          <div className="flex items-center mb-3">
-                            <Plus className="w-4 h-4 mr-2" />
-                            <span className="font-medium">Add New Employee</span>
-                          </div>
-                          <div className="mb-3">
-                            <Input
-                              placeholder="Employee ID (e.g., EMP004)"
-                              value={newEmployee.employeeId}
-                              onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="flex items-center space-x-2">
-                              <label className="text-sm">Rate:</label>
-                              <Input
-                                type="number"
-                                step="0.1"
-                                placeholder="1.5"
-                                value={newEmployee.rate}
-                                onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
-                                className="w-20"
-                              />
-                              <span className="text-xs">units/hr</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <label className="text-sm">Hours:</label>
-                              <Input
-                                type="number"
-                                step="0.5"
-                                placeholder="8"
-                                value={newEmployee.hours}
-                                min={1}
-                                max={12}
-                                onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
-                                className="w-20"
-                              />
-                              <span className="text-xs">hrs/day</span>
-                            </div>
-                          </div>
-                          <Button 
-                            onClick={handleAddEmployee} 
-                            className="mt-3" 
-                            size="sm"
-                            disabled={!newEmployee.employeeId.trim()}
-                          >
-                            Add Employee
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newDate = new Date(currentDate);
-                      newDate.setDate(newDate.getDate() - (viewType === 'day' ? 1 : viewType === 'week' ? 7 : 30));
-                      setCurrentDate(newDate);
-                    }}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-
-                  <Select value={viewType} onValueChange={(value: 'day' | 'week' | 'month') => setViewType(value)}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="day">
-                        <div className="flex items-center">
-                          <Calendar1 className="w-4 h-4 mr-2" />
-                          Day
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="week">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Week
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="month">
-                        <div className="flex items-center">
-                          <Grid3X3 className="w-4 h-4 mr-2" />
-                          Month
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newDate = new Date(currentDate);
-                      newDate.setDate(newDate.getDate() + (viewType === 'day' ? 1 : viewType === 'week' ? 7 : 30));
-                      setCurrentDate(newDate);
-                    }}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Calendar Display */}
-              {viewType === 'day' ? (
-                /* Day view - single column */
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded text-center text-sm font-medium">
-                    {format(currentDate, 'EEEE, MMMM d, yyyy')}
-                  </div>
-                  <div className="min-h-96 bg-white dark:bg-gray-900 rounded border p-4">
-                    {/* Day content */}
-                    <p className="text-center text-gray-500">Day view for {format(currentDate, 'MMM d')}</p>
-                  </div>
-                </div>
-              ) : viewType === 'week' ? (
-                /* Week view - grid layout with only molds that have orders */
-                <div
-                  className="grid border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-                >
-                  {/* Day Headers */}
-                  {dates.map(date => (
-                    <div
-                      key={date.toISOString()}
-                      className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-sm font-medium"
-                    >
-                      {format(date, 'EEE MM/dd')}
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Mold Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Mold Configuration</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {/* Add New Mold Form */}
+                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <Plus className="w-4 h-4 mr-2" />
+                      <span className="font-medium">Add New Mold</span>
                     </div>
-                  ))}
-
-                  {/* Rows for each mold - Only show molds with assigned orders */}
-                  {(() => {
-                    // Get molds that have P1 orders assigned to them
-                    const usedMoldIds = new Set(
-                      Object.entries(orderAssignments)
-                        .filter(([orderId, assignment]) => {
-                          // Only include non-Friday assignments
-                          const assignmentDate = new Date(assignment.date);
-                          const isFriday = assignmentDate.getDay() === 5;
-                          if (isFriday) return false;
-                          
-                          // Only include P1 orders
-                          return p1Orders.some(o => o.orderId === orderId);
-                        })
-                        .map(([, assignment]) => assignment.moldId)
-                    );
-                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                    
-                    return activeMolds.map(mold => (
-                    <React.Fragment key={mold.moldId}>
-                      {dates.map(date => {
-                        const dateString = date.toISOString();
-                        
-                        // Get orders assigned to this mold/date combination using p1Orders for filtering
-                        const cellOrders = Object.entries(orderAssignments)
-                          .filter(([orderId, assignment]) => {
-                            const assignmentDateOnly = assignment.date.split('T')[0];
-                            const cellDateOnly = dateString.split('T')[0];
-                            const orderInP1 = p1Orders.some(o => o.orderId === orderId);
-                            
-                            // Block Friday assignments (day 5) - not a work day
-                            const assignmentDate = new Date(assignment.date);
-                            const isFriday = assignmentDate.getDay() === 5;
-                            if (isFriday) {
-                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
-                              return false;
-                            }
-                            
-                            return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                          })
-                          .map(([orderId]) => {
-                            const order = p1Orders.find(o => o.orderId === orderId);
-                            return order;
-                          })
-                          .filter(order => order !== undefined) as any[];
-
-                        const dropId = `${mold.moldId}|${dateString}`;
-
-                        return (
-                          <DroppableCell
-                            key={dropId}
-                            moldId={mold.moldId}
-                            date={date}
-                            orders={cellOrders}
-                            onDrop={(orderId, moldId, date) => {
-                              // Handle drop (this is handled by DndContext now)
-                            }}
-                            moldInfo={{
-                              moldId: mold.moldId,
-                              instanceNumber: mold.instanceNumber
-                            }}
-                            getModelDisplayName={getModelDisplayName}
-                            features={features}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Mold Name</label>
+                        <Input
+                          placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
+                          value={newMold.moldName}
+                          onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Associated Stock Models</label>
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                          {stockModels.map((model: any) => (
+                            <div key={model.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`stock-${model.id}`}
+                                checked={newMold.stockModels.includes(model.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setNewMold(prev => ({
+                                      ...prev,
+                                      stockModels: [...prev.stockModels, model.id]
+                                    }));
+                                  } else {
+                                    setNewMold(prev => ({
+                                      ...prev,
+                                      stockModels: prev.stockModels.filter(id => id !== model.id)
+                                    }));
+                                  }
+                                }}
+                              />
+                              <label 
+                                htmlFor={`stock-${model.id}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                {model.displayName || model.name || model.id}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
+                      </div>
+                      {/* Bulk Creation Option */}
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="bulk-mode"
+                            checked={isBulkMode}
+                            onCheckedChange={(checked) => setIsBulkMode(!!checked)}
                           />
+                          <label 
+                            htmlFor="bulk-mode" 
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            Create multiple molds at once
+                          </label>
+                        </div>
+                        
+                        {isBulkMode && (
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Number of Molds</label>
+                            <Input
+                              type="number"
+                              placeholder="14"
+                              value={bulkMoldCount}
+                              min={1}
+                              max={50}
+                              onChange={(e) => setBulkMoldCount(+e.target.value)}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {!isBulkMode && (
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Instance Number</label>
+                            <Input
+                              type="number"
+                              placeholder="1"
+                              value={newMold.instanceNumber}
+                              min={1}
+                              onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">For single molds with custom instance numbers</p>
+                          </div>
+                        )}
+                        <div className={isBulkMode ? 'col-span-2' : ''}>
+                          <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
+                          <Input
+                            type="number"
+                            placeholder="2"
+                            value={newMold.multiplier}
+                            min={1}
+                            onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Units each mold can produce per day</p>
+                        </div>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleAddMold} 
+                      className="mt-3" 
+                      size="sm"
+                      disabled={!newMold.moldName.trim()}
+                    >
+                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  {/* Existing Molds */}
+                  {molds.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No molds configured yet. Use the form above to add your first mold.
+                    </div>
+                  ) : (
+                    molds.map(mold => (
+                      <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                        <Checkbox
+                          checked={mold.enabled ?? true}
+                          onCheckedChange={(checked) => 
+                            saveMold({ ...mold, enabled: !!checked })
+                          }
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <div className="font-medium text-base">
+                              {mold.modelName} #{mold.instanceNumber}
+                            </div>
+                            <Badge variant={mold.isActive ? "default" : "secondary"}>
+                              {mold.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Mold ID: {mold.moldId}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm font-medium">Daily Capacity:</label>
+                          <Input
+                            type="number"
+                            value={mold.multiplier}
+                            min={1}
+                            onChange={(e) =>
+                              saveMold({ ...mold, multiplier: +e.target.value })
+                            }
+                            className="w-24"
+                          />
+                          <span className="text-sm text-gray-600">units/day</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleMoldStatus(mold.moldId, !mold.isActive)}
+                            className={mold.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
+                          >
+                            {mold.isActive ? "Mark Inactive" : "Reactivate"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteMold(mold.moldId)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                      <strong>How to Add Molds:</strong>
+                    </p>
+                    <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
+                      <li><strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")</li>
+                      <li><strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on</li>
+                      <li><strong>Daily Capacity:</strong> How many units this specific mold can produce in one day</li>
+                    </ul>
+                    {molds.length > 0 && (
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
+                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
+                        Adjust daily capacity to reflect each mold's production capability.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Users className="w-4 h-4 mr-2" />
+                  Employee Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Employee Configuration</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {/* Add New Employee Form */}
+                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <Plus className="w-4 h-4 mr-2" />
+                      <span className="font-medium">Add New Employee</span>
+                    </div>
+                    <div className="mb-3">
+                      <Input
+                        placeholder="Employee ID (e.g., EMP004)"
+                        value={newEmployee.employeeId}
+                        onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm">Rate:</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="1.5"
+                          value={newEmployee.rate}
+                          onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
+                          className="w-20"
+                        />
+                        <span className="text-xs">units/hr</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <label className="text-sm">Hours:</label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="8"
+                          value={newEmployee.hours}
+                          min={1}
+                          max={12}
+                          onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
+                          className="w-20"
+                        />
+                        <span className="text-xs">hrs/day</span>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleAddEmployee} 
+                      className="mt-3" 
+                      size="sm"
+                      disabled={!newEmployee.employeeId.trim()}
+                    >
+                      Add Employee
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  {/* Existing Employees */}
+                  {employees.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No employees configured yet. Use the form above to add your first employee.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {employees.map(emp => {
+                        const changes = employeeChanges[emp.employeeId];
+                        const currentRate = changes?.rate ?? emp.rate;
+                        const currentHours = changes?.hours ?? emp.hours;
+                        
+                        return (
+                          <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="font-medium text-base">{emp.name}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  Employee ID: {emp.employeeId} | Department: {emp.department}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant={emp.isActive ? "default" : "secondary"}>
+                                  {emp.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleEmployeeStatus(emp.employeeId, !emp.isActive)}
+                                  className={emp.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
+                                >
+                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => deleteEmployee(emp.employeeId)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm font-medium">Production Rate:</label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  value={currentRate}
+                                  onChange={(e) =>
+                                    handleEmployeeChange(emp.employeeId, 'rate', +e.target.value)
+                                  }
+                                  className="w-24"
+                                />
+                                <span className="text-sm text-gray-600">units/hr</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <label className="text-sm font-medium">Daily Hours:</label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={currentHours}
+                                  min={1}
+                                  max={12}
+                                  onChange={(e) =>
+                                    handleEmployeeChange(emp.employeeId, 'hours', +e.target.value)
+                                  }
+                                  className="w-24"
+                                />
+                                <span className="text-sm text-gray-600">hrs/day</span>
+                              </div>
+                            </div>
+                          </div>
                         );
                       })}
-                    </React.Fragment>
-                    ));
-                  })()}
-                </div>
-              ) : (
-                /* Month view - organized by weeks */
-                <div className="space-y-4">
-                  {weekGroups?.map((week, weekIndex) => (
-                    <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      {/* Week Header */}
-                      <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                          Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
-                        </h3>
-                      </div>
                       
-                      {/* Week Calendar Grid */}
-                      <div
-                        className="grid gap-1"
-                        style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
-                      >
-                        {/* Day Headers */}
-                        {week.map(date => (
-                          <div
-                            key={date.toISOString()}
-                            className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
+                      {/* Save Button */}
+                      {hasUnsavedChanges && (
+                        <div className="flex justify-center pt-4 border-t">
+                          <Button 
+                            onClick={handleSaveEmployeeChanges}
+                            className="bg-green-600 hover:bg-green-700 text-white"
                           >
-                            {format(date, 'EEE MM/dd')}
-                          </div>
-                        ))}
-
-                        {/* Month P1 Orders - compact layout */}
-                        {(() => {
-                          // Get molds that have P1 orders assigned in this week
-                          const usedMoldIds = new Set(
-                            Object.entries(orderAssignments)
-                              .filter(([orderId, assignment]) => {
-                                // Only include non-Friday assignments in this week
-                                const assignmentDate = new Date(assignment.date);
-                                const isFriday = assignmentDate.getDay() === 5;
-                                if (isFriday) return false;
-                                
-                                // Check if assignment date is within this week
-                                const isInWeek = week.some(weekDate => {
-                                  const assignmentDateOnly = assignment.date.split('T')[0];
-                                  const weekDateOnly = weekDate.toISOString().split('T')[0];
-                                  return assignmentDateOnly === weekDateOnly;
-                                });
-                                
-                                // Only include P1 orders
-                                return isInWeek && p1Orders.some(o => o.orderId === orderId);
-                              })
-                              .map(([, assignment]) => assignment.moldId)
-                          );
-                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                          
-                          return activeMolds.map(mold => {
-                            // Get all dates in this week that have orders for this mold
-                            const moldDatesWithOrders = week.filter(date => {
-                              const dateString = date.toISOString();
-                              const cellOrders = Object.entries(orderAssignments)
-                                .filter(([orderId, assignment]) => {
-                                  const assignmentDateOnly = assignment.date.split('T')[0];
-                                  const cellDateOnly = dateString.split('T')[0];
-                                  const orderInP1 = p1Orders.some(o => o.orderId === orderId);
-                                  
-                                  // Block Friday assignments
-                                  const assignmentDate = new Date(assignment.date);
-                                  const isFriday = assignmentDate.getDay() === 5;
-                                  if (isFriday) return false;
-                                  
-                                  return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                                });
-                              return cellOrders.length > 0;
-                            });
-
-                            if (moldDatesWithOrders.length === 0) return null;
-
-                            return (
-                              <div key={`${weekIndex}-${mold.moldId}`} className="col-span-full border border-blue-200 dark:border-blue-700 rounded-lg overflow-hidden mb-2">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-1 border-b border-blue-200 dark:border-blue-700">
-                                  <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-100">
-                                    {mold.moldId} ({mold.instanceNumber})
-                                  </h4>
-                                </div>
-                                <div className="p-2">
-                                  <div className="flex flex-wrap gap-2">
-                                    {moldDatesWithOrders.map(date => {
-                                      const dateString = date.toISOString();
-                                      
-                                      // Get orders for this mold/date
-                                      const cellOrders = Object.entries(orderAssignments)
-                                        .filter(([orderId, assignment]) => {
-                                          const assignmentDateOnly = assignment.date.split('T')[0];
-                                          const cellDateOnly = dateString.split('T')[0];
-                                          const orderInP1 = p1Orders.some(o => o.orderId === orderId);
-                                          
-                                          // Block Friday assignments
-                                          const assignmentDate = new Date(assignment.date);
-                                          const isFriday = assignmentDate.getDay() === 5;
-                                          if (isFriday) return false;
-                                          
-                                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                                        })
-                                        .map(([orderId]) => p1Orders.find(o => o.orderId === orderId))
-                                        .filter(order => order !== undefined) as any[];
-
-                                      return (
-                                        <div key={`${weekIndex}-${mold.moldId}-${date.toISOString()}`} className="flex-shrink-0">
-                                          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                                            {format(date, 'MM/dd')}
-                                          </div>
-                                          <DroppableCell
-                                            moldId={mold.moldId}
-                                            date={date}
-                                            orders={cellOrders}
-                                            onDrop={(orderId, moldId, date) => {
-                                              // Handle drop
-                                            }}
-                                            moldInfo={{
-                                              moldId: mold.moldId,
-                                              instanceNumber: mold.instanceNumber
-                                            }}
-                                            getModelDisplayName={getModelDisplayName}
-                                            features={features}
-                                          />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }).filter(Boolean);
-                        })()}
-                      </div>
+                            Save Changes
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                  
+                  {employees.length > 0 && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
+                        The system will automatically distribute work based on these settings.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </DialogContent>
+            </Dialog>
 
-              </main>
-            </div>
+
+
+
+
+            <Button
+              variant={viewType === 'day' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('day')}
+            >
+              <Calendar1 className="w-4 h-4 mr-1" />
+              Day
+            </Button>
+            <Button
+              variant={viewType === 'week' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('week')}
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              Week
+            </Button>
+            <Button
+              variant={viewType === 'month' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('month')}
+            >
+              <Grid3X3 className="w-4 h-4 mr-1" />
+              Month
+            </Button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewType === 'week') {
+                  // Jump to previous work week (skip weekends)
+                  const prevWeekStart = startOfWeek(addDays(currentDate, -7), { weekStartsOn: 1 });
+                  setCurrentDate(prevWeekStart);
+                } else {
+                  setCurrentDate(prev => addDays(prev, -1));
+                }
+              }}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="px-3 text-sm font-medium">
+              {viewType === 'week' 
+                ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
+                : format(currentDate, 'MMMM yyyy')
+              }
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewType === 'week') {
+                  // Jump to next work week (skip weekends)
+                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
+                  setCurrentDate(nextWeekStart);
+                } else {
+                  setCurrentDate(prev => addDays(prev, 1));
+                }
+              }}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
             
-            <DragOverlay>
-              {activeId ? (
-                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-                  {activeId}
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </TabsContent>
+            {/* Quick Next Week Button */}
+            {viewType === 'week' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
+                  setCurrentDate(nextWeekStart);
+                }}
+                className="ml-2 text-xs"
+              >
+                Next Week
+              </Button>
+            )}
+          </div>
+        </div>
 
-        {/* P2 Layup Scheduler Tab */}
-        <TabsContent value="p2" className="flex-1 overflow-hidden">
-          <DndContext 
-            sensors={sensors} 
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex h-full">
-
-              {/* Calendar - Full Width */}
-              <main className="flex-1 p-6 overflow-auto">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex space-x-2">
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Mold Settings
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Mold Configuration</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        {/* Add New Mold Form */}
-                        <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                          <div className="flex items-center mb-3">
-                            <Plus className="w-4 h-4 mr-2" />
-                            <span className="font-medium">Add New Mold</span>
-                          </div>
-                          <div className="space-y-3">
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Mold Name</label>
-                              <Input
-                                placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
-                                value={newMold.moldName}
-                                onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
-                            </div>
-                          </div>
-                          <Button 
-                            onClick={handleAddMold} 
-                            className="mt-3" 
-                            size="sm"
-                            disabled={!newMold.moldName.trim()}
-                          >
-                            Add Mold
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Users className="w-4 h-4 mr-2" />
-                        Employee Settings
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Employee Configuration</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                          <div className="flex items-center mb-3">
-                            <Plus className="w-4 h-4 mr-2" />
-                            <span className="font-medium">Add New Employee</span>
-                          </div>
-                          <div className="mb-3">
-                            <Input
-                              placeholder="Employee ID (e.g., EMP004)"
-                              value={newEmployee.employeeId}
-                              onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                            />
-                          </div>
-                          <Button 
-                            onClick={handleAddEmployee} 
-                            className="mt-3" 
-                            size="sm"
-                            disabled={!newEmployee.employeeId.trim()}
-                          >
-                            Add Employee
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newDate = new Date(currentDate);
-                      newDate.setDate(newDate.getDate() - (viewType === 'day' ? 1 : viewType === 'week' ? 7 : 30));
-                      setCurrentDate(newDate);
-                    }}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-
-                  <Select value={viewType} onValueChange={(value: 'day' | 'week' | 'month') => setViewType(value)}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="day">
-                        <div className="flex items-center">
-                          <Calendar1 className="w-4 h-4 mr-2" />
-                          Day
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="week">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Week
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="month">
-                        <div className="flex items-center">
-                          <Grid3X3 className="w-4 h-4 mr-2" />
-                          Month
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newDate = new Date(currentDate);
-                      newDate.setDate(newDate.getDate() + (viewType === 'day' ? 1 : viewType === 'week' ? 7 : 30));
-                      setCurrentDate(newDate);
-                    }}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Calendar Display for P2 Orders */}
-              {viewType === 'day' ? (
-                /* Day view - single column */
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded text-center text-sm font-medium">
-                    {format(currentDate, 'EEEE, MMMM d, yyyy')}
-                  </div>
-                  <div className="min-h-96 bg-white dark:bg-gray-900 rounded border p-4">
-                    <p className="text-center text-gray-500">P2 Day view for {format(currentDate, 'MMM d')}</p>
-                  </div>
-                </div>
-              ) : viewType === 'week' ? (
-                /* Week view - grid layout for P2 */
+          {/* Week-based Calendar Layout */}
+          {viewType === 'week' || viewType === 'day' ? (
+            <div
+              className="grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+            >
+              {/* Header */}
+              {dates.map(date => (
                 <div
-                  className="grid border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+                  key={date.toISOString()}
+                  className="p-3 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center font-semibold text-sm"
                 >
-                  {/* Day Headers */}
-                  {dates.map(date => (
-                    <div
-                      key={date.toISOString()}
-                      className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-sm font-medium"
-                    >
-                      {format(date, 'EEE MM/dd')}
-                    </div>
-                  ))}
+                  {format(date, 'MM/dd')}
+                  <div className="text-xs text-gray-500 mt-1">
+                    {format(date, 'EEE')}
+                  </div>
+                </div>
+              ))}
 
-                  {/* P2 Orders - compact layout showing only molds with orders */}
-                  {(() => {
-                    // Get molds that have P2 orders assigned to them
-                    const usedMoldIds = new Set(
-                      Object.entries(orderAssignments)
-                        .filter(([orderId, assignment]) => {
-                          // Only include non-Friday assignments
-                          const assignmentDate = new Date(assignment.date);
-                          const isFriday = assignmentDate.getDay() === 5;
-                          if (isFriday) return false;
-                          
-                          // Only include P2 orders
-                          return p2Orders.some(o => o.orderId === orderId);
-                        })
-                        .map(([, assignment]) => assignment.moldId)
-                    );
-                    const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+              {/* Rows for each mold - Only show molds with assigned orders */}
+              {(() => {
+                // Get molds that have orders assigned to them
+                const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
+                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                
+                console.log(`📊 DEBUG: Calendar Display Summary`);
+                console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
+                console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
+                console.log(`  • Used mold IDs:`, Array.from(usedMoldIds));
+                console.log(`  • Active molds with orders: ${activeMolds.length}`);
+                console.log(`  • Active mold details:`, activeMolds.map(m => ({ moldId: m.moldId, modelName: m.modelName })));
+                
+                if (activeMolds.length === 0 && Object.keys(orderAssignments).length > 0) {
+                  console.log(`❌ MISMATCH: Have ${Object.keys(orderAssignments).length} assignments but no active molds!`);
+                  console.log(`  • Assignment details:`, Object.entries(orderAssignments).slice(0, 5));
+                }
+                
+                return activeMolds.map(mold => (
+                <React.Fragment key={mold.moldId}>
+                  {dates.map(date => {
+                    const dateString = date.toISOString();
                     
-                    return activeMolds.map(mold => {
-                      // Get all dates that have P2 orders for this mold
-                      const moldDatesWithOrders = dates.filter(date => {
-                        const dateString = date.toISOString();
-                        const cellOrders = Object.entries(orderAssignments)
-                          .filter(([orderId, assignment]) => {
-                            const assignmentDateOnly = assignment.date.split('T')[0];
-                            const cellDateOnly = dateString.split('T')[0];
-                            const orderInP2 = p2Orders.some(o => o.orderId === orderId);
-                            
-                            // Block Friday assignments
-                            const assignmentDate = new Date(assignment.date);
-                            const isFriday = assignmentDate.getDay() === 5;
-                            if (isFriday) return false;
-                            
-                            return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                          });
-                        return cellOrders.length > 0;
-                      });
+                    // Get orders assigned to this mold/date combination
+                    const cellOrders = Object.entries(orderAssignments)
+                      .filter(([orderId, assignment]) => {
+                        const assignmentDateOnly = assignment.date.split('T')[0];
+                        const cellDateOnly = dateString.split('T')[0];
+                        return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                      })
+                      .map(([orderId]) => {
+                        const order = orders.find(o => o.orderId === orderId);
+                        return order;
+                      })
+                      .filter(order => order !== undefined) as any[];
 
-                      if (moldDatesWithOrders.length === 0) return null;
+                    const dropId = `${mold.moldId}|${dateString}`;
 
-                      return (
-                        <div key={mold.moldId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                          {/* Mold Header */}
-                          <div className="bg-green-50 dark:bg-green-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-sm font-semibold text-green-900 dark:text-green-100">
-                              {mold.moldId} ({mold.instanceNumber}) - P2
-                            </h3>
-                          </div>
-                          
-                          {/* P2 Orders for this mold - flex layout */}
-                          <div className="p-4">
-                            <div className="flex flex-wrap gap-4">
-                              {moldDatesWithOrders.map(date => {
-                                const dateString = date.toISOString();
-                                
-                                // Get P2 orders for this mold/date
-                                const cellOrders = Object.entries(orderAssignments)
-                                  .filter(([orderId, assignment]) => {
-                                    const assignmentDateOnly = assignment.date.split('T')[0];
-                                    const cellDateOnly = dateString.split('T')[0];
-                                    const orderInP2 = p2Orders.some(o => o.orderId === orderId);
-                                    
-                                    // Block Friday assignments
-                                    const assignmentDate = new Date(assignment.date);
-                                    const isFriday = assignmentDate.getDay() === 5;
-                                    if (isFriday) return false;
-                                    
-                                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                                  })
-                                  .map(([orderId]) => {
-                                    const order = p2Orders.find(o => o.orderId === orderId);
-                                    return order;
-                                  })
-                                  .filter(order => order !== undefined) as any[];
-
-                                const dropId = `${mold.moldId}|${dateString}`;
-
-                                return (
-                                  <div key={dropId} className="flex-shrink-0">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                                      {format(date, 'EEE MM/dd')}
-                                    </div>
-                                    <DroppableCell
-                                      moldId={mold.moldId}
-                                      date={date}
-                                      orders={cellOrders}
-                                      onDrop={(orderId, moldId, date) => {
-                                        // Handle drop (this is handled by DndContext now)
-                                      }}
-                                      moldInfo={{
-                                        moldId: mold.moldId,
-                                        instanceNumber: mold.instanceNumber
-                                      }}
-                                      getModelDisplayName={getModelDisplayName}
-                                      features={features}
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }).filter(Boolean);
-                  })()}
-                </div>
-              ) : (
-                /* Month view for P2 orders */
-                <div className="space-y-4">
-                  {weekGroups?.map((week, weekIndex) => (
-                    <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      {/* Week Header */}
-                      <div className="bg-green-50 dark:bg-green-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="text-sm font-semibold text-green-900 dark:text-green-100">
-                          P2 Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
-                        </h3>
-                      </div>
-                      
-                      {/* Week Calendar Grid */}
-                      <div
-                        className="grid gap-1"
-                        style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
-                      >
-                        {/* Day Headers */}
-                        {week.map(date => (
-                          <div
-                            key={date.toISOString()}
-                            className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
-                          >
-                            {format(date, 'EEE MM/dd')}
-                          </div>
-                        ))}
-
-                        {/* Month P2 Orders - compact layout */}
-                        {(() => {
-                          // Get molds that have P2 orders assigned in this week
-                          const usedMoldIds = new Set(
-                            Object.entries(orderAssignments)
-                              .filter(([orderId, assignment]) => {
-                                // Only include non-Friday assignments in this week
-                                const assignmentDate = new Date(assignment.date);
-                                const isFriday = assignmentDate.getDay() === 5;
-                                if (isFriday) return false;
-                                
-                                // Check if assignment date is within this week
-                                const isInWeek = week.some(weekDate => {
-                                  const assignmentDateOnly = assignment.date.split('T')[0];
-                                  const weekDateOnly = weekDate.toISOString().split('T')[0];
-                                  return assignmentDateOnly === weekDateOnly;
-                                });
-                                
-                                // Only include P2 orders
-                                return isInWeek && p2Orders.some(o => o.orderId === orderId);
-                              })
-                              .map(([, assignment]) => assignment.moldId)
-                          );
-                          const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                          
-                          return activeMolds.map(mold => {
-                            // Get all dates in this week that have P2 orders for this mold
-                            const moldDatesWithOrders = week.filter(date => {
-                              const dateString = date.toISOString();
-                              const cellOrders = Object.entries(orderAssignments)
-                                .filter(([orderId, assignment]) => {
-                                  const assignmentDateOnly = assignment.date.split('T')[0];
-                                  const cellDateOnly = dateString.split('T')[0];
-                                  const orderInP2 = p2Orders.some(o => o.orderId === orderId);
-                                  
-                                  // Block Friday assignments
-                                  const assignmentDate = new Date(assignment.date);
-                                  const isFriday = assignmentDate.getDay() === 5;
-                                  if (isFriday) return false;
-                                  
-                                  return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                                });
-                              return cellOrders.length > 0;
-                            });
-
-                            if (moldDatesWithOrders.length === 0) return null;
-
-                            return (
-                              <div key={`${weekIndex}-${mold.moldId}-p2`} className="col-span-full border border-green-200 dark:border-green-700 rounded-lg overflow-hidden mb-2">
-                                <div className="bg-green-50 dark:bg-green-900/20 px-3 py-1 border-b border-green-200 dark:border-green-700">
-                                  <h4 className="text-xs font-semibold text-green-900 dark:text-green-100">
-                                    {mold.moldId} ({mold.instanceNumber}) - P2
-                                  </h4>
-                                </div>
-                                <div className="p-2">
-                                  <div className="flex flex-wrap gap-2">
-                                    {moldDatesWithOrders.map(date => {
-                                      const dateString = date.toISOString();
-                                      
-                                      // Get P2 orders for this mold/date
-                                      const cellOrders = Object.entries(orderAssignments)
-                                        .filter(([orderId, assignment]) => {
-                                          const assignmentDateOnly = assignment.date.split('T')[0];
-                                          const cellDateOnly = dateString.split('T')[0];
-                                          const orderInP2 = p2Orders.some(o => o.orderId === orderId);
-                                          
-                                          // Block Friday assignments
-                                          const assignmentDate = new Date(assignment.date);
-                                          const isFriday = assignmentDate.getDay() === 5;
-                                          if (isFriday) return false;
-                                          
-                                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP2;
-                                        })
-                                        .map(([orderId]) => p2Orders.find(o => o.orderId === orderId))
-                                        .filter(order => order !== undefined) as any[];
-
-                                      return (
-                                        <div key={`${weekIndex}-${mold.moldId}-${date.toISOString()}-p2`} className="flex-shrink-0">
-                                          <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                                            {format(date, 'MM/dd')}
-                                          </div>
-                                          <DroppableCell
-                                            moldId={mold.moldId}
-                                            date={date}
-                                            orders={cellOrders}
-                                            onDrop={(orderId, moldId, date) => {
-                                              // Handle drop
-                                            }}
-                                            moldInfo={{
-                                              moldId: mold.moldId,
-                                              instanceNumber: mold.instanceNumber
-                                            }}
-                                            getModelDisplayName={getModelDisplayName}
-                                            features={features}
-                                          />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }).filter(Boolean);
-                        })()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              </main>
+                    return (
+                      <DroppableCell
+                        key={dropId}
+                        moldId={mold.moldId}
+                        date={date}
+                        orders={cellOrders}
+                        onDrop={(orderId, moldId, date) => {
+                          // Handle drop (this is handled by DndContext now)
+                        }}
+                        moldInfo={{
+                          moldId: mold.moldId,
+                          instanceNumber: mold.instanceNumber
+                        }}
+                        getModelDisplayName={getModelDisplayName}
+                        features={features}
+                      />
+                    );
+                  })}
+                </React.Fragment>
+                ));
+              })()}
             </div>
-            
-            <DragOverlay>
-              {activeId ? (
-                <div className="p-2 bg-green-100 dark:bg-green-900 rounded border shadow-lg text-xs">
-                  {activeId}
+          ) : (
+            /* Month view - organized by weeks */
+            <div className="space-y-4">
+              {weekGroups?.map((week, weekIndex) => (
+                <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  {/* Week Header */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                      Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
+                    </h3>
+                  </div>
+                  
+                  {/* Week Calendar Grid */}
+                  <div
+                    className="grid gap-1"
+                    style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
+                  >
+                    {/* Day Headers */}
+                    {week.map(date => (
+                      <div
+                        key={date.toISOString()}
+                        className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
+                      >
+                        {format(date, 'EEE MM/dd')}
+                      </div>
+                    ))}
+
+                    {/* Mold Rows for this week - Only show molds with assigned orders */}
+                    {(() => {
+                      // Get molds that have orders assigned to them
+                      const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
+                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                      
+                      return activeMolds.map(mold => (
+                      <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
+                        {week.map(date => {
+                          const dateString = date.toISOString();
+                          const cellDateOnly = dateString.split('T')[0];
+                          
+                          const cellOrders = Object.entries(orderAssignments)
+                            .filter(([orderId, assignment]) => {
+                              const assignmentDateOnly = assignment.date.split('T')[0];
+                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                            })
+                            .map(([orderId]) => {
+                              const order = orders.find(o => o.orderId === orderId);
+                              return order;
+                            })
+                            .filter(order => order !== undefined) as any[];
+
+                          const dropId = `${mold.moldId}|${dateString}`;
+
+                          return (
+                            <DroppableCell
+                              key={dropId}
+                              moldId={mold.moldId}
+                              date={date}
+                              orders={cellOrders}
+                              onDrop={(orderId, moldId, date) => {
+                                // Handle drop (this is handled by DndContext now)
+                              }}
+                              moldInfo={{
+                                moldId: mold.moldId,
+                                instanceNumber: mold.instanceNumber
+                              }}
+                              getModelDisplayName={getModelDisplayName}
+                              features={features}
+                            />
+                          );
+                        })}
+                      </React.Fragment>
+                      ));
+                    })()}
+                  </div>
                 </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </TabsContent>
-      </Tabs>
+              ))}
+            </div>
+          )}
+
+        </main>
+      </div>
+      
+      <DragOverlay>
+        {activeId ? (
+          <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
+            {activeId}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
     </div>
   );
 }

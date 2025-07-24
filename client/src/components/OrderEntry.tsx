@@ -109,7 +109,7 @@ export default function OrderEntry() {
   const [paymentTimestamp, setPaymentTimestamp] = useState<Date | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Unified price calculation function
+  // Calculate total price based on selected features
   const calculateTotalPrice = useCallback(() => {
     let total = 0;
 
@@ -119,7 +119,7 @@ export default function OrderEntry() {
       total += priceOverride !== null ? priceOverride : (selectedModel.price || 0);
     }
 
-    // Add feature prices from features object
+    // Add feature prices
     Object.entries(features).forEach(([featureId, value]) => {
       if (value && value !== 'none') {
         const feature = featureDefs.find(f => f.id === featureId);
@@ -143,43 +143,7 @@ export default function OrderEntry() {
       }
     });
 
-    // Add bottom metal price (separate state variable)
-    if (bottomMetal) {
-      const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
-      if (bottomMetalFeature?.options) {
-        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
-        if (option?.price) {
-          total += option.price;
-        }
-      }
-    }
-
-    // Add paint options price (separate state variable)
-    if (paintOptions && paintOptions !== 'none') {
-      const paintFeatures = featureDefs.filter(f => 
-        f.displayName === 'Premium Options' ||
-        f.displayName === 'Terrain Options' ||
-        f.displayName === 'Rogue Options' ||
-        f.displayName === 'Standard Options' ||
-        f.displayName === 'Carbon Camo Ready' ||
-        f.displayName === 'Camo Options' ||
-        f.id === 'metallic_finishes' ||
-        f.name === 'metallic_finishes' ||
-        f.category === 'paint_options'
-      );
-      
-      for (const feature of paintFeatures) {
-        if (feature.options) {
-          const option = feature.options.find(opt => opt.value === paintOptions);
-          if (option?.price) {
-            total += option.price;
-            break; // Only add price once
-          }
-        }
-      }
-    }
-
-    // Add rail accessory prices (separate state variable)
+    // Add rail accessory prices
     if (railAccessory && railAccessory.length > 0) {
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
       if (railFeature?.options) {
@@ -192,7 +156,7 @@ export default function OrderEntry() {
       }
     }
 
-    // Add other options prices (separate state variable)
+    // Add other options prices
     if (otherOptions && otherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
@@ -206,10 +170,7 @@ export default function OrderEntry() {
     }
 
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, bottomMetal, paintOptions, railAccessory, otherOptions]);
-
-  // Store discount details for appliesTo logic
-  const [discountDetails, setDiscountDetails] = useState<any>(null);
+  }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
 
   // Calculate discount amount based on selected discount code
   const calculateDiscountAmount = useCallback((subtotal: number) => {
@@ -228,30 +189,6 @@ export default function OrderEntry() {
     const selectedDiscount = discountOptions.find(d => d.value === discountCode);
     if (!selectedDiscount) return 0;
     
-    // For persistent discounts, check appliesTo setting
-    if (discountCode.startsWith('persistent_') && discountDetails) {
-      const baseAmount = priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0);
-      
-      // If appliesTo is 'stock_model', apply discount only to base model price
-      if (discountDetails.appliesTo === 'stock_model') {
-        // Extract percentage from label (e.g., "10% off")
-        const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
-        if (percentMatch) {
-          const percent = parseInt(percentMatch[1]);
-          return (baseAmount * percent) / 100;
-        }
-        
-        // Extract dollar amount from label (e.g., "$50.00 off")
-        const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
-        if (dollarMatch) {
-          const amount = parseFloat(dollarMatch[1]);
-          return amount;
-        }
-      }
-      // If appliesTo is 'total_order', apply to full subtotal (existing behavior)
-    }
-    
-    // Default behavior for short-term sales and total_order persistent discounts
     // Extract percentage from label (e.g., "10% off")
     const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
     if (percentMatch) {
@@ -267,7 +204,7 @@ export default function OrderEntry() {
     }
     
     return 0;
-  }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue, discountDetails, priceOverride, modelOptions, modelId]);
+  }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue]);
 
   const subtotalPrice = calculateTotalPrice();
   const discountAmount = calculateDiscountAmount(subtotalPrice);
@@ -437,7 +374,6 @@ export default function OrderEntry() {
       ]);
       
       const discounts: {value: string; label: string}[] = [];
-      const discountDetailsMap: Record<string, any> = {};
       
       // Add active short-term sales
       const now = new Date();
@@ -448,15 +384,10 @@ export default function OrderEntry() {
           return startDate <= now && now <= endDate && sale.isActive;
         })
         .forEach((sale: any) => {
-          const value = `short_term_${sale.id}`;
           discounts.push({
-            value,
+            value: `short_term_${sale.id}`,
             label: `${sale.name} (${sale.percent}% off)`
           });
-          discountDetailsMap[value] = {
-            ...sale,
-            appliesTo: sale.appliesTo || 'total_order'
-          };
         });
       
       // Add active persistent discounts
@@ -466,19 +397,13 @@ export default function OrderEntry() {
           const displayValue = discount.percent 
             ? `${discount.percent}% off`
             : `$${(discount.fixedAmount / 100).toFixed(2)} off`;
-          const value = `persistent_${discount.id}`;
           discounts.push({
-            value,
+            value: `persistent_${discount.id}`,
             label: `${discount.name} (${displayValue})`
           });
-          discountDetailsMap[value] = discount;
         });
       
       setDiscountOptions(discounts);
-      // Store discount details for appliesTo logic
-      if (discountCode && discountDetailsMap[discountCode]) {
-        setDiscountDetails(discountDetailsMap[discountCode]);
-      }
     } catch (error) {
       console.error('Failed to load discount codes:', error);
     }
@@ -509,7 +434,95 @@ export default function OrderEntry() {
     }
   };
 
-  // Use unified pricing calculation (calculated above with discount already included)
+  // Calculate order total
+  const calculateTotal = useCallback(() => {
+    const selectedModel = modelOptions.find(m => m.id === modelId);
+    // Use price override if set, otherwise use original model price
+    const basePrice = priceOverride !== null ? priceOverride : (selectedModel?.price || 0);
+    
+    let featureCost = 0;
+    
+    // Calculate cost from features state
+    Object.entries(features).forEach(([featureId, value]) => {
+      const feature = featureDefs.find(f => f.id === featureId);
+      if (feature?.options) {
+        const option = feature.options.find(opt => opt.value === value);
+        featureCost += option?.price || 0;
+      }
+    });
+    
+    // Add cost from bottom metal selection
+    if (bottomMetal) {
+      const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
+      if (bottomMetalFeature?.options) {
+        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
+        featureCost += option?.price || 0;
+      }
+    }
+    
+    // Add cost from paint options
+    if (paintOptions && paintOptions !== 'none') {
+      const paintFeatures = featureDefs.filter(f => 
+        f.displayName === 'Cerakote Options' ||
+        f.displayName === 'Terrain Options' ||
+        f.displayName === 'Rogue Options' ||
+        f.displayName === 'Standard Options' ||
+        f.displayName === 'Carbon Camo Ready' ||
+        f.displayName === 'Camo Options' ||
+        f.id === 'metallic_finishes' ||
+        f.name === 'metallic_finishes'
+      );
+      
+      for (const feature of paintFeatures) {
+        if (feature.options) {
+          const option = feature.options.find(opt => opt.value === paintOptions);
+          if (option) {
+            featureCost += option.price || 0;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Add cost from other options (multiselect)
+    if (otherOptions && otherOptions.length > 0) {
+      const feature = featureDefs.find(f => f.id === 'other_options');
+      if (feature?.options) {
+        otherOptions.forEach(optionValue => {
+          const option = feature.options!.find(opt => opt.value === optionValue);
+          if (option) {
+            featureCost += option.price || 0;
+          }
+        });
+      }
+    }
+    
+    // Add cost from rail accessory (multiselect)
+    if (railAccessory && railAccessory.length > 0) {
+      const feature = featureDefs.find(f => f.id === 'rail_accessory');
+      if (feature?.options) {
+        railAccessory.forEach(optionValue => {
+          const option = feature.options!.find(opt => opt.value === optionValue);
+          if (option) {
+            featureCost += option.price || 0;
+          }
+        });
+      }
+    }
+
+    const subtotal = basePrice + featureCost;
+    const total = subtotal + shipping;
+
+    return {
+      basePrice,
+      featureCost,
+      subtotal,
+      shipping,
+      total
+    };
+  }, [modelId, modelOptions, features, featureDefs, shipping, bottomMetal, paintOptions, otherOptions, railAccessory, priceOverride]);
+
+  const pricing = calculateTotal();
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) {
@@ -1315,7 +1328,7 @@ export default function OrderEntry() {
               <div className="text-center space-y-2 border-b pb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-3xl font-bold">1</span>
-                  <span className="text-3xl font-bold text-blue-600">${totalPrice.toFixed(2)}</span>
+                  <span className="text-3xl font-bold text-blue-600">${pricing.total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Items</span>
@@ -1627,33 +1640,7 @@ export default function OrderEntry() {
               {/* Discount Code */}
               <div className="border-t pt-4">
                 <div className="font-medium text-base mb-2">Discount Code</div>
-                <Select value={discountCode} onValueChange={(value) => {
-                  setDiscountCode(value);
-                  // Load discount details when selection changes
-                  if (value && value !== 'none') {
-                    const loadDiscountDetails = async () => {
-                      try {
-                        if (value.startsWith('persistent_')) {
-                          const discountId = value.replace('persistent_', '');
-                          const persistentDiscounts = await apiRequest('/api/persistent-discounts');
-                          const discount = persistentDiscounts.find((d: any) => d.id.toString() === discountId);
-                          setDiscountDetails(discount || null);
-                        } else if (value.startsWith('short_term_')) {
-                          const saleId = value.replace('short_term_', '');
-                          const shortTermSales = await apiRequest('/api/short-term-sales');
-                          const sale = shortTermSales.find((s: any) => s.id.toString() === saleId);
-                          setDiscountDetails(sale ? { ...sale, appliesTo: sale.appliesTo || 'total_order' } : null);
-                        }
-                      } catch (error) {
-                        console.error('Failed to load discount details:', error);
-                        setDiscountDetails(null);
-                      }
-                    };
-                    loadDiscountDetails();
-                  } else {
-                    setDiscountDetails(null);
-                  }
-                }}>
+                <Select value={discountCode} onValueChange={setDiscountCode}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select discount code" />
                   </SelectTrigger>
@@ -1666,12 +1653,6 @@ export default function OrderEntry() {
                     ))}
                   </SelectContent>
                 </Select>
-                {/* Show what the discount applies to */}
-                {discountDetails && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Applies to: {discountDetails.appliesTo === 'stock_model' ? 'Stock Model Only' : 'Total Order'}
-                  </div>
-                )}
               </div>
 
               {/* Shipping & Handling */}
@@ -1723,7 +1704,7 @@ export default function OrderEntry() {
                 
                 {/* Balance Due/Credit - Only show if payment exists */}
                 {isPaid && paymentAmount && paymentAmount.trim() !== '' && (() => {
-                  const remainingBalance = (totalPrice + shipping) - parseFloat(paymentAmount || '0');
+                  const remainingBalance = (totalPrice + 36.95) - parseFloat(paymentAmount || '0');
                   const isCredit = remainingBalance < 0;
                   const balanceAmount = Math.abs(remainingBalance);
                   

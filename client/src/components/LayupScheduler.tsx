@@ -1351,8 +1351,22 @@ export default function LayupScheduler() {
                   </div>
                 </div>
               ) : viewType === 'week' ? (
-                /* Week view - compact layout showing only molds with orders */
-                <div className="space-y-4">
+                /* Week view - grid layout with only molds that have orders */
+                <div
+                  className="grid border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+                >
+                  {/* Day Headers */}
+                  {dates.map(date => (
+                    <div
+                      key={date.toISOString()}
+                      className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-sm font-medium"
+                    >
+                      {format(date, 'EEE MM/dd')}
+                    </div>
+                  ))}
+
+                  {/* Rows for each mold - Only show molds with assigned orders */}
                   {(() => {
                     // Get molds that have P1 orders assigned to them
                     const usedMoldIds = new Set(
@@ -1370,92 +1384,56 @@ export default function LayupScheduler() {
                     );
                     const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                     
-                    return activeMolds.map(mold => {
-                      // Get all dates that have orders for this mold
-                      const moldDatesWithOrders = dates.filter(date => {
+                    return activeMolds.map(mold => (
+                    <React.Fragment key={mold.moldId}>
+                      {dates.map(date => {
                         const dateString = date.toISOString();
+                        
+                        // Get orders assigned to this mold/date combination using p1Orders for filtering
                         const cellOrders = Object.entries(orderAssignments)
                           .filter(([orderId, assignment]) => {
                             const assignmentDateOnly = assignment.date.split('T')[0];
                             const cellDateOnly = dateString.split('T')[0];
                             const orderInP1 = p1Orders.some(o => o.orderId === orderId);
                             
-                            // Block Friday assignments
+                            // Block Friday assignments (day 5) - not a work day
                             const assignmentDate = new Date(assignment.date);
                             const isFriday = assignmentDate.getDay() === 5;
-                            if (isFriday) return false;
+                            if (isFriday) {
+                              console.warn(`🚫 Filtering out Friday assignment for order ${orderId} - Not a work day`);
+                              return false;
+                            }
                             
                             return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                          });
-                        return cellOrders.length > 0;
-                      });
+                          })
+                          .map(([orderId]) => {
+                            const order = p1Orders.find(o => o.orderId === orderId);
+                            return order;
+                          })
+                          .filter(order => order !== undefined) as any[];
 
-                      if (moldDatesWithOrders.length === 0) return null;
+                        const dropId = `${mold.moldId}|${dateString}`;
 
-                      return (
-                        <div key={mold.moldId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                          {/* Mold Header */}
-                          <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                              {mold.moldId} ({mold.instanceNumber})
-                            </h3>
-                          </div>
-                          
-                          {/* Orders for this mold - flex layout */}
-                          <div className="p-4">
-                            <div className="flex flex-wrap gap-4">
-                              {moldDatesWithOrders.map(date => {
-                                const dateString = date.toISOString();
-                                
-                                // Get orders for this mold/date
-                                const cellOrders = Object.entries(orderAssignments)
-                                  .filter(([orderId, assignment]) => {
-                                    const assignmentDateOnly = assignment.date.split('T')[0];
-                                    const cellDateOnly = dateString.split('T')[0];
-                                    const orderInP1 = p1Orders.some(o => o.orderId === orderId);
-                                    
-                                    // Block Friday assignments
-                                    const assignmentDate = new Date(assignment.date);
-                                    const isFriday = assignmentDate.getDay() === 5;
-                                    if (isFriday) return false;
-                                    
-                                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly && orderInP1;
-                                  })
-                                  .map(([orderId]) => {
-                                    const order = p1Orders.find(o => o.orderId === orderId);
-                                    return order;
-                                  })
-                                  .filter(order => order !== undefined) as any[];
-
-                                const dropId = `${mold.moldId}|${dateString}`;
-
-                                return (
-                                  <div key={dropId} className="flex-shrink-0">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                                      {format(date, 'EEE MM/dd')}
-                                    </div>
-                                    <DroppableCell
-                                      moldId={mold.moldId}
-                                      date={date}
-                                      orders={cellOrders}
-                                      onDrop={(orderId, moldId, date) => {
-                                        // Handle drop (this is handled by DndContext now)
-                                      }}
-                                      moldInfo={{
-                                        moldId: mold.moldId,
-                                        instanceNumber: mold.instanceNumber
-                                      }}
-                                      getModelDisplayName={getModelDisplayName}
-                                      features={features}
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }).filter(Boolean);
+                        return (
+                          <DroppableCell
+                            key={dropId}
+                            moldId={mold.moldId}
+                            date={date}
+                            orders={cellOrders}
+                            onDrop={(orderId, moldId, date) => {
+                              // Handle drop (this is handled by DndContext now)
+                            }}
+                            moldInfo={{
+                              moldId: mold.moldId,
+                              instanceNumber: mold.instanceNumber
+                            }}
+                            getModelDisplayName={getModelDisplayName}
+                            features={features}
+                          />
+                        );
+                      })}
+                    </React.Fragment>
+                    ));
                   })()}
                 </div>
               ) : (

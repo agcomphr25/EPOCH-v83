@@ -209,6 +209,16 @@ export function generateLayupSchedule(
     return toKey(monday);
   };
 
+  // Helper function to find Monday of the week for a given date
+  const getMondayOfWeek = (date: Date): Date => {
+    let monday = new Date(date);
+    const dayOfWeek = monday.getDay();
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday=0, so 6 days back; Monday=1, so 0 days back
+    
+    monday.setDate(monday.getDate() - daysToSubtract);
+    return monday;
+  };
+
   // Helper function to find next Monday from a given date
   const getNextMonday = (date: Date): Date => {
     let nextMonday = new Date(date);
@@ -224,104 +234,125 @@ export function generateLayupSchedule(
     return nextMonday;
   };
 
-  // 6. Schedule LOP orders first (Monday-only), then regular orders
+  // 6. Group LOP orders by week and schedule ALL LOP orders for each week on that week's Monday
   const result: ScheduleResult[] = [];
   
-  // Schedule LOP adjustment orders on Mondays only
-  console.log(`📅 Scheduling ${sortedLopOrders.length} LOP orders on Mondays only`);
-  for (const order of sortedLopOrders) {
-    let scheduled = false;
-    let attemptDate = getNextMonday(new Date(order.orderDate));
+  // Group LOP orders by the Monday of their week
+  const lopOrdersByWeek = new Map<string, LayupOrder[]>();
+  sortedLopOrders.forEach(order => {
+    const mondayOfWeek = getMondayOfWeek(new Date(order.orderDate));
+    const weekKey = toKey(mondayOfWeek);
     
-    // Try to schedule on Mondays within reasonable timeframe (up to 8 weeks out)
-    let maxAttempts = 8; // 8 Mondays
+    if (!lopOrdersByWeek.has(weekKey)) {
+      lopOrdersByWeek.set(weekKey, []);
+    }
+    lopOrdersByWeek.get(weekKey)!.push(order);
+  });
+  
+  console.log(`📅 Scheduling ${sortedLopOrders.length} LOP orders grouped by week:`);
+  lopOrdersByWeek.forEach((weekOrders, weekKey) => {
+    console.log(`📏 Week ${weekKey}: ${weekOrders.length} LOP orders to schedule on Monday`);
+  });
+  
+  // Schedule all LOP orders for each week on that week's Monday
+  for (const [weekKey, weekOrders] of lopOrdersByWeek) {
+    const targetMonday = new Date(weekKey);
+    console.log(`📏 Scheduling ${weekOrders.length} LOP orders on Monday ${weekKey}`);
     
-    while (!scheduled && maxAttempts > 0) {
-      const dateKey = toKey(attemptDate);
-      const weekKey = getWeekKey(attemptDate);
+    for (const order of weekOrders) {
+      let scheduled = false;
+      let attemptDate = new Date(targetMonday);
       
-      // Only attempt on Mondays for LOP orders
-      if (attemptDate.getDay() !== 1) {
-        attemptDate = getNextMonday(attemptDate);
-        maxAttempts--;
-        continue;
-      }
+      // Try to schedule on this specific Monday, then fall back to next Mondays if needed
+      let maxAttempts = 8; // 8 Mondays fallback
       
-      // Initialize tracking if needed - each day starts fresh with 0 usage for all molds
-      if (!dateMoldUsage[dateKey]) {
-        dateMoldUsage[dateKey] = { totalUsed: 0 };
-        enabledMolds.forEach(m => dateMoldUsage[dateKey][m.moldId] = 0);
-        console.log(`🔄 New Monday ${dateKey}: Initialized ${enabledMolds.length} molds for LOP scheduling`);
-      }
-      if (!dateEmployeeUsage[dateKey]) {
-        dateEmployeeUsage[dateKey] = {};
-        employeeSettings.forEach(emp => dateEmployeeUsage[dateKey][emp.employeeId] = 0);
-      }
-      if (!(weekKey in weeklyDistribution)) {
-        weeklyDistribution[weekKey] = 0;
-      }
+      while (!scheduled && maxAttempts > 0) {
+        const dateKey = toKey(attemptDate);
+        const weekKey = getWeekKey(attemptDate);
+        
+        // Only attempt on Mondays for LOP orders
+        if (attemptDate.getDay() !== 1) {
+          attemptDate = getNextMonday(attemptDate);
+          maxAttempts--;
+          continue;
+        }
+        
+        // Initialize tracking if needed - each day starts fresh with 0 usage for all molds
+        if (!dateMoldUsage[dateKey]) {
+          dateMoldUsage[dateKey] = { totalUsed: 0 };
+          enabledMolds.forEach(m => dateMoldUsage[dateKey][m.moldId] = 0);
+          console.log(`🔄 New Monday ${dateKey}: Initialized ${enabledMolds.length} molds for LOP scheduling`);
+        }
+        if (!dateEmployeeUsage[dateKey]) {
+          dateEmployeeUsage[dateKey] = {};
+          employeeSettings.forEach(emp => dateEmployeeUsage[dateKey][emp.employeeId] = 0);
+        }
+        if (!(weekKey in weeklyDistribution)) {
+          weeklyDistribution[weekKey] = 0;
+        }
 
-      // Check if this Monday has capacity - find compatible molds based on stock model
-      const orderStockModel = order.stockModelId || order.modelId;
-      console.log(`📏 Scheduling LOP order ${order.orderId} on Monday ${dateKey} with stock model: ${orderStockModel}`);
-      
-      // First filter for compatible molds based on stock model
-      const compatibleMolds = enabledMolds.filter(m => {
-        if (m.stockModels && Array.isArray(m.stockModels) && orderStockModel) {
-          const isCompatible = m.stockModels.includes(orderStockModel);
-          return isCompatible;
-        }
-        return false;
-      });
-      
-      // Then find available capacity among compatible molds
-      const moldSlot = compatibleMolds.find(m => {
-        const currentUsage = dateMoldUsage[dateKey][m.moldId];
-        return currentUsage < m.multiplier;
-      });
-      
-      if (moldSlot) {
-        // Reserve the mold slot
-        dateMoldUsage[dateKey][moldSlot.moldId]++;
-        dateMoldUsage[dateKey].totalUsed++;
-        weeklyDistribution[weekKey]++;
+        // Check if this Monday has capacity - find compatible molds based on stock model
+        const orderStockModel = order.stockModelId || order.modelId;
+        console.log(`📏 Scheduling LOP order ${order.orderId} on Monday ${dateKey} with stock model: ${orderStockModel}`);
         
-        // Distribute employee workload
-        const employeeAssignments: {employeeId: string; workload: number}[] = [];
-        for (const emp of employeeSettings) {
-          const currentLoad = dateEmployeeUsage[dateKey][emp.employeeId];
-          const dailyCapacity = employeeDailyCapacities[emp.employeeId];
-          
-          if (currentLoad < dailyCapacity) {
-            const workload = Math.min(1, dailyCapacity - currentLoad);
-            employeeAssignments.push({
-              employeeId: emp.employeeId,
-              workload: workload
-            });
-            dateEmployeeUsage[dateKey][emp.employeeId] += workload;
-            break; // Assign to first available employee
+        // First filter for compatible molds based on stock model
+        const compatibleMolds = enabledMolds.filter(m => {
+          if (m.stockModels && Array.isArray(m.stockModels) && orderStockModel) {
+            const isCompatible = m.stockModels.includes(orderStockModel);
+            return isCompatible;
           }
-        }
-        
-        result.push({
-          orderId: order.orderId,
-          scheduledDate: new Date(attemptDate),
-          moldId: moldSlot.moldId,
-          employeeAssignments
+          return false;
         });
         
-        console.log(`📏✅ LOP Order ${order.orderId} scheduled on Monday ${dateKey} with mold ${moldSlot.moldId}`);
-        scheduled = true;
-      } else {
-        console.log(`📏❌ No compatible mold available for LOP order ${order.orderId} on Monday ${dateKey}`);
-        // Try next Monday
-        attemptDate = addDays(attemptDate, 7);
-        maxAttempts--;
+        // Then find available capacity among compatible molds
+        const moldSlot = compatibleMolds.find(m => {
+          const currentUsage = dateMoldUsage[dateKey][m.moldId];
+          return currentUsage < m.multiplier;
+        });
+        
+        if (moldSlot) {
+          // Reserve the mold slot
+          dateMoldUsage[dateKey][moldSlot.moldId]++;
+          dateMoldUsage[dateKey].totalUsed++;
+          weeklyDistribution[weekKey]++;
+          
+          // Distribute employee workload
+          const employeeAssignments: {employeeId: string; workload: number}[] = [];
+          for (const emp of employeeSettings) {
+            const currentLoad = dateEmployeeUsage[dateKey][emp.employeeId];
+            const dailyCapacity = employeeDailyCapacities[emp.employeeId];
+            
+            if (currentLoad < dailyCapacity) {
+              const workload = Math.min(1, dailyCapacity - currentLoad);
+              employeeAssignments.push({
+                employeeId: emp.employeeId,
+                workload: workload
+              });
+              dateEmployeeUsage[dateKey][emp.employeeId] += workload;
+              break; // Assign to first available employee
+            }
+          }
+          
+          result.push({
+            orderId: order.orderId,
+            scheduledDate: new Date(attemptDate),
+            moldId: moldSlot.moldId,
+            employeeAssignments
+          });
+          
+          console.log(`📏✅ LOP Order ${order.orderId} scheduled on Monday ${dateKey} with mold ${moldSlot.moldId}`);
+          scheduled = true;
+        } else {
+          console.log(`📏❌ No compatible mold available for LOP order ${order.orderId} on Monday ${dateKey}`);
+          // Try next Monday
+          attemptDate = addDays(attemptDate, 7);
+          maxAttempts--;
+        }
       }
-    }
-    
-    if (!scheduled) {
-      console.log(`📏⚠️ Could not schedule LOP order ${order.orderId} on any Monday within 8 weeks`);
+      
+      if (!scheduled) {
+        console.log(`📏⚠️ Could not schedule LOP order ${order.orderId} on any Monday within 8 weeks`);
+      }
     }
   }
   

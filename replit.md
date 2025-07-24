@@ -10,6 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 24, 2025 - LOP Monday-Only Scheduling Implementation (COMPLETED)**
+- ✅ **LOP Detection Function**: Added hasLOPAdjustment() function to identify orders with Length of Pull adjustments
+- ✅ **Week-Based LOP Grouping**: Groups all LOP orders by week and schedules them exclusively on Monday of their respective week
+- ✅ **Monday-Only Constraint**: LOP adjustment orders are restricted to Monday scheduling only, never Tuesday-Thursday
+- ✅ **Fallback Logic**: If a Monday is at capacity, LOP orders fall back to subsequent Mondays with detailed logging
+- ✅ **Separated Order Streams**: LOP orders processed first (Monday-only), then regular orders (Monday-Thursday)
+- ✅ **Enhanced Debugging**: Added comprehensive logging for LOP order identification and Monday scheduling verification
+- ✅ **API Enhancement**: Updated layup queue API to include features object for proper LOP detection
+- ✅ **Algorithm Optimization**: Modified scheduler to prioritize LOP orders for Monday placement before regular order distribution
+
 **July 23, 2025 - Auto-Schedule Function Restoration Without UI Buttons (COMPLETED)**
 - ✅ **Auto-Schedule Buttons Removed**: Removed both purple auto-schedule buttons from Layup Scheduler interface per user request
 - ✅ **Debug Report Button Removed**: Eliminated debug report functionality and button from calendar interface

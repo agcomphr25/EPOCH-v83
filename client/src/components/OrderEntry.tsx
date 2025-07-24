@@ -172,6 +172,9 @@ export default function OrderEntry() {
     return total;
   }, [modelOptions, modelId, featureDefs, features, railAccessory, otherOptions]);
 
+  // Store discount details for appliesTo logic
+  const [discountDetails, setDiscountDetails] = useState<any>(null);
+
   // Calculate discount amount based on selected discount code
   const calculateDiscountAmount = useCallback((subtotal: number) => {
     if (!discountCode || discountCode === 'none') return 0;
@@ -189,6 +192,30 @@ export default function OrderEntry() {
     const selectedDiscount = discountOptions.find(d => d.value === discountCode);
     if (!selectedDiscount) return 0;
     
+    // For persistent discounts, check appliesTo setting
+    if (discountCode.startsWith('persistent_') && discountDetails) {
+      const baseAmount = priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0);
+      
+      // If appliesTo is 'stock_model', apply discount only to base model price
+      if (discountDetails.appliesTo === 'stock_model') {
+        // Extract percentage from label (e.g., "10% off")
+        const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
+        if (percentMatch) {
+          const percent = parseInt(percentMatch[1]);
+          return (baseAmount * percent) / 100;
+        }
+        
+        // Extract dollar amount from label (e.g., "$50.00 off")
+        const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
+        if (dollarMatch) {
+          const amount = parseFloat(dollarMatch[1]);
+          return amount;
+        }
+      }
+      // If appliesTo is 'total_order', apply to full subtotal (existing behavior)
+    }
+    
+    // Default behavior for short-term sales and total_order persistent discounts
     // Extract percentage from label (e.g., "10% off")
     const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
     if (percentMatch) {
@@ -204,7 +231,7 @@ export default function OrderEntry() {
     }
     
     return 0;
-  }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue]);
+  }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue, discountDetails, priceOverride, modelOptions, modelId]);
 
   const subtotalPrice = calculateTotalPrice();
   const discountAmount = calculateDiscountAmount(subtotalPrice);
@@ -374,6 +401,7 @@ export default function OrderEntry() {
       ]);
       
       const discounts: {value: string; label: string}[] = [];
+      const discountDetailsMap: Record<string, any> = {};
       
       // Add active short-term sales
       const now = new Date();
@@ -384,10 +412,15 @@ export default function OrderEntry() {
           return startDate <= now && now <= endDate && sale.isActive;
         })
         .forEach((sale: any) => {
+          const value = `short_term_${sale.id}`;
           discounts.push({
-            value: `short_term_${sale.id}`,
+            value,
             label: `${sale.name} (${sale.percent}% off)`
           });
+          discountDetailsMap[value] = {
+            ...sale,
+            appliesTo: sale.appliesTo || 'total_order'
+          };
         });
       
       // Add active persistent discounts
@@ -397,13 +430,19 @@ export default function OrderEntry() {
           const displayValue = discount.percent 
             ? `${discount.percent}% off`
             : `$${(discount.fixedAmount / 100).toFixed(2)} off`;
+          const value = `persistent_${discount.id}`;
           discounts.push({
-            value: `persistent_${discount.id}`,
+            value,
             label: `${discount.name} (${displayValue})`
           });
+          discountDetailsMap[value] = discount;
         });
       
       setDiscountOptions(discounts);
+      // Store discount details for appliesTo logic
+      if (discountCode && discountDetailsMap[discountCode]) {
+        setDiscountDetails(discountDetailsMap[discountCode]);
+      }
     } catch (error) {
       console.error('Failed to load discount codes:', error);
     }
@@ -1640,7 +1679,33 @@ export default function OrderEntry() {
               {/* Discount Code */}
               <div className="border-t pt-4">
                 <div className="font-medium text-base mb-2">Discount Code</div>
-                <Select value={discountCode} onValueChange={setDiscountCode}>
+                <Select value={discountCode} onValueChange={(value) => {
+                  setDiscountCode(value);
+                  // Load discount details when selection changes
+                  if (value && value !== 'none') {
+                    const loadDiscountDetails = async () => {
+                      try {
+                        if (value.startsWith('persistent_')) {
+                          const discountId = value.replace('persistent_', '');
+                          const persistentDiscounts = await apiRequest('/api/persistent-discounts');
+                          const discount = persistentDiscounts.find((d: any) => d.id.toString() === discountId);
+                          setDiscountDetails(discount || null);
+                        } else if (value.startsWith('short_term_')) {
+                          const saleId = value.replace('short_term_', '');
+                          const shortTermSales = await apiRequest('/api/short-term-sales');
+                          const sale = shortTermSales.find((s: any) => s.id.toString() === saleId);
+                          setDiscountDetails(sale ? { ...sale, appliesTo: sale.appliesTo || 'total_order' } : null);
+                        }
+                      } catch (error) {
+                        console.error('Failed to load discount details:', error);
+                        setDiscountDetails(null);
+                      }
+                    };
+                    loadDiscountDetails();
+                  } else {
+                    setDiscountDetails(null);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select discount code" />
                   </SelectTrigger>
@@ -1653,6 +1718,12 @@ export default function OrderEntry() {
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Show what the discount applies to */}
+                {discountDetails && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Applies to: {discountDetails.appliesTo === 'stock_model' ? 'Stock Model Only' : 'Total Order'}
+                  </div>
+                )}
               </div>
 
               {/* Shipping & Handling */}

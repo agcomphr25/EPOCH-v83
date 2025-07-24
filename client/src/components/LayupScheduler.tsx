@@ -1090,9 +1090,16 @@ export default function LayupScheduler() {
                     variant="outline" 
                     size="sm"
                     onClick={() => {
-                      console.log('🔄 FORCE CLEAR AND REGENERATE SCHEDULE');
+                      console.log('🔄 FORCE CLEAR AND REGENERATE SCHEDULE - BUTTON CLICKED');
+                      console.log('Current orders:', orders.length);
+                      console.log('Current molds:', molds.length);
+                      console.log('Current employees:', employees.length);
+                      console.log('Current assignments before clear:', Object.keys(orderAssignments).length);
                       setOrderAssignments({});
-                      setTimeout(() => generateAutoSchedule(), 100);
+                      setTimeout(() => {
+                        console.log('🔄 About to call generateAutoSchedule...');
+                        generateAutoSchedule();
+                      }, 100);
                     }}
                     className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
                   >

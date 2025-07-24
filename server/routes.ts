@@ -6,6 +6,11 @@ import { db } from "./db";
 import { enhancedForms, enhancedFormCategories } from "./schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import path from "path";
+import fs from "fs";
+import crypto from "crypto";
+import { uploadMiddleware, getFileInfo, getFileUrl, validateEmployeeDocumentAccess, getDocumentType } from "./utils/fileUpload";
+import { authenticateToken, requireRole, requireEmployeeAccess, authenticatePortalToken } from "./middleware/auth";
 
 
 // SmartyStreets direct API calls
@@ -50,7 +55,14 @@ import {
   insertEmployeeLayupSettingsSchema,
   insertLayupOrderSchema,
   insertLayupScheduleSchema,
-  insertOrderSchema
+  insertOrderSchema,
+  // New employee management schemas
+  insertCertificationSchema,
+  insertEmployeeCertificationSchema,
+  insertEvaluationSchema,
+  insertUserSessionSchema,
+  insertEmployeeDocumentSchema,
+  insertEmployeeAuditLogSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1193,6 +1205,797 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create employee error:", error);
       res.status(400).json({ error: "Invalid employee data" });
+    }
+  });
+
+  app.get("/api/employees/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const employee = await storage.getEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      res.json(employee);
+    } catch (error) {
+      console.error("Get employee error:", error);
+      res.status(500).json({ error: "Failed to get employee" });
+    }
+  });
+
+  app.put("/api/employees/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertEmployeeSchema.partial().parse(req.body);
+      const employee = await storage.updateEmployee(id, validatedData);
+      res.json(employee);
+    } catch (error) {
+      console.error("Update employee error:", error);
+      res.status(400).json({ error: "Invalid employee data" });
+    }
+  });
+
+  app.delete("/api/employees/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteEmployee(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete employee error:", error);
+      res.status(500).json({ error: "Failed to delete employee" });
+    }
+  });
+
+  // Employee portal token generation
+  app.post("/api/employees/:id/portal-token", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const token = await storage.generateEmployeePortalToken(id);
+      res.json({ 
+        token, 
+        portalUrl: `${req.protocol}://${req.get('host')}/employee-portal/${token}` 
+      });
+    } catch (error) {
+      console.error("Generate portal token error:", error);
+      res.status(500).json({ error: "Failed to generate portal token" });
+    }
+  });
+
+  // Employee portal access by token
+  app.get("/api/employee-portal/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      const employee = await storage.getEmployeeByToken(token);
+      if (!employee) {
+        return res.status(404).json({ error: "Invalid or expired token" });
+      }
+      
+      // Log portal access
+      await storage.createAuditLog({
+        employeeId: employee.id,
+        action: "PORTAL_ACCESS",
+        resourceType: "PORTAL",
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      });
+      
+      res.json(employee);
+    } catch (error) {
+      console.error("Employee portal access error:", error);
+      res.status(500).json({ error: "Portal access failed" });
+    }
+  });
+
+  // =================================
+  // CERTIFICATIONS ROUTES
+  // =================================
+  
+  app.get("/api/certifications", async (req, res) => {
+    try {
+      const certifications = await storage.getAllCertifications();
+      res.json(certifications);
+    } catch (error) {
+      console.error("Get certifications error:", error);
+      res.status(500).json({ error: "Failed to get certifications" });
+    }
+  });
+
+  app.post("/api/certifications", async (req, res) => {
+    try {
+      const validatedData = insertCertificationSchema.parse(req.body);
+      const certification = await storage.createCertification(validatedData);
+      res.status(201).json(certification);
+    } catch (error) {
+      console.error("Create certification error:", error);
+      res.status(400).json({ error: "Invalid certification data" });
+    }
+  });
+
+  app.get("/api/certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const certification = await storage.getCertification(id);
+      if (!certification) {
+        return res.status(404).json({ error: "Certification not found" });
+      }
+      res.json(certification);
+    } catch (error) {
+      console.error("Get certification error:", error);
+      res.status(500).json({ error: "Failed to get certification" });
+    }
+  });
+
+  app.put("/api/certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertCertificationSchema.partial().parse(req.body);
+      const certification = await storage.updateCertification(id, validatedData);
+      res.json(certification);
+    } catch (error) {
+      console.error("Update certification error:", error);
+      res.status(400).json({ error: "Invalid certification data" });
+    }
+  });
+
+  app.delete("/api/certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteCertification(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete certification error:", error);
+      res.status(500).json({ error: "Failed to delete certification" });
+    }
+  });
+
+  // =================================
+  // EMPLOYEE CERTIFICATIONS ROUTES
+  // =================================
+  
+  app.get("/api/employee-certifications", async (req, res) => {
+    try {
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string) : undefined;
+      const certifications = await storage.getEmployeeCertifications(employeeId);
+      res.json(certifications);
+    } catch (error) {
+      console.error("Get employee certifications error:", error);
+      res.status(500).json({ error: "Failed to get employee certifications" });
+    }
+  });
+
+  app.post("/api/employee-certifications", async (req, res) => {
+    try {
+      const validatedData = insertEmployeeCertificationSchema.parse(req.body);
+      const empCertification = await storage.createEmployeeCertification(validatedData);
+      res.status(201).json(empCertification);
+    } catch (error) {
+      console.error("Create employee certification error:", error);
+      res.status(400).json({ error: "Invalid employee certification data" });
+    }
+  });
+
+  app.get("/api/employee-certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const empCertification = await storage.getEmployeeCertification(id);
+      if (!empCertification) {
+        return res.status(404).json({ error: "Employee certification not found" });
+      }
+      res.json(empCertification);
+    } catch (error) {
+      console.error("Get employee certification error:", error);
+      res.status(500).json({ error: "Failed to get employee certification" });
+    }
+  });
+
+  app.put("/api/employee-certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertEmployeeCertificationSchema.partial().parse(req.body);
+      const empCertification = await storage.updateEmployeeCertification(id, validatedData);
+      res.json(empCertification);
+    } catch (error) {
+      console.error("Update employee certification error:", error);
+      res.status(400).json({ error: "Invalid employee certification data" });
+    }
+  });
+
+  app.delete("/api/employee-certifications/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteEmployeeCertification(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete employee certification error:", error);
+      res.status(500).json({ error: "Failed to delete employee certification" });
+    }
+  });
+
+  // Get expiring certifications
+  app.get("/api/employee-certifications/expiring/:days", async (req, res) => {
+    try {
+      const days = parseInt(req.params.days);
+      const expiring = await storage.getExpiringCertifications(days);
+      res.json(expiring);
+    } catch (error) {
+      console.error("Get expiring certifications error:", error);
+      res.status(500).json({ error: "Failed to get expiring certifications" });  
+    }
+  });
+
+  // =================================
+  // EVALUATIONS ROUTES
+  // =================================
+  
+  app.get("/api/evaluations", async (req, res) => {
+    try {
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string) : undefined;
+      const evaluatorId = req.query.evaluatorId ? parseInt(req.query.evaluatorId as string) : undefined;
+      
+      let evaluations;
+      if (employeeId) {
+        evaluations = await storage.getEvaluationsByEmployee(employeeId);
+      } else if (evaluatorId) {
+        evaluations = await storage.getEvaluationsByEvaluator(evaluatorId);
+      } else {
+        evaluations = await storage.getAllEvaluations();
+      }
+      
+      res.json(evaluations);
+    } catch (error) {
+      console.error("Get evaluations error:", error);
+      res.status(500).json({ error: "Failed to get evaluations" });
+    }
+  });
+
+  app.post("/api/evaluations", async (req, res) => {
+    try {
+      const validatedData = insertEvaluationSchema.parse(req.body);
+      const evaluation = await storage.createEvaluation(validatedData);
+      res.status(201).json(evaluation);
+    } catch (error) {
+      console.error("Create evaluation error:", error);
+      res.status(400).json({ error: "Invalid evaluation data" });
+    }
+  });
+
+  app.get("/api/evaluations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const evaluation = await storage.getEvaluation(id);
+      if (!evaluation) {
+        return res.status(404).json({ error: "Evaluation not found" });
+      }
+      res.json(evaluation);
+    } catch (error) {
+      console.error("Get evaluation error:", error);
+      res.status(500).json({ error: "Failed to get evaluation" });
+    }
+  });
+
+  app.put("/api/evaluations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertEvaluationSchema.partial().parse(req.body);
+      const evaluation = await storage.updateEvaluation(id, validatedData);
+      res.json(evaluation);
+    } catch (error) {
+      console.error("Update evaluation error:", error);
+      res.status(400).json({ error: "Invalid evaluation data" });
+    }
+  });
+
+  app.delete("/api/evaluations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteEvaluation(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete evaluation error:", error);
+      res.status(500).json({ error: "Failed to delete evaluation" });
+    }
+  });
+
+  // Submit evaluation for review
+  app.post("/api/evaluations/:id/submit", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const evaluation = await storage.submitEvaluation(id);
+      res.json(evaluation);
+    } catch (error) {
+      console.error("Submit evaluation error:", error);
+      res.status(500).json({ error: "Failed to submit evaluation" });
+    }
+  });
+
+  // Review and complete evaluation
+  app.post("/api/evaluations/:id/review", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const reviewData = insertEvaluationSchema.partial().parse(req.body);
+      const evaluation = await storage.reviewEvaluation(id, reviewData);
+      res.json(evaluation);
+    } catch (error) {
+      console.error("Review evaluation error:", error);
+      res.status(400).json({ error: "Invalid review data" });
+    }
+  });
+
+  // =================================
+  // AUTHENTICATION ROUTES
+  // =================================
+  
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      // Note: In a real implementation, you'd validate credentials here
+      const { username, password, employeeId } = req.body;
+      
+      // For now, create a simple session (in real app, validate credentials first)
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+
+      const sessionData = {
+        userId: 1, // This would be from user lookup
+        sessionToken,
+        employeeId: employeeId || null,
+        userType: 'ADMIN' as const, // This would be determined by user role
+        expiresAt,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      };
+
+      const session = await storage.createUserSession(sessionData);
+      
+      // Log login action
+      if (employeeId) {
+        await storage.createAuditLog({
+          employeeId,
+          action: "LOGIN",
+          resourceType: "SESSION",
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent') || null,
+        });
+      }
+      
+      res.json({ 
+        sessionToken: session.sessionToken,
+        expiresAt: session.expiresAt,
+        userType: session.userType
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(401).json({ error: "Authentication failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+      if (sessionToken) {
+        const session = await storage.getUserSession(sessionToken);
+        if (session?.employeeId) {
+          await storage.createAuditLog({
+            employeeId: session.employeeId,
+            action: "LOGOUT",
+            resourceType: "SESSION",
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent') || null,
+          });
+        }
+        await storage.deleteUserSession(sessionToken);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/session", async (req, res) => {
+    try {
+      const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+      if (!sessionToken) {
+        return res.status(401).json({ error: "No session token" });
+      }
+      
+      const session = await storage.getUserSession(sessionToken);
+      if (!session) {
+        return res.status(401).json({ error: "Invalid or expired session" });
+      }
+      
+      res.json({
+        userId: session.userId,
+        employeeId: session.employeeId,
+        userType: session.userType,
+        expiresAt: session.expiresAt
+      });
+    } catch (error) {
+      console.error("Session check error:", error);
+      res.status(500).json({ error: "Session check failed" });
+    }
+  });
+
+  // =================================
+  // DOCUMENT MANAGEMENT ROUTES
+  // =================================
+  
+  app.get("/api/employee-documents", async (req, res) => {
+    try {
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string) : undefined;
+      const documentType = req.query.documentType as string;
+      
+      let documents;
+      if (documentType) {
+        documents = await storage.getDocumentsByType(documentType, employeeId);
+      } else {
+        documents = await storage.getAllDocuments(employeeId);
+      }
+      
+      res.json(documents);
+    } catch (error) {
+      console.error("Get documents error:", error);
+      res.status(500).json({ error: "Failed to get documents" });
+    }
+  });
+
+  app.post("/api/employee-documents", async (req, res) => {
+    try {
+      const validatedData = insertEmployeeDocumentSchema.parse(req.body);
+      const document = await storage.createDocument(validatedData);
+      
+      // Log document upload
+      await storage.createAuditLog({
+        employeeId: document.employeeId,
+        action: "DOCUMENT_UPLOAD",
+        resourceType: "DOCUMENT",
+        resourceId: document.id.toString(),
+        details: { documentType: document.documentType, fileName: document.fileName },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      });
+      
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Create document error:", error);
+      res.status(400).json({ error: "Invalid document data" });
+    }
+  });
+
+  app.get("/api/employee-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      
+      // Log document access
+      await storage.createAuditLog({
+        employeeId: document.employeeId,
+        action: "DOCUMENT_VIEW",
+        resourceType: "DOCUMENT",
+        resourceId: document.id.toString(),
+        details: { documentType: document.documentType, fileName: document.fileName },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      });
+      
+      res.json(document);
+    } catch (error) {
+      console.error("Get document error:", error);
+      res.status(500).json({ error: "Failed to get document" });
+    }
+  });
+
+  app.put("/api/employee-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertEmployeeDocumentSchema.partial().parse(req.body);
+      const document = await storage.updateDocument(id, validatedData);
+      res.json(document);
+    } catch (error) {
+      console.error("Update document error:", error);
+      res.status(400).json({ error: "Invalid document data" });
+    }
+  });
+
+  app.delete("/api/employee-documents/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const document = await storage.getDocument(id);
+      if (document) {
+        await storage.createAuditLog({
+          employeeId: document.employeeId,
+          action: "DOCUMENT_DELETE",
+          resourceType: "DOCUMENT",
+          resourceId: document.id.toString(),
+          details: { documentType: document.documentType, fileName: document.fileName },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent') || null,
+        });
+      }
+      
+      await storage.deleteDocument(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete document error:", error);
+      res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
+  // Get expiring documents
+  app.get("/api/employee-documents/expiring/:days", async (req, res) => {
+    try {
+      const days = parseInt(req.params.days);
+      const expiring = await storage.getExpiringDocuments(days);
+      res.json(expiring);
+    } catch (error) {
+      console.error("Get expiring documents error:", error);
+      res.status(500).json({ error: "Failed to get expiring documents" });  
+    }
+  });
+
+  // =================================
+  // AUDIT LOG ROUTES
+  // =================================
+  
+  app.get("/api/audit-logs", async (req, res) => {
+    try {
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string) : undefined;
+      const action = req.query.action as string;
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      
+      let logs;
+      if (startDate && endDate) {
+        logs = await storage.getAuditLogsByDateRange(startDate, endDate, employeeId);
+      } else {
+        logs = await storage.getAuditLogs(employeeId, action);
+      }
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Get audit logs error:", error);
+      res.status(500).json({ error: "Failed to get audit logs" });
+    }
+  });
+
+  // =================================
+  // FILE UPLOAD AND SERVING ROUTES
+  // =================================
+  
+  // Upload employee documents (with authentication)
+  app.post("/api/employee-documents/upload", authenticateToken, uploadMiddleware.array('documents', 5), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      const employeeId = parseInt(req.body.employeeId);
+      const documentType = req.body.documentType || 'OTHER';
+      const description = req.body.description || '';
+      const tags = req.body.tags ? JSON.parse(req.body.tags) : [];
+      const expiryDate = req.body.expiryDate ? new Date(req.body.expiryDate) : null;
+      const isConfidential = req.body.isConfidential === 'true';
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      if (!employeeId) {
+        return res.status(400).json({ error: "Employee ID is required" });
+      }
+
+      // Check authorization - only admins or the employee themselves can upload documents
+      if (!validateEmployeeDocumentAccess(req.user!.userType, req.user!.employeeId, employeeId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const uploadedDocuments = [];
+
+      for (const file of files) {
+        const fileInfo = getFileInfo(file);
+        const autoDetectedType = getDocumentType(file.originalname, file.mimetype);
+        
+        const documentData = {
+          employeeId,
+          documentType: documentType || autoDetectedType,
+          fileName: fileInfo.fileName,
+          originalFileName: fileInfo.originalFileName,
+          fileSize: fileInfo.fileSize,
+          mimeType: fileInfo.mimeType,
+          filePath: fileInfo.filePath,
+          uploadedBy: req.user!.employeeId || null,
+          description,
+          tags,
+          expiryDate,
+          isConfidential,
+        };
+
+        const document = await storage.createDocument(documentData);
+        
+        // Log document upload
+        await storage.createAuditLog({
+          employeeId,
+          action: "DOCUMENT_UPLOAD",
+          resourceType: "DOCUMENT",
+          resourceId: document.id.toString(),
+          details: { 
+            documentType: document.documentType, 
+            fileName: document.fileName,
+            fileSize: document.fileSize 
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent') || null,
+        });
+
+        uploadedDocuments.push({
+          ...document,
+          fileUrl: getFileUrl(req, document.fileName)
+        });
+      }
+
+      res.status(201).json(uploadedDocuments);
+    } catch (error) {
+      console.error("File upload error:", error);
+      res.status(500).json({ error: "File upload failed" });
+    }
+  });
+
+  // Serve employee documents (with access control)
+  app.get("/api/files/employee-documents/:fileName", authenticateToken, async (req, res) => {
+    try {
+      const fileName = req.params.fileName;
+      const filePath = path.join(process.cwd(), 'uploads', 'employee-documents', fileName);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Get document info from database to check access
+      const documents = await storage.getAllDocuments();
+      const document = documents.find(doc => doc.fileName === fileName);
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found in database" });
+      }
+
+      // Check access permissions
+      if (!validateEmployeeDocumentAccess(req.user!.userType, req.user!.employeeId, document.employeeId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Log document access
+      await storage.createAuditLog({
+        employeeId: document.employeeId,
+        action: "DOCUMENT_VIEW",
+        resourceType: "DOCUMENT",
+        resourceId: document.id.toString(),
+        details: { 
+          documentType: document.documentType, 
+          fileName: document.fileName 
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      });
+
+      // Set appropriate headers
+      res.setHeader('Content-Type', document.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${document.originalFileName}"`);
+      
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("File serving error:", error);
+      res.status(500).json({ error: "Failed to serve file" });
+    }
+  });
+
+  // Download employee document (forces download)
+  app.get("/api/employee-documents/:id/download", authenticateToken, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const document = await storage.getDocument(id);
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      // Check access permissions
+      if (!validateEmployeeDocumentAccess(req.user!.userType, req.user!.employeeId, document.employeeId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const filePath = document.filePath;
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found on disk" });
+      }
+
+      // Log download
+      await storage.createAuditLog({
+        employeeId: document.employeeId,
+        action: "DOCUMENT_DOWNLOAD",
+        resourceType: "DOCUMENT",
+        resourceId: document.id.toString(),
+        details: { 
+          documentType: document.documentType, 
+          fileName: document.fileName 
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent') || null,
+      });
+
+      // Force download
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${document.originalFileName}"`);
+      
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("File download error:", error);
+      res.status(500).json({ error: "Failed to download file" });
+    }
+  });
+
+  // Employee portal file upload (for portal users)
+  app.post("/api/employee-portal/:token/documents/upload", authenticatePortalToken, uploadMiddleware.array('documents', 3), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      const employeeId = req.user!.employeeId!;
+      const documentType = req.body.documentType || 'OTHER';
+      const description = req.body.description || '';
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const uploadedDocuments = [];
+
+      for (const file of files) {
+        const fileInfo = getFileInfo(file);
+        const autoDetectedType = getDocumentType(file.originalname, file.mimetype);
+        
+        const documentData = {
+          employeeId,
+          documentType: documentType || autoDetectedType,
+          fileName: fileInfo.fileName,
+          originalFileName: fileInfo.originalFileName,
+          fileSize: fileInfo.fileSize,
+          mimeType: fileInfo.mimeType,
+          filePath: fileInfo.filePath,
+          uploadedBy: null, // Portal uploads don't have uploadedBy user
+          description,
+          tags: [],
+          expiryDate: null,
+          isConfidential: false,
+        };
+
+        const document = await storage.createDocument(documentData);
+        
+        // Log portal document upload
+        await storage.createAuditLog({
+          employeeId,
+          action: "PORTAL_DOCUMENT_UPLOAD",
+          resourceType: "DOCUMENT",
+          resourceId: document.id.toString(),
+          details: { 
+            documentType: document.documentType, 
+            fileName: document.fileName,
+            fileSize: document.fileSize 
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent') || null,
+        });
+
+        uploadedDocuments.push({
+          ...document,
+          fileUrl: getFileUrl(req, document.fileName)
+        });
+      }
+
+      res.status(201).json(uploadedDocuments);
+    } catch (error) {
+      console.error("Portal file upload error:", error);
+      res.status(500).json({ error: "Portal file upload failed" });
     }
   });
 

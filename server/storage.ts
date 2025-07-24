@@ -6,6 +6,8 @@ import {
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations,
+  // New employee management tables
+  certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -21,6 +23,13 @@ import {
   type InventoryScan, type InsertInventoryScan,
   type PartsRequest, type InsertPartsRequest,
   type Employee, type InsertEmployee,
+  // New employee management types
+  type Certification, type InsertCertification,
+  type EmployeeCertification, type InsertEmployeeCertification,
+  type Evaluation, type InsertEvaluation,
+  type UserSession, type InsertUserSession,
+  type EmployeeDocument, type InsertEmployeeDocument,
+  type EmployeeAuditLog, type InsertEmployeeAuditLog,
   type QcDefinition, type InsertQcDefinition,
   type QcSubmission, type InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
@@ -52,7 +61,8 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt } from "drizzle-orm";
+import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -173,6 +183,57 @@ export interface IStorage {
   createEmployee(data: InsertEmployee): Promise<Employee>;
   updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
   deleteEmployee(id: number): Promise<void>;
+  getEmployeeByToken(token: string): Promise<Employee | undefined>;
+  generateEmployeePortalToken(employeeId: number): Promise<string>;
+  updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void>;
+
+  // Certifications CRUD
+  getAllCertifications(): Promise<Certification[]>;
+  getCertification(id: number): Promise<Certification | undefined>;
+  createCertification(data: InsertCertification): Promise<Certification>;
+  updateCertification(id: number, data: Partial<InsertCertification>): Promise<Certification>;
+  deleteCertification(id: number): Promise<void>;
+
+  // Employee Certifications CRUD
+  getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]>;
+  getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined>;
+  createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification>;
+  updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification>;
+  deleteEmployeeCertification(id: number): Promise<void>;
+  getExpiringCertifications(days: number): Promise<EmployeeCertification[]>;
+
+  // Evaluations CRUD
+  getAllEvaluations(): Promise<Evaluation[]>;
+  getEvaluation(id: number): Promise<Evaluation | undefined>;
+  getEvaluationsByEmployee(employeeId: number): Promise<Evaluation[]>;
+  getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]>;
+  createEvaluation(data: InsertEvaluation): Promise<Evaluation>;
+  updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation>;
+  deleteEvaluation(id: number): Promise<void>;
+  submitEvaluation(id: number): Promise<Evaluation>;
+  reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation>;
+
+  // User Sessions CRUD (Authentication)
+  createUserSession(data: InsertUserSession): Promise<UserSession>;
+  getUserSession(sessionToken: string): Promise<UserSession | undefined>;
+  updateUserSession(sessionToken: string, data: Partial<InsertUserSession>): Promise<UserSession>;
+  deleteUserSession(sessionToken: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
+  getUserActiveSessions(userId: number): Promise<UserSession[]>;
+
+  // Employee Documents CRUD
+  getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]>;
+  getDocument(id: number): Promise<EmployeeDocument | undefined>;
+  createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument>;
+  updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument>;
+  deleteDocument(id: number): Promise<void>;
+  getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]>;
+  getExpiringDocuments(days: number): Promise<EmployeeDocument[]>;
+
+  // Employee Audit Log
+  createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog>;
+  getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]>;
+  getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]>;
 
   // QC Definitions CRUD
   getQCDefinitions(line?: string, department?: string, final?: boolean): Promise<QcDefinition[]>;
@@ -1052,6 +1113,348 @@ export class DatabaseStorage implements IStorage {
     await db.update(employees)
       .set({ isActive: false })
       .where(eq(employees.id, id));
+  }
+
+  async getEmployeeByToken(token: string): Promise<Employee | undefined> {
+    const [employee] = await db.select().from(employees)
+      .where(and(
+        eq(employees.portalToken, token),
+        gt(employees.portalTokenExpiry, new Date()),
+        eq(employees.isActive, true)
+      ));
+    return employee || undefined;
+  }
+
+  async generateEmployeePortalToken(employeeId: number): Promise<string> {
+    const token = nanoid(32);
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30); // 30 days expiry
+    
+    await db.update(employees)
+      .set({ 
+        portalToken: token,
+        portalTokenExpiry: expiry,
+        updatedAt: new Date()
+      })
+      .where(eq(employees.id, employeeId));
+    
+    return token;
+  }
+
+  async updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void> {
+    await db.update(employees)
+      .set({ 
+        portalToken: token,
+        portalTokenExpiry: expiry,
+        updatedAt: new Date()
+      })
+      .where(eq(employees.id, employeeId));
+  }
+
+  // Certifications CRUD
+  async getAllCertifications(): Promise<Certification[]> {
+    return await db.select().from(certifications)
+      .where(eq(certifications.isActive, true))
+      .orderBy(certifications.name);
+  }
+
+  async getCertification(id: number): Promise<Certification | undefined> {
+    const [certification] = await db.select().from(certifications)
+      .where(eq(certifications.id, id));
+    return certification || undefined;
+  }
+
+  async createCertification(data: InsertCertification): Promise<Certification> {
+    const [certification] = await db.insert(certifications).values(data).returning();
+    return certification;
+  }
+
+  async updateCertification(id: number, data: Partial<InsertCertification>): Promise<Certification> {
+    const [certification] = await db.update(certifications)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(certifications.id, id))
+      .returning();
+    return certification;
+  }
+
+  async deleteCertification(id: number): Promise<void> {
+    await db.update(certifications)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(certifications.id, id));
+  }
+
+  // Employee Certifications CRUD
+  async getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]> {
+    let query = db.select().from(employeeCertifications)
+      .where(eq(employeeCertifications.isActive, true));
+    
+    if (employeeId) {
+      query = query.where(and(
+        eq(employeeCertifications.isActive, true),
+        eq(employeeCertifications.employeeId, employeeId)
+      ));
+    }
+    
+    return await query.orderBy(employeeCertifications.dateObtained);
+  }
+
+  async getEmployeeCertification(id: number): Promise<EmployeeCertification | undefined> {
+    const [empCert] = await db.select().from(employeeCertifications)
+      .where(eq(employeeCertifications.id, id));
+    return empCert || undefined;
+  }
+
+  async createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification> {
+    const [empCert] = await db.insert(employeeCertifications).values(data).returning();
+    return empCert;
+  }
+
+  async updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification> {
+    const [empCert] = await db.update(employeeCertifications)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(employeeCertifications.id, id))
+      .returning();
+    return empCert;
+  }
+
+  async deleteEmployeeCertification(id: number): Promise<void> {
+    await db.update(employeeCertifications)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(employeeCertifications.id, id));
+  }
+
+  async getExpiringCertifications(days: number): Promise<EmployeeCertification[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    
+    return await db.select().from(employeeCertifications)
+      .where(and(
+        eq(employeeCertifications.isActive, true),
+        lte(employeeCertifications.expiryDate, futureDate),
+        gte(employeeCertifications.expiryDate, new Date())
+      ))
+      .orderBy(employeeCertifications.expiryDate);
+  }
+
+  // Evaluations CRUD
+  async getAllEvaluations(): Promise<Evaluation[]> {
+    return await db.select().from(evaluations)
+      .orderBy(desc(evaluations.createdAt));
+  }
+
+  async getEvaluation(id: number): Promise<Evaluation | undefined> {
+    const [evaluation] = await db.select().from(evaluations)
+      .where(eq(evaluations.id, id));
+    return evaluation || undefined;
+  }
+
+  async getEvaluationsByEmployee(employeeId: number): Promise<Evaluation[]> {
+    return await db.select().from(evaluations)
+      .where(eq(evaluations.employeeId, employeeId))
+      .orderBy(desc(evaluations.evaluationPeriodEnd));
+  }
+
+  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]> {
+    return await db.select().from(evaluations)
+      .where(eq(evaluations.evaluatorId, evaluatorId))
+      .orderBy(desc(evaluations.createdAt));
+  }
+
+  async createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
+    const [evaluation] = await db.insert(evaluations).values(data).returning();
+    return evaluation;
+  }
+
+  async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
+    const [evaluation] = await db.update(evaluations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(evaluations.id, id))
+      .returning();
+    return evaluation;
+  }
+
+  async deleteEvaluation(id: number): Promise<void> {
+    await db.delete(evaluations).where(eq(evaluations.id, id));
+  }
+
+  async submitEvaluation(id: number): Promise<Evaluation> {
+    const [evaluation] = await db.update(evaluations)
+      .set({ 
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(evaluations.id, id))
+      .returning();
+    return evaluation;
+  }
+
+  async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
+    const [evaluation] = await db.update(evaluations)
+      .set({ 
+        ...reviewData,
+        status: 'REVIEWED',
+        reviewedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(evaluations.id, id))
+      .returning();
+    return evaluation;
+  }
+
+  // User Sessions CRUD (Authentication)
+  async createUserSession(data: InsertUserSession): Promise<UserSession> {
+    const [session] = await db.insert(userSessions).values(data).returning();
+    return session;
+  }
+
+  async getUserSession(sessionToken: string): Promise<UserSession | undefined> {
+    const [session] = await db.select().from(userSessions)
+      .where(and(
+        eq(userSessions.sessionToken, sessionToken),
+        eq(userSessions.isActive, true),
+        gt(userSessions.expiresAt, new Date())
+      ));
+    return session || undefined;
+  }
+
+  async updateUserSession(sessionToken: string, data: Partial<InsertUserSession>): Promise<UserSession> {
+    const [session] = await db.update(userSessions)
+      .set(data)
+      .where(eq(userSessions.sessionToken, sessionToken))
+      .returning();
+    return session;
+  }
+
+  async deleteUserSession(sessionToken: string): Promise<void> {
+    await db.update(userSessions)
+      .set({ isActive: false })
+      .where(eq(userSessions.sessionToken, sessionToken));
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    await db.update(userSessions)
+      .set({ isActive: false })
+      .where(lt(userSessions.expiresAt, new Date()));
+  }
+
+  async getUserActiveSessions(userId: number): Promise<UserSession[]> {
+    return await db.select().from(userSessions)
+      .where(and(
+        eq(userSessions.userId, userId),
+        eq(userSessions.isActive, true),
+        gt(userSessions.expiresAt, new Date())
+      ))
+      .orderBy(desc(userSessions.createdAt));
+  }
+
+  // Employee Documents CRUD
+  async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
+    let query = db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.isActive, true));
+    
+    if (employeeId) {
+      query = query.where(and(
+        eq(employeeDocuments.isActive, true),
+        eq(employeeDocuments.employeeId, employeeId)
+      ));
+    }
+    
+    return await query.orderBy(desc(employeeDocuments.createdAt));
+  }
+
+  async getDocument(id: number): Promise<EmployeeDocument | undefined> {
+    const [document] = await db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.id, id));
+    return document || undefined;
+  }
+
+  async createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
+    const [document] = await db.insert(employeeDocuments).values(data).returning();
+    return document;
+  }
+
+  async updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument> {
+    const [document] = await db.update(employeeDocuments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(employeeDocuments.id, id))
+      .returning();
+    return document;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    await db.update(employeeDocuments)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(employeeDocuments.id, id));
+  }
+
+  async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
+    let query = db.select().from(employeeDocuments)
+      .where(and(
+        eq(employeeDocuments.documentType, documentType),
+        eq(employeeDocuments.isActive, true)
+      ));
+    
+    if (employeeId) {
+      query = query.where(and(
+        eq(employeeDocuments.documentType, documentType),
+        eq(employeeDocuments.employeeId, employeeId),
+        eq(employeeDocuments.isActive, true)
+      ));
+    }
+    
+    return await query.orderBy(desc(employeeDocuments.createdAt));
+  }
+
+  async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    
+    return await db.select().from(employeeDocuments)
+      .where(and(
+        eq(employeeDocuments.isActive, true),
+        lte(employeeDocuments.expiryDate, futureDate),
+        gte(employeeDocuments.expiryDate, new Date())
+      ))
+      .orderBy(employeeDocuments.expiryDate);
+  }
+
+  // Employee Audit Log
+  async createAuditLog(data: InsertEmployeeAuditLog): Promise<EmployeeAuditLog> {
+    const [auditLog] = await db.insert(employeeAuditLog).values(data).returning();
+    return auditLog;
+  }
+
+  async getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]> {
+    let query = db.select().from(employeeAuditLog);
+    
+    const conditions = [];
+    if (employeeId) conditions.push(eq(employeeAuditLog.employeeId, employeeId));
+    if (action) conditions.push(eq(employeeAuditLog.action, action));
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    return await query.orderBy(desc(employeeAuditLog.timestamp));
+  }
+
+  async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
+    let query = db.select().from(employeeAuditLog)
+      .where(and(
+        gte(employeeAuditLog.timestamp, startDate),
+        lte(employeeAuditLog.timestamp, endDate)
+      ));
+    
+    if (employeeId) {
+      query = query.where(and(
+        gte(employeeAuditLog.timestamp, startDate),
+        lte(employeeAuditLog.timestamp, endDate),
+        eq(employeeAuditLog.employeeId, employeeId)
+      ));
+    }
+    
+    return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD

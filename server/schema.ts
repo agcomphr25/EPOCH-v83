@@ -271,14 +271,126 @@ export const partsRequests = pgTable("parts_requests", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Enhanced Employee Management System
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
   employeeCode: text("employee_code").unique(),
   name: text("name").notNull(),
+  email: text("email").unique(),
+  phone: text("phone"),
   role: text("role").notNull(),
   department: text("department"),
+  hireDate: date("hire_date"),
+  dateOfBirth: date("date_of_birth"),
+  address: text("address"),
+  emergencyContact: text("emergency_contact"),
+  emergencyPhone: text("emergency_phone"),
+  salary: real("salary"),
+  hourlyRate: real("hourly_rate"),
+  employmentType: text("employment_type").default("FULL_TIME"), // FULL_TIME, PART_TIME, CONTRACT
+  portalToken: text("portal_token").unique(), // UUID for employee portal access
+  portalTokenExpiry: timestamp("portal_token_expiry"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee Certifications Management
+export const certifications = pgTable("certifications", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  issuingOrganization: text("issuing_organization"),
+  validityPeriod: integer("validity_period"), // months
+  category: text("category"), // SAFETY, TECHNICAL, REGULATORY, etc.
+  requirements: text("requirements"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee-Certification Junction Table
+export const employeeCertifications = pgTable("employee_certifications", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  certificationId: integer("certification_id").references(() => certifications.id).notNull(),
+  dateObtained: date("date_obtained").notNull(),
+  expiryDate: date("expiry_date"),
+  certificateNumber: text("certificate_number"),
+  documentUrl: text("document_url"), // Link to certificate document
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employee Evaluations
+export const evaluations = pgTable("evaluations", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  evaluatorId: integer("evaluator_id").references(() => employees.id).notNull(),
+  evaluationType: text("evaluation_type").notNull(), // ANNUAL, QUARTERLY, PROBATIONARY, PROJECT_BASED
+  evaluationPeriodStart: date("evaluation_period_start").notNull(),
+  evaluationPeriodEnd: date("evaluation_period_end").notNull(),
+  overallRating: integer("overall_rating"), // 1-5 scale
+  performanceGoals: jsonb("performance_goals"), // JSON array of goals
+  achievements: text("achievements"),
+  areasForImprovement: text("areas_for_improvement"),
+  developmentPlan: text("development_plan"),
+  comments: text("comments"),
+  employeeComments: text("employee_comments"),
+  status: text("status").default("DRAFT"), // DRAFT, SUBMITTED, REVIEWED, COMPLETED
+  submittedAt: timestamp("submitted_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User Sessions for Authentication
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  sessionToken: text("session_token").notNull().unique(),
+  employeeId: integer("employee_id").references(() => employees.id),
+  userType: text("user_type").notNull(), // ADMIN, EMPLOYEE, MANAGER
+  expiresAt: timestamp("expires_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Document Storage for Employee Files
+export const employeeDocuments = pgTable("employee_documents", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  documentType: text("document_type").notNull(), // CERTIFICATE, HANDBOOK, CONTRACT, ID, etc.
+  fileName: text("file_name").notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  filePath: text("file_path").notNull(),
+  uploadedBy: integer("uploaded_by").references(() => users.id),
+  isConfidential: boolean("is_confidential").default(false),
+  tags: text("tags").array(), // Array of tags for organization
+  description: text("description"),
+  expiryDate: date("expiry_date"), // For documents that expire
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Audit Trail for Employee Actions
+export const employeeAuditLog = pgTable("employee_audit_log", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  action: text("action").notNull(), // LOGIN, LOGOUT, DOCUMENT_VIEW, DOCUMENT_UPLOAD, etc.
+  resourceType: text("resource_type"), // DOCUMENT, EVALUATION, CERTIFICATION
+  resourceId: text("resource_id"),
+  details: jsonb("details"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
 // QC and Preventive Maintenance Tables
@@ -566,11 +678,127 @@ export const insertInventoryScanSchema = createInsertSchema(inventoryScans).omit
 export const insertEmployeeSchema = createInsertSchema(employees).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+  portalToken: true,
+  portalTokenExpiry: true,
 }).extend({
   name: z.string().min(1, "Employee name is required"),
+  email: z.string().email("Valid email is required").optional().nullable(),
+  phone: z.string().optional().nullable(),
   role: z.string().min(1, "Employee role is required"),
   department: z.string().optional().nullable(),
+  hireDate: z.coerce.date().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  address: z.string().optional().nullable(),
+  emergencyContact: z.string().optional().nullable(),
+  emergencyPhone: z.string().optional().nullable(),
+  salary: z.number().min(0).optional().nullable(),
+  hourlyRate: z.number().min(0).optional().nullable(),
+  employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT']).default('FULL_TIME'),
   isActive: z.boolean().default(true),
+});
+
+// Certifications schemas
+export const insertCertificationSchema = createInsertSchema(certifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Certification name is required"),
+  description: z.string().optional().nullable(),
+  issuingOrganization: z.string().optional().nullable(),
+  validityPeriod: z.number().min(0).optional().nullable(),
+  category: z.string().optional().nullable(),
+  requirements: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertEmployeeCertificationSchema = createInsertSchema(employeeCertifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  certificationId: z.number().min(1, "Certification ID is required"),
+  dateObtained: z.coerce.date(),
+  expiryDate: z.coerce.date().optional().nullable(),
+  certificateNumber: z.string().optional().nullable(),
+  documentUrl: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Evaluations schemas
+export const insertEvaluationSchema = createInsertSchema(evaluations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  submittedAt: true,
+  reviewedAt: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  evaluatorId: z.number().min(1, "Evaluator ID is required"),
+  evaluationType: z.enum(['ANNUAL', 'QUARTERLY', 'PROBATIONARY', 'PROJECT_BASED']),
+  evaluationPeriodStart: z.coerce.date(),
+  evaluationPeriodEnd: z.coerce.date(),
+  overallRating: z.number().min(1).max(5).optional().nullable(),
+  performanceGoals: z.array(z.any()).optional().nullable(),
+  achievements: z.string().optional().nullable(),
+  areasForImprovement: z.string().optional().nullable(),
+  developmentPlan: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
+  employeeComments: z.string().optional().nullable(),
+  status: z.enum(['DRAFT', 'SUBMITTED', 'REVIEWED', 'COMPLETED']).default('DRAFT'),
+});
+
+// User session schema
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  userId: z.number().min(1, "User ID is required"),
+  sessionToken: z.string().min(1, "Session token is required"),
+  employeeId: z.number().optional().nullable(),
+  userType: z.enum(['ADMIN', 'EMPLOYEE', 'MANAGER']),
+  expiresAt: z.coerce.date(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Employee documents schema
+export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  documentType: z.string().min(1, "Document type is required"),
+  fileName: z.string().min(1, "File name is required"),
+  originalFileName: z.string().min(1, "Original file name is required"),
+  fileSize: z.number().min(0, "File size must be positive"),
+  mimeType: z.string().min(1, "MIME type is required"),
+  filePath: z.string().min(1, "File path is required"),
+  uploadedBy: z.number().optional().nullable(),
+  isConfidential: z.boolean().default(false),
+  tags: z.array(z.string()).optional().nullable(),
+  description: z.string().optional().nullable(),
+  expiryDate: z.coerce.date().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Audit log schema
+export const insertEmployeeAuditLogSchema = createInsertSchema(employeeAuditLog).omit({
+  id: true,
+  timestamp: true,
+}).extend({
+  employeeId: z.number().min(1, "Employee ID is required"),
+  action: z.string().min(1, "Action is required"),
+  resourceType: z.string().optional().nullable(),
+  resourceId: z.string().optional().nullable(),
+  details: z.record(z.any()).optional().nullable(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
 });
 
 export const insertQcDefinitionSchema = createInsertSchema(qcDefinitions).omit({
@@ -722,6 +950,20 @@ export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
+
+// New employee-related types
+export type InsertCertification = z.infer<typeof insertCertificationSchema>;
+export type Certification = typeof certifications.$inferSelect;
+export type InsertEmployeeCertification = z.infer<typeof insertEmployeeCertificationSchema>;
+export type EmployeeCertification = typeof employeeCertifications.$inferSelect;
+export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
+export type Evaluation = typeof evaluations.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+export type InsertEmployeeAuditLog = z.infer<typeof insertEmployeeAuditLogSchema>;
+export type EmployeeAuditLog = typeof employeeAuditLog.$inferSelect;
 export type InsertQcDefinition = z.infer<typeof insertQcDefinitionSchema>;
 export type QcDefinition = typeof qcDefinitions.$inferSelect;
 export type InsertQcSubmission = z.infer<typeof insertQcSubmissionSchema>;

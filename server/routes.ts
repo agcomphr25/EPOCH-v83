@@ -2961,8 +2961,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('🔍 Debug first production order - ALL PROPERTIES:', JSON.stringify(productionOrders[0], null, 2));
         
         pendingProductionOrders = productionOrders.filter(po => {
-          const status = (po as any).productionStatus || (po as any).production_status;
-          const orderId = (po as any).orderId || (po as any).order_id;
+          // Drizzle ORM returns camelCase field names
+          const status = (po as any).productionStatus;
+          const orderId = (po as any).orderId;
           const isPending = status === 'PENDING';
           const isPUR = orderId?.startsWith('PUR');
           
@@ -2975,6 +2976,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return isPending && isPUR;
         });
         console.log(`🏭 Found ${pendingProductionOrders.length} pending PUR production orders`);
+        
+        // Debug: Show first few production orders to see the filtering
+        console.log('🔍 First 3 production orders after filtering:', pendingProductionOrders.slice(0, 3).map(po => ({
+          id: (po as any).id,
+          orderId: (po as any).orderId,
+          status: (po as any).productionStatus,
+          itemName: (po as any).itemName
+        })));
         if (pendingProductionOrders.length > 0) {
           console.log('🏭 Sample production order:', {
             orderId: (pendingProductionOrders[0] as any).orderId,
@@ -3120,6 +3129,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         p1LayupOrders: p1LayupOrders?.length || 0,
         productionLayupOrders: productionLayupOrders?.length || 0
       });
+      
+      console.log('🔍 Sample production layup order structure:', productionLayupOrders[0] || 'None found');
+      
       const combinedOrders = [
         ...(layupOrders || []).map(order => ({ 
           ...order, 
@@ -3140,6 +3152,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
+      console.log(`🏭 Final combined orders count: ${combinedOrders.length}`);
+      console.log(`🏭 Production orders in final result: ${combinedOrders.filter(o => o.source === 'production_order').length}`);
+      
       res.json(combinedOrders);
     } catch (error) {
       console.error("Layup queue error:", error);

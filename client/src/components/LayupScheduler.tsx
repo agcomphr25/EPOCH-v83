@@ -219,121 +219,39 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           
           // For non-APR orders, show action length
           const getActionInletDisplayNonAPR = (orderFeatures: any) => {
-            if (!orderFeatures) {
-              console.log(`❌ No features for order ${order.orderId}`);
-              return null;
-            }
-            
-            console.log(`🔍 Checking action length for ${order.orderId}:`, {
-              action_length: orderFeatures.action_length,
-              action_inlet: orderFeatures.action_inlet,
-              action: orderFeatures.action,
-              modelId: modelId
-            });
+            if (!orderFeatures) return null;
             
             // Look for action_length field first
             let actionLengthValue = orderFeatures.action_length;
             
-            // If action_length is empty or 'none', try to derive from action_inlet or action field
-            if (!actionLengthValue || actionLengthValue === 'none') {
-              const actionField = orderFeatures.action_inlet || orderFeatures.action;
+            // If action_length is empty or 'none', try to derive from action_inlet
+            if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
+              const actionInlet = orderFeatures.action_inlet;
               
-              if (actionField) {
-                // Map common action inlets/actions to action lengths based on actual data patterns
-                const actionToLengthMap: {[key: string]: string} = {
-                  // Standard action inlet mappings
-                  'anti_ten_hunter_def': 'SA', // Short action
-                  'def_dev_hunter_rem': 'LA', // Long action based on database data
-                  'def_anti': 'SA', // Defiance Anti action - Short
-                  'remington_700': 'SA', // Most common Rem 700 is short action
-                  'remington_700_long': 'LA',
-                  'rem_700': 'SA',
-                  'rem_700_short': 'SA',
-                  'rem_700_long': 'LA', 
-                  'tikka_t3': 'SA',
-                  'tikka_short': 'SA',
-                  'tikka_long': 'LA',
-                  'savage_short': 'SA',
-                  'savage_long': 'LA',
-                  'savage_110': 'LA',
-                  'winchester_70': 'LA',
-                  'howa_1500': 'SA',
-                  // Bergara actions
-                  'bergara_b14': 'SA',
-                  'bergara_premier': 'SA',
-                  'bergara_hmr': 'SA',
-                  'carbon_six_medium': 'MA',
-                  // Lone Peak actions
-                  'lone_peak_fuzion': 'SA',
-                  'lone_peak_razorback': 'SA',
-                  'lone_peak_ascent': 'SA',
-                  // Defiance actions
-                  'defiance_deviant': 'SA',
-                  'defiance_rebel': 'SA',
-                  'def_deviant': 'SA',
-                  'def_deviant_hunter': 'SA',
-                  // Mack Bros actions
-                  'mack_bros_evo_ii': 'SA',
-                  'mack_bros_evo': 'SA',
-                  // APR actions
-                  'apr': 'SA',
-                  'american_rifle_company': 'SA',
-                  // Zermatt actions
-                  'zermatt_origin': 'SA',
-                  'zermatt_tl3': 'SA',
-                  // Terminus actions
-                  'terminus_apollo': 'SA',
-                  'terminus_kratos': 'SA',
-                  // Impact actions
-                  'impact_737r': 'SA',
-                  'impact_nbk': 'SA',
-                  // Bighorn actions
-                  'bighorn_origin': 'SA',
-                  'bighorn_tl3': 'SA',
-                  // Curtis actions
-                  'curtis_axiom': 'SA',
-                  // Default fallback for unknown actions (most are short action)
-                  'unknown': 'SA'
-                };
-                
-                actionLengthValue = actionToLengthMap[actionField];
-                console.log(`🎯 Mapped ${actionField} to ${actionLengthValue}`);
-              }
+              // Map common action inlets to action lengths based on actual data patterns
+              const inletToLengthMap: {[key: string]: string} = {
+                'anti_ten_hunter_def': 'SA', // Short action
+                'remington_700': 'SA', // Most common Rem 700 is short action
+                'remington_700_long': 'LA',
+                'rem_700': 'SA',
+                'rem_700_short': 'SA',
+                'rem_700_long': 'LA', 
+                'tikka_t3': 'SA',
+                'tikka_short': 'SA',
+                'tikka_long': 'LA',
+                'savage_short': 'SA',
+                'savage_long': 'LA',
+                'savage_110': 'LA',
+                'winchester_70': 'LA',
+                'howa_1500': 'SA',
+                'bergara_b14': 'SA',
+                'carbon_six_medium': 'MA'
+              };
+              
+              actionLengthValue = inletToLengthMap[actionInlet] || 'SA'; // Default to SA if not found
             }
             
-            // If still no action length found, apply comprehensive fallback logic
-            if (!actionLengthValue) {
-              // Skip Tikka orders completely - they shouldn't show action length
-              const isTikka = modelId && (modelId.toLowerCase().includes('tikka') || 
-                              (orderFeatures.action_inlet && orderFeatures.action_inlet.toLowerCase().includes('tikka')) ||
-                              (orderFeatures.action && orderFeatures.action.toLowerCase().includes('tikka')));
-              
-              if (isTikka) {
-                console.log(`⏭️ Skipping Tikka order ${order.orderId} - no action length needed`);
-                return null;
-              }
-              
-              // For all non-Tikka orders, provide a fallback action length
-              if (modelId) {
-                if (modelId.includes('alpine') || modelId.includes('hunter')) {
-                  actionLengthValue = 'SA';
-                  console.log(`🎯 Defaulting Alpine Hunter ${modelId} to SA (Short Action)`);
-                } else {
-                  // Default fallback for any other non-Tikka order
-                  actionLengthValue = 'SA'; // Most actions are short action
-                  console.log(`🔧 Fallback: Setting ${order.orderId} to SA (default for unknown action)`);
-                }
-              } else {
-                // Final fallback - every non-Tikka order gets SA
-                actionLengthValue = 'SA';
-                console.log(`🔧 Final fallback: Setting ${order.orderId} to SA`);
-              }
-            }
-            
-            if (!actionLengthValue || actionLengthValue === 'none') {
-              console.log(`❌ No action length found for ${order.orderId}`);
-              return null;
-            }
+            if (!actionLengthValue || actionLengthValue === 'none') return null;
             
             // Simple abbreviation mapping without depending on features API
             const displayMap: {[key: string]: string} = {
@@ -342,9 +260,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
             };
             
-            const result = displayMap[actionLengthValue] || actionLengthValue;
-            console.log(`✅ Final action length for ${order.orderId}: ${result}`);
-            return result;
+            return displayMap[actionLengthValue] || actionLengthValue;
           };
           
           const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);

@@ -813,6 +813,7 @@ export default function LayupScheduler() {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log("🚀 Auto-running initial schedule generation");
       console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
+      console.log("🏭 Production orders in data:", orders.filter(o => o.source === 'production_order').length);
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
   }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
@@ -1606,9 +1607,9 @@ export default function LayupScheduler() {
 
               {/* Rows for each mold - Only show molds with assigned orders */}
               {(() => {
-                // Get molds that have orders assigned to them
+                // Show ALL enabled molds temporarily to debug production order visibility
                 const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                const activeMolds = molds.filter(m => m.enabled); // Show all enabled molds for debugging
                 
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
@@ -1693,9 +1694,9 @@ export default function LayupScheduler() {
 
                     {/* Mold Rows for this week - Only show molds with assigned orders */}
                     {(() => {
-                      // Get molds that have orders assigned to them
+                      // Show ALL enabled molds temporarily to debug production order visibility
                       const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                      const activeMolds = molds.filter(m => m.enabled); // Show all enabled molds for debugging
                       
                       return activeMolds.map(mold => (
                       <React.Fragment key={`${weekIndex}-${mold.moldId}`}>

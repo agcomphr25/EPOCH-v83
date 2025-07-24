@@ -626,9 +626,10 @@ export default function LayupScheduler() {
         priorityScore: order.priorityScore || 5,
         customer: order.customer,
         product: order.product,
-        modelId: order.stockModelId || order.modelId,
-        stockModelId: order.stockModelId || order.modelId,
-        features: order.features || {} // Include features for LOP detection
+        modelId: (order as any).stockModelId || (order as any).modelId,
+        stockModelId: (order as any).stockModelId || (order as any).modelId,
+        features: (order as any).features || {}, // Include features for LOP detection
+        source: (order as any).source || 'main_orders'
       }));
 
       // Convert molds to scheduler format
@@ -864,7 +865,7 @@ export default function LayupScheduler() {
     
     if (draggedOrder) {
       // Check if this is a LOP adjustment order
-      const lopValue = draggedOrder.features?.length_of_pull;
+      const lopValue = (draggedOrder as any).features?.length_of_pull;
       const isLOPOrder = lopValue && 
         lopValue !== 'none' && 
         lopValue !== 'standard' && 
@@ -1020,10 +1021,10 @@ export default function LayupScheduler() {
 
   // Filter orders by type
   const p1Orders = orders.filter(order => 
-    order.source === 'main_orders' || order.source === 'p1_purchase_order' || !order.source
+    (order as any).source === 'main_orders' || (order as any).source === 'p1_purchase_order' || !(order as any).source
   );
   const p2Orders = orders.filter(order => 
-    order.source === 'p2_production_order'
+    (order as any).source === 'p2_production_order'
   );
 
   console.log('📊 Order Distribution:', {

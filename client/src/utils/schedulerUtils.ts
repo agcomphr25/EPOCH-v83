@@ -16,6 +16,7 @@ export interface LayupOrder {
   modelId?: string;
   stockModelId?: string;
   features?: any; // Include features for LOP detection
+  source?: string; // Track if from P1 Purchase Orders, P2, etc.
 }
 
 export interface MoldSettings {
@@ -119,6 +120,12 @@ export function generateLayupSchedule(
   employeeSettings: EmployeeSettings[]
 ): ScheduleResult[] {
   console.log(`📋 Total orders to schedule: ${orders.length}`);
+  console.log(`📋 Order breakdown by source:`, {
+    total: orders.length,
+    p1_purchase_orders: orders.filter(o => o.source === 'p1_purchase_order').length,
+    main_orders: orders.filter(o => o.source === 'main_orders' || !o.source).length,
+    p2_production_orders: orders.filter(o => o.source === 'p2_production_order').length
+  });
 
   // 1. Compute capacities with 10-hour work days
   const enabledMolds = moldSettings.filter(m => m.enabled);
@@ -185,7 +192,7 @@ export function generateLayupSchedule(
     return nextDay;
   };
 
-  // 4. Generate work days for even distribution
+  // 4. Generate work days for even distribution (Monday-Thursday only)
   const getWorkDaysInWeek = (startDate: Date) => {
     const workDays: Date[] = [];
     let current = new Date(startDate);
@@ -195,13 +202,32 @@ export function generateLayupSchedule(
       current = addDays(current, current.getDay() === 0 ? 1 : -1);
     }
     
-    // Add Monday through Thursday
+    // Add Monday through Thursday ONLY (4-day work week)
     for (let i = 0; i < 4; i++) {
       workDays.push(new Date(current));
       current = addDays(current, 1);
     }
     
     return workDays;
+  };
+
+  // Enhanced work week generation for multiple weeks
+  const generateWorkWeeks = (startDate: Date, weeksCount: number = 8) => {
+    const allWorkDays: Date[] = [];
+    let currentWeekStart = new Date(startDate);
+    
+    // Find Monday of current week
+    while (currentWeekStart.getDay() !== 1) {
+      currentWeekStart = addDays(currentWeekStart, -1);
+    }
+    
+    for (let week = 0; week < weeksCount; week++) {
+      const weekDays = getWorkDaysInWeek(addDays(currentWeekStart, week * 7));
+      allWorkDays.push(...weekDays);
+    }
+    
+    console.log(`📅 Generated ${allWorkDays.length} work days across ${weeksCount} weeks (Monday-Thursday only)`);
+    return allWorkDays;
   };
 
   // 5. Track usage per date and week distribution

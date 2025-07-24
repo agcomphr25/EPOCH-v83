@@ -650,9 +650,12 @@ export default function LayupScheduler() {
       }));
 
       console.log('🔧 Calling generateLayupSchedule with Monday-only LOP constraints...');
+      console.log(`📊 Input data: ${layupOrders.length} orders, ${moldSettings.length} molds, ${employeeSettings.length} employees`);
       
       // Use the proper scheduler utility with LOP Monday-only logic
       const scheduleResults = generateLayupSchedule(layupOrders, moldSettings, employeeSettings);
+      
+      console.log(`📊 Raw scheduler response:`, scheduleResults);
       
       console.log(`📅 Scheduler returned ${scheduleResults.length} assignments`);
 
@@ -716,9 +719,13 @@ export default function LayupScheduler() {
 
   // Auto-generate schedule when data is loaded
   useEffect(() => {
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log("🚀 Auto-running initial schedule generation with LOP Monday-only constraints");
+    console.log(`🔍 Schedule check: orders=${orders.length}, molds=${molds.length}, employees=${employees.length}, assignments=${Object.keys(orderAssignments).length}`);
+    
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+      console.log("🚀 Auto-running schedule generation with LOP Monday-only constraints");
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
+    } else {
+      console.log("⏳ Waiting for data to load before generating schedule");
     }
   }, [orders.length, molds.length, employees.length, generateAutoSchedule]);
 
@@ -1078,6 +1085,20 @@ export default function LayupScheduler() {
               <main className="flex-1 p-6 overflow-auto">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex space-x-2">
+                  {/* Temporary debug button to force schedule regeneration */}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      console.log('🔄 FORCE CLEAR AND REGENERATE SCHEDULE');
+                      setOrderAssignments({});
+                      setTimeout(() => generateAutoSchedule(), 100);
+                    }}
+                    className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Force Regenerate
+                  </Button>
 
                   <Dialog>
                     <DialogTrigger asChild>

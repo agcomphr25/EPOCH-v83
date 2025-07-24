@@ -265,7 +265,7 @@ export function generateLayupSchedule(
   });
   
   // Schedule all LOP orders for each week on that week's Monday
-  for (const [weekKey, weekOrders] of lopOrdersByWeek) {
+  for (const [weekKey, weekOrders] of Array.from(lopOrdersByWeek.entries())) {
     const targetMonday = new Date(weekKey);
     console.log(`📏 Scheduling ${weekOrders.length} LOP orders on Monday ${weekKey}`);
     

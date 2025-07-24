@@ -24,16 +24,34 @@ declare global {
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;
 
-    const sessionToken = token || cookieToken;
+    const token = bearerToken || cookieToken;
 
-    if (!sessionToken) {
+    if (!token) {
       return res.status(401).json({ error: 'No session token' });
     }
 
-    const user = await AuthService.getUserBySession(sessionToken);
+    let user = null;
+
+    // Try JWT authentication first (for Bearer tokens)
+    if (bearerToken) {
+      const jwtPayload = AuthService.verifyJWT(bearerToken);
+      if (jwtPayload) {
+        // Get user from database using JWT payload
+        const dbUser = await AuthService.getUserById(jwtPayload.userId);
+        if (dbUser && dbUser.isActive) {
+          user = dbUser;
+        }
+      }
+    }
+
+    // Fallback to session-based authentication (for cookies)
+    if (!user && cookieToken) {
+      user = await AuthService.getUserBySession(cookieToken);
+    }
+
     if (!user) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }

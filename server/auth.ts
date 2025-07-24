@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import jwt from 'jsonwebtoken';
 import { db } from './db';
 import { users, userSessions, employeeAuditLog } from './schema';
 import { eq, and, lt, gt } from 'drizzle-orm';
@@ -8,6 +9,7 @@ const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 export interface AuthUser {
   id: number;
@@ -37,6 +39,29 @@ export class AuthService {
 
   static generateSessionToken(): string {
     return randomBytes(32).toString('hex');
+  }
+
+  static generateJWT(userId: number, role: string, employeeId: number | null = null): string {
+    const payload = { 
+      userId, 
+      role, 
+      employeeId,
+      type: 'access'
+    };
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
+  }
+
+  static verifyJWT(token: string): { userId: number; role: string; employeeId: number | null } | null {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      return {
+        userId: decoded.userId,
+        role: decoded.role,
+        employeeId: decoded.employeeId || null
+      };
+    } catch (error) {
+      return null;
+    }
   }
 
   static async createSession(userId: number, userType: string, employeeId: number | null, ipAddress: string | null, userAgent: string | null): Promise<string> {
@@ -176,6 +201,9 @@ export class AuthService {
       });
     }
 
+    // Generate JWT token
+    const jwtToken = this.generateJWT(user.id, user.role, user.employeeId);
+
     return {
       user: {
         id: user.id,
@@ -186,6 +214,7 @@ export class AuthService {
         isActive: user.isActive,
       },
       sessionToken,
+      token: jwtToken // Add JWT token to response
     };
   }
 
@@ -219,16 +248,11 @@ export class AuthService {
     return true;
   }
 
-  static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {
-    const session = await this.validateSession(sessionToken);
-    if (!session) {
-      return null;
-    }
-
+  static async getUserById(userId: number): Promise<AuthUser | null> {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, session.userId));
+      .where(eq(users.id, userId));
 
     if (!user || !user.isActive) {
       return null;
@@ -242,6 +266,15 @@ export class AuthService {
       canOverridePrices: user.canOverridePrices,
       isActive: user.isActive,
     };
+  }
+
+  static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {
+    const session = await this.validateSession(sessionToken);
+    if (!session) {
+      return null;
+    }
+
+    return this.getUserById(session.userId);
   }
 
   static async validatePortalToken(portalToken: string): Promise<{ employeeId: number; isValid: boolean }> {

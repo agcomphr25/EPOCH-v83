@@ -812,9 +812,9 @@ export default function LayupScheduler() {
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
     if (viewType === 'week') {
-      // Show work week only: Monday through Friday
+      // Show work week only: Monday through Thursday (4-day work week)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      return eachDayOfInterval({ start, end: addDays(start, 4) }); // Only 5 days (Mon-Fri)
+      return eachDayOfInterval({ start, end: addDays(start, 3) }); // Only 4 days (Mon-Thu)
     }
     // month - organize by weeks
     const start = startOfMonth(currentDate);
@@ -830,9 +830,9 @@ export default function LayupScheduler() {
     let currentWeek: Date[] = [];
     
     dates.forEach((date, index) => {
-      // Only include work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
+      // Only include work days (Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4)
       const dayOfWeek = date.getDay();
-      const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+      const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 4;
       
       if (isWorkDay) {
         currentWeek.push(date);

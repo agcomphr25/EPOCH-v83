@@ -2961,15 +2961,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('🔍 Debug first production order - ALL PROPERTIES:', JSON.stringify(productionOrders[0], null, 2));
         
         pendingProductionOrders = productionOrders.filter(po => {
-          const status = (po as any).productionStatus;
-          const orderId = (po as any).orderId;
+          const status = (po as any).productionStatus || (po as any).production_status;
+          const orderId = (po as any).orderId || (po as any).order_id;
           const isPending = status === 'PENDING';
           const isPUR = orderId?.startsWith('PUR');
           
           if (isPending && isPUR) {
             console.log(`✅ Production order ${orderId} matches criteria: status=${status}, starts with PUR=${isPUR}`);
-          } else {
-            console.log(`❌ Production order ${orderId} filtered out: status=${status}, starts with PUR=${isPUR}`);
+          } else if (orderId?.startsWith('PUR')) {
+            console.log(`⚠️ Production order ${orderId} has wrong status: ${status} (expected PENDING)`);
           }
           
           return isPending && isPUR;

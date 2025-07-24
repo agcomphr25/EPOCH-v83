@@ -509,9 +509,7 @@ export default function OrderEntry() {
     }
   };
 
-  // Use unified pricing calculation
-  const subtotalPrice = calculateTotalPrice();
-  const totalPrice = subtotalPrice + shipping;
+  // Use unified pricing calculation (calculated above with discount already included)
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) {
@@ -1725,7 +1723,7 @@ export default function OrderEntry() {
                 
                 {/* Balance Due/Credit - Only show if payment exists */}
                 {isPaid && paymentAmount && paymentAmount.trim() !== '' && (() => {
-                  const remainingBalance = (totalPrice + 36.95) - parseFloat(paymentAmount || '0');
+                  const remainingBalance = (totalPrice + shipping) - parseFloat(paymentAmount || '0');
                   const isCredit = remainingBalance < 0;
                   const balanceAmount = Math.abs(remainingBalance);
                   

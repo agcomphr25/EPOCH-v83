@@ -371,36 +371,26 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label>Method of Payment</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="electronic" id="payment-electronic" 
-                    checked={formData.paymentMethod === 'electronic'}
-                    onChange={() => handleInputChange('paymentMethod', 'electronic')}
-                  />
-                  <Label htmlFor="payment-electronic">Electronic Funds</Label>
+              <RadioGroup value={formData.paymentMethod} onValueChange={(value) => handleInputChange('paymentMethod', value)}>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="electronic" id="payment-electronic" />
+                    <Label htmlFor="payment-electronic">Electronic Funds</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="check" id="payment-check" />
+                    <Label htmlFor="payment-check">Check</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="credit" id="payment-credit" />
+                    <Label htmlFor="payment-credit">Credit Card</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="other" id="payment-other" />
+                    <Label htmlFor="payment-other">Other</Label>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="check" id="payment-check"
-                    checked={formData.paymentMethod === 'check'}
-                    onChange={() => handleInputChange('paymentMethod', 'check')}
-                  />
-                  <Label htmlFor="payment-check">Check</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="credit" id="payment-credit"
-                    checked={formData.paymentMethod === 'credit'}
-                    onChange={() => handleInputChange('paymentMethod', 'credit')}
-                  />
-                  <Label htmlFor="payment-credit">Credit Card</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="other" id="payment-other"
-                    checked={formData.paymentMethod === 'other'}
-                    onChange={() => handleInputChange('paymentMethod', 'other')}
-                  />
-                  <Label htmlFor="payment-other">Other</Label>
-                </div>
-              </div>
+              </RadioGroup>
               {formData.paymentMethod === 'other' && (
                 <Input 
                   placeholder="Specify other payment method"

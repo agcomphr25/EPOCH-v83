@@ -15,6 +15,17 @@ import {
 
 const router = Router();
 
+// Get all orders for All Orders List (root endpoint)
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllOrders();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving orders:', error);
+    res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });
+  }
+});
+
 // Order Draft Management
 router.get('/drafts', async (req: Request, res: Response) => {
   try {
@@ -214,6 +225,17 @@ router.post('/production-orders/generate/:purchaseOrderId', async (req: Request,
   } catch (error) {
     console.error('Generate production orders error:', error);
     res.status(500).json({ error: "Failed to generate production orders" });
+  }
+});
+
+// Get all orders for All Orders List
+router.get('/all', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllOrders();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving orders:', error);
+    res.status(500).json({ error: "Failed to retrieve orders", details: (error as any).message });
   }
 });
 

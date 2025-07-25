@@ -11,6 +11,7 @@ interface Order {
   modelId: string;
   currentDepartment: string;
   status: string;
+  fbOrderNumber?: string;
 }
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,7 @@ import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
+import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
@@ -188,7 +190,9 @@ export default function AllOrdersList() {
                 
                 return (
                   <TableRow key={order.orderId}>
-                    <TableCell className="font-medium">{order.orderId}</TableCell>
+                    <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
+                      {getDisplayOrderId(order)}
+                    </TableCell>
                     <TableCell>
                       {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
                     </TableCell>

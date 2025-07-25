@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = [
   { name: 'Layup', color: 'bg-[#7BAFD4]' },
@@ -23,6 +24,7 @@ interface OrderDetail {
   dueDate: Date;
   daysInDept: number;
   scheduleStatus: ScheduleStatus;
+  fbOrderNumber?: string;
 }
 
 const statusColors: Record<ScheduleStatus, string> = {
@@ -51,7 +53,7 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
-      title={`${order.orderId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - ${order.scheduleStatus} (${order.daysInDept} days)`}
     />
   );
 };
@@ -74,9 +76,9 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
-      title={`${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - ${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
     >
-      {order.orderId}
+      {getDisplayOrderId(order)}
     </div>
   );
 };

@@ -413,7 +413,7 @@ export interface IStorage {
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
-  getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>>>;
+  getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; fbOrderNumber: string | null; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>>;
   progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft>;
   scrapOrder(orderId: string, scrapData: { reason: string; disposition: string; authorization: string; scrapDate: Date }): Promise<OrderDraft>;
   createReplacementOrder(scrapOrderId: string): Promise<OrderDraft>;
@@ -2565,6 +2565,7 @@ export class DatabaseStorage implements IStorage {
       const orders = await db
         .select({
           orderId: orderDrafts.orderId,
+          fbOrderNumber: orderDrafts.fbOrderNumber,
           modelId: orderDrafts.modelId,
           currentDepartment: orderDrafts.currentDepartment,
           dueDate: orderDrafts.dueDate,
@@ -2603,6 +2604,7 @@ export class DatabaseStorage implements IStorage {
 
         pipelineDetails[order.currentDepartment].push({
           orderId: order.orderId,
+          fbOrderNumber: order.fbOrderNumber,
           modelId: order.modelId || '',
           dueDate: order.dueDate,
           daysInDept,

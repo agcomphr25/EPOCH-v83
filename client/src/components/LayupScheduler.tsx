@@ -40,6 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { getDisplayOrderId } from '@/lib/orderUtils';
 
 // Draggable Order Item Component with responsive sizing
 function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[] }) {
@@ -141,7 +142,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
     >
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
-          {order.orderId || 'No ID'}
+          {getDisplayOrderId(order) || 'No ID'}
           {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
           {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
         </div>

@@ -55,6 +55,7 @@ import EmployeePortal from "./pages/EmployeePortal";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from "./pages/P2Forms";
+import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -98,6 +99,7 @@ function App() {
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
                   <Route path="/p2-forms" component={P2Forms} />
+                  <Route path="/purchase-review-checklist" component={PurchaseReviewChecklist} />
 
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
                   <Route path="/forms/render/:formId" component={FormRendererPage} />

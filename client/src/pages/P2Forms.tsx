@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar } from "lucide-react";
+import { Link } from "wouter";
 
 export default function P2Forms() {
   return (
@@ -30,6 +31,12 @@ export default function P2Forms() {
                 Generate and manage production order documentation
               </p>
               <div className="space-y-2">
+                <Link href="/purchase-review-checklist">
+                  <Button className="w-full justify-start" variant="outline">
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Purchase Review Checklist
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="h-4 w-4 mr-2" />
                   Production Work Orders

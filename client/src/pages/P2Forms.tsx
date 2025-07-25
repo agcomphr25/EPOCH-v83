@@ -43,6 +43,12 @@ export default function P2Forms() {
                     View Submissions
                   </Button>
                 </Link>
+                <Link href="/rfq-risk-assessment">
+                  <Button className="w-full justify-start" variant="outline">
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    RFQ Risk Assessment
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="h-4 w-4 mr-2" />
                   Production Work Orders

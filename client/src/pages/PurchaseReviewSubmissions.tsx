@@ -286,7 +286,7 @@ export default function PurchaseReviewSubmissions() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        <span>Submission #{submission.id}</span>
+                        <span>PO #{submission.formData?.poNumber || `SUB-${submission.id}`}</span>
                         <Badge className={`${getStatusColor(submission.status)} text-white`}>
                           {submission.status}
                         </Badge>
@@ -344,7 +344,7 @@ export default function PurchaseReviewSubmissions() {
                             </DialogTrigger>
                         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
-                            <DialogTitle>Purchase Review Checklist - Submission #{selectedSubmission?.id}</DialogTitle>
+                            <DialogTitle>Purchase Review Checklist - PO #{selectedSubmission?.formData?.poNumber || `SUB-${selectedSubmission?.id}`}</DialogTitle>
                           </DialogHeader>
                           {selectedSubmission && (
                             <div className="space-y-4">
@@ -474,14 +474,8 @@ export default function PurchaseReviewSubmissions() {
                     </div>
                   ) : (
                     <div className="text-sm text-gray-600">
-                      {submission.formData?.customerName && (
-                        <p><strong>Customer:</strong> {submission.formData.customerName}</p>
-                      )}
-                      {submission.formData?.projectName && (
-                        <p><strong>Project:</strong> {submission.formData.projectName}</p>
-                      )}
-                      {submission.formData?.quantity && (
-                        <p><strong>Quantity:</strong> {submission.formData.quantity}</p>
+                      {submission.formData?.quantityRequested && (
+                        <p><strong>Quantity:</strong> {submission.formData.quantityRequested}</p>
                       )}
                       {submission.formData?.unitPrice && (
                         <p><strong>Unit Price:</strong> ${submission.formData.unitPrice}</p>

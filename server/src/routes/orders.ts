@@ -26,6 +26,41 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get pipeline counts for all departments (must be before :orderId route)
+router.get('/pipeline-counts', async (req: Request, res: Response) => {
+  try {
+    const counts = await storage.getPipelineCounts();
+    res.json(counts);
+  } catch (error) {
+    console.error("Pipeline counts fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch pipeline counts" });
+  }
+});
+
+// Get detailed pipeline data with schedule status (must be before :orderId route)
+router.get('/pipeline-details', async (req: Request, res: Response) => {
+  try {
+    const details = await storage.getPipelineDetails();
+    res.json(details);
+  } catch (error) {
+    console.error("Pipeline details fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch pipeline details" });
+  }
+});
+
+// Outstanding Orders route (must be before :orderId route)
+router.get('/outstanding', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getOutstandingOrders();
+    res.json(orders);
+  } catch (error) {
+    console.error("Get outstanding orders error:", error);
+    res.status(500).json({ error: "Failed to get outstanding orders" });
+  }
+});
+
+
+
 // Order Draft Management
 router.get('/drafts', async (req: Request, res: Response) => {
   try {
@@ -90,14 +125,17 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Order Management
-router.get('/', async (req: Request, res: Response) => {
+// Order Management (duplicate removed)
+// Specific routes must come before parameterized routes
+
+// Get all orders endpoint (backward compatibility)
+router.get('/all', async (req: Request, res: Response) => {
   try {
     const orders = await storage.getAllOrders();
     res.json(orders);
   } catch (error) {
-    console.error('Get orders error:', error);
-    res.status(500).json({ error: "Failed to fetch orders" });
+    console.error('Error retrieving all orders:', error);
+    res.status(500).json({ error: "Failed to fetch order", details: (error as any).message });
   }
 });
 
@@ -228,15 +266,6 @@ router.post('/production-orders/generate/:purchaseOrderId', async (req: Request,
   }
 });
 
-// Get all orders for All Orders List
-router.get('/all', async (req: Request, res: Response) => {
-  try {
-    const orders = await storage.getAllOrders();
-    res.json(orders);
-  } catch (error) {
-    console.error('Error retrieving orders:', error);
-    res.status(500).json({ error: "Failed to retrieve orders", details: (error as any).message });
-  }
-});
+
 
 export default router;

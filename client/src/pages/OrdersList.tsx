@@ -13,6 +13,7 @@ import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderPricingTooltip from '@/components/OrderPricingTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { getDisplayOrderId } from '@/lib/orderUtils';
 import toast from 'react-hot-toast';
 
 interface Order {
@@ -438,10 +439,10 @@ export default function OrdersList() {
                     key={order.id}
                     className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <OrderPricingTooltip orderId={order.orderId}>
                         <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                          {order.orderId}
+                          {getDisplayOrderId(order)}
                         </span>
                       </OrderPricingTooltip>
                     </TableCell>

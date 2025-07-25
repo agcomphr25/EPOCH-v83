@@ -155,6 +155,12 @@ export default function Navigation() {
       label: 'AG Bottom Metal Report',
       icon: FileText,
       description: 'Orders with AG bottom metal specifications'
+    },
+    {
+      path: '/p2-forms',
+      label: 'P2 Forms',
+      icon: ClipboardList,
+      description: 'P2 specialized forms and documentation'
     }
   ];
 

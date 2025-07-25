@@ -524,6 +524,9 @@ export default function LayupScheduler() {
   const queryClient = useQueryClient();
   
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
+  
+  // Debug molds data
+  console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
   

@@ -1,0 +1,179 @@
+import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
+import {
+  insertCustomerSchema,
+  insertCustomerAddressSchema,
+  insertCommunicationLogSchema,
+  insertP2CustomerSchema
+} from '@shared/schema';
+
+const router = Router();
+
+// Regular Customers Management
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const customers = await storage.getAllCustomers();
+    res.json(customers);
+  } catch (error) {
+    console.error('Get customers error:', error);
+    res.status(500).json({ error: "Failed to fetch customers" });
+  }
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const customer = await storage.getCustomer(customerId);
+    
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+    
+    res.json(customer);
+  } catch (error) {
+    console.error('Get customer error:', error);
+    res.status(500).json({ error: "Failed to fetch customer" });
+  }
+});
+
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerData = insertCustomerSchema.parse(req.body);
+    const newCustomer = await storage.createCustomer(customerData);
+    res.status(201).json(newCustomer);
+  } catch (error) {
+    console.error('Create customer error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create customer" });
+  }
+});
+
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCustomer = await storage.updateCustomer(customerId, updates);
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Update customer error:', error);
+    res.status(500).json({ error: "Failed to update customer" });
+  }
+});
+
+router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    await storage.deleteCustomer(customerId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete customer error:', error);
+    res.status(500).json({ error: "Failed to delete customer" });
+  }
+});
+
+// Customer Addresses
+router.get('/:id/addresses', async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const addresses = await storage.getCustomerAddresses(customerId);
+    res.json(addresses);
+  } catch (error) {
+    console.error('Get customer addresses error:', error);
+    res.status(500).json({ error: "Failed to fetch customer addresses" });
+  }
+});
+
+router.post('/:id/addresses', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const addressData = insertCustomerAddressSchema.parse({
+      ...req.body,
+      customerId
+    });
+    const newAddress = await storage.createCustomerAddress(addressData);
+    res.status(201).json(newAddress);
+  } catch (error) {
+    console.error('Create customer address error:', error);
+    res.status(500).json({ error: "Failed to create customer address" });
+  }
+});
+
+// Communication Logs
+router.get('/:id/communications', async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const communications = await storage.getCommunicationLogs(customerId);
+    res.json(communications);
+  } catch (error) {
+    console.error('Get communication logs error:', error);
+    res.status(500).json({ error: "Failed to fetch communication logs" });
+  }
+});
+
+router.post('/:id/communications', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const communicationData = insertCommunicationLogSchema.parse({
+      ...req.body,
+      customerId
+    });
+    const newCommunication = await storage.createCommunicationLog(communicationData);
+    res.status(201).json(newCommunication);
+  } catch (error) {
+    console.error('Create communication log error:', error);
+    res.status(500).json({ error: "Failed to create communication log" });
+  }
+});
+
+// P2 Customers Management
+router.get('/p2', async (req: Request, res: Response) => {
+  try {
+    const p2Customers = await storage.getAllP2Customers();
+    res.json(p2Customers);
+  } catch (error) {
+    console.error('Get P2 customers error:', error);
+    res.status(500).json({ error: "Failed to fetch P2 customers" });
+  }
+});
+
+router.post('/p2', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerData = insertP2CustomerSchema.parse(req.body);
+    const newCustomer = await storage.createP2Customer(customerData);
+    res.status(201).json(newCustomer);
+  } catch (error) {
+    console.error('Create P2 customer error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create P2 customer" });
+  }
+});
+
+router.put('/p2/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCustomer = await storage.updateP2Customer(customerId, updates);
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Update P2 customer error:', error);
+    res.status(500).json({ error: "Failed to update P2 customer" });
+  }
+});
+
+router.delete('/p2/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    await storage.deleteP2Customer(customerId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete P2 customer error:', error);
+    res.status(500).json({ error: "Failed to delete P2 customer" });
+  }
+});
+
+export default router;

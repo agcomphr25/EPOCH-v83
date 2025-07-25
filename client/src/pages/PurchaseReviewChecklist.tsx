@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Save, Printer, Download, FileText } from "lucide-react";
+import SignatureCanvas from 'react-signature-canvas';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {
@@ -47,13 +48,17 @@ const useSmartyStreetsAutocomplete = (query: string) => {
 };
 
 export default function PurchaseReviewChecklist() {
-  // Fetch P2 customers for dropdown
+  // Signature canvas reference
+  const signatureCanvasRef = useRef<SignatureCanvas>(null);
+
+  // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
     queryKey: ['/api/p2/customers'],
     select: (data: any[]) => data.map(customer => ({
       id: customer.id,
       customerId: customer.customerId,
-      customerName: customer.customerName
+      customerName: customer.customerName,
+      shipToAddress: customer.shipToAddress
     }))
   });
 
@@ -164,7 +169,10 @@ export default function PurchaseReviewChecklist() {
     
     setFormData(prev => ({
       ...prev,
-      amount: calculatedAmount.toFixed(2)
+      amount: calculatedAmount.toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      })
     }));
   }, [formData.quantityRequested, formData.unitPrice, formData.toolingPrice, formData.additionalCost]);
 
@@ -213,6 +221,32 @@ export default function PurchaseReviewChecklist() {
         ? [...prev.certifications, certification]
         : prev.certifications.filter(c => c !== certification)
     }));
+  };
+
+  // Handle customer selection to populate ship-to information
+  const handleCustomerChange = (customerId: string) => {
+    const selectedCustomer = p2Customers.find(c => c.customerId === customerId);
+    setFormData(prev => ({
+      ...prev,
+      customerId,
+      customerName: selectedCustomer?.customerName || '',
+      shipToInformation: selectedCustomer?.shipToAddress || ''
+    }));
+  };
+
+  // Clear signature
+  const clearSignature = () => {
+    if (signatureCanvasRef.current) {
+      signatureCanvasRef.current.clear();
+    }
+  };
+
+  // Save signature as base64
+  const saveSignature = () => {
+    if (signatureCanvasRef.current) {
+      const signatureData = signatureCanvasRef.current.toDataURL();
+      setFormData(prev => ({ ...prev, signature: signatureData }));
+    }
   };
 
   const handleSave = async () => {
@@ -289,7 +323,7 @@ export default function PurchaseReviewChecklist() {
           <CardContent>
             <div className="space-y-2">
               <Label htmlFor="customerId">Select Customer</Label>
-              <Select value={formData.customerId} onValueChange={(value) => handleInputChange('customerId', value)}>
+              <Select value={formData.customerId} onValueChange={handleCustomerChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a customer" />
                 </SelectTrigger>
@@ -536,8 +570,7 @@ export default function PurchaseReviewChecklist() {
                   id="earlyPayDiscount"
                   value={formData.earlyPayDiscount}
                   onChange={(e) => handleInputChange('earlyPayDiscount', e.target.value)}
-                  disabled
-                  className="bg-gray-100"
+                  placeholder="Enter early pay discount terms or N/A"
                 />
               </div>
             </div>
@@ -1293,13 +1326,27 @@ export default function PurchaseReviewChecklist() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="signature">Signature</Label>
-                <Input 
-                  id="signature"
-                  value={formData.signature}
-                  onChange={(e) => handleInputChange('signature', e.target.value)}
-                  placeholder="Digital signature or name"
-                />
+                <Label>Digital Signature</Label>
+                <div className="border border-gray-300 rounded-md p-2">
+                  <SignatureCanvas
+                    ref={signatureCanvasRef}
+                    penColor="black"
+                    canvasProps={{
+                      width: 300,
+                      height: 150,
+                      className: 'signature-canvas border rounded'
+                    }}
+                    onEnd={saveSignature}
+                  />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" onClick={clearSignature}>
+                    Clear
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={saveSignature}>
+                    Save Signature
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="date">Date</Label>

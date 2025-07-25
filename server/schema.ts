@@ -1363,6 +1363,7 @@ export const p2Customers = pgTable('p2_customers', {
   contactPhone: text('contact_phone'),
   billingAddress: text('billing_address'),
   shippingAddress: text('shipping_address'),
+  shipToAddress: text('ship_to_address'), // New field for ship-to information
   paymentTerms: text('payment_terms').default('NET_30'),
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
   notes: text('notes'),
@@ -1508,6 +1509,7 @@ export const insertP2CustomerSchema = createInsertSchema(p2Customers).omit({
   contactPhone: z.string().optional().nullable(),
   billingAddress: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  shipToAddress: z.string().optional().nullable(),
   paymentTerms: z.string().default('NET_30'),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
   notes: z.string().optional().nullable(),

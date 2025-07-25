@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Download, Trash2, Calendar, User, FileText } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Eye, Download, Trash2, Calendar, User, FileText, Plus, Edit, Save, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Link } from 'wouter';
 
 interface PurchaseReviewSubmission {
   id: number;
@@ -19,6 +24,10 @@ export default function PurchaseReviewSubmissions() {
   const [submissions, setSubmissions] = useState<PurchaseReviewSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubmission, setSelectedSubmission] = useState<PurchaseReviewSubmission | null>(null);
+  const [editingSubmission, setEditingSubmission] = useState<PurchaseReviewSubmission | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
     fetchSubmissions();
@@ -68,6 +77,7 @@ export default function PurchaseReviewSubmissions() {
       
       if (response.ok) {
         setSubmissions(prev => prev.filter(s => s.id !== id));
+        alert('Submission deleted successfully');
       } else {
         alert('Failed to delete submission');
       }
@@ -76,6 +86,72 @@ export default function PurchaseReviewSubmissions() {
       alert('Failed to delete submission');
     }
   };
+
+  const handleEdit = (submission: PurchaseReviewSubmission) => {
+    setEditingSubmission({ ...submission });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingSubmission) return;
+
+    try {
+      const response = await fetch(`/api/purchase-review-checklists/${editingSubmission.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerId: editingSubmission.customerId,
+          formData: editingSubmission.formData,
+          createdBy: editingSubmission.createdBy,
+          status: editingSubmission.status
+        })
+      });
+
+      if (response.ok) {
+        const updatedSubmission = await response.json();
+        setSubmissions(prev => 
+          prev.map(s => s.id === editingSubmission.id ? updatedSubmission : s)
+        );
+        setEditingSubmission(null);
+        alert('Submission updated successfully');
+      } else {
+        alert('Failed to update submission');
+      }
+    } catch (error) {
+      console.error('Error updating submission:', error);
+      alert('Failed to update submission');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSubmission(null);
+  };
+
+  const handleCreateNew = () => {
+    setIsCreateDialogOpen(false);
+    // Navigate to the Purchase Review Checklist form
+    window.location.href = '/purchase-review-checklist';
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    if (!editingSubmission) return;
+    setEditingSubmission({
+      ...editingSubmission,
+      status: newStatus as PurchaseReviewSubmission['status']
+    });
+  };
+
+  const filteredSubmissions = submissions.filter(submission => {
+    const matchesSearch = searchQuery === '' || 
+      submission.formData?.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      submission.formData?.projectName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      submission.id.toString().includes(searchQuery);
+    
+    const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   const exportToCSV = (submission: PurchaseReviewSubmission) => {
     const data = submission.formData;
@@ -110,21 +186,101 @@ export default function PurchaseReviewSubmissions() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Purchase Review Checklist Submissions</h1>
-          <p className="text-gray-600 mt-2">View and manage all purchase review checklist submissions</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Purchase Review Checklist Submissions</h1>
+              <p className="text-gray-600 mt-2">View and manage all purchase review checklist submissions</p>
+            </div>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Submission
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Purchase Review Checklist</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <p className="text-gray-600 mb-4">
+                    Click the button below to navigate to the Purchase Review Checklist form to create a new submission.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button onClick={handleCreateNew} className="bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Go to Form
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Search and Filter Controls */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Label htmlFor="search">Search Submissions</Label>
+              <Input
+                id="search"
+                placeholder="Search by customer name, project, or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div className="sm:w-48">
+              <Label htmlFor="status-filter">Filter by Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                  <SelectItem value="SUBMITTED">Submitted</SelectItem>
+                  <SelectItem value="APPROVED">Approved</SelectItem>
+                  <SelectItem value="REJECTED">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Results Summary */}
+          <div className="mt-4 text-sm text-gray-600">
+            Showing {filteredSubmissions.length} of {submissions.length} submissions
+          </div>
         </div>
 
-        {submissions.length === 0 ? (
+        {filteredSubmissions.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
               <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No submissions found</h3>
-              <p className="text-gray-600">Purchase review checklist submissions will appear here once created.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {submissions.length === 0 ? 'No submissions found' : 'No submissions match your filters'}
+              </h3>
+              <p className="text-gray-600">
+                {submissions.length === 0 
+                  ? 'Purchase review checklist submissions will appear here once created.'
+                  : 'Try adjusting your search terms or filters to find submissions.'
+                }
+              </p>
+              {submissions.length === 0 && (
+                <Link href="/purchase-review-checklist">
+                  <Button className="mt-4">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Submission
+                  </Button>
+                </Link>
+              )}
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-6">
-            {submissions.map((submission) => (
+            {filteredSubmissions.map((submission) => (
               <Card key={submission.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex justify-between items-start">
@@ -154,17 +310,38 @@ export default function PurchaseReviewSubmissions() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
+                      {editingSubmission?.id === submission.id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={handleSaveEdit}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <Save className="h-4 w-4 mr-1" />
+                            Save
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setSelectedSubmission(submission)}
+                            onClick={handleCancelEdit}
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
+                            <X className="h-4 w-4 mr-1" />
+                            Cancel
                           </Button>
-                        </DialogTrigger>
+                        </>
+                      ) : (
+                        <>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedSubmission(submission)}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                            </DialogTrigger>
                         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Purchase Review Checklist - Submission #{selectedSubmission?.id}</DialogTitle>
@@ -197,48 +374,123 @@ export default function PurchaseReviewSubmissions() {
                             </div>
                           )}
                         </DialogContent>
-                      </Dialog>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => exportToCSV(submission)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Export
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(submission.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Delete
-                      </Button>
+                          </Dialog>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(submission)}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => exportToCSV(submission)}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Export
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(submission.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
                 
                 <CardContent>
-                  <div className="text-sm text-gray-600">
-                    {submission.formData?.customerName && (
-                      <p><strong>Customer:</strong> {submission.formData.customerName}</p>
-                    )}
-                    {submission.formData?.projectName && (
-                      <p><strong>Project:</strong> {submission.formData.projectName}</p>
-                    )}
-                    {submission.formData?.quantity && (
-                      <p><strong>Quantity:</strong> {submission.formData.quantity}</p>
-                    )}
-                    {submission.formData?.unitPrice && (
-                      <p><strong>Unit Price:</strong> ${submission.formData.unitPrice}</p>
-                    )}
-                    {submission.formData?.amount && (
-                      <p><strong>Total Amount:</strong> ${submission.formData.amount}</p>
-                    )}
-                  </div>
+                  {editingSubmission?.id === submission.id ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="edit-customer">Customer ID</Label>
+                          <Input
+                            id="edit-customer"
+                            value={editingSubmission.customerId || ''}
+                            onChange={(e) => setEditingSubmission({
+                              ...editingSubmission,
+                              customerId: e.target.value
+                            })}
+                            placeholder="Customer ID"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-status">Status</Label>
+                          <Select value={editingSubmission.status} onValueChange={handleStatusChange}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="DRAFT">Draft</SelectItem>
+                              <SelectItem value="SUBMITTED">Submitted</SelectItem>
+                              <SelectItem value="APPROVED">Approved</SelectItem>
+                              <SelectItem value="REJECTED">Rejected</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-created-by">Created By</Label>
+                        <Input
+                          id="edit-created-by"
+                          value={editingSubmission.createdBy || ''}
+                          onChange={(e) => setEditingSubmission({
+                            ...editingSubmission,
+                            createdBy: e.target.value
+                          })}
+                          placeholder="Created by"
+                        />
+                      </div>
+                      <div>
+                        <Label>Form Data (JSON)</Label>
+                        <Textarea
+                          value={JSON.stringify(editingSubmission.formData, null, 2)}
+                          onChange={(e) => {
+                            try {
+                              const parsed = JSON.parse(e.target.value);
+                              setEditingSubmission({
+                                ...editingSubmission,
+                                formData: parsed
+                              });
+                            } catch (error) {
+                              // Invalid JSON, don't update
+                            }
+                          }}
+                          rows={6}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      {submission.formData?.customerName && (
+                        <p><strong>Customer:</strong> {submission.formData.customerName}</p>
+                      )}
+                      {submission.formData?.projectName && (
+                        <p><strong>Project:</strong> {submission.formData.projectName}</p>
+                      )}
+                      {submission.formData?.quantity && (
+                        <p><strong>Quantity:</strong> {submission.formData.quantity}</p>
+                      )}
+                      {submission.formData?.unitPrice && (
+                        <p><strong>Unit Price:</strong> ${submission.formData.unitPrice}</p>
+                      )}
+                      {submission.formData?.amount && (
+                        <p><strong>Total Amount:</strong> ${submission.formData.amount}</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

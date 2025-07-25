@@ -10,6 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 25, 2025 - Full CRUD Purchase Review Checklist Management System (COMPLETED)**
+- ✅ **Complete Submissions Management**: Built comprehensive submissions viewing page with full CRUD capabilities for Purchase Review Checklists
+- ✅ **Advanced Search & Filtering**: Added search functionality by customer name, project, or ID with status-based filtering (DRAFT, SUBMITTED, APPROVED, REJECTED)
+- ✅ **Inline Editing System**: Implemented inline editing with Save/Cancel buttons allowing direct modification of Customer ID, Status, Created By, and Form Data (JSON)
+- ✅ **Create New Submissions**: Added "Create New Submission" button with dialog that navigates users to the Purchase Review Checklist form
+- ✅ **Enhanced User Experience**: Results counter showing filtered vs total submissions, improved empty states with contextual messages
+- ✅ **Complete API Integration**: All CRUD operations (Create, Read, Update, Delete) fully functional with proper error handling and success messages
+- ✅ **Export & Management**: CSV export functionality and delete confirmation dialogs with proper cleanup
+- ✅ **Navigation Integration**: Easy access from P2 Forms page via "View Submissions" button for seamless workflow
+
 **July 25, 2025 - Enhanced Purchase Review Checklist with Advanced Integrations and Smart Logic (COMPLETED)**
 - ✅ **P2 Customer Integration**: Added customer dropdown at top of form populated from p2_customers table with customer name and ID display
 - ✅ **SmartyStreets Address Autocomplete**: Implemented real-time address autocomplete for new customer addresses with dropdown suggestions

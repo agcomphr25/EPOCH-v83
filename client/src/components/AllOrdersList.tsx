@@ -45,7 +45,7 @@ export default function AllOrdersList() {
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
-    const model = stockModels.find((m: any) => m.id === modelId);
+    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 

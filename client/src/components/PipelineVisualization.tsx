@@ -15,7 +15,7 @@ const departments = [
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
 
-type ScheduleStatus = 'on-schedule' | 'at-risk' | 'behind';
+type ScheduleStatus = 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical';
 
 interface OrderDetail {
   orderId: string;
@@ -25,30 +25,55 @@ interface OrderDetail {
   scheduleStatus: ScheduleStatus;
 }
 
-const statusColors = {
+const statusColors: Record<ScheduleStatus, string> = {
   'on-schedule': 'bg-green-500',
-  'at-risk': 'bg-yellow-500',
-  'behind': 'bg-red-500'
+  'dept-overdue': 'bg-yellow-500',
+  'cannot-meet-due': 'bg-orange-500',
+  'critical': 'bg-red-500'
 };
 
 // Hybrid visualization components
-const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => (
-  <div 
-    className={`w-2 h-2 ${statusColors[order.scheduleStatus]} cursor-pointer hover:scale-150 transition-transform`}
-    onClick={onClick}
-    title={`${order.orderId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
-  />
-);
+const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => {
+  const getStatusStyle = (status: ScheduleStatus) => {
+    if (status === 'cannot-meet-due') {
+      return { backgroundColor: '#FFA500' };
+    }
+    return {};
+  };
 
-const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail; onClick?: () => void; getModelDisplayName?: (modelId: string) => string }) => (
-  <div 
-    className={`px-2 py-1 rounded text-xs text-white ${statusColors[order.scheduleStatus]} cursor-pointer hover:bg-opacity-80 transition-colors`}
-    onClick={onClick}
-    title={`${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
-  >
-    {order.orderId}
-  </div>
-);
+  return (
+    <div 
+      className={`w-2 h-2 cursor-pointer hover:scale-150 transition-transform ${
+        order.scheduleStatus === 'cannot-meet-due' ? '' : statusColors[order.scheduleStatus]
+      }`}
+      style={getStatusStyle(order.scheduleStatus)}
+      onClick={onClick}
+      title={`${order.orderId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+    />
+  );
+};
+
+const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail; onClick?: () => void; getModelDisplayName?: (modelId: string) => string }) => {
+  const getStatusStyle = (status: ScheduleStatus) => {
+    if (status === 'cannot-meet-due') {
+      return { backgroundColor: '#FFA500' };
+    }
+    return {};
+  };
+
+  return (
+    <div 
+      className={`px-2 py-1 rounded text-xs text-white cursor-pointer hover:bg-opacity-80 transition-colors ${
+        order.scheduleStatus === 'cannot-meet-due' ? '' : statusColors[order.scheduleStatus]
+      }`}
+      style={getStatusStyle(order.scheduleStatus)}
+      onClick={onClick}
+      title={`${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+    >
+      {order.orderId}
+    </div>
+  );
+};
 
 const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { department: string; orders: OrderDetail[]; getModelDisplayName: (modelId: string) => string }) => {
   const count = orders.length;
@@ -95,7 +120,8 @@ export default function PipelineVisualization() {
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
-    const model = stockModels.find((m: any) => m.id === modelId);
+    const models = stockModels as any[];
+    const model = models?.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
@@ -162,11 +188,15 @@ export default function PipelineVisualization() {
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-yellow-500 rounded"></div>
-            <span>At Risk</span>
+            <span>Dept Overdue</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFA500'}}></div>
+            <span>Can't Meet Due</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <span>Behind</span>
+            <span>Critical</span>
           </div>
         </div>
         

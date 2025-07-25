@@ -10,6 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 24, 2025 - Enhanced Production Pipeline Overview with 4-Color Status System (COMPLETED)**
+- ✅ **Due Date-Based Logic**: Replaced time-percentage logic with realistic due date feasibility calculations
+- ✅ **4-Color Status System**: Implemented comprehensive color coding - Green (on-schedule), Yellow (dept overdue), Orange (#FFA500, cannot meet due date), Red (critical - both dept overdue AND cannot meet due date)
+- ✅ **Department Time Limits**: Yellow status triggers when orders exceed department limits (7 days regular, 14 days for Finish/Gunsmith on Adjustable stocks)
+- ✅ **Adjustable Stock Detection**: Special handling for stocks with "Adj" in model name for extended Finish/Gunsmith processing times
+- ✅ **Priority Status Logic**: Critical (red) takes priority when orders are both over department time AND cannot meet due date
+- ✅ **Detailed Logging**: Added comprehensive logging showing days until due, processing time needed, current department time, and status reasoning
+- ✅ **Visual Implementation**: Custom orange color (#FFA500) properly implemented with inline styles, updated legend with all 4 status types
+
 **July 24, 2025 - Ashley Tandy Order Deletion Task (COMPLETED)**
 - ✅ **Order Identification**: Successfully identified Ashley Tandy as customer ID 192 with 12 total orders
 - ✅ **Complete Order Deletion**: Deleted all 12 orders for Ashley Tandy from the system using API endpoints

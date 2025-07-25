@@ -2543,7 +2543,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>>> {
+  async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>> {
     try {
       // Get all active orders with their department entry timestamps
       const orders = await db
@@ -2570,7 +2570,7 @@ export class DatabaseStorage implements IStorage {
         );
 
       // Group by department and calculate schedule status
-      const pipelineDetails: Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'at-risk' | 'behind' }>> = {};
+      const pipelineDetails: Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>> = {};
 
       orders.forEach(order => {
         if (!order.currentDepartment) return;
@@ -2639,7 +2639,7 @@ export class DatabaseStorage implements IStorage {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'at-risk' | 'behind' {
+  private calculateScheduleStatus(order: any, daysInDept: number): 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' {
     const isAdjusted = order.modelId?.includes('Adj') || false;
     const now = new Date();
     const dueDate = new Date(order.dueDate);
@@ -2660,34 +2660,41 @@ export class DatabaseStorage implements IStorage {
     // Define department sequence
     const departmentSequence = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
     
+    // Check if order is overdue in current department
+    const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
+    const isDeptOverdue = daysInDept > currentDeptStandardTime;
+    
     // Calculate remaining time needed from current department onward
     const currentDeptIndex = departmentSequence.indexOf(order.currentDepartment);
-    if (currentDeptIndex === -1) {
-      // Unknown department, fallback to old logic
-      const standardDays = departmentTimes[order.currentDepartment] || 7;
-      if (daysInDept > standardDays) return 'behind';
-      if (daysInDept > standardDays * 0.8) return 'at-risk';
-      return 'on-schedule';
-    }
-    
-    // Sum up remaining processing time from current department to end
     let remainingProcessingDays = 0;
-    for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
-      const dept = departmentSequence[i];
-      remainingProcessingDays += departmentTimes[dept] || 7;
+    
+    if (currentDeptIndex !== -1) {
+      for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
+        const dept = departmentSequence[i];
+        remainingProcessingDays += departmentTimes[dept] || 7;
+      }
+    } else {
+      // Unknown department fallback
+      remainingProcessingDays = currentDeptStandardTime;
     }
     
-    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, currently in ${order.currentDepartment}`);
+    // Check if order cannot meet due date
+    const cannotMeetDueDate = remainingProcessingDays > daysUntilDue;
     
-    // Determine status based on due date feasibility
-    if (remainingProcessingDays > daysUntilDue) {
-      console.log(`🔴 Order ${order.orderId}: BEHIND - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
-      return 'behind';
-    } else if (remainingProcessingDays > daysUntilDue * 0.8) {
-      console.log(`🟡 Order ${order.orderId}: AT-RISK - Tight timeline (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
-      return 'at-risk';
+    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime})`);
+    
+    // Determine status priority: critical > cannot-meet-due > dept-overdue > on-schedule
+    if (isDeptOverdue && cannotMeetDueDate) {
+      console.log(`🔴 Order ${order.orderId}: CRITICAL - Over dept time AND cannot meet due date`);
+      return 'critical';
+    } else if (cannotMeetDueDate) {
+      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+      return 'cannot-meet-due';
+    } else if (isDeptOverdue) {
+      console.log(`🟡 Order ${order.orderId}: DEPT-OVERDUE - Over department time limit (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment})`);
+      return 'dept-overdue';
     } else {
-      console.log(`🟢 Order ${order.orderId}: ON-SCHEDULE - Sufficient time (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+      console.log(`🟢 Order ${order.orderId}: ON-SCHEDULE - Good timing (${daysInDept} ≤ ${currentDeptStandardTime} days in dept, can meet due date)`);
       return 'on-schedule';
     }
   }

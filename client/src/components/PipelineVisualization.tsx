@@ -38,13 +38,16 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
     if (status === 'cannot-meet-due') {
       return { backgroundColor: '#FFA500' };
     }
+    if (status === 'dept-overdue') {
+      return { backgroundColor: '#FFFF00' };
+    }
     return {};
   };
 
   return (
     <div 
       className={`w-2 h-2 cursor-pointer hover:scale-150 transition-transform ${
-        order.scheduleStatus === 'cannot-meet-due' ? '' : statusColors[order.scheduleStatus]
+        (order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus]
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
@@ -58,13 +61,16 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
     if (status === 'cannot-meet-due') {
       return { backgroundColor: '#FFA500' };
     }
+    if (status === 'dept-overdue') {
+      return { backgroundColor: '#FFFF00', color: '#000000' }; // Black text on bright yellow
+    }
     return {};
   };
 
   return (
     <div 
-      className={`px-2 py-1 rounded text-xs text-white cursor-pointer hover:bg-opacity-80 transition-colors ${
-        order.scheduleStatus === 'cannot-meet-due' ? '' : statusColors[order.scheduleStatus]
+      className={`px-2 py-1 rounded text-xs cursor-pointer hover:bg-opacity-80 transition-colors ${
+        (order.scheduleStatus === 'cannot-meet-due' || order.scheduleStatus === 'dept-overdue') ? '' : statusColors[order.scheduleStatus] + ' text-white'
       }`}
       style={getStatusStyle(order.scheduleStatus)}
       onClick={onClick}
@@ -187,7 +193,7 @@ export default function PipelineVisualization() {
             <span>On Schedule</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+            <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
             <span>Dept Overdue</span>
           </div>
           <div className="flex items-center gap-1">

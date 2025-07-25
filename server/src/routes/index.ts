@@ -22,7 +22,7 @@ export function registerRoutes(app: Express) {
   app.use('/api/forms', formsRoutes);
   
   // Task tracker routes
-  app.use('/api/tasks', tasksRoutes);
+  app.use('/api/task-items', tasksRoutes);
   
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);

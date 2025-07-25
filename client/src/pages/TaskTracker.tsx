@@ -74,6 +74,9 @@ export default function TaskTracker() {
     mutationFn: async (taskData: any) => {
       return apiRequest('/api/task-items', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ ...taskData, createdBy: 'Current User' }), // TODO: Get from auth
       });
     },
@@ -93,6 +96,9 @@ export default function TaskTracker() {
     mutationFn: async ({ id, ...taskData }: any) => {
       return apiRequest(`/api/task-items/${id}`, {
         method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(taskData),
       });
     },
@@ -120,6 +126,9 @@ export default function TaskTracker() {
       
       return apiRequest(`/api/task-items/${id}/status`, {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(updateData),
       });
     },

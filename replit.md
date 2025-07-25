@@ -10,15 +10,19 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 25, 2025 - Enhanced Purchase Review Checklist with P2 Integration and Smart Calculations (COMPLETED)**
+**July 25, 2025 - Enhanced Purchase Review Checklist with Advanced Integrations and Smart Logic (COMPLETED)**
 - ✅ **P2 Customer Integration**: Added customer dropdown at top of form populated from p2_customers table with customer name and ID display
+- ✅ **SmartyStreets Address Autocomplete**: Implemented real-time address autocomplete for new customer addresses with dropdown suggestions
 - ✅ **Smart Payment Terms**: Converted Payment Terms to dropdown with CIA, Net 10, Net 20, Net 30 options (Net 30 default)
 - ✅ **Early Pay Discount Lock**: Set Early Pay & Discount Requested field to N/A with disabled input
+- ✅ **FFL N/A Option**: Added N/A radio button option to FFL field for complete coverage
 - ✅ **Manufacturing UOM Standards**: Added Unit of Measure dropdown with standard manufacturing units (Each, Piece, Set, Pair, Kit, Lot, Dozen, Package, Assembly, Unit)
-- ✅ **Automatic Amount Calculation**: Amount field now auto-calculates as (Quantity × Unit Price) + Tooling + Additional Items with live updates
+- ✅ **Disbursement Schedule Dropdown**: Changed to dropdown with Paid in Advance, At Completion, As Delivered (default) options
+- ✅ **First Article Conditional Logic**: When First Article Quantity is 0, automatically sets Due Date, Inspection Location, and Acceptance Timeframe to N/A with disabled fields
+- ✅ **Shipping Company Dropdown**: Changed to dropdown with UPS, FedEx, USPS, N/A options
+- ✅ **Automatic Amount Calculation**: Amount field auto-calculates as (Quantity × Unit Price) + Tooling + Additional Items with live updates
 - ✅ **Enhanced Input Types**: Added proper number inputs with step validation for pricing fields and quantity controls
 - ✅ **Professional Interface**: Calculated amount displays with currency formatting and read-only styling
-- ✅ **Complete Form Sections**: All sections A-F implemented with radio buttons, checkboxes, text inputs, and proper validation
 
 **July 25, 2025 - Fixed Action Length Field Saving Bug in Order Entry (COMPLETED)**
 - ✅ **Root Cause Identified**: Action Length selections weren't being saved because the field was missing from feature consolidation during order save

@@ -11,6 +11,41 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Save, Printer, Download, FileText } from "lucide-react";
 
+// SmartyStreets address autocomplete hook
+const useSmartyStreetsAutocomplete = (query: string) => {
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (query.length < 3) {
+        setSuggestions([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await fetch('/api/address/autocomplete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+        const data = await response.json();
+        setSuggestions(data.suggestions || []);
+      } catch (error) {
+        console.error('Address autocomplete error:', error);
+        setSuggestions([]);
+      }
+      setIsLoading(false);
+    };
+
+    const debounceTimer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [query]);
+
+  return { suggestions, isLoading };
+};
+
 export default function PurchaseReviewChecklist() {
   // Fetch P2 customers for dropdown
   const { data: p2Customers = [] } = useQuery({
@@ -21,6 +56,11 @@ export default function PurchaseReviewChecklist() {
       customerName: customer.customerName
     }))
   });
+
+  // Address autocomplete state
+  const [addressQuery, setAddressQuery] = useState('');
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const { suggestions: addressSuggestions } = useSmartyStreetsAutocomplete(addressQuery);
 
   const [formData, setFormData] = useState({
     // Section A - Customer Information - moved customerId to top
@@ -53,7 +93,7 @@ export default function PurchaseReviewChecklist() {
     additionalItems: '',
     additionalCost: '0',
     amount: '0', // Will be calculated
-    disbursementSchedule: '',
+    disbursementSchedule: 'As Delivered', // Set default
     
     // Level 1 Assembly
     level1ItemNumber: '',
@@ -128,8 +168,34 @@ export default function PurchaseReviewChecklist() {
     }));
   }, [formData.quantityRequested, formData.unitPrice, formData.toolingPrice, formData.additionalCost]);
 
+  // Auto-set First Article fields to N/A when quantity is 0
+  useEffect(() => {
+    const quantity = parseFloat(formData.firstArticleQuantity) || 0;
+    if (quantity === 0) {
+      setFormData(prev => ({
+        ...prev,
+        firstArticleDueDate: 'N/A',
+        inspectionLocation: 'N/A',
+        acceptanceTimeframe: 'N/A'
+      }));
+    }
+  }, [formData.firstArticleQuantity]);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddressChange = (value: string) => {
+    setAddressQuery(value);
+    handleInputChange('address', value);
+    setShowAddressSuggestions(value.length >= 3);
+  };
+
+  const selectAddressSuggestion = (suggestion: any) => {
+    const fullAddress = `${suggestion.street_line}, ${suggestion.city}, ${suggestion.state} ${suggestion.zipcode}`;
+    handleInputChange('address', fullAddress);
+    setAddressQuery(fullAddress);
+    setShowAddressSuggestions(false);
   };
 
   const handleCheckboxChange = (field: string, checked: boolean) => {
@@ -269,14 +335,29 @@ export default function PurchaseReviewChecklist() {
               </div>
             </div>
 
-            <div>
+            <div className="relative">
               <Label htmlFor="address">Address</Label>
               <Textarea 
                 id="address"
                 value={formData.address}
-                onChange={(e) => handleInputChange('address', e.target.value)}
+                onChange={(e) => handleAddressChange(e.target.value)}
                 rows={2}
+                placeholder="Start typing address for autocomplete..."
               />
+              {showAddressSuggestions && addressSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                  {addressSuggestions.map((suggestion, index) => (
+                    <div
+                      key={index}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      onClick={() => selectAddressSuggestion(suggestion)}
+                    >
+                      <div className="font-medium">{suggestion.street_line}</div>
+                      <div className="text-sm text-gray-600">{suggestion.city}, {suggestion.state} {suggestion.zipcode}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -310,6 +391,10 @@ export default function PurchaseReviewChecklist() {
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="N" id="ffl-n" />
                     <Label htmlFor="ffl-n">N</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="NA" id="ffl-na" />
+                    <Label htmlFor="ffl-na">N/A</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -563,11 +648,16 @@ export default function PurchaseReviewChecklist() {
 
             <div>
               <Label htmlFor="disbursementSchedule">Disbursement Schedule</Label>
-              <Input 
-                id="disbursementSchedule"
-                value={formData.disbursementSchedule}
-                onChange={(e) => handleInputChange('disbursementSchedule', e.target.value)}
-              />
+              <Select value={formData.disbursementSchedule} onValueChange={(value) => handleInputChange('disbursementSchedule', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select disbursement schedule" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Paid in Advance">Paid in Advance</SelectItem>
+                  <SelectItem value="At Completion">At Completion</SelectItem>
+                  <SelectItem value="As Delivered">As Delivered</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Level sections */}
@@ -921,6 +1011,8 @@ export default function PurchaseReviewChecklist() {
                 <Label htmlFor="firstArticleQuantity">First Article Quantity</Label>
                 <Input 
                   id="firstArticleQuantity"
+                  type="number"
+                  min="0"
                   value={formData.firstArticleQuantity}
                   onChange={(e) => handleInputChange('firstArticleQuantity', e.target.value)}
                 />
@@ -932,6 +1024,8 @@ export default function PurchaseReviewChecklist() {
                   type="date"
                   value={formData.firstArticleDueDate}
                   onChange={(e) => handleInputChange('firstArticleDueDate', e.target.value)}
+                  disabled={parseFloat(formData.firstArticleQuantity) === 0}
+                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
                 />
               </div>
             </div>
@@ -943,6 +1037,8 @@ export default function PurchaseReviewChecklist() {
                   id="inspectionLocation"
                   value={formData.inspectionLocation}
                   onChange={(e) => handleInputChange('inspectionLocation', e.target.value)}
+                  disabled={parseFloat(formData.firstArticleQuantity) === 0}
+                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
                 />
               </div>
               <div>
@@ -951,6 +1047,8 @@ export default function PurchaseReviewChecklist() {
                   id="acceptanceTimeframe"
                   value={formData.acceptanceTimeframe}
                   onChange={(e) => handleInputChange('acceptanceTimeframe', e.target.value)}
+                  disabled={parseFloat(formData.firstArticleQuantity) === 0}
+                  className={parseFloat(formData.firstArticleQuantity) === 0 ? "bg-gray-100" : ""}
                 />
               </div>
             </div>
@@ -1010,11 +1108,17 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="shippingCompany">Shipping Company</Label>
-                <Input 
-                  id="shippingCompany"
-                  value={formData.shippingCompany}
-                  onChange={(e) => handleInputChange('shippingCompany', e.target.value)}
-                />
+                <Select value={formData.shippingCompany} onValueChange={(value) => handleInputChange('shippingCompany', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select shipping company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UPS">UPS</SelectItem>
+                    <SelectItem value="FedEx">FedEx</SelectItem>
+                    <SelectItem value="USPS">USPS</SelectItem>
+                    <SelectItem value="N/A">N/A</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="clientAccountNumber">Client Account #</Label>

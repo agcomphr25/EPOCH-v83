@@ -215,9 +215,38 @@ export default function PurchaseReviewChecklist() {
     }));
   };
 
-  const handleSave = () => {
-    console.log('Saving form data:', formData);
-    // TODO: Implement save functionality
+  const handleSave = async () => {
+    try {
+      console.log('Saving form data:', formData);
+      
+      const checklistData = {
+        customerId: formData.customerId || null,
+        formData: formData,
+        createdBy: 'current_user', // Replace with actual user context
+        status: 'DRAFT' as const
+      };
+
+      const response = await fetch('/api/purchase-review-checklists', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(checklistData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save checklist');
+      }
+
+      const result = await response.json();
+      console.log('Checklist saved successfully:', result);
+      
+      // Show success message
+      alert('Purchase Review Checklist saved successfully!');
+    } catch (error) {
+      console.error('Error saving checklist:', error);
+      alert('Failed to save checklist. Please try again.');
+    }
   };
 
   const handlePrint = () => {

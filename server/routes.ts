@@ -68,7 +68,9 @@ import {
   // Authentication schemas
   insertUserSchema,
   loginSchema,
-  changePasswordSchema
+  changePasswordSchema,
+  // Purchase Review Checklist schema
+  insertPurchaseReviewChecklistSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5143,7 +5145,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Purchase Review Checklist API routes
+  app.post("/api/purchase-review-checklists", async (req, res) => {
+    try {
+      const data = insertPurchaseReviewChecklistSchema.parse(req.body);
+      const result = await storage.createPurchaseReviewChecklist(data);
+      res.json(result);
+    } catch (error) {
+      console.error("Create purchase review checklist error:", error);
+      res.status(500).json({ error: "Failed to save purchase review checklist" });
+    }
+  });
+
+  app.get("/api/purchase-review-checklists", async (req, res) => {
+    try {
+      const result = await storage.getAllPurchaseReviewChecklists();
+      res.json(result);
+    } catch (error) {
+      console.error("Get purchase review checklists error:", error);
+      res.status(500).json({ error: "Failed to get purchase review checklists" });
+    }
+  });
+
+  app.get("/api/purchase-review-checklists/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await storage.getPurchaseReviewChecklistById(parseInt(id));
+      if (!result) {
+        return res.status(404).json({ error: "Purchase review checklist not found" });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("Get purchase review checklist error:", error);
+      res.status(500).json({ error: "Failed to get purchase review checklist" });
+    }
+  });
+
+  app.put("/api/purchase-review-checklists/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = insertPurchaseReviewChecklistSchema.parse(req.body);
+      const result = await storage.updatePurchaseReviewChecklist(parseInt(id), data);
+      if (!result) {
+        return res.status(404).json({ error: "Purchase review checklist not found" });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("Update purchase review checklist error:", error);
+      res.status(500).json({ error: "Failed to update purchase review checklist" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
 }
+

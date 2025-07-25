@@ -5,7 +5,7 @@ import {
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations,
+  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists,
   // New employee management tables
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -58,6 +58,7 @@ import {
   type LayupSchedule, type InsertLayupSchedule,
   type BomDefinition, type InsertBomDefinition,
   type BomItem, type InsertBomItem,
+  type PurchaseReviewChecklist, type InsertPurchaseReviewChecklist,
 
 } from "./schema";
 import { db } from "./db";
@@ -422,6 +423,12 @@ export interface IStorage {
   addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem>;
   updateBOMItem(bomId: number, itemId: number, data: Partial<InsertBomItem>): Promise<BomItem>;
   deleteBOMItem(bomId: number, itemId: number): Promise<void>;
+
+  // Purchase Review Checklist Methods
+  getAllPurchaseReviewChecklists(): Promise<PurchaseReviewChecklist[]>;
+  getPurchaseReviewChecklistById(id: number): Promise<PurchaseReviewChecklist | undefined>;
+  createPurchaseReviewChecklist(data: InsertPurchaseReviewChecklist): Promise<PurchaseReviewChecklist>;
+  updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist>;
 
 
 
@@ -3487,6 +3494,39 @@ export class DatabaseStorage implements IStorage {
     }
 
     return this.getDailyChecklist(employeeId, today);
+  }
+
+  // Purchase Review Checklist Methods
+  async getAllPurchaseReviewChecklists(): Promise<PurchaseReviewChecklist[]> {
+    return await db
+      .select()
+      .from(purchaseReviewChecklists)
+      .orderBy(desc(purchaseReviewChecklists.createdAt));
+  }
+
+  async getPurchaseReviewChecklistById(id: number): Promise<PurchaseReviewChecklist | undefined> {
+    const [result] = await db
+      .select()
+      .from(purchaseReviewChecklists)
+      .where(eq(purchaseReviewChecklists.id, id));
+    return result || undefined;
+  }
+
+  async createPurchaseReviewChecklist(data: InsertPurchaseReviewChecklist): Promise<PurchaseReviewChecklist> {
+    const [result] = await db
+      .insert(purchaseReviewChecklists)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist> {
+    const [result] = await db
+      .update(purchaseReviewChecklists)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(purchaseReviewChecklists.id, id))
+      .returning();
+    return result;
   }
 
 }

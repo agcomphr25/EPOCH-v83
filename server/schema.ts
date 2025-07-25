@@ -1014,6 +1014,31 @@ export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 
+// Purchase Review Checklist Table
+export const purchaseReviewChecklists = pgTable("purchase_review_checklists", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id"),
+  formData: jsonb("form_data").notNull(),
+  createdBy: text("created_by"),
+  status: text("status").default("DRAFT").notNull(), // DRAFT, SUBMITTED, APPROVED, REJECTED
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPurchaseReviewChecklistSchema = createInsertSchema(purchaseReviewChecklists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().optional().nullable(),
+  formData: z.record(z.any()),
+  createdBy: z.string().optional().nullable(),
+  status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']).default('DRAFT'),
+});
+
+export type InsertPurchaseReviewChecklist = z.infer<typeof insertPurchaseReviewChecklistSchema>;
+export type PurchaseReviewChecklist = typeof purchaseReviewChecklists.$inferSelect;
+
 // Layup Scheduler Tables
 export const molds = pgTable("molds", {
   id: serial("id").primaryKey(),

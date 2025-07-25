@@ -108,7 +108,16 @@ router.get('/:id', async (req, res) => {
 // POST /api/documents/upload - Upload new document
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
+    console.log('📁 Document upload request received');
+    console.log('📁 File info:', req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    } : 'No file');
+    console.log('📁 Body data:', req.body);
+    
     if (!req.file) {
+      console.log('❌ No file uploaded');
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
@@ -116,6 +125,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     
     // Validate required fields
     if (!title || !documentType) {
+      console.log('❌ Missing required fields:', { title, documentType });
       return res.status(400).json({ error: 'Title and document type are required' });
     }
 
@@ -142,7 +152,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     // Validate data with schema
     const validatedData = insertDocumentSchema.parse(documentData);
     
+    console.log('📁 Creating document in database...');
     const document = await storage.createManagedDocument(validatedData);
+    console.log('✅ Document created successfully:', document.id);
     res.status(201).json(document);
   } catch (error) {
     console.error('Error uploading document:', error);

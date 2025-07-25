@@ -124,19 +124,30 @@ export default function DocumentManagement() {
         documentType: formData.get('documentType')
       });
       
-      const response = await fetch('/api/documents/upload', {
-        method: 'POST',
-        body: formData
-      });
-      
-      console.log('Upload response status:', response.status);
-      const result = await response.json();
-      console.log('Upload response data:', result);
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Upload failed');
+      try {
+        const response = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        console.log('Upload response status:', response.status);
+        console.log('Upload response headers:', Object.fromEntries(response.headers.entries()));
+        
+        // Check if response is ok before trying to parse JSON
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Upload error response:', errorText);
+          throw new Error(`Upload failed: ${response.status} - ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Upload response data:', result);
+        
+        return result;
+      } catch (networkError) {
+        console.error('Network error during upload:', networkError);
+        throw networkError;
       }
-      return result;
     },
     onSuccess: (data) => {
       console.log('Upload successful:', data);

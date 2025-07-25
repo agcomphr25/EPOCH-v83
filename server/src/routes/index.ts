@@ -41,4 +41,6 @@ export function registerRoutes(app: Express) {
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);
   // app.use('/api/bom', bomRoutes);
+  
+  return app;
 }

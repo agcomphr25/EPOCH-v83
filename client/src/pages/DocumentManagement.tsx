@@ -89,6 +89,11 @@ export default function DocumentManagement() {
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [uploadForm, setUploadForm] = useState({
+    title: '',
+    description: '',
+    documentType: ''
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -112,25 +117,42 @@ export default function DocumentManagement() {
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      console.log('Uploading document with data:', {
+        file: formData.get('file'),
+        title: formData.get('title'),
+        description: formData.get('description'),
+        documentType: formData.get('documentType')
+      });
+      
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
         body: formData
       });
-      if (!response.ok) throw new Error('Upload failed');
-      return response.json();
+      
+      console.log('Upload response status:', response.status);
+      const result = await response.json();
+      console.log('Upload response data:', result);
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed');
+      }
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Upload successful:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
       setIsUploadDialogOpen(false);
+      setUploadForm({ title: '', description: '', documentType: '' });
       toast({
         title: "Success",
         description: "Document uploaded successfully"
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Upload error:', error);
       toast({
         title: "Error",
-        description: "Failed to upload document",
+        description: error.message || "Failed to upload document",
         variant: "destructive"
       });
     }
@@ -182,10 +204,24 @@ export default function DocumentManagement() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     
+    // Manually append the controlled form values
+    formData.set('title', uploadForm.title);
+    formData.set('description', uploadForm.description);
+    formData.set('documentType', uploadForm.documentType);
+    
     if (!formData.get('file')) {
       toast({
         title: "Error",
         description: "Please select a file to upload",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!uploadForm.title || !uploadForm.documentType) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
         variant: "destructive"
       });
       return;
@@ -303,15 +339,31 @@ export default function DocumentManagement() {
                 </div>
                 <div>
                   <Label htmlFor="title">Title</Label>
-                  <Input name="title" placeholder="Document title" required />
+                  <Input 
+                    name="title" 
+                    placeholder="Document title" 
+                    value={uploadForm.title}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, title: e.target.value }))}
+                    required 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="description">Description</Label>
-                  <Textarea name="description" placeholder="Optional description" />
+                  <Textarea 
+                    name="description" 
+                    placeholder="Optional description" 
+                    value={uploadForm.description}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, description: e.target.value }))}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="documentType">Document Type</Label>
-                  <Select name="documentType" required>
+                  <Select 
+                    name="documentType" 
+                    value={uploadForm.documentType}
+                    onValueChange={(value) => setUploadForm(prev => ({ ...prev, documentType: value }))}
+                    required
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>

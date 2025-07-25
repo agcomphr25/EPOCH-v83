@@ -6,13 +6,22 @@ export default function useMoldSettings() {
   const [molds, setMolds] = useState<Mold[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔧 useMoldSettings: Molds state changed:', molds);
+  }, [molds]);
+
   const fetchMolds = async () => {
     try {
       setLoading(true);
+      console.log('🔧 useMoldSettings: Fetching molds from /api/molds...');
       const data = await apiRequest('/api/molds');
+      console.log('🔧 useMoldSettings: Received molds data:', data);
+      console.log('🔧 useMoldSettings: Data type:', typeof data, 'Array?', Array.isArray(data));
       setMolds(data);
+      console.log('🔧 useMoldSettings: Set molds state to:', data);
     } catch (error) {
-      console.error('Failed to fetch molds:', error);
+      console.error('🔧 useMoldSettings: Failed to fetch molds:', error);
     } finally {
       setLoading(false);
     }

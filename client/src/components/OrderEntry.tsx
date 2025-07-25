@@ -584,6 +584,8 @@ export default function OrderEntry() {
         ...features,
         // Add handedness to features if set
         ...(handedness && { handedness }),
+        // Add action length to features if set
+        ...(actionLength && { action_length: actionLength }),
         // Add bottom metal to features if set  
         ...(bottomMetal && { bottom_metal: bottomMetal }),
         // Add paint options to features if set

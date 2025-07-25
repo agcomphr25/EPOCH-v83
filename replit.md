@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 25, 2025 - Fixed Action Length Field Saving Bug in Order Entry (COMPLETED)**
+- ✅ **Root Cause Identified**: Action Length selections weren't being saved because the field was missing from feature consolidation during order save
+- ✅ **Database Issue Resolution**: Added action_length field to completeFeatures object in handleSubmit function to ensure proper persistence
+- ✅ **Order Summary Display Fix**: Action Length now correctly displays selected values in Order Summary section
+- ✅ **Legacy Order Support**: Existing orders without action_length can be updated by selecting a value and saving
+- ✅ **Feature Loading Enhancement**: Order editing properly loads action_length from features object during order retrieval
+- ✅ **Complete System Verification**: Confirmed both new order creation and existing order editing work correctly with action length field
+
 **July 24, 2025 - Enhanced Production Pipeline Overview with 4-Color Status System (COMPLETED)**
 - ✅ **Due Date-Based Logic**: Replaced time-percentage logic with realistic due date feasibility calculations
 - ✅ **4-Color Status System**: Implemented comprehensive color coding - Green (on-schedule), Yellow (dept overdue), Orange (#FFA500, cannot meet due date), Red (critical - both dept overdue AND cannot meet due date)

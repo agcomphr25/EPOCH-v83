@@ -335,7 +335,6 @@ export default function OrderEntry() {
         console.log('Loading order features:', featuresObj);
         
         setHandedness(featuresObj.handedness || order.handedness || '');
-        console.log('Loading action_length from features:', featuresObj.action_length);
         setActionLength(featuresObj.action_length || '');
         setBottomMetal(featuresObj.bottom_metal || '');
         setBarrelInlet(featuresObj.barrel_inlet || '');
@@ -1114,10 +1113,7 @@ export default function OrderEntry() {
                   {/* Action Length */}
                   <div>
                     <Label>Action Length</Label>
-                    <Select value={actionLength} onValueChange={(value) => {
-                      console.log('Action Length dropdown changed to:', value);
-                      setActionLength(value);
-                    }}>
+                    <Select value={actionLength} onValueChange={setActionLength}>
                       <SelectTrigger>
                         <SelectValue placeholder="Short" />
                       </SelectTrigger>
@@ -1391,18 +1387,11 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Action Length';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{(() => {
-                      console.log('Order Summary - actionLength state:', actionLength);
-                      console.log('Order Summary - featureDefs:', featureDefs.length, 'features');
+                    <span className="font-medium">{actionLength ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_length');
-                      console.log('Order Summary - action_length feature found:', feature);
-                      
-                      if (!actionLength) return 'Not selected';
-                      
                       const option = feature?.options?.find(opt => opt.value === actionLength);
-                      console.log('Order Summary - option found:', option);
                       return option?.label || actionLength.charAt(0).toUpperCase() + actionLength.slice(1);
-                    })()}</span>
+                    })() : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">${actionLength ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_length');
                       const option = feature?.options?.find(opt => opt.value === actionLength);

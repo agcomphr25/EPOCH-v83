@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,19 @@ import { Separator } from "@/components/ui/separator";
 import { Save, Printer, Download, FileText } from "lucide-react";
 
 export default function PurchaseReviewChecklist() {
+  // Fetch P2 customers for dropdown
+  const { data: p2Customers = [] } = useQuery({
+    queryKey: ['/api/p2/customers'],
+    select: (data: any[]) => data.map(customer => ({
+      id: customer.id,
+      customerId: customer.customerId,
+      customerName: customer.customerName
+    }))
+  });
+
   const [formData, setFormData] = useState({
-    // Section A - Customer Information
+    // Section A - Customer Information - moved customerId to top
+    customerId: '',
     existingCustomer: '',
     significantChanges: '',
     companyName: '',
@@ -27,20 +39,20 @@ export default function PurchaseReviewChecklist() {
     poNumber: '',
     contractNumber: '',
     invoiceRemittance: '',
-    paymentTerms: '',
-    earlyPayDiscount: '',
+    paymentTerms: 'Net 30', // Set default
+    earlyPayDiscount: 'N/A', // Set to N/A as requested
     paymentMethod: '',
     paymentMethodOther: '',
 
     // Section B - Service/Product Requested and Prices
     outsideServices: '',
-    quantityRequested: '',
+    quantityRequested: '0',
     unitOfMeasure: '',
-    unitPrice: '',
-    toolingPrice: '',
+    unitPrice: '0',
+    toolingPrice: '0',
     additionalItems: '',
-    additionalCost: '',
-    amount: '',
+    additionalCost: '0',
+    amount: '0', // Will be calculated
     disbursementSchedule: '',
     
     // Level 1 Assembly
@@ -101,6 +113,21 @@ export default function PurchaseReviewChecklist() {
     date: ''
   });
 
+  // Calculate amount when quantity, unit price, tooling, or additional cost changes
+  useEffect(() => {
+    const quantity = parseFloat(formData.quantityRequested) || 0;
+    const unitPrice = parseFloat(formData.unitPrice) || 0;
+    const tooling = parseFloat(formData.toolingPrice) || 0;
+    const additional = parseFloat(formData.additionalCost) || 0;
+    
+    const calculatedAmount = (quantity * unitPrice) + tooling + additional;
+    
+    setFormData(prev => ({
+      ...prev,
+      amount: calculatedAmount.toFixed(2)
+    }));
+  }, [formData.quantityRequested, formData.unitPrice, formData.toolingPrice, formData.additionalCost]);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -158,6 +185,30 @@ export default function PurchaseReviewChecklist() {
             </Button>
           </div>
         </div>
+
+        {/* Customer Selection - Moved to top */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Customer Selection</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="customerId">Select Customer</Label>
+              <Select value={formData.customerId} onValueChange={(value) => handleInputChange('customerId', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {p2Customers.map(customer => (
+                    <SelectItem key={customer.id} value={customer.customerId}>
+                      {customer.customerName} ({customer.customerId})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Section A - Customer Information */}
         <Card className="mb-6">
@@ -353,11 +404,17 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="paymentTerms">Payment Terms</Label>
-                <Input 
-                  id="paymentTerms"
-                  value={formData.paymentTerms}
-                  onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
-                />
+                <Select value={formData.paymentTerms} onValueChange={(value) => handleInputChange('paymentTerms', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment terms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CIA">CIA</SelectItem>
+                    <SelectItem value="Net 10">Net 10</SelectItem>
+                    <SelectItem value="Net 20">Net 20</SelectItem>
+                    <SelectItem value="Net 30">Net 30</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="earlyPayDiscount">Early Pay & Discount Requested</Label>
@@ -365,6 +422,8 @@ export default function PurchaseReviewChecklist() {
                   id="earlyPayDiscount"
                   value={formData.earlyPayDiscount}
                   onChange={(e) => handleInputChange('earlyPayDiscount', e.target.value)}
+                  disabled
+                  className="bg-gray-100"
                 />
               </div>
             </div>
@@ -421,6 +480,8 @@ export default function PurchaseReviewChecklist() {
                 <Label htmlFor="quantityRequested">Quantity Requested</Label>
                 <Input 
                   id="quantityRequested"
+                  type="number"
+                  min="1"
                   value={formData.quantityRequested}
                   onChange={(e) => handleInputChange('quantityRequested', e.target.value)}
                 />
@@ -430,24 +491,40 @@ export default function PurchaseReviewChecklist() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="unitOfMeasure">Unit of Measure</Label>
-                <Input 
-                  id="unitOfMeasure"
-                  value={formData.unitOfMeasure}
-                  onChange={(e) => handleInputChange('unitOfMeasure', e.target.value)}
-                />
+                <Select value={formData.unitOfMeasure} onValueChange={(value) => handleInputChange('unitOfMeasure', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ea">Each (ea)</SelectItem>
+                    <SelectItem value="pc">Piece (pc)</SelectItem>
+                    <SelectItem value="set">Set</SelectItem>
+                    <SelectItem value="pair">Pair</SelectItem>
+                    <SelectItem value="kit">Kit</SelectItem>
+                    <SelectItem value="lot">Lot</SelectItem>
+                    <SelectItem value="doz">Dozen (doz)</SelectItem>
+                    <SelectItem value="pkg">Package (pkg)</SelectItem>
+                    <SelectItem value="assy">Assembly (assy)</SelectItem>
+                    <SelectItem value="unit">Unit</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label htmlFor="unitPrice">Unit Price</Label>
+                <Label htmlFor="unitPrice">Unit Price ($)</Label>
                 <Input 
                   id="unitPrice"
+                  type="number"
+                  step="0.01"
                   value={formData.unitPrice}
                   onChange={(e) => handleInputChange('unitPrice', e.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="toolingPrice">Tooling Price</Label>
+                <Label htmlFor="toolingPrice">Tooling Price ($)</Label>
                 <Input 
                   id="toolingPrice"
+                  type="number"
+                  step="0.01"
                   value={formData.toolingPrice}
                   onChange={(e) => handleInputChange('toolingPrice', e.target.value)}
                 />
@@ -464,19 +541,22 @@ export default function PurchaseReviewChecklist() {
                 />
               </div>
               <div>
-                <Label htmlFor="additionalCost">Cost</Label>
+                <Label htmlFor="additionalCost">Additional Cost ($)</Label>
                 <Input 
                   id="additionalCost"
+                  type="number"
+                  step="0.01"
                   value={formData.additionalCost}
                   onChange={(e) => handleInputChange('additionalCost', e.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="amount">Amount</Label>
+                <Label htmlFor="amount">Amount (Calculated) ($)</Label>
                 <Input 
                   id="amount"
-                  value={formData.amount}
-                  onChange={(e) => handleInputChange('amount', e.target.value)}
+                  value={`$${formData.amount}`}
+                  disabled
+                  className="bg-gray-100 font-medium"
                 />
               </div>
             </div>

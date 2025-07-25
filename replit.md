@@ -10,14 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
-**July 25, 2025 - P2 Forms Section with Complete Purchase Review Checklist Implementation (COMPLETED)**
-- ✅ **P2 Forms Navigation**: Added P2 Forms section under Forms & Reports in main navigation menu
-- ✅ **Comprehensive Form Categories**: Created P2 Forms page with 6 main categories (Production Orders, Quality Control, Shipping & Documentation, Inventory & Receiving, Custom Reports, Compliance & Documentation)
-- ✅ **Purchase Review Checklist Recreation**: Built complete fillable form matching exact PDF structure with all sections (Customer Information, Service/Product Requested, Description/Specifications, Inspection/Acceptance, Shipping, Special Contract Requirements)
-- ✅ **Professional Form Interface**: Implemented comprehensive form with radio buttons, checkboxes, text inputs, date pickers, and proper validation for all PDF fields
-- ✅ **Interactive Features**: Added Save Form, Print, and Export PDF functionality with proper form state management
-- ✅ **Routing Integration**: Added /purchase-review-checklist route to application with proper navigation links
-- ✅ **Complete Data Model**: Implemented comprehensive form data state covering all sections A-F from original PDF with proper TypeScript typing
+**July 25, 2025 - Enhanced Purchase Review Checklist with P2 Integration and Smart Calculations (COMPLETED)**
+- ✅ **P2 Customer Integration**: Added customer dropdown at top of form populated from p2_customers table with customer name and ID display
+- ✅ **Smart Payment Terms**: Converted Payment Terms to dropdown with CIA, Net 10, Net 20, Net 30 options (Net 30 default)
+- ✅ **Early Pay Discount Lock**: Set Early Pay & Discount Requested field to N/A with disabled input
+- ✅ **Manufacturing UOM Standards**: Added Unit of Measure dropdown with standard manufacturing units (Each, Piece, Set, Pair, Kit, Lot, Dozen, Package, Assembly, Unit)
+- ✅ **Automatic Amount Calculation**: Amount field now auto-calculates as (Quantity × Unit Price) + Tooling + Additional Items with live updates
+- ✅ **Enhanced Input Types**: Added proper number inputs with step validation for pricing fields and quantity controls
+- ✅ **Professional Interface**: Calculated amount displays with currency formatting and read-only styling
+- ✅ **Complete Form Sections**: All sections A-F implemented with radio buttons, checkboxes, text inputs, and proper validation
 
 **July 25, 2025 - Fixed Action Length Field Saving Bug in Order Entry (COMPLETED)**
 - ✅ **Root Cause Identified**: Action Length selections weren't being saved because the field was missing from feature consolidation during order save

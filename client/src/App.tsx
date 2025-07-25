@@ -59,6 +59,7 @@ import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import TaskTracker from "./pages/TaskTracker";
+import DocumentManagement from "./pages/DocumentManagement";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -106,6 +107,7 @@ function App() {
                   <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
                   <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
                   <Route path="/task-tracker" component={TaskTracker} />
+                  <Route path="/document-management" component={DocumentManagement} />
 
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
                   <Route path="/forms/render/:formId" component={FormRendererPage} />

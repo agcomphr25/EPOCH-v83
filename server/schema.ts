@@ -1771,3 +1771,112 @@ export const insertTaskItemSchema = createInsertSchema(taskItems).omit({
 
 export type InsertTaskItem = z.infer<typeof insertTaskItemSchema>;
 export type TaskItem = typeof taskItems.$inferSelect;
+
+// Document Management System Tables
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  fileName: text("file_name").notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  documentType: text("document_type").notNull(), // 'RFQ', 'QUOTE', 'PO', 'PACKING_SLIP', 'RISK_ASSESSMENT', 'FORM_SUBMISSION'
+  uploadDate: timestamp("upload_date").defaultNow(),
+  uploadedBy: integer("uploaded_by").references(() => users.id),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const documentTags = pgTable("document_tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category"), // 'project', 'customer', 'po_number', 'status', 'document_type'
+  color: text("color").default("#3B82F6"), // Hex color for UI
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const documentTagRelations = pgTable("document_tag_relations", {
+  documentId: integer("document_id").references(() => documents.id, { onDelete: "cascade" }).notNull(),
+  tagId: integer("tag_id").references(() => documentTags.id, { onDelete: "cascade" }).notNull(),
+  addedAt: timestamp("added_at").defaultNow(),
+}, (table) => ({
+  pk: { primaryKey: table.documentId, tagId: table.tagId },
+}));
+
+export const documentCollections = pgTable("document_collections", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  collectionType: text("collection_type").notNull(), // 'purchase_order', 'customer_project', 'quote_process', 'form_workflow'
+  primaryIdentifier: text("primary_identifier"), // PO number, customer ID, quote number
+  status: text("status").default("active"), // 'active', 'completed', 'archived', 'cancelled'
+  metadata: jsonb("metadata"), // Additional flexible data
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const documentCollectionRelations = pgTable("document_collection_relations", {
+  collectionId: integer("collection_id").references(() => documentCollections.id, { onDelete: "cascade" }).notNull(),
+  documentId: integer("document_id").references(() => documents.id, { onDelete: "cascade" }).notNull(),
+  relationshipType: text("relationship_type").default("primary"), // 'primary', 'supporting', 'revision', 'reference'
+  displayOrder: integer("display_order").default(0),
+  addedAt: timestamp("added_at").defaultNow(),
+  addedBy: integer("added_by").references(() => users.id),
+}, (table) => ({
+  pk: { primaryKey: table.collectionId, documentId: table.documentId },
+}));
+
+// Document Management Insert Schemas
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+  uploadDate: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Title is required"),
+  fileName: z.string().min(1, "File name is required"),
+  originalFileName: z.string().min(1, "Original file name is required"),
+  filePath: z.string().min(1, "File path is required"),
+  fileSize: z.number().positive("File size must be positive"),
+  mimeType: z.string().min(1, "MIME type is required"),
+  documentType: z.enum(['RFQ', 'QUOTE', 'PO', 'PACKING_SLIP', 'RISK_ASSESSMENT', 'FORM_SUBMISSION', 'SPECIFICATION', 'CONTRACT', 'INVOICE', 'OTHER']),
+  uploadedBy: z.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+export const insertDocumentTagSchema = createInsertSchema(documentTags).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  name: z.string().min(1, "Tag name is required"),
+  category: z.enum(['project', 'customer', 'po_number', 'status', 'document_type', 'priority', 'department', 'other']).optional().nullable(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Color must be a valid hex color").default("#3B82F6"),
+  description: z.string().optional().nullable(),
+});
+
+export const insertDocumentCollectionSchema = createInsertSchema(documentCollections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Collection name is required"),
+  collectionType: z.enum(['purchase_order', 'customer_project', 'quote_process', 'form_workflow', 'general']),
+  primaryIdentifier: z.string().optional().nullable(),
+  status: z.enum(['active', 'completed', 'archived', 'cancelled']).default('active'),
+  description: z.string().optional().nullable(),
+  metadata: z.record(z.any()).optional().nullable(),
+  createdBy: z.number().optional().nullable(),
+});
+
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+export type InsertDocumentTag = z.infer<typeof insertDocumentTagSchema>;
+export type DocumentTag = typeof documentTags.$inferSelect;
+export type InsertDocumentCollection = z.infer<typeof insertDocumentCollectionSchema>;
+export type DocumentCollection = typeof documentCollections.$inferSelect;

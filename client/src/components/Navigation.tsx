@@ -167,6 +167,12 @@ export default function Navigation() {
       label: 'Task Tracker',
       icon: CheckSquare,
       description: 'Collaborative task management with GJ, TM, and Finished checkboxes'
+    },
+    {
+      path: '/document-management',
+      label: 'Document Management',
+      icon: FileText,
+      description: 'Unified document repository with advanced tagging and organization'
     }
   ];
 

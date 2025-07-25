@@ -8,6 +8,8 @@ import {
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists,
   // Task tracker table
   taskItems,
+  // Document management tables
+  documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -63,6 +65,10 @@ import {
   type PurchaseReviewChecklist, type InsertPurchaseReviewChecklist,
   // Task tracker types
   type TaskItem, type InsertTaskItem,
+  // Document management types
+  type Document, type InsertDocument,
+  type DocumentTag, type InsertDocumentTag,
+  type DocumentCollection, type InsertDocumentCollection,
 
 } from "./schema";
 import { db } from "./db";
@@ -3595,6 +3601,293 @@ export class DatabaseStorage implements IStorage {
       .update(taskItems)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(taskItems.id, id));
+  }
+
+  // Document Management System CRUD Methods
+  
+  // Documents CRUD
+  async getAllDocuments(): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(eq(documents.isActive, true))
+      .orderBy(desc(documents.uploadDate));
+  }
+
+  async getDocument(id: number): Promise<Document | undefined> {
+    const [document] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.isActive, true)));
+    return document;
+  }
+
+  async searchDocuments(query: string): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(and(
+        eq(documents.isActive, true),
+        or(
+          ilike(documents.title, `%${query}%`),
+          ilike(documents.description, `%${query}%`),
+          ilike(documents.fileName, `%${query}%`),
+          ilike(documents.documentType, `%${query}%`)
+        )
+      ))
+      .orderBy(desc(documents.uploadDate))
+      .limit(50);
+  }
+
+  async getDocumentsByType(documentType: string): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(and(
+        eq(documents.isActive, true),
+        eq(documents.documentType, documentType)
+      ))
+      .orderBy(desc(documents.uploadDate));
+  }
+
+  async createDocument(data: InsertDocument): Promise<Document> {
+    const [document] = await db
+      .insert(documents)
+      .values({
+        ...data,
+        uploadDate: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return document;
+  }
+
+  async updateDocument(id: number, data: Partial<InsertDocument>): Promise<Document> {
+    const [document] = await db
+      .update(documents)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(documents.id, id))
+      .returning();
+    return document;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    // Soft delete - mark as inactive
+    await db
+      .update(documents)
+      .set({
+        isActive: false,
+        updatedAt: new Date()
+      })
+      .where(eq(documents.id, id));
+  }
+
+  // Document Tags CRUD
+  async getAllTags(): Promise<DocumentTag[]> {
+    return await db
+      .select()
+      .from(documentTags)
+      .where(eq(documentTags.isActive, true))
+      .orderBy(documentTags.category, documentTags.name);
+  }
+
+  async getTagsByCategory(category: string): Promise<DocumentTag[]> {
+    return await db
+      .select()
+      .from(documentTags)
+      .where(and(
+        eq(documentTags.isActive, true),
+        eq(documentTags.category, category)
+      ))
+      .orderBy(documentTags.name);
+  }
+
+  async createTag(data: InsertDocumentTag): Promise<DocumentTag> {
+    const [tag] = await db
+      .insert(documentTags)
+      .values({
+        ...data,
+        createdAt: new Date()
+      })
+      .returning();
+    return tag;
+  }
+
+  async updateTag(id: number, data: Partial<InsertDocumentTag>): Promise<DocumentTag> {
+    const [tag] = await db
+      .update(documentTags)
+      .set(data)
+      .where(eq(documentTags.id, id))
+      .returning();
+    return tag;
+  }
+
+  async deleteTag(id: number): Promise<void> {
+    // Soft delete - mark as inactive and remove all relations
+    await db
+      .update(documentTags)
+      .set({ isActive: false })
+      .where(eq(documentTags.id, id));
+    
+    // Remove tag relations
+    await db
+      .delete(documentTagRelations)
+      .where(eq(documentTagRelations.tagId, id));
+  }
+
+  // Document Tag Relations
+  async getDocumentTags(documentId: number): Promise<DocumentTag[]> {
+    return await db
+      .select({
+        id: documentTags.id,
+        name: documentTags.name,
+        category: documentTags.category,
+        color: documentTags.color,
+        description: documentTags.description,
+        isActive: documentTags.isActive,
+        createdAt: documentTags.createdAt
+      })
+      .from(documentTagRelations)
+      .innerJoin(documentTags, eq(documentTagRelations.tagId, documentTags.id))
+      .where(and(
+        eq(documentTagRelations.documentId, documentId),
+        eq(documentTags.isActive, true)
+      ))
+      .orderBy(documentTags.category, documentTags.name);
+  }
+
+  async addTagToDocument(documentId: number, tagId: number): Promise<void> {
+    await db
+      .insert(documentTagRelations)
+      .values({
+        documentId,
+        tagId,
+        addedAt: new Date()
+      })
+      .onConflictDoNothing();
+  }
+
+  async removeTagFromDocument(documentId: number, tagId: number): Promise<void> {
+    await db
+      .delete(documentTagRelations)
+      .where(and(
+        eq(documentTagRelations.documentId, documentId),
+        eq(documentTagRelations.tagId, tagId)
+      ));
+  }
+
+  // Document Collections CRUD
+  async getAllCollections(): Promise<DocumentCollection[]> {
+    return await db
+      .select()
+      .from(documentCollections)
+      .orderBy(desc(documentCollections.createdAt));
+  }
+
+  async getCollection(id: number): Promise<DocumentCollection | undefined> {
+    const [collection] = await db
+      .select()
+      .from(documentCollections)
+      .where(eq(documentCollections.id, id));
+    return collection;
+  }
+
+  async getCollectionsByType(collectionType: string): Promise<DocumentCollection[]> {
+    return await db
+      .select()
+      .from(documentCollections)
+      .where(eq(documentCollections.collectionType, collectionType))
+      .orderBy(desc(documentCollections.createdAt));
+  }
+
+  async createCollection(data: InsertDocumentCollection): Promise<DocumentCollection> {
+    const [collection] = await db
+      .insert(documentCollections)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return collection;
+  }
+
+  async updateCollection(id: number, data: Partial<InsertDocumentCollection>): Promise<DocumentCollection> {
+    const [collection] = await db
+      .update(documentCollections)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(documentCollections.id, id))
+      .returning();
+    return collection;
+  }
+
+  async deleteCollection(id: number): Promise<void> {
+    // Delete collection and all its document relations
+    await db
+      .delete(documentCollectionRelations)
+      .where(eq(documentCollectionRelations.collectionId, id));
+    
+    await db
+      .delete(documentCollections)
+      .where(eq(documentCollections.id, id));
+  }
+
+  // Document Collection Relations
+  async getCollectionDocuments(collectionId: number): Promise<Document[]> {
+    return await db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        description: documents.description,
+        fileName: documents.fileName,
+        originalFileName: documents.originalFileName,
+        filePath: documents.filePath,
+        fileSize: documents.fileSize,
+        mimeType: documents.mimeType,
+        documentType: documents.documentType,
+        uploadDate: documents.uploadDate,
+        uploadedBy: documents.uploadedBy,
+        isActive: documents.isActive,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt
+      })
+      .from(documentCollectionRelations)
+      .innerJoin(documents, eq(documentCollectionRelations.documentId, documents.id))
+      .where(and(
+        eq(documentCollectionRelations.collectionId, collectionId),
+        eq(documents.isActive, true)
+      ))
+      .orderBy(documentCollectionRelations.displayOrder, documents.uploadDate);
+  }
+
+  async addDocumentToCollection(collectionId: number, documentId: number, relationshipType: string = 'primary', displayOrder: number = 0, addedBy?: number): Promise<void> {
+    await db
+      .insert(documentCollectionRelations)
+      .values({
+        collectionId,
+        documentId,
+        relationshipType,
+        displayOrder,
+        addedBy,
+        addedAt: new Date()
+      })
+      .onConflictDoNothing();
+  }
+
+  async removeDocumentFromCollection(collectionId: number, documentId: number): Promise<void> {
+    await db
+      .delete(documentCollectionRelations)
+      .where(and(
+        eq(documentCollectionRelations.collectionId, collectionId),
+        eq(documentCollectionRelations.documentId, documentId)
+      ));
   }
 
 }

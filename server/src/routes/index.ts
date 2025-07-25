@@ -7,6 +7,7 @@ import tasksRoutes from './tasks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import qualityRoutes from './quality';
+import documentsRoutes from './documents';
 
 export function registerRoutes(app: Express) {
   // Authentication routes
@@ -32,6 +33,9 @@ export function registerRoutes(app: Express) {
   
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
+  
+  // Document management routes
+  app.use('/api/documents', documentsRoutes);
   
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);

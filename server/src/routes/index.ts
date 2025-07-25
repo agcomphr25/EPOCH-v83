@@ -8,6 +8,7 @@ import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
+import moldsRoutes from './molds';
 
 export function registerRoutes(app: Express) {
   // Authentication routes
@@ -36,6 +37,9 @@ export function registerRoutes(app: Express) {
   
   // Document management routes
   app.use('/api/documents', documentsRoutes);
+  
+  // Mold management routes
+  app.use('/api/molds', moldsRoutes);
   
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);

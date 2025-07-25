@@ -3529,6 +3529,12 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async deletePurchaseReviewChecklist(id: number): Promise<void> {
+    await db
+      .delete(purchaseReviewChecklists)
+      .where(eq(purchaseReviewChecklists.id, id));
+  }
+
 }
 
 export const storage = new DatabaseStorage();

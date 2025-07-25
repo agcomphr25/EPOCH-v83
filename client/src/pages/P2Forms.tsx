@@ -37,6 +37,12 @@ export default function P2Forms() {
                     Purchase Review Checklist
                   </Button>
                 </Link>
+                <Link href="/purchase-review-submissions">
+                  <Button className="w-full justify-start" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    View Submissions
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="h-4 w-4 mr-2" />
                   Production Work Orders

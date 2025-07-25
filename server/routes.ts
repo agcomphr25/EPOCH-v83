@@ -5196,6 +5196,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/purchase-review-checklists/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await storage.deletePurchaseReviewChecklist(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete purchase review checklist error:", error);
+      res.status(500).json({ error: "Failed to delete purchase review checklist" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

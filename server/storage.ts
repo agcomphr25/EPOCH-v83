@@ -3605,8 +3605,8 @@ export class DatabaseStorage implements IStorage {
 
   // Document Management System CRUD Methods
   
-  // Documents CRUD
-  async getAllDocuments(): Promise<Document[]> {
+  // Documents CRUD (Document Management System)
+  async getAllManagedDocuments(): Promise<Document[]> {
     return await db
       .select()
       .from(documents)
@@ -3614,7 +3614,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(documents.uploadDate));
   }
 
-  async getDocument(id: number): Promise<Document | undefined> {
+  async getManagedDocument(id: number): Promise<Document | undefined> {
     const [document] = await db
       .select()
       .from(documents)
@@ -3639,7 +3639,7 @@ export class DatabaseStorage implements IStorage {
       .limit(50);
   }
 
-  async getDocumentsByType(documentType: string): Promise<Document[]> {
+  async getManagedDocumentsByType(documentType: string): Promise<Document[]> {
     return await db
       .select()
       .from(documents)
@@ -3650,7 +3650,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(documents.uploadDate));
   }
 
-  async createDocument(data: InsertDocument): Promise<Document> {
+  async createManagedDocument(data: InsertDocument): Promise<Document> {
     const [document] = await db
       .insert(documents)
       .values({
@@ -3663,7 +3663,7 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
-  async updateDocument(id: number, data: Partial<InsertDocument>): Promise<Document> {
+  async updateManagedDocument(id: number, data: Partial<InsertDocument>): Promise<Document> {
     const [document] = await db
       .update(documents)
       .set({
@@ -3675,7 +3675,7 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
-  async deleteDocument(id: number): Promise<void> {
+  async deleteManagedDocument(id: number): Promise<void> {
     // Soft delete - mark as inactive
     await db
       .update(documents)

@@ -49,7 +49,7 @@ const upload = multer({
 // GET /api/documents - Get all documents
 router.get('/', async (req, res) => {
   try {
-    const documents = await storage.getAllDocuments();
+    const documents = await storage.getAllManagedDocuments();
     res.json(documents);
   } catch (error) {
     console.error('Error fetching documents:', error);
@@ -77,7 +77,7 @@ router.get('/search', async (req, res) => {
 router.get('/type/:type', async (req, res) => {
   try {
     const { type } = req.params;
-    const documents = await storage.getDocumentsByType(type);
+    const documents = await storage.getManagedDocumentsByType(type);
     res.json(documents);
   } catch (error) {
     console.error('Error fetching documents by type:', error);
@@ -93,7 +93,7 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid document ID' });
     }
     
-    const document = await storage.getDocument(id);
+    const document = await storage.getManagedDocument(id);
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
     }
@@ -142,7 +142,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     // Validate data with schema
     const validatedData = insertDocumentSchema.parse(documentData);
     
-    const document = await storage.createDocument(validatedData);
+    const document = await storage.createManagedDocument(validatedData);
     res.status(201).json(document);
   } catch (error) {
     console.error('Error uploading document:', error);
@@ -171,7 +171,7 @@ router.put('/:id', async (req, res) => {
     // Validate update data (partial schema)
     const updateData = insertDocumentSchema.partial().parse(req.body);
     
-    const document = await storage.updateDocument(id, updateData);
+    const document = await storage.updateManagedDocument(id, updateData);
     res.json(document);
   } catch (error) {
     console.error('Error updating document:', error);
@@ -192,7 +192,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid document ID' });
     }
 
-    await storage.deleteDocument(id);
+    await storage.deleteManagedDocument(id);
     res.json({ message: 'Document deleted successfully' });
   } catch (error) {
     console.error('Error deleting document:', error);
@@ -208,7 +208,7 @@ router.get('/:id/download', async (req, res) => {
       return res.status(400).json({ error: 'Invalid document ID' });
     }
 
-    const document = await storage.getDocument(id);
+    const document = await storage.getManagedDocument(id);
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
     }

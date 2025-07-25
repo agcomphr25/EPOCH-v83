@@ -2681,14 +2681,11 @@ export class DatabaseStorage implements IStorage {
     // Check if order cannot meet due date
     const cannotMeetDueDate = remainingProcessingDays > daysUntilDue;
     
-    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime})`);
+    console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`);
     
-    // Determine status priority: critical > cannot-meet-due > dept-overdue > on-schedule
-    if (isDeptOverdue && cannotMeetDueDate) {
-      console.log(`🔴 Order ${order.orderId}: CRITICAL - Over dept time AND cannot meet due date`);
-      return 'critical';
-    } else if (cannotMeetDueDate) {
-      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue})`);
+    // Determine status priority: cannot-meet-due overrides all others
+    if (cannotMeetDueDate) {
+      console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue}) ${isDeptOverdue ? '[Also over dept time]' : ''}`);
       return 'cannot-meet-due';
     } else if (isDeptOverdue) {
       console.log(`🟡 Order ${order.orderId}: DEPT-OVERDUE - Over department time limit (${daysInDept} > ${currentDeptStandardTime} days in ${order.currentDepartment})`);

@@ -41,6 +41,20 @@ export function registerRoutes(app: Express) {
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
   
+  // Temporary bypass route for employee layup settings (different path to avoid conflicts)
+  app.get('/api/layup-employee-settings', async (req, res) => {
+    try {
+      console.log('🔧 Bypass employee layup-settings route called');
+      const { storage } = await import('../../storage');
+      const settings = await storage.getAllEmployeeLayupSettings();
+      console.log('🔧 Found employees:', settings);
+      res.json(settings);
+    } catch (error) {
+      console.error('🔧 Employee layup settings fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch employee layup settings" });
+    }
+  });
+  
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

@@ -6,13 +6,22 @@ export default function useEmployeeSettings() {
   const [employees, setEmployees] = useState<(EmployeeLayupSettings & { name: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔧 useEmployeeSettings: Employees state changed:', employees);
+  }, [employees]);
+
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const data = await apiRequest('/api/employees/layup-settings');
+      console.log('🔧 useEmployeeSettings: Fetching employees from /api/layup-employee-settings...');
+      const data = await apiRequest('/api/layup-employee-settings');
+      console.log('🔧 useEmployeeSettings: Received employees data:', data);
+      console.log('🔧 useEmployeeSettings: Data type:', typeof data, 'Array?', Array.isArray(data));
       setEmployees(data);
+      console.log('🔧 useEmployeeSettings: Set employees state to:', data);
     } catch (error) {
-      console.error('Failed to fetch employee layup settings:', error);
+      console.error('🔧 useEmployeeSettings: Failed to fetch employees:', error);
     } finally {
       setLoading(false);
     }

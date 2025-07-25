@@ -10,7 +10,8 @@ import {
   insertEmployeeDocumentSchema,
   insertTimeClockEntrySchema,
   insertChecklistItemSchema,
-  insertOnboardingDocSchema
+  insertOnboardingDocSchema,
+  insertEmployeeLayupSettingsSchema
 } from '@shared/schema';
 
 const router = Router();
@@ -223,6 +224,90 @@ router.post('/:id/checklist', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Update checklist error:', error);
     res.status(500).json({ error: "Failed to update checklist" });
+  }
+});
+
+// Employee Layup Settings CRUD (migrated from monolithic routes.ts)
+// Note: These routes don't require authentication for use in Layup Scheduler
+router.get("/layup-settings", async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getAllEmployeeLayupSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error("Employee layup settings fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch employee layup settings" });
+  }
+});
+
+router.get("/layup-settings/:employeeId", async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getEmployeeLayupSettings(req.params.employeeId);
+    if (settings) {
+      res.json(settings);
+    } else {
+      res.status(404).json({ error: "Employee layup settings not found" });
+    }
+  } catch (error) {
+    console.error("Employee layup settings fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch employee layup settings" });
+  }
+});
+
+router.post("/layup-settings", async (req: Request, res: Response) => {
+  try {
+    const result = insertEmployeeLayupSettingsSchema.parse(req.body);
+    const settings = await storage.createEmployeeLayupSettings(result);
+    res.json(settings);
+  } catch (error) {
+    console.error("Employee layup settings creation error:", error);
+    res.status(400).json({ error: "Invalid employee layup settings data" });
+  }
+});
+
+router.put("/layup-settings/:employeeId", async (req: Request, res: Response) => {
+  try {
+    // Decode URL-encoded employee ID
+    const employeeId = decodeURIComponent(req.params.employeeId);
+    console.log(`💾 API: Updating employee layup settings for: "${employeeId}"`);
+    console.log(`📝 API: Update data:`, req.body);
+    
+    // Validate the data (but be flexible with required fields for updates)
+    const updateData = {
+      rate: req.body.rate ? parseFloat(req.body.rate) : undefined,
+      hours: req.body.hours ? parseFloat(req.body.hours) : undefined,
+      department: req.body.department || undefined,
+      isActive: req.body.isActive !== undefined ? req.body.isActive : undefined,
+      updatedAt: new Date()
+    };
+    
+    // Remove undefined values
+    const cleanData = Object.fromEntries(
+      Object.entries(updateData).filter(([_, value]) => value !== undefined)
+    );
+    
+    console.log(`🧹 API: Clean update data:`, cleanData);
+    
+    const settings = await storage.updateEmployeeLayupSettings(employeeId, cleanData);
+    console.log(`✅ API: Successfully updated employee layup settings for: "${employeeId}"`);
+    res.json(settings);
+  } catch (error) {
+    console.error("❌ API: Employee layup settings update error:", error);
+    console.error("❌ API: Error details:", (error as any)?.message);
+    res.status(500).json({ 
+      error: "Failed to update employee layup settings",
+      details: (error as any)?.message || "Unknown error",
+      employeeId: decodeURIComponent(req.params.employeeId)
+    });
+  }
+});
+
+router.delete("/layup-settings/:employeeId", async (req: Request, res: Response) => {
+  try {
+    await storage.deleteEmployeeLayupSettings(req.params.employeeId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Employee layup settings deletion error:", error);
+    res.status(500).json({ error: "Failed to delete employee layup settings" });
   }
 });
 

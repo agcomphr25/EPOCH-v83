@@ -6,6 +6,8 @@ import {
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists,
+  // Task tracker table
+  taskItems,
   // New employee management tables
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
@@ -59,6 +61,8 @@ import {
   type BomDefinition, type InsertBomDefinition,
   type BomItem, type InsertBomItem,
   type PurchaseReviewChecklist, type InsertPurchaseReviewChecklist,
+  // Task tracker types
+  type TaskItem, type InsertTaskItem,
 
 } from "./schema";
 import { db } from "./db";
@@ -429,10 +433,15 @@ export interface IStorage {
   getPurchaseReviewChecklistById(id: number): Promise<PurchaseReviewChecklist | undefined>;
   createPurchaseReviewChecklist(data: InsertPurchaseReviewChecklist): Promise<PurchaseReviewChecklist>;
   updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist>;
+  deletePurchaseReviewChecklist(id: number): Promise<void>;
 
-
-
-
+  // Task Tracker Methods
+  getAllTaskItems(): Promise<TaskItem[]>;
+  getTaskItemById(id: number): Promise<TaskItem | undefined>;
+  createTaskItem(data: InsertTaskItem): Promise<TaskItem>;
+  updateTaskItem(id: number, data: Partial<InsertTaskItem>): Promise<TaskItem>;
+  updateTaskItemStatus(id: number, statusData: any): Promise<TaskItem>;
+  deleteTaskItem(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3533,6 +3542,57 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(purchaseReviewChecklists)
       .where(eq(purchaseReviewChecklists.id, id));
+  }
+
+  // Task Tracker Methods
+  async getAllTaskItems(): Promise<TaskItem[]> {
+    return await db
+      .select()
+      .from(taskItems)
+      .where(eq(taskItems.isActive, true))
+      .orderBy(desc(taskItems.createdAt));
+  }
+
+  async getTaskItemById(id: number): Promise<TaskItem | undefined> {
+    const [result] = await db
+      .select()
+      .from(taskItems)
+      .where(and(eq(taskItems.id, id), eq(taskItems.isActive, true)));
+    return result || undefined;
+  }
+
+  async createTaskItem(data: InsertTaskItem): Promise<TaskItem> {
+    const [result] = await db
+      .insert(taskItems)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async updateTaskItem(id: number, data: Partial<InsertTaskItem>): Promise<TaskItem> {
+    const [result] = await db
+      .update(taskItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(taskItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async updateTaskItemStatus(id: number, statusData: any): Promise<TaskItem> {
+    const [result] = await db
+      .update(taskItems)
+      .set({ ...statusData, updatedAt: new Date() })
+      .where(eq(taskItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteTaskItem(id: number): Promise<void> {
+    // Soft delete - mark as inactive instead of removing from database
+    await db
+      .update(taskItems)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(taskItems.id, id));
   }
 
 }

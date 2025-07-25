@@ -70,7 +70,9 @@ import {
   loginSchema,
   changePasswordSchema,
   // Purchase Review Checklist schema
-  insertPurchaseReviewChecklistSchema
+  insertPurchaseReviewChecklistSchema,
+  // Task Tracker schema
+  insertTaskItemSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5204,6 +5206,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete purchase review checklist error:", error);
       res.status(500).json({ error: "Failed to delete purchase review checklist" });
+    }
+  });
+
+  // Task Tracker API routes
+  app.get("/api/task-items", async (req, res) => {
+    try {
+      const tasks = await storage.getAllTaskItems();
+      res.json(tasks);
+    } catch (error) {
+      console.error("Get task items error:", error);
+      res.status(500).json({ error: "Failed to get task items" });
+    }
+  });
+
+  app.get("/api/task-items/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const task = await storage.getTaskItemById(parseInt(id));
+      if (!task) {
+        return res.status(404).json({ error: "Task item not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Get task item error:", error);
+      res.status(500).json({ error: "Failed to get task item" });
+    }
+  });
+
+  app.post("/api/task-items", async (req, res) => {
+    try {
+      const data = insertTaskItemSchema.parse(req.body);
+      const task = await storage.createTaskItem(data);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Create task item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid task item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create task item" });
+      }
+    }
+  });
+
+  app.put("/api/task-items/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = insertTaskItemSchema.partial().parse(req.body);
+      const task = await storage.updateTaskItem(parseInt(id), data);
+      if (!task) {
+        return res.status(404).json({ error: "Task item not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Update task item error:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid task item data", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update task item" });
+      }
+    }
+  });
+
+  app.patch("/api/task-items/:id/status", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+      const task = await storage.updateTaskItemStatus(parseInt(id), updateData);
+      if (!task) {
+        return res.status(404).json({ error: "Task item not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Update task item status error:", error);
+      res.status(500).json({ error: "Failed to update task item status" });
+    }
+  });
+
+  app.delete("/api/task-items/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTaskItem(parseInt(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete task item error:", error);
+      res.status(500).json({ error: "Failed to delete task item" });
     }
   });
 

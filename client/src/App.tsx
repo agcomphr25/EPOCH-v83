@@ -58,6 +58,7 @@ import P2Forms from "./pages/P2Forms";
 import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
+import TaskTracker from "./pages/TaskTracker";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -104,6 +105,7 @@ function App() {
                   <Route path="/purchase-review-checklist" component={PurchaseReviewChecklist} />
                   <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
                   <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
+                  <Route path="/task-tracker" component={TaskTracker} />
 
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
                   <Route path="/forms/render/:formId" component={FormRendererPage} />

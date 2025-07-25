@@ -1723,3 +1723,51 @@ export const insertP2ProductionOrderSchema = createInsertSchema(p2ProductionOrde
 
 export type InsertP2ProductionOrder = z.infer<typeof insertP2ProductionOrderSchema>;
 export type P2ProductionOrder = typeof p2ProductionOrders.$inferSelect;
+
+// Task Tracker - Collaborative task management system
+export const taskItems = pgTable('task_items', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(), // Item description/title
+  description: text('description'), // Optional detailed description
+  category: text('category'), // Optional category/project grouping
+  priority: text('priority').default('Medium').notNull(), // Low, Medium, High, Critical
+  dueDate: timestamp('due_date'),
+  
+  // Status checkboxes
+  gjStatus: boolean('gj_status').default(false).notNull(), // GJ checkbox
+  tmStatus: boolean('tm_status').default(false).notNull(), // TM checkbox
+  finishedStatus: boolean('finished_status').default(false).notNull(), // Finished checkbox
+  
+  // Tracking fields
+  assignedTo: text('assigned_to'), // Who is responsible
+  createdBy: text('created_by').notNull(), // Who created the task
+  gjCompletedBy: text('gj_completed_by'), // Who checked GJ
+  gjCompletedAt: timestamp('gj_completed_at'), // When GJ was checked
+  tmCompletedBy: text('tm_completed_by'), // Who checked TM
+  tmCompletedAt: timestamp('tm_completed_at'), // When TM was checked
+  finishedCompletedBy: text('finished_completed_by'), // Who marked as finished
+  finishedCompletedAt: timestamp('finished_completed_at'), // When marked as finished
+  
+  notes: text('notes'), // Additional notes/comments
+  isActive: boolean('is_active').default(true).notNull(), // For soft delete
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertTaskItemSchema = createInsertSchema(taskItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Title is required").max(255, "Title must be less than 255 characters"),
+  description: z.string().max(1000, "Description must be less than 1000 characters").optional(),
+  category: z.string().max(100, "Category must be less than 100 characters").optional(),
+  priority: z.enum(['Low', 'Medium', 'High', 'Critical']).default('Medium'),
+  dueDate: z.string().datetime().optional(),
+  assignedTo: z.string().max(100, "Assigned to must be less than 100 characters").optional(),
+  createdBy: z.string().min(1, "Created by is required").max(100, "Created by must be less than 100 characters"),
+  notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
+});
+
+export type InsertTaskItem = z.infer<typeof insertTaskItemSchema>;
+export type TaskItem = typeof taskItems.$inferSelect;

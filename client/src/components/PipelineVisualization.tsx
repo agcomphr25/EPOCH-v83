@@ -165,9 +165,17 @@ export default function PipelineVisualization() {
             const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
             const orders = pipelineDetails?.[dept.name] || [];
             
+            // Determine if department should be highlighted (more than 25 stocks)
+            const isOverloaded = count > 25;
+            
             return (
               <div key={dept.name} className="text-center space-y-2">
-                <div className={`w-full h-16 ${dept.color} rounded-lg flex items-center justify-center text-white font-bold text-xl`}>
+                <div 
+                  className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl ${
+                    isOverloaded ? 'text-black' : `${dept.color} text-white`
+                  }`}
+                  style={isOverloaded ? { backgroundColor: '#FFFF00' } : {}}
+                >
                   {count}
                 </div>
                 <div className="text-sm font-medium">{dept.name}</div>
@@ -187,22 +195,33 @@ export default function PipelineVisualization() {
         </div>
         
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-center gap-4 text-sm">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-green-500 rounded"></div>
-            <span>On Schedule</span>
+        <div className="mt-4 space-y-2">
+          {/* Order Status Legend */}
+          <div className="flex items-center justify-center gap-4 text-sm">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-green-500 rounded"></div>
+              <span>On Schedule</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
+              <span>Dept Overdue</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFA500'}}></div>
+              <span>Can't Meet Due</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-red-500 rounded"></div>
+              <span>Critical</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
-            <span>Dept Overdue</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFA500'}}></div>
-            <span>Can't Meet Due</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <span>Critical</span>
+          
+          {/* Department Card Legend */}
+          <div className="flex items-center justify-center gap-4 text-xs text-gray-600">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
+              <span>Department Card: {'>'}25 Stocks</span>
+            </div>
           </div>
         </div>
         

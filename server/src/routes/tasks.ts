@@ -61,7 +61,7 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
     const taskId = parseInt(req.params.id);
     const statusData = req.body;
-    const updatedTask = await storage.updateTaskItemStatus(taskId, statusData);
+    const updatedTask = await storage.updateTaskItem(taskId, statusData);
     res.json(updatedTask);
   } catch (error) {
     console.error('Update task status error:', error);

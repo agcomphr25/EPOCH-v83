@@ -529,16 +529,7 @@ export default function LayupScheduler() {
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
   
-  // Debug employees data in component
-  console.log('🔧 LayupScheduler: Employees data from hook:', { employees, employeesLength: employees.length, employeesLoading });
-  console.log('🔧 LayupScheduler: First employee:', employees[0]);
-  console.log('🔧 LayupScheduler: Employees array type check:', Array.isArray(employees));
-  
-  // Track employees state changes
-  React.useEffect(() => {
-    console.log('🔧 LayupScheduler: Employees changed in component:', employees);
-    console.log('🔧 LayupScheduler: Employees length:', employees.length);
-  }, [employees]);
+
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
   
   // Debug production orders specifically

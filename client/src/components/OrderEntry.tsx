@@ -366,6 +366,12 @@ export default function OrderEntry() {
         // Set ONLY the features object - all form controls now read from this
         setFeatures(featuresObj);
         
+        // Force re-render by updating features state after a brief delay
+        setTimeout(() => {
+          console.log('🔄 Forcing features state update for re-render');
+          setFeatures(prev => ({ ...prev, ...featuresObj }));
+        }, 100);
+        
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);
         setFbOrderNumber(order.fbOrderNumber || '');
@@ -946,9 +952,13 @@ export default function OrderEntry() {
                   {/* Handedness */}
                   <div>
                     <Label>Handedness</Label>
+                    {console.log('🔍 Rendering Handedness with features.handedness:', features.handedness)}
                     <Select 
                       value={features.handedness || ''} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
+                      onValueChange={(value) => {
+                        console.log('🖱️ Handedness changed to:', value);
+                        setFeatures(prev => ({ ...prev, handedness: value }));
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select handedness..." />
@@ -1123,6 +1133,7 @@ export default function OrderEntry() {
                   {/* Action Length */}
                   <div>
                     <Label>Action Length</Label>
+                    {console.log('🔍 Rendering Action Length with features.action_length:', features.action_length)}
                     <Select 
                       value={features.action_length || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}

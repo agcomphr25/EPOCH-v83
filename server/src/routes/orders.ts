@@ -15,10 +15,10 @@ import {
 
 const router = Router();
 
-// Get all orders for All Orders List (root endpoint) - should include finalized orders
+// Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getFinalizedOrders();
+    const orders = await storage.getAllOrders();
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders:', error);

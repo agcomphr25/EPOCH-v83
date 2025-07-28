@@ -951,10 +951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Draft found:", draft.orderId, "Status:", draft.status);
       
-      // Move order from draft table to main orders table
-      const finalizedOrder = await storage.finalizeOrderDraft(draft.orderId);
-      console.log("Successfully finalized and moved order:", draft.orderId);
-      res.json({ success: true, message: "Order finalized and moved to production", order: finalizedOrder });
+      // Simply update status to FINALIZED in the draft table
+      await storage.updateOrderDraft(draft.orderId, { status: 'FINALIZED' });
+      console.log("Successfully finalized order:", draft.orderId);
+      res.json({ success: true, message: "Order finalized successfully" });
     } catch (error) {
       console.error("Finalize order error:", error);
       res.status(500).json({ error: "Failed to finalize order" });

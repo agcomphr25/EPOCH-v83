@@ -165,6 +165,7 @@ export interface IStorage {
   // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
   markOrderIdAsUsed(orderId: string): Promise<void>;
+  cleanupExpiredReservations(): Promise<number>;
 
   // Forms CRUD
   getAllForms(): Promise<Form[]>;

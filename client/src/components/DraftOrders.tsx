@@ -31,15 +31,10 @@ export default function DraftOrders() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const { data: allDrafts = [], isLoading, error } = useQuery({
+  const { data: drafts = [], isLoading, error } = useQuery({
     queryKey: ['/api/orders/drafts'],
     queryFn: () => apiRequest('/api/orders/drafts'),
   });
-
-  // Filter to only show actual drafts, not finalized orders
-  const drafts = allDrafts.filter((draft: OrderDraft) => 
-    draft.status === 'DRAFT' || draft.status === 'CONFIRMED'
-  );
 
   const deleteDraftMutation = useMutation({
     mutationFn: (orderId: string) => apiRequest(`/api/orders/draft/${orderId}`, {

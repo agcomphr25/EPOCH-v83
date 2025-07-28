@@ -41,11 +41,15 @@ export default function AllOrdersList() {
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
+    queryFn: () => apiRequest('/api/stock-models'),
   });
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
-    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
+    if (!modelId || !stockModels || stockModels.length === 0) {
+      return modelId || 'Unknown Model';
+    }
+    const model = (stockModels as any[]).find((m: any) => m && m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
@@ -197,7 +201,12 @@ export default function AllOrdersList() {
                       {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell>{order.customer || order.customerId}</TableCell>
-                    <TableCell>{order.product || getModelDisplayName(order.modelId)}</TableCell>
+                    <TableCell>
+                      {order.product || getModelDisplayName(order.modelId)}
+                      {stockModels.length === 0 && (
+                        <span className="text-xs text-gray-400 ml-2">(Loading...)</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
                         {order.currentDepartment}

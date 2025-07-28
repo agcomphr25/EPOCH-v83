@@ -511,19 +511,27 @@ export default function OrderEntry() {
       console.log('🔍 Raw models from API:', models);
       console.log('🔍 Total models received:', models?.length || 0);
       
-      if (models && models.length > 0) {
+      if (models && Array.isArray(models) && models.length > 0) {
         console.log('🔍 First model sample:', models[0]);
         console.log('🔍 Model properties:', Object.keys(models[0]));
         
-        const activeModels = models.filter((m: StockModel) => m.isActive);
+        // Ensure models have the required fields
+        const validModels = models.filter((m: any) => 
+          m && typeof m === 'object' && 
+          m.id && 
+          (m.displayName || m.name) && 
+          typeof m.price === 'number'
+        );
+        
+        const activeModels = validModels.filter((m: StockModel) => m.isActive !== false);
         console.log('🔍 Active models filtered:', activeModels.length);
         console.log('🔍 Active models IDs:', activeModels.map((m: StockModel) => m.id));
-        console.log('🔍 Active models display names:', activeModels.map((m: StockModel) => m.displayName));
+        console.log('🔍 Active models display names:', activeModels.map((m: StockModel) => m.displayName || m.name));
         
         setModelOptions(activeModels);
         console.log('✅ Stock models loaded successfully:', activeModels.length);
       } else {
-        console.log('⚠️ No models received from API');
+        console.log('⚠️ No valid models received from API');
         setModelOptions([]);
       }
     } catch (error) {
@@ -951,19 +959,33 @@ export default function OrderEntry() {
                         console.log('  - ModelOptions length:', modelOptions.length);
                         console.log('  - RenderKey:', renderKey);
                         if (modelOptions.length > 0) {
-                          console.log('  - Available models:', modelOptions.map(m => `${m.id}:${m.displayName}`).slice(0, 5));
+                          console.log('  - Available models:', modelOptions.map(m => `${m.id}:${m.displayName || m.name}`).slice(0, 5));
                           const selectedModel = modelOptions.find(m => m.id === modelId);
-                          console.log('  - Selected model found:', !!selectedModel, selectedModel?.displayName);
+                          console.log('  - Selected model found:', !!selectedModel, selectedModel?.displayName || selectedModel?.name);
+                        } else {
+                          console.log('  - No models available in dropdown');
                         }
+                        
+                        if (modelOptions.length === 0) {
+                          return (
+                            <SelectItem value="no-models" disabled>
+                              No stock models available
+                            </SelectItem>
+                          );
+                        }
+                        
                         return modelOptions.map((model) => (
                           <SelectItem key={model.id} value={model.id}>
-                            {model.displayName}
+                            {model.displayName || model.name} - ${model.price?.toFixed(2) || '0.00'}
                           </SelectItem>
                         ));
                       })()}
                     </SelectContent>
                   </Select>
                   {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}
+                  {modelOptions.length === 0 && (
+                    <p className="text-sm text-yellow-600">Loading stock models...</p>
+                  )}
                 </div>
 
                 {/* Alamo Price Override */}

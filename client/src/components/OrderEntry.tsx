@@ -952,13 +952,10 @@ export default function OrderEntry() {
                   {/* Handedness */}
                   <div>
                     <Label>Handedness</Label>
-                    {console.log('🔍 Rendering Handedness with features.handedness:', features.handedness)}
                     <Select 
+                      key={`handedness-${features.handedness || 'empty'}`}
                       value={features.handedness || ''} 
-                      onValueChange={(value) => {
-                        console.log('🖱️ Handedness changed to:', value);
-                        setFeatures(prev => ({ ...prev, handedness: value }));
-                      }}
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select handedness..." />
@@ -974,6 +971,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Action Inlet</Label>
                     <Select 
+                      key={`action-inlet-${features.action_inlet || 'empty'}`}
                       value={features.action_inlet || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
                     >
@@ -1133,8 +1131,8 @@ export default function OrderEntry() {
                   {/* Action Length */}
                   <div>
                     <Label>Action Length</Label>
-                    {console.log('🔍 Rendering Action Length with features.action_length:', features.action_length)}
                     <Select 
+                      key={`action-length-${features.action_length || 'empty'}`}
                       value={features.action_length || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
                     >

@@ -1586,27 +1586,55 @@ export default function OrderEntry() {
                 <div className="flex justify-between items-center">
                   <span>{(() => {
                     const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                    console.log('🔧 Rails feature found:', !!feature, feature?.displayName);
                     return feature?.displayName || 'Rails';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{railAccessory && railAccessory.length > 0 ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'rail_accessory');
-                      if (!feature?.options) return railAccessory.join(', ');
-                      const labels = railAccessory.map(optionValue => {
-                        const option = feature.options!.find(opt => opt.value === optionValue);
-                        return option?.label || optionValue;
+                    <span className="font-medium">{(() => {
+                      // Check both railAccessory state and features.rail_accessory
+                      const railsFromState = railAccessory && railAccessory.length > 0 ? railAccessory : null;
+                      const railsFromFeatures = features.rail_accessory && features.rail_accessory.length > 0 ? features.rail_accessory : null;
+                      const currentRails = railsFromState || railsFromFeatures;
+                      
+                      console.log('🔧 Rails state debug:', {
+                        railAccessory,
+                        'features.rail_accessory': features.rail_accessory,
+                        currentRails,
+                        featureDefsCount: featureDefs.length
                       });
-                      return labels.join(', ');
-                    })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${railAccessory && railAccessory.length > 0 ? (() => {
-                      const feature = featureDefs.find(f => f.id === 'rail_accessory');
-                      if (!feature?.options) return '0.00';
-                      const totalPrice = railAccessory.reduce((sum, optionValue) => {
-                        const option = feature.options!.find(opt => opt.value === optionValue);
-                        return sum + (option?.price || 0);
-                      }, 0);
-                      return totalPrice.toFixed(2);
-                    })() : '0.00'}</span>
+                      
+                      if (currentRails && currentRails.length > 0) {
+                        const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                        if (!feature?.options) {
+                          console.log('🔧 Rails feature found but no options:', feature);
+                          return currentRails.join(', ');
+                        }
+                        const labels = currentRails.map(optionValue => {
+                          const option = feature.options!.find(opt => opt.value === optionValue);
+                          console.log('🔧 Rails option lookup:', optionValue, '→', option?.label);
+                          return option?.label || optionValue;
+                        });
+                        return labels.join(', ');
+                      }
+                      return 'Not selected';
+                    })()}</span>
+                    <span className="text-blue-600 font-bold">${(() => {
+                      // Check both railAccessory state and features.rail_accessory
+                      const railsFromState = railAccessory && railAccessory.length > 0 ? railAccessory : null;
+                      const railsFromFeatures = features.rail_accessory && features.rail_accessory.length > 0 ? features.rail_accessory : null;
+                      const currentRails = railsFromState || railsFromFeatures;
+                      
+                      if (currentRails && currentRails.length > 0) {
+                        const feature = featureDefs.find(f => f.id === 'rail_accessory');
+                        if (!feature?.options) return '0.00';
+                        const totalPrice = currentRails.reduce((sum, optionValue) => {
+                          const option = feature.options!.find(opt => opt.value === optionValue);
+                          return sum + (option?.price || 0);
+                        }, 0);
+                        return totalPrice.toFixed(2);
+                      }
+                      return '0.00';
+                    })()}</span>
                   </div>
                 </div>
                 
@@ -1682,56 +1710,85 @@ export default function OrderEntry() {
                 <div className="flex justify-between items-center">
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
-                      // Search through ALL paint-related features to find the matching option
-                      const paintFeatures = featureDefs.filter(f => 
-                        f.displayName?.includes('Options') || 
-                        f.displayName?.includes('Camo') || 
-                        f.displayName?.includes('Cerakote') ||
-                        f.displayName?.includes('Terrain') ||
-                        f.displayName?.includes('Rogue') ||
-                        f.displayName?.includes('Standard') ||
-                        f.id === 'metallic_finishes' ||
-                        f.name === 'metallic_finishes' ||
-                        f.category === 'paint' ||
-                        f.subcategory === 'paint'
-                      );
+                    <span className="font-medium">{(() => {
+                      // Check both paintOptions state and features for paint-related values
+                      const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
+                      const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
+                      const currentPaint = paintFromState || paintFromFeatures;
                       
-                      for (const feature of paintFeatures) {
-                        if (feature.options) {
-                          const option = feature.options.find(opt => opt.value === paintOptions);
-                          if (option) {
-                            return option.label;
+                      console.log('🎨 Paint state debug:', {
+                        paintOptions,
+                        'features.metallic_finishes': features.metallic_finishes,
+                        'features.paint_options': features.paint_options,
+                        'features.paint_options_combined': features.paint_options_combined,
+                        currentPaint,
+                        featureDefsCount: featureDefs.length
+                      });
+                      
+                      if (currentPaint && currentPaint !== 'none') {
+                        // Search through ALL paint-related features to find the matching option
+                        const paintFeatures = featureDefs.filter(f => 
+                          f.displayName?.includes('Options') || 
+                          f.displayName?.includes('Camo') || 
+                          f.displayName?.includes('Cerakote') ||
+                          f.displayName?.includes('Terrain') ||
+                          f.displayName?.includes('Rogue') ||
+                          f.displayName?.includes('Standard') ||
+                          f.id === 'metallic_finishes' ||
+                          f.name === 'metallic_finishes' ||
+                          f.category === 'paint' ||
+                          f.subcategory === 'paint'
+                        );
+                        
+                        console.log('🎨 Paint features found:', paintFeatures.length, paintFeatures.map(f => ({ id: f.id, displayName: f.displayName, optionsCount: f.options?.length })));
+                        
+                        for (const feature of paintFeatures) {
+                          if (feature.options) {
+                            const option = feature.options.find(opt => opt.value === currentPaint);
+                            if (option) {
+                              console.log('🎨 Paint option found:', currentPaint, '→', option.label, '$' + option.price);
+                              return option.label;
+                            }
                           }
                         }
+                        console.log('🎨 Paint option not found for value:', currentPaint);
+                        return 'Selected';
                       }
-                      return 'Selected';
-                    })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${paintOptions && paintOptions !== 'none' ? (() => {
-                      // Search through ALL paint-related features to find the matching option
-                      const paintFeatures = featureDefs.filter(f => 
-                        f.displayName?.includes('Options') || 
-                        f.displayName?.includes('Camo') || 
-                        f.displayName?.includes('Cerakote') ||
-                        f.displayName?.includes('Terrain') ||
-                        f.displayName?.includes('Rogue') ||
-                        f.displayName?.includes('Standard') ||
-                        f.id === 'metallic_finishes' ||
-                        f.name === 'metallic_finishes' ||
-                        f.category === 'paint' ||
-                        f.subcategory === 'paint'
-                      );
+                      return 'Not selected';
+                    })()}</span>
+                    <span className="text-blue-600 font-bold">${(() => {
+                      // Check both paintOptions state and features for paint-related values
+                      const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
+                      const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
+                      const currentPaint = paintFromState || paintFromFeatures;
                       
-                      for (const feature of paintFeatures) {
-                        if (feature.options) {
-                          const option = feature.options.find(opt => opt.value === paintOptions);
-                          if (option) {
-                            return (option.price || 0).toFixed(2);
+                      if (currentPaint && currentPaint !== 'none') {
+                        // Search through ALL paint-related features to find the matching option
+                        const paintFeatures = featureDefs.filter(f => 
+                          f.displayName?.includes('Options') || 
+                          f.displayName?.includes('Camo') || 
+                          f.displayName?.includes('Cerakote') ||
+                          f.displayName?.includes('Terrain') ||
+                          f.displayName?.includes('Rogue') ||
+                          f.displayName?.includes('Standard') ||
+                          f.id === 'metallic_finishes' ||
+                          f.name === 'metallic_finishes' ||
+                          f.category === 'paint' ||
+                          f.subcategory === 'paint'
+                        );
+                        
+                        for (const feature of paintFeatures) {
+                          if (feature.options) {
+                            const option = feature.options.find(opt => opt.value === currentPaint);
+                            if (option) {
+                              return (option.price || 0).toFixed(2);
+                            }
                           }
                         }
+                        return '0.00';
                       }
                       return '0.00';
-                    })() : '0.00'}</span>
+                    })()}</span>
                   </div>
                 </div>
               </div>

@@ -46,6 +46,43 @@ export function registerRoutes(app: Express): Server {
   // Layup PDF generation routes
   app.use('/api/pdf', layupPdfRoute);
   
+  // Stock Models routes - bypass to old monolithic routes temporarily
+  app.get('/api/stock-models', async (req, res) => {
+    try {
+      console.log("🔍 Stock models API called");
+      const { storage } = await import('../../storage');
+      const stockModels = await storage.getAllStockModels();
+      console.log("🔍 Retrieved stock models from storage:", stockModels.length, "models");
+      if (stockModels.length > 0) {
+        console.log("🔍 First stock model from storage:", stockModels[0]);
+        console.log("🔍 First stock model keys:", Object.keys(stockModels[0]));
+      }
+      
+      // Transform data to ensure proper format for frontend
+      const transformedModels = stockModels.map(model => ({
+        id: model.id,
+        name: model.name,
+        displayName: model.displayName,
+        price: model.price,
+        description: model.description,
+        isActive: model.isActive,
+        sortOrder: model.sortOrder,
+        createdAt: model.createdAt,
+        updatedAt: model.updatedAt
+      }));
+      
+      console.log("🔍 Transformed models count:", transformedModels.length);
+      if (transformedModels.length > 0) {
+        console.log("🔍 First transformed model:", transformedModels[0]);
+      }
+      
+      res.json(transformedModels);
+    } catch (error) {
+      console.error("🚨 Error retrieving stock models:", error);
+      res.status(500).json({ error: "Failed to retrieve stock models" });
+    }
+  });
+
   // Features routes - bypass to old monolithic routes temporarily
   app.get('/api/features', async (req, res) => {
     try {

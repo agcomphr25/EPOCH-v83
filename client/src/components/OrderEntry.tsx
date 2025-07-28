@@ -197,16 +197,17 @@ export default function OrderEntry() {
       }
     }
 
-    // Add rail accessory prices (separate state variable)
-    if (railAccessory && railAccessory.length > 0) {
-      console.log('💰 Rails calculation - railAccessory value:', railAccessory);
+    // Add rail accessory prices (check both state variable and features object)
+    const currentRails = railAccessory && railAccessory.length > 0 ? railAccessory : (features.rail_accessory || []);
+    if (currentRails && currentRails.length > 0) {
+      console.log('💰 Rails calculation - current rails:', currentRails);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
       console.log('💰 Rails calculation - found feature:', railFeature?.displayName || railFeature?.name);
       
       if (railFeature?.options) {
         console.log('💰 Rails calculation - available options:', railFeature.options.map(opt => `${opt.label}: ${opt.value} = $${opt.price}`));
         let railsTotal = 0;
-        railAccessory.forEach(optionValue => {
+        currentRails.forEach(optionValue => {
           const option = railFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
             railsTotal += option.price;
@@ -221,7 +222,7 @@ export default function OrderEntry() {
         console.log('💰 Rails calculation - NO FEATURE or OPTIONS found for rail_accessory');
       }
     } else {
-      console.log('💰 Rails calculation - No railAccessory selected or empty array');
+      console.log('💰 Rails calculation - No rails selected');
     }
 
     // Add other options prices (separate state variable)

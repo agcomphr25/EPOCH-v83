@@ -345,6 +345,7 @@ export default function OrderEntry() {
         }
         
         console.log('Setting modelId:', order.modelId || '');
+        console.log('Current modelOptions available:', modelOptions.length);
         setModelId(order.modelId || '');
         console.log('Setting features object:', order.features || {});
         setFeatures(order.features || {});
@@ -1405,7 +1406,7 @@ export default function OrderEntry() {
                 <div className="flex justify-between items-center">
                   <span>Handedness:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{handedness ? (handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
+                    <span className="font-medium">{features.handedness ? (features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected'}</span>
                     <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
@@ -1417,14 +1418,14 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Action Length';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{actionLength ? (() => {
+                    <span className="font-medium">{features.action_length ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_length');
-                      const option = feature?.options?.find(opt => opt.value === actionLength);
-                      return option?.label || actionLength.charAt(0).toUpperCase() + actionLength.slice(1);
+                      const option = feature?.options?.find(opt => opt.value === features.action_length);
+                      return option?.label || features.action_length.charAt(0).toUpperCase() + features.action_length.slice(1);
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${actionLength ? (() => {
+                    <span className="text-blue-600 font-bold">${features.action_length ? (() => {
                       const feature = featureDefs.find(f => f.id === 'action_length');
-                      const option = feature?.options?.find(opt => opt.value === actionLength);
+                      const option = feature?.options?.find(opt => opt.value === features.action_length);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1457,14 +1458,14 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Bottom Metal';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{bottomMetal ? (() => {
+                    <span className="font-medium">{features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                      const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                      return option?.label || bottomMetal;
+                      const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
+                      return option?.label || features.bottom_metal;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${bottomMetal ? (() => {
+                    <span className="text-blue-600 font-bold">${features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                      const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                      const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1537,19 +1538,19 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Rails';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{railAccessory && railAccessory.length > 0 ? (() => {
+                    <span className="font-medium">{features.rail_accessory && features.rail_accessory.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'rail_accessory');
-                      if (!feature?.options) return railAccessory.join(', ');
-                      const labels = railAccessory.map(optionValue => {
+                      if (!feature?.options) return features.rail_accessory.join(', ');
+                      const labels = features.rail_accessory.map(optionValue => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return option?.label || optionValue;
                       });
                       return labels.join(', ');
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${railAccessory && railAccessory.length > 0 ? (() => {
+                    <span className="text-blue-600 font-bold">${features.rail_accessory && features.rail_accessory.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'rail_accessory');
                       if (!feature?.options) return '0.00';
-                      const totalPrice = railAccessory.reduce((sum, optionValue) => {
+                      const totalPrice = features.rail_accessory.reduce((sum, optionValue) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return sum + (option?.price || 0);
                       }, 0);
@@ -1605,19 +1606,19 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Other Options';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{otherOptions && otherOptions.length > 0 ? (() => {
+                    <span className="font-medium">{features.other_options && features.other_options.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
-                      if (!feature?.options) return otherOptions.join(', ');
-                      const labels = otherOptions.map(optionValue => {
+                      if (!feature?.options) return features.other_options.join(', ');
+                      const labels = features.other_options.map(optionValue => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return option?.label || optionValue;
                       });
                       return labels.join(', ');
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${otherOptions && otherOptions.length > 0 ? (() => {
+                    <span className="text-blue-600 font-bold">${features.other_options && features.other_options.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
                       if (!feature?.options) return '0.00';
-                      const totalPrice = otherOptions.reduce((sum, optionValue) => {
+                      const totalPrice = features.other_options.reduce((sum, optionValue) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return sum + (option?.price || 0);
                       }, 0);
@@ -1630,7 +1631,7 @@ export default function OrderEntry() {
                 <div className="flex justify-between items-center">
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{paintOptions && paintOptions !== 'none' ? (() => {
+                    <span className="font-medium">{features.paint_options && features.paint_options !== 'none' ? (() => {
                       // Search through ALL paint-related features to find the matching option
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName?.includes('Options') || 
@@ -1647,7 +1648,7 @@ export default function OrderEntry() {
                       
                       for (const feature of paintFeatures) {
                         if (feature.options) {
-                          const option = feature.options.find(opt => opt.value === paintOptions);
+                          const option = feature.options.find(opt => opt.value === features.paint_options);
                           if (option) {
                             return option.label;
                           }
@@ -1655,7 +1656,7 @@ export default function OrderEntry() {
                       }
                       return 'Selected';
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${paintOptions && paintOptions !== 'none' ? (() => {
+                    <span className="text-blue-600 font-bold">${features.paint_options && features.paint_options !== 'none' ? (() => {
                       // Search through ALL paint-related features to find the matching option
                       const paintFeatures = featureDefs.filter(f => 
                         f.displayName?.includes('Options') || 
@@ -1672,7 +1673,7 @@ export default function OrderEntry() {
                       
                       for (const feature of paintFeatures) {
                         if (feature.options) {
-                          const option = feature.options.find(opt => opt.value === paintOptions);
+                          const option = feature.options.find(opt => opt.value === features.paint_options);
                           if (option) {
                             return (option.price || 0).toFixed(2);
                           }

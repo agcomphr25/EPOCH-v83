@@ -567,12 +567,50 @@ export default function LayupScheduler() {
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
+  // Load existing schedule data from database
+  const { data: existingSchedule, isLoading: scheduleLoading } = useQuery({
+    queryKey: ['/api/layup-schedule'],
+    enabled: true,
+  });
+
+  // Update local assignments when schedule data loads
+  useEffect(() => {
+    if (existingSchedule && existingSchedule.length > 0) {
+      const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      existingSchedule.forEach((entry: any) => {
+        assignments[entry.orderId] = {
+          moldId: entry.moldId,
+          date: entry.scheduledDate
+        };
+      });
+      
+      console.log('📅 Loading existing schedule assignments:', Object.keys(assignments).length, 'assignments');
+      setOrderAssignments(assignments);
+    }
+  }, [existingSchedule]);
+
   // Save functionality
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedScheduleChanges, setHasUnsavedScheduleChanges] = useState(false);
 
   const saveScheduleMutation = useMutation({
     mutationFn: async (assignments: {[orderId: string]: { moldId: string, date: string }}) => {
+      // First, clear existing schedule entries for these orders
+      const orderIds = Object.keys(assignments);
+      console.log('💾 Saving schedule for', orderIds.length, 'orders');
+      
+      // Delete existing entries for these orders
+      const deletePromises = orderIds.map(orderId => 
+        apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+          method: 'DELETE'
+        }).catch(err => {
+          // Ignore errors for non-existent entries
+          console.log('Note: No existing schedule found for order', orderId);
+        })
+      );
+      
+      await Promise.all(deletePromises);
+      
       // Convert assignments to schedule entries
       const scheduleEntries = Object.entries(assignments).map(([orderId, assignment]) => ({
         orderId,

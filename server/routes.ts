@@ -4717,6 +4717,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/layup-schedule/by-order/:orderId", async (req, res) => {
+    try {
+      const orderId = req.params.orderId;
+      await storage.deleteLayupScheduleByOrder(orderId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Layup schedule deletion by order error:", error);
+      res.status(500).json({ error: "Failed to delete layup schedule by order" });
+    }
+  });
+
   // Department Progression API Routes
   
   // Get all orders with department information

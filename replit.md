@@ -10,6 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 28, 2025 - Save Schedule Persistence Fix and Sticky Header Implementation (COMPLETED)**
+- ✅ **Save Schedule Persistence**: Fixed critical issue where Save Schedule button didn't persist changes across page refreshes by implementing proper database loading and saving
+- ✅ **Schedule Data Loading**: Added automatic loading of existing schedule assignments from database on component initialization
+- ✅ **Database Integration**: Enhanced save functionality to clear existing entries before saving new assignments to prevent duplicates
+- ✅ **Unsaved Changes Tracking**: Properly tracks when user makes drag-and-drop changes and shows Save Schedule button
+- ✅ **Sticky Header Implementation**: Control bar and date headers now remain fixed at top during scrolling for better user experience
+- ✅ **API Endpoint Enhancement**: Added `/api/layup-schedule/by-order/{orderId}` DELETE endpoint for proper cleanup during saves
+- ✅ **Real-time Updates**: Schedule changes now persist correctly and reload properly when navigating back to Layup Scheduler
+
 **July 28, 2025 - Layup Scheduler Mold Filtering and Display Optimization (COMPLETED)**
 - ✅ **Smart Mold Filtering**: Implemented intelligent mold display showing only relevant molds (those with assigned orders OR compatible with orders in queue)
 - ✅ **Order Count Sorting**: Molds sorted by total order count in descending order, ensuring most active molds appear at top of each day

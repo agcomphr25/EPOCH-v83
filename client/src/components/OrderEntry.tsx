@@ -163,43 +163,65 @@ export default function OrderEntry() {
 
     // Add paint options price (separate state variable)
     if (paintOptions && paintOptions !== 'none') {
+      console.log('💰 Paint calculation - paintOptions value:', paintOptions);
       const paintFeatures = featureDefs.filter(f => 
-        f.displayName === 'Premium Options' ||
-        f.displayName === 'Terrain Options' ||
-        f.displayName === 'Rogue Options' ||
-        f.displayName === 'Standard Options' ||
-        f.displayName === 'Carbon Camo Ready' ||
-        f.displayName === 'Camo Options' ||
+        f.displayName?.includes('Options') || 
+        f.displayName?.includes('Camo') || 
+        f.displayName?.includes('Cerakote') ||
+        f.displayName?.includes('Terrain') ||
+        f.displayName?.includes('Rogue') ||
+        f.displayName?.includes('Standard') ||
         f.id === 'metallic_finishes' ||
         f.name === 'metallic_finishes' ||
-        f.category === 'paint_options'
+        f.category === 'paint' ||
+        f.subcategory === 'paint'
       );
       
+      console.log('💰 Paint calculation - found features:', paintFeatures.length, paintFeatures.map(f => f.displayName));
+      
+      let paintPriceAdded = false;
       for (const feature of paintFeatures) {
         if (feature.options) {
           const option = feature.options.find(opt => opt.value === paintOptions);
           if (option?.price) {
+            console.log('💰 Paint calculation - found option:', option.label, 'price:', option.price);
             total += option.price;
+            paintPriceAdded = true;
             break; // Only add price once
           }
         }
+      }
+      
+      if (!paintPriceAdded) {
+        console.log('💰 Paint calculation - NO PRICE FOUND for:', paintOptions);
       }
     }
 
     // Add rail accessory prices (separate state variable)
     if (railAccessory && railAccessory.length > 0) {
+      console.log('💰 Rails calculation - railAccessory value:', railAccessory);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
+      console.log('💰 Rails calculation - found feature:', railFeature?.displayName || railFeature?.name);
+      
       if (railFeature?.options) {
+        console.log('💰 Rails calculation - available options:', railFeature.options.map(opt => `${opt.label}: ${opt.value} = $${opt.price}`));
         let railsTotal = 0;
         railAccessory.forEach(optionValue => {
           const option = railFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
             railsTotal += option.price;
             total += option.price;
+            console.log('💰 Rails calculation - FOUND and ADDED:', option.label, 'price:', option.price);
+          } else {
+            console.log('💰 Rails calculation - NO PRICE FOUND for:', optionValue);
           }
         });
-        console.log('💰 Price calculation - Rails total:', railsTotal, 'from', railAccessory);
+        console.log('💰 Rails calculation - Total rails price:', railsTotal);
+      } else {
+        console.log('💰 Rails calculation - NO FEATURE or OPTIONS found for rail_accessory');
       }
+    } else {
+      console.log('💰 Rails calculation - No railAccessory selected or empty array');
     }
 
     // Add other options prices (separate state variable)

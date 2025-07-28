@@ -461,10 +461,17 @@ export default function OrderEntry() {
   const loadFeatures = async () => {
     try {
       const features = await apiRequest('/api/features');
-      setFeatureDefs(features);
-      console.log('Features loaded:', features.length);
+      console.log('🔍 Raw features data from API:', features);
+      console.log('🔍 Features array length:', features?.length || 0);
+      if (features && features.length > 0) {
+        console.log('🔍 First feature sample:', features[0]);
+        console.log('🔍 Available feature IDs:', features.map((f: any) => f.id).join(', '));
+      }
+      setFeatureDefs(features || []);
+      console.log('🔍 setFeatureDefs called with:', features?.length || 0, 'features');
     } catch (error) {
-      console.error('Failed to load features:', error);
+      console.error('❌ Failed to load features:', error);
+      setFeatureDefs([]); // Set empty array on error
     }
   };
 

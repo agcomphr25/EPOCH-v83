@@ -311,7 +311,9 @@ export default function OrderEntry() {
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
+      console.log('Loading existing order:', orderIdToEdit);
       const order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+      console.log('Received order data:', order);
       if (order) {
         // Populate form with existing order data
         setOrderId(order.orderId);
@@ -327,12 +329,15 @@ export default function OrderEntry() {
           }
         }
         
+        console.log('Setting modelId:', order.modelId || '');
         setModelId(order.modelId || '');
+        console.log('Setting features object:', order.features || {});
         setFeatures(order.features || {});
         
         // Set individual feature states from features object
         const featuresObj = order.features || {};
         console.log('Loading order features:', featuresObj);
+        console.log('Available featuresObj keys:', Object.keys(featuresObj));
         
         setHandedness(featuresObj.handedness || order.handedness || '');
         setActionLength(featuresObj.action_length || '');

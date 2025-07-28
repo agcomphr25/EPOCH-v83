@@ -860,16 +860,31 @@ export default function OrderEntry() {
                 {/* Stock Model Selection */}
                 <div>
                   <Label>Stock Model</Label>
-                  <Select value={modelId} onValueChange={setModelId}>
+                  <Select 
+                    key={`stock-model-${renderKey}-${modelId || 'empty'}`}
+                    value={modelId} 
+                    onValueChange={setModelId}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select or search model..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {modelOptions.map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          {model.displayName}
-                        </SelectItem>
-                      ))}
+                      {(() => {
+                        console.log('🔧 Stock Model Dropdown Debug:');
+                        console.log('  - Current modelId:', modelId);
+                        console.log('  - ModelOptions length:', modelOptions.length);
+                        console.log('  - RenderKey:', renderKey);
+                        if (modelOptions.length > 0) {
+                          console.log('  - Available models:', modelOptions.map(m => `${m.id}:${m.displayName}`).slice(0, 5));
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          console.log('  - Selected model found:', !!selectedModel, selectedModel?.displayName);
+                        }
+                        return modelOptions.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.displayName}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                   {errors.modelId && <p className="text-sm text-red-500">{errors.modelId}</p>}

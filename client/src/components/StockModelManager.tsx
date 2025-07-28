@@ -52,9 +52,21 @@ export default function StockModelManager() {
   });
 
   // Fetch stock models
-  const { data: stockModels = [], isLoading } = useQuery<StockModel[]>({
+  const { data: stockModels = [], isLoading, error } = useQuery<StockModel[]>({
     queryKey: ['/api/stock-models'],
-    queryFn: () => apiRequest('/api/stock-models'),
+    queryFn: async () => {
+      console.log('🔍 Fetching stock models from API...');
+      const result = await apiRequest('/api/stock-models');
+      console.log('🔍 Stock models API response:', result);
+      console.log('🔍 Response type:', typeof result);
+      console.log('🔍 Is array:', Array.isArray(result));
+      console.log('🔍 Response length:', result?.length);
+      if (result && result.length > 0) {
+        console.log('🔍 First stock model:', result[0]);
+        console.log('🔍 First stock model keys:', Object.keys(result[0]));
+      }
+      return result;
+    },
   });
 
   // Create stock model mutation
@@ -194,6 +206,20 @@ export default function StockModelManager() {
       </div>
     );
   }
+
+  if (error) {
+    console.error('🚨 Stock models query error:', error);
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-500">Error loading stock models: {String(error)}</div>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('🔍 Final stockModels in render:', stockModels);
+  console.log('🔍 Final stockModels length:', stockModels?.length);
 
   return (
     <div className="p-6">

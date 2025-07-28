@@ -347,41 +347,24 @@ export default function OrderEntry() {
         console.log('Setting modelId:', order.modelId || '');
         console.log('Current modelOptions available:', modelOptions.length);
         setModelId(order.modelId || '');
-        console.log('Setting features object:', order.features || {});
-        setFeatures(order.features || {});
-        
-        // Set individual feature states from features object
+        // CRITICAL: Only use the features object - don't set separate state variables
+        console.log('✅ Setting features object:', order.features || {});
         const featuresObj = order.features || {};
-        console.log('Loading order features:', featuresObj);
-        console.log('Available featuresObj keys:', Object.keys(featuresObj));
+        console.log('✅ Loading order features:', featuresObj);
+        console.log('✅ Available featuresObj keys:', Object.keys(featuresObj));
+        console.log('✅ Specific feature values:');
+        console.log('  - handedness:', featuresObj.handedness);
+        console.log('  - action_length:', featuresObj.action_length);
+        console.log('  - action_inlet:', featuresObj.action_inlet);
+        console.log('  - barrel_inlet:', featuresObj.barrel_inlet);
+        console.log('  - bottom_metal:', featuresObj.bottom_metal);
+        console.log('  - qd_accessory:', featuresObj.qd_accessory);
+        console.log('  - paint_options:', featuresObj.paint_options);
+        console.log('  - rail_accessory:', featuresObj.rail_accessory);
+        console.log('  - other_options:', featuresObj.other_options);
         
-        setHandedness(featuresObj.handedness || order.handedness || '');
-        setActionLength(featuresObj.action_length || '');
-        setBottomMetal(featuresObj.bottom_metal || '');
-        setBarrelInlet(featuresObj.barrel_inlet || '');
-        setQdQuickDetach(featuresObj.qd_accessory || '');
-        setSwivelStuds(featuresObj.swivel_studs || '');
-        setTexture(featuresObj.texture_options || '');
-        
-        // CRITICAL FIX: Handle paint options - check multiple possible field names
-        const paintValue = featuresObj.paint_options || featuresObj.paintOptions || featuresObj.paint || '';
-        console.log('Setting paint options:', paintValue);
-        setPaintOptions(paintValue);
-        
-        // CRITICAL FIX: Handle rail accessories - check multiple possible field names and ensure array format
-        const railValue = featuresObj.rail_accessory || featuresObj.railAccessory || featuresObj.rail_accessories || [];
-        const railArray = Array.isArray(railValue) ? railValue : (railValue ? [railValue] : []);
-        console.log('Setting rail accessories:', railArray);
-        setRailAccessory(railArray);
-        
-        // CRITICAL FIX: Handle other options - check multiple possible field names and ensure array format
-        const otherValue = featuresObj.other_options || featuresObj.otherOptions || featuresObj.other || [];
-        const otherArray = Array.isArray(otherValue) ? otherValue : (otherValue ? [otherValue] : []);
-        console.log('Setting other options:', otherArray);
-        setOtherOptions(otherArray);
-        
-        // Set the main features object which will populate form dropdowns
-        console.log('Setting features object with length_of_pull:', featuresObj.length_of_pull);
+        // Set ONLY the features object - all form controls now read from this
+        setFeatures(featuresObj);
         
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);

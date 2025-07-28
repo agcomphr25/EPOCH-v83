@@ -729,28 +729,17 @@ export default function LayupScheduler() {
 
     console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
     
-    // Get work days for current and next week
-    const getWorkDaysInWeek = (startDate: Date) => {
-      const workDays: Date[] = [];
-      let current = new Date(startDate);
-      
-      // Find Monday of current week
-      while (current.getDay() !== 1) {
-        current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
+    // Get 4 weeks of work days (Monday through Thursday only) - matches calendar display
+    const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
+    const allWorkDays = [];
+    
+    // Generate 4 weeks of work days (Mon-Thu only, skip Fri-Sun)
+    for (let week = 0; week < 4; week++) {
+      for (let day = 0; day < 4; day++) { // Mon=0, Tue=1, Wed=2, Thu=3
+        const workDay = addDays(start, week * 7 + day);
+        allWorkDays.push(workDay);
       }
-      
-      // Add Monday through Thursday
-      for (let i = 0; i < 4; i++) {
-        workDays.push(new Date(current));
-        current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
-      }
-      
-      return workDays;
-    };
-
-    const currentWeekDays = getWorkDaysInWeek(currentDate);
-    const nextWeekDays = getWorkDaysInWeek(new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000));
-    const allWorkDays = [...currentWeekDays, ...nextWeekDays];
+    }
 
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
@@ -1216,13 +1205,23 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
-  // Generate date ranges based on view type - work week focus (Mon-Fri only)
+  // Generate date ranges based on view type - extended work week view
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
     if (viewType === 'week') {
-      // Show work week only: Monday through Friday
+      // Show extended work weeks: 4 weeks of work days (Monday through Thursday only)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      return eachDayOfInterval({ start, end: addDays(start, 4) }); // Only 5 days (Mon-Fri)
+      const workDays = [];
+      
+      // Generate 4 weeks of work days (Mon-Thu only, skip Fri-Sun)
+      for (let week = 0; week < 4; week++) {
+        for (let day = 0; day < 4; day++) { // Mon=0, Tue=1, Wed=2, Thu=3
+          const workDay = addDays(start, week * 7 + day);
+          workDays.push(workDay);
+        }
+      }
+      
+      return workDays;
     }
     // month - organize by weeks
     const start = startOfMonth(currentDate);
@@ -1994,9 +1993,9 @@ export default function LayupScheduler() {
               size="sm"
               onClick={() => {
                 if (viewType === 'week') {
-                  // Jump to previous work week (skip weekends)
-                  const prevWeekStart = startOfWeek(addDays(currentDate, -7), { weekStartsOn: 1 });
-                  setCurrentDate(prevWeekStart);
+                  // Jump to previous 4-week period
+                  const prevPeriodStart = startOfWeek(addDays(currentDate, -28), { weekStartsOn: 1 });
+                  setCurrentDate(prevPeriodStart);
                 } else {
                   setCurrentDate(prev => addDays(prev, -1));
                 }
@@ -2006,7 +2005,7 @@ export default function LayupScheduler() {
             </Button>
             <span className="px-3 text-sm font-medium">
               {viewType === 'week' 
-                ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
+                ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 24), 'M/d')}`
                 : format(currentDate, 'MMMM yyyy')
               }
             </span>
@@ -2015,9 +2014,9 @@ export default function LayupScheduler() {
               size="sm"
               onClick={() => {
                 if (viewType === 'week') {
-                  // Jump to next work week (skip weekends)
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
+                  // Jump to next 4-week period
+                  const nextPeriodStart = startOfWeek(addDays(currentDate, 28), { weekStartsOn: 1 });
+                  setCurrentDate(nextPeriodStart);
                 } else {
                   setCurrentDate(prev => addDays(prev, 1));
                 }
@@ -2026,18 +2025,18 @@ export default function LayupScheduler() {
               <ChevronRight className="w-4 h-4" />
             </Button>
             
-            {/* Quick Next Week Button */}
+            {/* Quick Next Period Button */}
             {viewType === 'week' && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
+                  const nextPeriodStart = startOfWeek(addDays(currentDate, 28), { weekStartsOn: 1 });
+                  setCurrentDate(nextPeriodStart);
                 }}
                 className="ml-2 text-xs"
               >
-                Next Week
+                Next Period
               </Button>
             )}
           </div>

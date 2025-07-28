@@ -434,7 +434,12 @@ export default function OrderEntry() {
         setHasAGROrder(!!order.agrOrderDetails);
         setShipping(order.shipping || 36.95);
         setIsCustomOrder(order.isCustomOrder === 'yes');
-        setNotes(order.notes || '');
+        // Load notes from either the dedicated notes column or features.specialInstructions for backward compatibility
+        const notesFromField = order.notes || '';
+        const notesFromFeatures = featuresObj.specialInstructions || '';
+        const finalNotes = notesFromField || notesFromFeatures;
+        setNotes(finalNotes);
+        console.log('✅ Loading notes:', { notesFromField, notesFromFeatures, finalNotes });
         setDiscountCode(order.discountCode || '');
         setCustomDiscountType(order.customDiscountType || 'percent');
         setCustomDiscountValue(order.customDiscountValue || 0);

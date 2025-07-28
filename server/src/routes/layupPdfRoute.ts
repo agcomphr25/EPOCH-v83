@@ -215,7 +215,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([792, 612]); // Landscape orientation for more space
+    let page = pdfDoc.addPage([792, 612]); // Landscape orientation for card layout
     const { width, height } = page.getSize();
     
     // Load fonts
@@ -268,36 +268,24 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       statsX += 140;
     });
 
-    // Table headers
+    // Card layout header
     const headerY = height - 140;
-    const headers = ['Order ID', 'Model', 'Material', 'Action', 'LOP', 'Heavy Fill', 'Customer', 'Due Date', 'Source'];
-    const columnWidths = [85, 100, 45, 40, 60, 55, 90, 70, 50];
-    let currentX = 30;
-
-    headers.forEach((header, index) => {
-      page.drawText(header, {
-        x: currentX,
-        y: headerY,
-        size: 10,
-        font: boldFont,
-        color: rgb(0, 0, 0),
-      });
-      currentX += columnWidths[index];
-    });
-
-    // Draw header underline
-    page.drawLine({
-      start: { x: 30, y: headerY - 5 },
-      end: { x: width - 30, y: headerY - 5 },
-      thickness: 1,
+    page.drawText('Orders displayed as cards matching the Layup Scheduler format:', {
+      x: 50,
+      y: headerY,
+      size: 12,
+      font: boldFont,
       color: rgb(0, 0, 0),
     });
 
-    // Table data
+    // Card-style layout instead of table
     let currentY = headerY - 20;
-    const rowHeight = 16;
-    const maxRowsPerPage = Math.floor((height - 200) / rowHeight);
-    let rowCount = 0;
+    const cardHeight = 80;
+    const cardWidth = 180;
+    const cardsPerRow = 4;
+    const cardSpacing = 10;
+    const maxCardsPerPage = Math.floor((height - 200) / (cardHeight + cardSpacing)) * cardsPerRow;
+    let cardCount = 0;
 
     // Sort orders by due date
     const sortedOrders = allLayupOrders.sort((a, b) => {
@@ -307,36 +295,19 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
     });
 
     sortedOrders.forEach((order, index) => {
-      if (rowCount >= maxRowsPerPage) {
+      if (cardCount >= maxCardsPerPage) {
         // Add new page
         page = pdfDoc.addPage([792, 612]);
         currentY = height - 50;
-        rowCount = 0;
-        
-        // Repeat headers on new page
-        currentX = 30;
-        headers.forEach((header, headerIndex) => {
-          page.drawText(header, {
-            x: currentX,
-            y: currentY,
-            size: 10,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-          });
-          currentX += columnWidths[headerIndex];
-        });
-        
-        page.drawLine({
-          start: { x: 30, y: currentY - 5 },
-          end: { x: width - 30, y: currentY - 5 },
-          thickness: 1,
-          color: rgb(0, 0, 0),
-        });
-        
-        currentY -= 20;
+        cardCount = 0;
       }
 
-      currentX = 30;
+      // Calculate card position
+      const row = Math.floor(cardCount / cardsPerRow);
+      const col = cardCount % cardsPerRow;
+      const cardX = 30 + col * (cardWidth + cardSpacing);
+      const cardY = currentY - row * (cardHeight + cardSpacing);
+
       const modelId = order.stockModelId || order.modelId;
       const materialType = getMaterialType(modelId);
       const actionLength = getActionLength(order.features);
@@ -344,66 +315,158 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const heavyFill = getHeavyFillDisplay(order.features);
       const modelDisplay = getModelDisplayName(modelId);
       
-      // Debug logging for missing data
-      console.log(`PDF Debug - Order ${order.orderId}:`, {
-        modelId,
-        materialType,
-        actionLength,
-        lopDisplay,
-        heavyFill: heavyFill ? 'Yes' : 'No',
-        features: order.features
-      });
+      // Determine card color based on source
+      let bgColor = rgb(0.95, 0.95, 1); // light blue for regular orders
+      let borderColor = rgb(0.7, 0.7, 1);
+      let textColor = rgb(0, 0, 0.8);
       
-      // Determine row color based on source
-      let bgColor = rgb(1, 1, 1); // white
       if (order.source === 'p1_purchase_order') {
-        bgColor = rgb(0.95, 1, 0.95); // light green
+        bgColor = rgb(0.95, 1, 0.95); // light green for P1 orders
+        borderColor = rgb(0.6, 0.9, 0.6);
+        textColor = rgb(0, 0.6, 0);
+      } else if (order.source === 'production_order') {
+        bgColor = rgb(1, 0.95, 0.9); // light orange for production orders
+        borderColor = rgb(1, 0.8, 0.6);
+        textColor = rgb(0.8, 0.5, 0);
       }
       
-      // Draw background
+      // Draw card background
       page.drawRectangle({
-        x: 30,
-        y: currentY - 3,
-        width: width - 60,
-        height: rowHeight - 2,
+        x: cardX,
+        y: cardY - cardHeight,
+        width: cardWidth,
+        height: cardHeight,
         color: bgColor,
-        borderColor: rgb(0.9, 0.9, 0.9),
-        borderWidth: 0.5,
+        borderColor: borderColor,
+        borderWidth: 1,
       });
 
-      const rowData = [
-        order.orderId || 'No ID',
-        modelDisplay && modelDisplay.length > 15 ? modelDisplay.substring(0, 12) + '...' : (modelDisplay || 'Unknown'),
-        materialType || '-',
-        actionLength || '-',
-        lopDisplay ? (lopDisplay.length > 8 ? lopDisplay.substring(0, 6) + '...' : lopDisplay) : '-',
-        heavyFill ? 'Yes' : '-',
-        (order.customer || 'Unknown').length > 12 ? order.customer.substring(0, 10) + '...' : (order.customer || 'Unknown'),
-        order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { month: 'M', day: 'd' }) : '-',
-        order.source === 'p1_purchase_order' ? 'P1 PO' : 'Regular'
-      ];
-
-      rowData.forEach((data, colIndex) => {
-        const textColor = order.source === 'p1_purchase_order' ? rgb(0, 0.5, 0) : rgb(0, 0, 0);
-        const fontSize = colIndex === 1 ? 8 : 9; // Smaller font for model names
-        
-        page.drawText(data.toString(), {
-          x: currentX + 2,
-          y: currentY,
-          size: fontSize,
-          font: regularFont,
-          color: textColor,
+      let textY = cardY - 12;
+      const lineHeight = 9;
+      
+      // Order ID (large, bold)
+      const orderId = order.orderId || 'No ID';
+      page.drawText(orderId, {
+        x: cardX + 5,
+        y: textY,
+        size: 11,
+        font: boldFont,
+        color: textColor,
+      });
+      
+      // Source badge
+      if (order.source === 'p1_purchase_order') {
+        page.drawText('P1', {
+          x: cardX + cardWidth - 20,
+          y: textY,
+          size: 8,
+          font: boldFont,
+          color: rgb(0, 0.4, 0),
         });
-        currentX += columnWidths[colIndex];
+      } else if (order.source === 'production_order') {
+        page.drawText('PO', {
+          x: cardX + cardWidth - 20,
+          y: textY,
+          size: 8,
+          font: boldFont,
+          color: rgb(0.6, 0.3, 0),
+        });
+      }
+      
+      textY -= lineHeight + 2;
+      
+      // Model name with material type
+      if (modelDisplay) {
+        let modelText = modelDisplay.length > 18 ? modelDisplay.substring(0, 16) + '..' : modelDisplay;
+        if (materialType) {
+          modelText = `${materialType} ${modelText}`;
+        }
+        page.drawText(modelText, {
+          x: cardX + 5,
+          y: textY,
+          size: 8,
+          font: regularFont,
+          color: rgb(0.2, 0.2, 0.2),
+        });
+      }
+      
+      textY -= lineHeight;
+      
+      // Action Length
+      if (actionLength) {
+        page.drawText(`Action: ${actionLength}`, {
+          x: cardX + 5,
+          y: textY,
+          size: 8,
+          font: regularFont,
+          color: rgb(0.3, 0.3, 0.3),
+        });
+      }
+      
+      textY -= lineHeight;
+      
+      // Length of Pull (LOP)
+      if (lopDisplay) {
+        page.drawText(`LOP: ${lopDisplay}`, {
+          x: cardX + 5,
+          y: textY,
+          size: 8,
+          font: regularFont,
+          color: rgb(0.3, 0.3, 0.3),
+        });
+      }
+      
+      textY -= lineHeight;
+      
+      // Heavy Fill
+      if (heavyFill) {
+        page.drawText('Heavy Fill', {
+          x: cardX + 5,
+          y: textY,
+          size: 8,
+          font: boldFont,
+          color: rgb(0.8, 0.4, 0),
+        });
+        textY -= lineHeight;
+      }
+      
+      // Customer and Due Date at bottom
+      const customer = (order.customer || 'Unknown').length > 15 ? 
+        order.customer.substring(0, 13) + '..' : (order.customer || 'Unknown');
+      page.drawText(`${customer}`, {
+        x: cardX + 5,
+        y: cardY - cardHeight + 12,
+        size: 7,
+        font: regularFont,
+        color: rgb(0.4, 0.4, 0.4),
       });
+      
+      if (order.dueDate) {
+        const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { month: 'M', day: 'd' });
+        page.drawText(`Due: ${dueDate}`, {
+          x: cardX + 5,
+          y: cardY - cardHeight + 4,
+          size: 7,
+          font: regularFont,
+          color: rgb(0.6, 0.6, 0.6),
+        });
+      }
 
-      currentY -= rowHeight;
-      rowCount++;
+      cardCount++;
+      
+      // Move to next row after filling current row
+      if (cardCount % cardsPerRow === 0) {
+        currentY -= (cardHeight + cardSpacing);
+      }
     });
 
-    // Legend
-    const legendY = Math.max(currentY - 30, 80);
-    page.drawText('Legend:', {
+    // Add legend on last page
+    if (cardCount > 0) {
+      currentY -= 60; // Space before legend
+    }
+    
+    const legendY = Math.max(currentY, 120);
+    page.drawText('Card Format Legend:', {
       x: 50,
       y: legendY,
       size: 12,
@@ -412,11 +475,12 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
     });
 
     const legendItems = [
+      'Blue Cards: Regular Orders | Green Cards: P1 Purchase Orders | Orange Cards: Production Orders',
       'Material: CF = Carbon Fiber, FG = Fiberglass',
       'Action: SA = Short Action, LA = Long Action, MA = Medium Action',
       'LOP: Length of Pull (only shown if non-standard)',
-      'Heavy Fill: Special manufacturing option',
-      'Source: P1 PO = P1 Purchase Order, Regular = Standard Order'
+      'Heavy Fill: Special manufacturing option requiring extra attention',
+      'Each card shows the same information displayed in the Layup Scheduler'
     ];
 
     legendItems.forEach((item, index) => {

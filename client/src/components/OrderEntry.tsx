@@ -614,6 +614,8 @@ export default function OrderEntry() {
           discountDetailsMap[value] = discount;
         });
       
+      console.log('💳 Discount options processed:', discounts.length, 'total discounts');
+      console.log('💳 Discount options:', discounts);
       setDiscountOptions(discounts);
       // Store discount details for appliesTo logic
       if (discountCode && discountDetailsMap[discountCode]) {

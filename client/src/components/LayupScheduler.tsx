@@ -1821,9 +1821,9 @@ export default function LayupScheduler() {
 
               {/* Rows for each mold - Only show molds with assigned orders */}
               {(() => {
-                // Show ALL enabled molds temporarily to debug production order visibility
+                // Only show molds that have orders assigned to them
                 const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                const activeMolds = molds.filter(m => m.enabled); // Show all enabled molds for debugging
+                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                 
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
@@ -1909,9 +1909,9 @@ export default function LayupScheduler() {
 
                     {/* Mold Rows for this week - Only show molds with assigned orders */}
                     {(() => {
-                      // Show ALL enabled molds temporarily to debug production order visibility
+                      // Only show molds that actually have orders assigned
                       const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                      const activeMolds = molds.filter(m => m.enabled); // Show all enabled molds for debugging
+                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
                       
                       return activeMolds.map(mold => (
                       <React.Fragment key={`${weekIndex}-${mold.moldId}`}>

@@ -28,6 +28,13 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
   const today = new Date();
   const updatedOrders = [...orders];
 
+  console.log(`🔧 LOP Scheduler Debug:`, {
+    today: today.toDateString(),
+    isMonday: todayIsMonday(today),
+    dayOfWeek: today.getDay(),
+    nextMondayWouldBe: nextMonday(today).toDateString()
+  });
+
   for (const order of updatedOrders) {
     if (!order.needsLOPAdjustment) continue;
 
@@ -52,7 +59,7 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
     order.lastScheduledLOPAdjustmentDate = today;
 
     console.log(
-      `Order ${order.orderId}: LOP scheduled for ${order.scheduledLOPAdjustmentDate?.toDateString()} (${order.lopAdjustmentOverrideReason})`
+      `🔧 Order ${order.orderId}: LOP scheduled for ${order.scheduledLOPAdjustmentDate?.toDateString()} (${order.lopAdjustmentOverrideReason})`
     );
   }
 
@@ -61,15 +68,26 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
 
 // Helper function to identify orders needing LOP adjustment
 export function identifyLOPOrders(orders: LayupOrder[]): LOPOrder[] {
-  return orders.map(order => ({
-    ...order,
-    needsLOPAdjustment: order.needsLOPAdjustment ?? false,
-    priority: order.priority ?? 50,
-    priorityChangedAt: order.priorityChangedAt || null,
-    lastScheduledLOPAdjustmentDate: order.lastScheduledLOPAdjustmentDate || null,
-    scheduledLOPAdjustmentDate: order.scheduledLOPAdjustmentDate || null,
-    lopAdjustmentOverrideReason: order.lopAdjustmentOverrideReason || null,
-  }));
+  return orders.map(order => {
+    // For testing purposes, mark some orders as needing LOP adjustment
+    // Check if order has any LOP-related features that aren't standard
+    const hasLOPFeatures = (order as any).features?.length_of_pull && 
+                          (order as any).features.length_of_pull !== 'no_lop_change' && 
+                          (order as any).features.length_of_pull !== 'standard';
+    
+    // For testing: mark every 10th order as needing LOP adjustment
+    const needsLOPTest = (order.id % 10 === 0) || hasLOPFeatures;
+    
+    return {
+      ...order,
+      needsLOPAdjustment: order.needsLOPAdjustment ?? needsLOPTest ?? false,
+      priority: order.priority ?? 50,
+      priorityChangedAt: order.priorityChangedAt || null,
+      lastScheduledLOPAdjustmentDate: order.lastScheduledLOPAdjustmentDate || null,
+      scheduledLOPAdjustmentDate: order.scheduledLOPAdjustmentDate || null,
+      lopAdjustmentOverrideReason: order.lopAdjustmentOverrideReason || null,
+    };
+  });
 }
 
 // Function to update order priority and trigger LOP rescheduling

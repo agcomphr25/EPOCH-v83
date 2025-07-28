@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { generateLayupSchedule } from '../utils/schedulerUtils';
-import { scheduleLOPAdjustments, identifyLOPOrders, getLOPStatus, needsImmediateLOPAttention } from '../utils/lopScheduler';
+import { scheduleLOPAdjustments, identifyLOPOrders, getLOPStatus } from '../utils/lopScheduler';
 import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
@@ -42,7 +42,7 @@ import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, User
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import LOPManager from './LOPManager';
+
 
 // Draggable Order Item Component with responsive sizing
 function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) {
@@ -1719,11 +1719,6 @@ export default function LayupScheduler() {
                 </div>
               </DialogContent>
             </Dialog>
-
-            <LOPManager orders={processedOrders} />
-
-
-
 
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}

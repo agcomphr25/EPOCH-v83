@@ -121,11 +121,21 @@ router.post('/draft', async (req: Request, res: Response) => {
 router.put('/draft/:id', async (req: Request, res: Response) => {
   try {
     const draftId = req.params.id;
-    const updates = req.body;
+    console.log('Update draft endpoint called for ID:', draftId);
+    console.log('Update data received:', req.body);
+    
+    // Validate the input data using the schema
+    const updates = insertOrderDraftSchema.partial().parse(req.body);
+    console.log('Validated updates:', updates);
+    
     const updatedDraft = await storage.updateOrderDraft(draftId, updates);
+    console.log('Update successful, returning:', updatedDraft);
     res.json(updatedDraft);
   } catch (error) {
     console.error('Update draft error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to update order draft" });
   }
 });

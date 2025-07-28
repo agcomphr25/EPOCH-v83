@@ -644,12 +644,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock Models API
   app.get("/api/stock-models", async (req, res) => {
     try {
+      console.log("🔍 Stock models API called");
       const stockModels = await storage.getAllStockModels();
-      console.log("Retrieved stock models:", stockModels.length, "models");
-      console.log("Stock models include:", stockModels.map(m => m.id));
-      res.json(stockModels);
+      console.log("🔍 Retrieved stock models from storage:", stockModels.length, "models");
+      if (stockModels.length > 0) {
+        console.log("🔍 First stock model from storage:", stockModels[0]);
+        console.log("🔍 First stock model keys:", Object.keys(stockModels[0]));
+      }
+      
+      // Transform snake_case to camelCase for frontend compatibility
+      const transformedModels = stockModels.map(model => ({
+        id: model.id,
+        name: model.name,
+        displayName: model.displayName, // This should be camelCase from Drizzle
+        price: model.price,
+        description: model.description,
+        isActive: model.isActive, // This should be camelCase from Drizzle
+        sortOrder: model.sortOrder, // This should be camelCase from Drizzle
+        createdAt: model.createdAt,
+        updatedAt: model.updatedAt
+      }));
+      
+      console.log("🔍 Transformed models count:", transformedModels.length);
+      if (transformedModels.length > 0) {
+        console.log("🔍 First transformed model:", transformedModels[0]);
+      }
+      
+      res.json(transformedModels);
     } catch (error) {
-      console.error("Error retrieving stock models:", error);
+      console.error("🚨 Error retrieving stock models:", error);
       res.status(500).json({ error: "Failed to retrieve stock models" });
     }
   });

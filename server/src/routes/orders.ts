@@ -75,7 +75,16 @@ router.get('/drafts', async (req: Request, res: Response) => {
 router.get('/draft/:id', async (req: Request, res: Response) => {
   try {
     const draftId = req.params.id;
-    const draft = await storage.getOrderDraftById(draftId);
+    let draft;
+    
+    // Check if the ID is a number (database ID) or string (order ID like AG422)
+    if (/^\d+$/.test(draftId)) {
+      // It's a numeric database ID
+      draft = await storage.getOrderDraftById(parseInt(draftId));
+    } else {
+      // It's an order ID like AG422
+      draft = await storage.getOrderDraft(draftId);
+    }
     
     if (!draft) {
       return res.status(404).json({ error: "Order draft not found" });

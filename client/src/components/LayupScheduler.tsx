@@ -533,7 +533,11 @@ function DroppableCell({
           />
         );
       })}
-      {/* No empty cell display - cells with no orders are filtered out at parent level */}
+      {orders.length === 0 && (
+        <div className="text-xs text-gray-400 text-center py-2 opacity-50">
+          Available
+        </div>
+      )}
     </div>
   );
 }
@@ -2025,46 +2029,45 @@ export default function LayupScheduler() {
                 </div>
               ))}
 
-              {/* Rows for each mold - Only show molds with assigned orders per day */}
+              {/* Rows for each mold - Show all molds sorted by order count (most orders first) */}
               {(() => {
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
                 
-                // For each date, determine which molds have orders and render them
-                const moldRowsPerDate = dates.map(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
-                  
-                  // Find which molds have orders for this specific date
-                  const moldsWithOrdersThisDate = molds.filter(m => {
-                    if (!m.enabled) return false;
+                // Get all enabled molds and calculate their total order counts across all displayed dates
+                const moldOrderCounts = molds.filter(m => m.enabled).map(mold => {
+                  // Count orders for this mold across all dates in the current view
+                  const totalOrdersForMold = dates.reduce((count, date) => {
+                    const dateString = date.toISOString();
+                    const cellDateOnly = dateString.split('T')[0];
                     
-                    // Check if this mold has any orders assigned for this date
-                    const hasOrdersForDate = Object.entries(orderAssignments).some(([orderId, assignment]) => {
+                    const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
                       const assignmentDateOnly = assignment.date.split('T')[0];
-                      return assignment.moldId === m.moldId && assignmentDateOnly === cellDateOnly;
-                    });
+                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                    }).length;
                     
-                    return hasOrdersForDate;
-                  });
+                    return count + ordersForThisMoldDate;
+                  }, 0);
                   
-                  return { date, moldsWithOrders: moldsWithOrdersThisDate };
+                  return { mold, orderCount: totalOrdersForMold };
                 });
                 
-                // Get unique molds that have orders on any day
-                const allUsedMolds = new Set<string>();
-                moldRowsPerDate.forEach(({ moldsWithOrders }) => {
-                  moldsWithOrders.forEach(mold => allUsedMolds.add(mold.moldId));
+                // Sort molds by order count (descending) - molds with most orders at top, empty molds at bottom
+                const sortedMolds = moldOrderCounts.sort((a, b) => {
+                  if (b.orderCount !== a.orderCount) {
+                    return b.orderCount - a.orderCount; // Primary sort: more orders first
+                  }
+                  // Secondary sort: alphabetical by mold ID for consistent ordering
+                  return a.mold.moldId.localeCompare(b.mold.moldId);
                 });
                 
-                console.log(`  • Molds with orders (any day): ${allUsedMolds.size}`);
-                console.log(`  • Molds per date:`, moldRowsPerDate.map(({ date, moldsWithOrders }) => 
-                  `${format(date, 'MM/dd')}: ${moldsWithOrders.length} molds`
+                console.log(`  • Mold order counts:`, sortedMolds.map(({ mold, orderCount }) => 
+                  `${mold.moldId}: ${orderCount} orders`
                 ));
                 
-                // Only render molds that have orders on at least one day
-                const activeMolds = molds.filter(m => m.enabled && allUsedMolds.has(m.moldId));
+                // Use all enabled molds (both with and without orders)
+                const activeMolds = sortedMolds.map(({ mold }) => mold);
                 
                 return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>
@@ -2136,11 +2139,34 @@ export default function LayupScheduler() {
                       </div>
                     ))}
 
-                    {/* Mold Rows for this week - Only show molds with assigned orders */}
+                    {/* Mold Rows for this week - Show all molds sorted by order count */}
                     {(() => {
-                      // Only show molds that actually have orders assigned
-                      const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                      const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+                      // Calculate order counts for this week and sort molds accordingly
+                      const moldOrderCounts = molds.filter(m => m.enabled).map(mold => {
+                        const totalOrdersForMold = week.reduce((count, date) => {
+                          const dateString = date.toISOString();
+                          const cellDateOnly = dateString.split('T')[0];
+                          
+                          const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+                            const assignmentDateOnly = assignment.date.split('T')[0];
+                            return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                          }).length;
+                          
+                          return count + ordersForThisMoldDate;
+                        }, 0);
+                        
+                        return { mold, orderCount: totalOrdersForMold };
+                      });
+                      
+                      // Sort by order count (descending), then alphabetically
+                      const sortedMolds = moldOrderCounts.sort((a, b) => {
+                        if (b.orderCount !== a.orderCount) {
+                          return b.orderCount - a.orderCount;
+                        }
+                        return a.mold.moldId.localeCompare(b.mold.moldId);
+                      });
+                      
+                      const activeMolds = sortedMolds.map(({ mold }) => mold);
                       
                       return activeMolds.map(mold => (
                       <React.Fragment key={`${weekIndex}-${mold.moldId}`}>

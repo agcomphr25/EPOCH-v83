@@ -962,7 +962,10 @@ export default function OrderEntry() {
                   {/* Handedness */}
                   <div>
                     <Label>Handedness</Label>
-                    <Select value={handedness} onValueChange={setHandedness}>
+                    <Select 
+                      value={features.handedness || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select handedness..." />
                       </SelectTrigger>
@@ -1102,12 +1105,13 @@ export default function OrderEntry() {
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
                               id={`other-option-${option.value}`}
-                              checked={otherOptions.includes(option.value)}
+                              checked={(features.other_options || []).includes(option.value)}
                               onCheckedChange={(checked) => {
+                                const currentOther = features.other_options || [];
                                 if (checked) {
-                                  setOtherOptions(prev => [...prev, option.value]);
+                                  setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
                                 } else {
-                                  setOtherOptions(prev => prev.filter(item => item !== option.value));
+                                  setFeatures(prev => ({ ...prev, other_options: currentOther.filter(item => item !== option.value) }));
                                 }
                               }}
                             />
@@ -1123,7 +1127,7 @@ export default function OrderEntry() {
                           </div>
                         ));
                       })()}
-                      {otherOptions.length === 0 && (
+                      {(!features.other_options || features.other_options.length === 0) && (
                         <div className="text-gray-400 text-sm italic">No options selected</div>
                       )}
                     </div>
@@ -1135,7 +1139,10 @@ export default function OrderEntry() {
                   {/* Action Length */}
                   <div>
                     <Label>Action Length</Label>
-                    <Select value={actionLength} onValueChange={setActionLength}>
+                    <Select 
+                      value={features.action_length || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Short" />
                       </SelectTrigger>
@@ -1151,8 +1158,8 @@ export default function OrderEntry() {
                   <div>
                     <Label>Bottom Metal</Label>
                     <Select 
-                      value={bottomMetal} 
-                      onValueChange={setBottomMetal}
+                      value={features.bottom_metal || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select..." />
@@ -1219,12 +1226,13 @@ export default function OrderEntry() {
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
                               id={`rail-option-${option.value}`}
-                              checked={railAccessory.includes(option.value)}
+                              checked={(features.rail_accessory || []).includes(option.value)}
                               onCheckedChange={(checked) => {
+                                const currentRails = features.rail_accessory || [];
                                 if (checked) {
-                                  setRailAccessory(prev => [...prev, option.value]);
+                                  setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
                                 } else {
-                                  setRailAccessory(prev => prev.filter(item => item !== option.value));
+                                  setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter(item => item !== option.value) }));
                                 }
                               }}
                             />
@@ -1240,7 +1248,7 @@ export default function OrderEntry() {
                           </div>
                         ));
                       })()}
-                      {railAccessory.length === 0 && (
+                      {(!features.rail_accessory || features.rail_accessory.length === 0) && (
                         <div className="text-gray-400 text-sm italic">No options selected</div>
                       )}
                     </div>
@@ -1285,8 +1293,8 @@ export default function OrderEntry() {
                   <div>
                     <Label>Paint Options</Label>
                     <Select 
-                      value={paintOptions} 
-                      onValueChange={setPaintOptions}
+                      value={features.paint_options || ''} 
+                      onValueChange={(value) => setFeatures(prev => ({ ...prev, paint_options: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select or search..." />

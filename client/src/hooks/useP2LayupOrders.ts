@@ -1,6 +1,7 @@
+
 import { useQuery } from "@tanstack/react-query";
 
-export interface LayupOrder {
+export interface P2LayupOrder {
   id: string;
   orderId: string;
   orderDate: string;
@@ -12,23 +13,19 @@ export interface LayupOrder {
   currentDepartment: string;
   priorityScore: number;
   dueDate?: string;
-  source: 'main_orders' | 'p1_purchase_order' | 'production_order';
-  poId?: number;
-  poItemId?: number;
+  source: 'production_order';
+  productionOrderId: number;
   stockModelId?: string;
-  modelId?: string;
-  productionOrderId?: number;
   specifications?: any;
-  features?: any;
   createdAt: string;
   updatedAt: string;
 }
 
-export function useUnifiedLayupOrders() {
+export function useP2LayupOrders() {
   const { data: orders = [], isLoading: loading, refetch: reloadOrders } = useQuery({
-    queryKey: ['/api/p1-layup-queue'],
-    select: (data: LayupOrder[]) => data || [],
-    refetchInterval: 30000, // Refresh every 30 seconds to get new P1 POs
+    queryKey: ['/api/p2-layup-queue'],
+    select: (data: P2LayupOrder[]) => data || [],
+    refetchInterval: 30000, // Refresh every 30 seconds to get new P2 production orders
   });
 
   return {

@@ -141,10 +141,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // Layup Queue endpoint - combines regular orders, P1 PO orders, and production orders
-  app.get('/api/layup-queue', async (req, res) => {
+  // P1 Layup Queue endpoint - combines regular orders and P1 purchase orders
+  app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting layup queue processing...');
+      console.log('🏭 Starting P1 layup queue processing...');
       const { storage } = await import('../../storage');
       
       // Get only finalized orders from draft table that are ready for production
@@ -155,7 +155,7 @@ export function registerRoutes(app: Express): Server {
       );
       
       // Add debug logging for features
-      console.log('Sample layup order features:', {
+      console.log('Sample P1 layup order features:', {
         orderId: layupOrders[0]?.orderId,
         features: layupOrders[0]?.features,
         modelId: layupOrders[0]?.modelId
@@ -200,6 +200,49 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
+      // Convert regular orders to unified format
+      const regularLayupOrders = layupOrders.map(order => ({
+        id: order.id?.toString() || order.orderId,
+        orderId: order.orderId,
+        orderDate: order.orderDate,
+        customer: order.customerId || 'Unknown',
+        product: order.modelId || 'Unknown',
+        quantity: 1,
+        status: order.status,
+        department: 'Layup',
+        currentDepartment: 'Layup',
+        priorityScore: 50, // Regular orders have lower priority
+        dueDate: order.dueDate,
+        source: 'main_orders' as const,
+        stockModelId: order.modelId,
+        modelId: order.modelId,
+        features: order.features,
+        createdAt: order.orderDate,
+        updatedAt: order.updatedAt || order.orderDate
+      }));
+
+      // Combine P1 order types only
+      const combinedOrders = [
+        ...regularLayupOrders,
+        ...p1LayupOrders
+      ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
+
+      console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
+      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
+      
+      res.json(combinedOrders);
+    } catch (error) {
+      console.error("P1 layup queue error:", error);
+      res.status(500).json({ error: "Failed to fetch P1 layup queue" });
+    }
+  });
+
+  // P2 Layup Queue endpoint - handles P2 production orders only
+  app.get('/api/p2-layup-queue', async (req, res) => {
+    try {
+      console.log('🏭 Starting P2 layup queue processing...');
+      const { storage } = await import('../../storage');
+
       // Get production orders from P2 system
       const productionOrders = await storage.getAllP2ProductionOrders();
       const pendingProductionOrders = productionOrders.filter(po => po.status === 'PENDING');
@@ -232,6 +275,68 @@ export function registerRoutes(app: Express): Server {
         };
       });
 
+      console.log(`🏭 P2 layup queue orders count: ${p2LayupOrders.length}`);
+      console.log(`🏭 Production orders in P2 result: ${p2LayupOrders.length}`);
+      
+      res.json(p2LayupOrders);
+    } catch (error) {
+      console.error("P2 layup queue error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 layup queue" });
+    }
+  });
+
+  // Legacy unified layup queue endpoint (kept for backward compatibility)
+  app.get('/api/layup-queue', async (req, res) => {
+    try {
+      console.log('🏭 Starting unified layup queue processing (legacy)...');
+      const { storage } = await import('../../storage');
+      
+      // Get only finalized orders from draft table that are ready for production
+      const allOrders = await storage.getAllOrderDrafts();
+      const layupOrders = allOrders.filter(order => 
+        order.status === 'FINALIZED' && 
+        (order.currentDepartment === 'Layup' || !order.currentDepartment)
+      );
+
+      // Get P1 Purchase Orders with stock model items
+      const pos = await storage.getAllPurchaseOrders();
+      const activePos = pos.filter(po => po.status === 'OPEN');
+      
+      const p1LayupOrders = [];
+      for (const po of activePos) {
+        const items = await storage.getPurchaseOrderItems(po.id);
+        const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
+        
+        for (const item of stockModelItems) {
+          // Calculate priority score based on due date urgency
+          const dueDate = new Date(po.expectedDelivery || po.poDate);
+          const today = new Date();
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
+          
+          p1LayupOrders.push({
+            id: `p1-${po.id}-${item.id}`,
+            orderId: `P1-${po.poNumber}-${item.id}`,
+            orderDate: po.poDate,
+            customer: po.customerName,
+            product: item.itemId,
+            quantity: item.quantity,
+            status: 'PENDING',
+            department: 'Layup',
+            currentDepartment: 'Layup',
+            priorityScore: priorityScore,
+            dueDate: po.expectedDelivery,
+            source: 'p1_purchase_order' as const,
+            poId: po.id,
+            poItemId: item.id,
+            stockModelId: item.itemId, // Use item ID as stock model
+            specifications: item.specifications,
+            createdAt: po.createdAt,
+            updatedAt: po.updatedAt
+          });
+        }
+      }
+
       // Convert regular orders to unified format
       const regularLayupOrders = layupOrders.map(order => ({
         id: order.id?.toString() || order.orderId,
@@ -253,19 +358,17 @@ export function registerRoutes(app: Express): Server {
         updatedAt: order.updatedAt || order.orderDate
       }));
 
-      // Combine all order types
+      // Combine only P1 order types (no P2 production orders)
       const combinedOrders = [
         ...regularLayupOrders,
-        ...p1LayupOrders,
-        ...p2LayupOrders
+        ...p1LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
-      console.log(`🏭 Final combined orders count: ${combinedOrders.length}`);
-      console.log(`🏭 Production orders in final result: ${combinedOrders.filter(o => o.source === 'production_order').length}`);
+      console.log(`🏭 Legacy layup queue orders count: ${combinedOrders.length}`);
       
       res.json(combinedOrders);
     } catch (error) {
-      console.error("Layup queue error:", error);
+      console.error("Legacy layup queue error:", error);
       res.status(500).json({ error: "Failed to fetch layup queue" });
     }
   });

@@ -2029,15 +2029,44 @@ export default function LayupScheduler() {
                 </div>
               ))}
 
-              {/* Rows for each mold - Show all molds sorted by order count (most orders first) */}
+              {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
                 
-                // Get all enabled molds and calculate their total order counts across all displayed dates
-                const moldOrderCounts = molds.filter(m => m.enabled).map(mold => {
-                  // Count orders for this mold across all dates in the current view
+                // Get molds that either have orders OR are compatible with existing orders in queue
+                const getCompatibleMolds = (order: any) => {
+                  const modelId = order.stockModelId || order.modelId;
+                  return molds.filter(mold => {
+                    if (!mold.enabled) return false;
+                    if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
+                    return mold.stockModels.includes(modelId);
+                  });
+                };
+                
+                // Find molds that are compatible with any order in the current queue
+                const compatibleMoldIds = new Set<string>();
+                orders.forEach(order => {
+                  const compatible = getCompatibleMolds(order);
+                  compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
+                });
+                
+                // Get molds that either have assignments OR are compatible with queue orders
+                const relevantMolds = molds.filter(m => {
+                  if (!m.enabled) return false;
+                  
+                  // Include if mold has orders assigned
+                  const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+                  if (hasAssignments) return true;
+                  
+                  // Include if mold is compatible with orders in queue (genuinely available)
+                  const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
+                  return isCompatibleWithQueue;
+                });
+                
+                // Calculate order counts for relevant molds
+                const moldOrderCounts = relevantMolds.map(mold => {
                   const totalOrdersForMold = dates.reduce((count, date) => {
                     const dateString = date.toISOString();
                     const cellDateOnly = dateString.split('T')[0];
@@ -2053,7 +2082,7 @@ export default function LayupScheduler() {
                   return { mold, orderCount: totalOrdersForMold };
                 });
                 
-                // Sort molds by order count (descending) - molds with most orders at top, empty molds at bottom
+                // Sort molds by order count (descending) - molds with most orders at top, available molds at bottom
                 const sortedMolds = moldOrderCounts.sort((a, b) => {
                   if (b.orderCount !== a.orderCount) {
                     return b.orderCount - a.orderCount; // Primary sort: more orders first
@@ -2062,11 +2091,12 @@ export default function LayupScheduler() {
                   return a.mold.moldId.localeCompare(b.mold.moldId);
                 });
                 
+                console.log(`  • Relevant molds (with orders or compatible): ${relevantMolds.length}/${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Mold order counts:`, sortedMolds.map(({ mold, orderCount }) => 
                   `${mold.moldId}: ${orderCount} orders`
                 ));
                 
-                // Use all enabled molds (both with and without orders)
+                // Use only relevant molds
                 const activeMolds = sortedMolds.map(({ mold }) => mold);
                 
                 return activeMolds.map(mold => (
@@ -2139,10 +2169,40 @@ export default function LayupScheduler() {
                       </div>
                     ))}
 
-                    {/* Mold Rows for this week - Show all molds sorted by order count */}
+                    {/* Mold Rows for this week - Show relevant molds sorted by order count */}
                     {(() => {
+                      // Get molds that either have orders OR are compatible with existing orders in queue
+                      const getCompatibleMolds = (order: any) => {
+                        const modelId = order.stockModelId || order.modelId;
+                        return molds.filter(mold => {
+                          if (!mold.enabled) return false;
+                          if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
+                          return mold.stockModels.includes(modelId);
+                        });
+                      };
+                      
+                      // Find molds that are compatible with any order in the current queue
+                      const compatibleMoldIds = new Set<string>();
+                      orders.forEach(order => {
+                        const compatible = getCompatibleMolds(order);
+                        compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
+                      });
+                      
+                      // Get molds that either have assignments OR are compatible with queue orders
+                      const relevantMolds = molds.filter(m => {
+                        if (!m.enabled) return false;
+                        
+                        // Include if mold has orders assigned
+                        const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+                        if (hasAssignments) return true;
+                        
+                        // Include if mold is compatible with orders in queue (genuinely available)
+                        const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
+                        return isCompatibleWithQueue;
+                      });
+                      
                       // Calculate order counts for this week and sort molds accordingly
-                      const moldOrderCounts = molds.filter(m => m.enabled).map(mold => {
+                      const moldOrderCounts = relevantMolds.map(mold => {
                         const totalOrdersForMold = week.reduce((count, date) => {
                           const dateString = date.toISOString();
                           const cellDateOnly = dateString.split('T')[0];

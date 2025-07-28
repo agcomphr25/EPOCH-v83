@@ -928,11 +928,13 @@ export default function CustomerManagement() {
               </TableHeader>
               <TableBody>
                 {filteredCustomers.map((customer: Customer) => {
-                  // Get addresses for this customer - handle both string and number comparisons
-                  const customerAddresses = addressesData?.filter(addr => 
-                    addr.customerId === customer.id.toString() || 
-                    addr.customerId.toString() === customer.id.toString()
-                  ) || [];
+                  // Get addresses for this customer - properly handle type conversion
+                  const customerAddresses = addressesData?.filter(addr => {
+                    // Convert both to numbers for comparison
+                    const addrCustomerId = typeof addr.customerId === 'string' ? 
+                      parseInt(addr.customerId, 10) : addr.customerId;
+                    return addrCustomerId === customer.id;
+                  }) || [];
                   const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
                   
 

@@ -55,16 +55,11 @@ export default function LOPManager({ orders }: LOPManagerProps) {
 
                 return lopOrders.map(order => {
                   const lopStatus = getLOPStatus(order);
-                  const immediateAttention = needsImmediateLOPAttention(order);
                   
                   return (
                     <div 
                       key={order.orderId} 
-                      className={`p-3 border rounded-lg ${
-                        immediateAttention 
-                          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
-                          : 'bg-gray-50 dark:bg-gray-800'
-                      }`}
+                      className="p-3 border rounded-lg bg-gray-50 dark:bg-gray-800"
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -81,24 +76,12 @@ export default function LOPManager({ orders }: LOPManagerProps) {
                         
                         <div className="flex items-center space-x-2">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            lopStatus.status === 'immediate' 
-                              ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                              : lopStatus.status === 'scheduled'
+                            lopStatus.status === 'scheduled'
                               ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
                               : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
                           }`}>
                             {lopStatus.status.toUpperCase()}
                           </span>
-                          
-                          {immediateAttention && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="text-red-600 border-red-200 hover:bg-red-50"
-                            >
-                              Process Now
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -148,11 +131,10 @@ export default function LOPManager({ orders }: LOPManagerProps) {
           </div>
           
           {/* LOP Statistics */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             {(() => {
               const lopOrders = identifyLOPOrders(orders);
               const needingLOP = lopOrders.filter(o => o.needsLOPAdjustment);
-              const immediate = needingLOP.filter(o => needsImmediateLOPAttention(o));
               const scheduled = needingLOP.filter(o => o.scheduledLOPAdjustmentDate);
               
               return (
@@ -163,15 +145,6 @@ export default function LOPManager({ orders }: LOPManagerProps) {
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
                       Need LOP Adjustment
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      {immediate.length}
-                    </div>
-                    <div className="text-sm text-red-600 dark:text-red-400">
-                      Immediate Attention
                     </div>
                   </div>
                   

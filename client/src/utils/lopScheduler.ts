@@ -122,28 +122,13 @@ export function updateOrderPriority(
 
 // Check if an order needs immediate LOP attention
 export function needsImmediateLOPAttention(order: LOPOrder): boolean {
-  if (!order.needsLOPAdjustment) return false;
-  
-  const today = new Date();
-  
-  // If scheduled for today and not yet processed
-  if (order.scheduledLOPAdjustmentDate && 
-      order.scheduledLOPAdjustmentDate.toDateString() === today.toDateString()) {
-    return true;
-  }
-  
-  // If priority was recently escalated
-  if (order.priorityChangedAt && 
-      order.priorityChangedAt > (order.lastScheduledLOPAdjustmentDate || new Date(0))) {
-    return true;
-  }
-  
+  // Immediate attention badges are disabled
   return false;
 }
 
 // Get LOP status for display
 export function getLOPStatus(order: LOPOrder): {
-  status: 'none' | 'scheduled' | 'immediate' | 'deferred';
+  status: 'none' | 'scheduled' | 'deferred';
   message: string;
   color: string;
 } {
@@ -152,14 +137,6 @@ export function getLOPStatus(order: LOPOrder): {
       status: 'none',
       message: 'No LOP adjustment needed',
       color: 'text-gray-500'
-    };
-  }
-
-  if (needsImmediateLOPAttention(order)) {
-    return {
-      status: 'immediate',
-      message: 'Immediate LOP attention required',
-      color: 'text-red-600'
     };
   }
 

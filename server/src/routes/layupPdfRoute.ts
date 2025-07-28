@@ -130,7 +130,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           'howa_1500': 'SA',
           'bergara_b14': 'SA',
           'carbon_six_medium': 'MA',
-          'lone_peak_fuzion': 'SA'  // Added missing mapping
+          'lone_peak_fuzion': 'SA'
         };
         
         actionLengthValue = inletToLengthMap[actionInlet];
@@ -148,10 +148,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
     };
 
     const getLOPDisplay = (orderFeatures) => {
-      if (!orderFeatures || !features) return null;
+      if (!orderFeatures) return null;
       
       const lopValue = orderFeatures.length_of_pull;
       
+      // Don't show if empty, none, standard, std, or any variation indicating no extra length
       if (!lopValue || 
           lopValue === 'none' || 
           lopValue === 'standard' || 
@@ -164,18 +165,22 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           lopValue === '' || 
           lopValue === '0' ||
           lopValue === 'normal' ||
-          lopValue.toLowerCase().includes('std') ||
-          lopValue.toLowerCase().includes('standard') ||
-          lopValue.toLowerCase().includes('no extra')) {
+          (typeof lopValue === 'string' && (
+            lopValue.toLowerCase().includes('std') ||
+            lopValue.toLowerCase().includes('standard') ||
+            lopValue.toLowerCase().includes('no extra')
+          ))) {
         return null;
       }
       
-      const lopFeature = features.find(f => f.id === 'length_of_pull');
-      
-      if (lopFeature && lopFeature.options) {
-        const option = lopFeature.options.find(opt => opt.value === lopValue);
-        if (option && option.label) {
-          return option.label;
+      // Try to find feature definition if available
+      if (features) {
+        const lopFeature = features.find(f => f.id === 'length_of_pull');
+        if (lopFeature && lopFeature.options) {
+          const option = lopFeature.options.find(opt => opt.value === lopValue);
+          if (option && option.label) {
+            return option.label;
+          }
         }
       }
       
@@ -184,13 +189,15 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
     };
 
     const getHeavyFillDisplay = (orderFeatures) => {
-      if (!orderFeatures) return null;
+      if (!orderFeatures) return false;
       
+      // Check if heavy_fill is in the other_options array
       const otherOptions = orderFeatures.other_options;
       if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
-        return 'Heavy Fill';
+        return true;
       }
       
+      // Check direct field for backward compatibility
       const heavyFillValue = orderFeatures.heavy_fill || 
                              orderFeatures.heavyFill || 
                              orderFeatures.heavy_fill_option ||
@@ -200,10 +207,10 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           heavyFillValue === true || 
           heavyFillValue === 'yes' ||
           heavyFillValue === 'heavy_fill') {
-        return 'Heavy Fill';
+        return true;
       }
       
-      return null;
+      return false;
     };
 
     // Create PDF document
@@ -331,10 +338,10 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
 
       currentX = 30;
       const modelId = order.stockModelId || order.modelId;
-      const materialType = getMaterialType(modelId) || '';
-      const actionLength = getActionLength(order.features) || '';
-      const lopDisplay = getLOPDisplay(order.features) || '';
-      const heavyFill = getHeavyFillDisplay(order.features) || '';
+      const materialType = getMaterialType(modelId);
+      const actionLength = getActionLength(order.features);
+      const lopDisplay = getLOPDisplay(order.features);
+      const heavyFill = getHeavyFillDisplay(order.features);
       const modelDisplay = getModelDisplayName(modelId);
       
       // Debug logging for missing data
@@ -343,7 +350,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
         materialType,
         actionLength,
         lopDisplay,
-        heavyFill,
+        heavyFill: heavyFill ? 'Yes' : 'No',
         features: order.features
       });
       
@@ -366,10 +373,10 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
 
       const rowData = [
         order.orderId || 'No ID',
-        modelDisplay.length > 15 ? modelDisplay.substring(0, 12) + '...' : modelDisplay,
+        modelDisplay && modelDisplay.length > 15 ? modelDisplay.substring(0, 12) + '...' : (modelDisplay || 'Unknown'),
         materialType || '-',
         actionLength || '-',
-        (lopDisplay && lopDisplay.length > 8) ? lopDisplay.substring(0, 6) + '...' : (lopDisplay || '-'),
+        lopDisplay ? (lopDisplay.length > 8 ? lopDisplay.substring(0, 6) + '...' : lopDisplay) : '-',
         heavyFill ? 'Yes' : '-',
         (order.customer || 'Unknown').length > 12 ? order.customer.substring(0, 10) + '...' : (order.customer || 'Unknown'),
         order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { month: 'M', day: 'd' }) : '-',

@@ -110,6 +110,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       
       let actionLengthValue = orderFeatures.action_length;
       
+      // If no direct action_length, try to derive from action_inlet
       if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
         const actionInlet = orderFeatures.action_inlet;
         const inletToLengthMap = {
@@ -128,10 +129,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           'winchester_70': 'LA',
           'howa_1500': 'SA',
           'bergara_b14': 'SA',
-          'carbon_six_medium': 'MA'
+          'carbon_six_medium': 'MA',
+          'lone_peak_fuzion': 'SA'  // Added missing mapping
         };
         
-        actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
+        actionLengthValue = inletToLengthMap[actionInlet];
       }
       
       if (!actionLengthValue || actionLengthValue === 'none') return null;
@@ -177,6 +179,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
         }
       }
       
+      // Return the raw value if no feature mapping found
       return lopValue;
     };
 
@@ -334,6 +337,16 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const heavyFill = getHeavyFillDisplay(order.features) || '';
       const modelDisplay = getModelDisplayName(modelId);
       
+      // Debug logging for missing data
+      console.log(`PDF Debug - Order ${order.orderId}:`, {
+        modelId,
+        materialType,
+        actionLength,
+        lopDisplay,
+        heavyFill,
+        features: order.features
+      });
+      
       // Determine row color based on source
       let bgColor = rgb(1, 1, 1); // white
       if (order.source === 'p1_purchase_order') {
@@ -354,12 +367,12 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const rowData = [
         order.orderId || 'No ID',
         modelDisplay.length > 15 ? modelDisplay.substring(0, 12) + '...' : modelDisplay,
-        materialType,
-        actionLength,
-        lopDisplay.length > 8 ? lopDisplay.substring(0, 6) + '...' : lopDisplay,
-        heavyFill ? 'Yes' : '',
+        materialType || '-',
+        actionLength || '-',
+        (lopDisplay && lopDisplay.length > 8) ? lopDisplay.substring(0, 6) + '...' : (lopDisplay || '-'),
+        heavyFill ? 'Yes' : '-',
         (order.customer || 'Unknown').length > 12 ? order.customer.substring(0, 10) + '...' : (order.customer || 'Unknown'),
-        order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { month: 'M', day: 'd' }) : '',
+        order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { month: 'M', day: 'd' }) : '-',
         order.source === 'p1_purchase_order' ? 'P1 PO' : 'Regular'
       ];
 

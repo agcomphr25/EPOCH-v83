@@ -16,12 +16,7 @@ import {
   useDroppable,
   useDraggable,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+// SortableContext removed - using basic drag and drop instead
 import { CSS } from '@dnd-kit/utilities';
 import {
   addDays,
@@ -52,7 +47,14 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
     setNodeRef,
     transform,
     isDragging,
-  } = useDraggable({ id: order.orderId });
+  } = useDraggable({ 
+    id: order.orderId,
+    data: {
+      type: 'order',
+      orderId: order.orderId,
+      source: order.source
+    }
+  });
 
   const style = {
     transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : 'none',
@@ -495,7 +497,12 @@ function DroppableCell({
     setNodeRef,
     isOver,
   } = useDroppable({
-    id: `${moldId}|${date.toISOString()}`
+    id: `${moldId}|${date.toISOString()}`,
+    data: {
+      type: 'cell',
+      moldId: moldId,
+      date: date.toISOString()
+    }
   });
 
   // Debug logging for each cell
@@ -511,23 +518,21 @@ function DroppableCell({
           {orders.length} order(s)
         </div>
       )}
-      <SortableContext items={orders.map(o => o?.orderId || 'unknown')} strategy={verticalListSortingStrategy}>
-        {orders.map((order, idx) => {
-          console.log(`🎯 Rendering order in cell:`, order);
-          return (
-            <DraggableOrderItem
-              key={order?.orderId || `order-${idx}`}
-              order={order}
-              priority={order?.priorityScore || 0}
-              totalOrdersInCell={orders.length}
-              moldInfo={moldInfo}
-              getModelDisplayName={getModelDisplayName}
-              features={features}
-              processedOrders={processedOrders}
-            />
-          );
-        })}
-      </SortableContext>
+      {orders.map((order, idx) => {
+        console.log(`🎯 Rendering order in cell:`, order);
+        return (
+          <DraggableOrderItem
+            key={order?.orderId || `order-${idx}`}
+            order={order}
+            priority={order?.priorityScore || 0}
+            totalOrdersInCell={orders.length}
+            moldInfo={moldInfo}
+            getModelDisplayName={getModelDisplayName}
+            features={features}
+            processedOrders={processedOrders}
+          />
+        );
+      })}
       {orders.length === 0 && (
         <div className="text-xs text-gray-400 text-center py-4">
           Empty cell
@@ -1063,7 +1068,17 @@ export default function LayupScheduler() {
     if (!over) return;
 
     const orderId = active.id as string;
-    const [moldId, dateIso] = (over.id as string).split('|');
+    const dropTargetId = over.id as string;
+    
+    // Parse the drop target ID (format: moldId|dateISO)
+    const [moldId, dateIso] = dropTargetId.split('|');
+    
+    if (!moldId || !dateIso) {
+      console.warn('Invalid drop target:', dropTargetId);
+      return;
+    }
+
+    console.log(`Moving order ${orderId} to mold ${moldId} on ${dateIso}`);
 
     // Update local assignment state
     setOrderAssignments(prev => ({

@@ -161,9 +161,15 @@ export default function OrderEntry() {
       }
     }
 
-    // Add paint options price (separate state variable)
-    if (paintOptions && paintOptions !== 'none') {
-      console.log('💰 Paint calculation - paintOptions value:', paintOptions);
+    // Add paint options price (check both state variable and features object)
+    const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
+    const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
+    const currentPaint = paintFromState || paintFromFeatures;
+    
+    if (currentPaint && currentPaint !== 'none') {
+      console.log('💰 Paint calculation - current paint:', currentPaint);
+      console.log('💰 Paint calculation - sources:', { paintFromState, paintFromFeatures });
+      
       const paintFeatures = featureDefs.filter(f => 
         f.displayName?.includes('Options') || 
         f.displayName?.includes('Camo') || 
@@ -182,9 +188,9 @@ export default function OrderEntry() {
       let paintPriceAdded = false;
       for (const feature of paintFeatures) {
         if (feature.options) {
-          const option = feature.options.find(opt => opt.value === paintOptions);
+          const option = feature.options.find(opt => opt.value === currentPaint);
           if (option?.price) {
-            console.log('💰 Paint calculation - found option:', option.label, 'price:', option.price);
+            console.log('💰 Paint calculation - FOUND and ADDED:', option.label, 'price:', option.price);
             total += option.price;
             paintPriceAdded = true;
             break; // Only add price once
@@ -193,7 +199,7 @@ export default function OrderEntry() {
       }
       
       if (!paintPriceAdded) {
-        console.log('💰 Paint calculation - NO PRICE FOUND for:', paintOptions);
+        console.log('💰 Paint calculation - NO PRICE FOUND for:', currentPaint);
       }
     }
 

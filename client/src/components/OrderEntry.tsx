@@ -294,11 +294,26 @@ export default function OrderEntry() {
     return urlParams.get('draft');
   };
 
-  // Load initial data
+  // Track loading state to ensure proper order
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Load initial data first
   useEffect(() => {
-    loadStockModels();
-    loadFeatures();
-    loadDiscountCodes();
+    const loadInitialData = async () => {
+      await Promise.all([
+        loadStockModels(),
+        loadFeatures(),
+        loadDiscountCodes()
+      ]);
+      setInitialDataLoaded(true);
+    };
+    
+    loadInitialData();
+  }, []);
+
+  // Load order data only after initial data is loaded
+  useEffect(() => {
+    if (!initialDataLoaded) return;
     
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
@@ -306,7 +321,7 @@ export default function OrderEntry() {
     } else {
       generateOrderId();
     }
-  }, []);
+  }, [initialDataLoaded]);
 
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
@@ -448,6 +463,7 @@ export default function OrderEntry() {
     try {
       const models = await apiRequest('/api/stock-models');
       setModelOptions(models.filter((m: StockModel) => m.isActive));
+      console.log('Stock models loaded:', models.length);
     } catch (error) {
       console.error('Failed to load stock models:', error);
     }
@@ -457,6 +473,7 @@ export default function OrderEntry() {
     try {
       const features = await apiRequest('/api/features');
       setFeatureDefs(features);
+      console.log('Features loaded:', features.length);
     } catch (error) {
       console.error('Failed to load features:', error);
     }

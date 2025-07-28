@@ -3902,15 +3902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Routes for PO item selection data
-  app.get("/api/stock-models", async (req, res) => {
-    try {
-      const models = await storage.getAllStockModels();
-      res.json(models);
-    } catch (error) {
-      console.error("Get stock models error:", error);
-      res.status(500).json({ error: "Failed to fetch stock models" });
-    }
-  });
+  // Stock models route moved up to avoid duplication
 
   app.get("/api/features", async (req, res) => {
     try {

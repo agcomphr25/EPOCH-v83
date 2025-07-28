@@ -296,6 +296,8 @@ export default function OrderEntry() {
 
   // Track loading state to ensure proper order
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  // Force component re-render when loading existing order
+  const [renderKey, setRenderKey] = useState(0);
 
   // Load initial data first
   useEffect(() => {
@@ -366,11 +368,8 @@ export default function OrderEntry() {
         // Set ONLY the features object - all form controls now read from this
         setFeatures(featuresObj);
         
-        // Force re-render by updating features state after a brief delay
-        setTimeout(() => {
-          console.log('🔄 Forcing features state update for re-render');
-          setFeatures(prev => ({ ...prev, ...featuresObj }));
-        }, 100);
+        // Force component re-render by incrementing render key
+        setRenderKey(prev => prev + 1);
         
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);
@@ -953,7 +952,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Handedness</Label>
                     <Select 
-                      key={`handedness-${features.handedness || 'empty'}`}
+                      key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
                       value={features.handedness || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
                     >
@@ -971,7 +970,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Action Inlet</Label>
                     <Select 
-                      key={`action-inlet-${features.action_inlet || 'empty'}`}
+                      key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                       value={features.action_inlet || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
                     >
@@ -1132,7 +1131,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Action Length</Label>
                     <Select 
-                      key={`action-length-${features.action_length || 'empty'}`}
+                      key={`action-length-${renderKey}-${features.action_length || 'empty'}`}
                       value={features.action_length || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
                     >
@@ -1151,6 +1150,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Bottom Metal</Label>
                     <Select 
+                      key={`bottom-metal-${renderKey}-${features.bottom_metal || 'empty'}`}
                       value={features.bottom_metal || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
                     >
@@ -1173,6 +1173,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>QD Quick Detach Cups</Label>
                     <Select 
+                      key={`qd-accessory-${renderKey}-${features.qd_accessory || 'empty'}`}
                       value={features.qd_accessory || ''} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, qd_accessory: value }))}
                     >

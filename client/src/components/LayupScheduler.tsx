@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { generateLayupSchedule } from '../utils/schedulerUtils';
+import { scheduleLOPAdjustments, identifyLOPOrders, getLOPStatus, needsImmediateLOPAttention } from '../utils/lopScheduler';
 import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
@@ -41,6 +42,7 @@ import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, User
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import LOPManager from './LOPManager';
 
 // Draggable Order Item Component with responsive sizing
 function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[] }) {
@@ -374,6 +376,31 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               LOP: {lopDisplay}
             </div>
           ) : null;
+        })()}
+
+        {/* Show LOP Adjustment Status */}
+        {(() => {
+          const lopOrder = identifyLOPOrders([order])[0];
+          const lopStatus = getLOPStatus(lopOrder);
+          
+          if (lopStatus.status === 'none') return null;
+          
+          return (
+            <div className="text-xs mt-1">
+              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                lopStatus.status === 'immediate' 
+                  ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  : lopStatus.status === 'scheduled'
+                  ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                  : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+              }`}>
+                {lopStatus.status === 'immediate' && '🔥 '}
+                {lopStatus.status === 'scheduled' && '📅 '}
+                {lopStatus.status === 'deferred' && '⏰ '}
+                LOP {lopStatus.status.toUpperCase()}
+              </span>
+            </div>
+          );
         })()}
         
         {/* Show Heavy Fill if selected */}
@@ -1666,6 +1693,7 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
+            <LOPManager orders={orders} />
 
 
 

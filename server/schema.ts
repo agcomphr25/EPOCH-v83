@@ -1074,6 +1074,13 @@ export const layupOrders = pgTable("layup_orders", {
   status: text("status").default("FINALIZED").notNull(),
   customer: text("customer").notNull(),
   product: text("product").notNull(),
+  // LOP Adjustment fields
+  needsLOPAdjustment: boolean("needs_lop_adjustment").default(false),
+  priority: integer("priority").default(50), // 1-100 priority level
+  priorityChangedAt: timestamp("priority_changed_at"),
+  lastScheduledLOPAdjustmentDate: timestamp("last_scheduled_lop_adjustment_date"),
+  scheduledLOPAdjustmentDate: timestamp("scheduled_lop_adjustment_date"),
+  lopAdjustmentOverrideReason: text("lop_adjustment_override_reason"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1131,6 +1138,13 @@ export const insertLayupOrderSchema = createInsertSchema(layupOrders).omit({
   status: z.string().default("FINALIZED"),
   customer: z.string().min(1, "Customer is required"),
   product: z.string().min(1, "Product is required"),
+  // LOP Adjustment fields
+  needsLOPAdjustment: z.boolean().default(false),
+  priority: z.number().min(1).max(100).default(50),
+  priorityChangedAt: z.coerce.date().optional().nullable(),
+  lastScheduledLOPAdjustmentDate: z.coerce.date().optional().nullable(),
+  scheduledLOPAdjustmentDate: z.coerce.date().optional().nullable(),
+  lopAdjustmentOverrideReason: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
 

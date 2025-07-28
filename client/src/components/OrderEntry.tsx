@@ -116,7 +116,9 @@ export default function OrderEntry() {
     // Add stock model price (use override if set, otherwise use standard price)
     const selectedModel = modelOptions.find(model => model.id === modelId);
     if (selectedModel) {
-      total += priceOverride !== null ? priceOverride : (selectedModel.price || 0);
+      const basePrice = priceOverride !== null ? priceOverride : (selectedModel.price || 0);
+      total += basePrice;
+      console.log('💰 Price calculation - Base price:', basePrice);
     }
 
     // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
@@ -188,12 +190,15 @@ export default function OrderEntry() {
     if (railAccessory && railAccessory.length > 0) {
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
       if (railFeature?.options) {
+        let railsTotal = 0;
         railAccessory.forEach(optionValue => {
           const option = railFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
+            railsTotal += option.price;
             total += option.price;
           }
         });
+        console.log('💰 Price calculation - Rails total:', railsTotal, 'from', railAccessory);
       }
     }
 
@@ -201,15 +206,19 @@ export default function OrderEntry() {
     if (otherOptions && otherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
+        let otherTotal = 0;
         otherOptions.forEach(optionValue => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
+            otherTotal += option.price;
             total += option.price;
           }
         });
+        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', otherOptions);
       }
     }
 
+    console.log('💰 Price calculation - Final total:', total);
     return total;
   }, [modelOptions, modelId, priceOverride, featureDefs, features, bottomMetal, paintOptions, railAccessory, otherOptions]);
 

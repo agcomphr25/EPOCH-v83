@@ -951,14 +951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Draft found:", draft.orderId, "Status:", draft.status);
       
-      // Temporarily bypass all status requirements - allow finalization from any status
-      // if (draft.status !== 'CONFIRMED' && draft.status !== 'DRAFT') {
-      //   return res.status(400).json({ error: "Order must be in CONFIRMED or DRAFT status" });
-      // }
-      
-      await storage.updateOrderDraft(draft.orderId, { status: 'FINALIZED' });
-      console.log("Successfully finalized order:", draft.orderId);
-      res.json({ success: true, message: "Order finalized successfully" });
+      // Move order from draft table to main orders table
+      const finalizedOrder = await storage.finalizeOrderDraft(draft.orderId);
+      console.log("Successfully finalized and moved order:", draft.orderId);
+      res.json({ success: true, message: "Order finalized and moved to production", order: finalizedOrder });
     } catch (error) {
       console.error("Finalize order error:", error);
       res.status(500).json({ error: "Failed to finalize order" });

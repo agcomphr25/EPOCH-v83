@@ -88,11 +88,11 @@ export function registerRoutes(app: Express) {
       console.log('🏭 Starting layup queue processing...');
       const { storage } = await import('../../storage');
       
-      // Get regular orders from main database - all finalized orders need layup processing
-      const regularOrders = await storage.getAllOrderDrafts();
-      const layupOrders = regularOrders.filter(order => 
-        order.status === 'FINALIZED'
-        // All finalized orders go through layup department, no need to filter by department
+      // Get only finalized orders from draft table that are ready for production
+      const allOrders = await storage.getAllOrderDrafts();
+      const layupOrders = allOrders.filter(order => 
+        order.status === 'FINALIZED' && 
+        (order.currentDepartment === 'Layup' || !order.currentDepartment)
       );
       
       // Add debug logging for features

@@ -1369,39 +1369,34 @@ export default function LayupScheduler() {
   }
 
   return (
-    <div className="h-full">
-      {/* Navigation Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
-          </div>
-          <div className="flex items-center space-x-4 text-sm">
-            <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-              <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
+    <div className="h-full flex flex-col">
+      {/* Sticky Header Container */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        {/* Navigation Header */}
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
-              <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
-            </div>
-            <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
-              <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>
+            <div className="flex items-center space-x-4 text-sm">
+              <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
+                <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
+              </div>
+              <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
+                <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-    <DndContext 
-      sensors={sensors} 
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex h-full">{/* Order queue removed per user request */}
-
-        {/* Calendar - Full Width */}
-        <main className="flex-1 p-6 overflow-auto">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex space-x-2">
+        {/* Control Bar */}
+        <div className="px-6 pb-4">
+          <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex space-x-2">
 
             <Dialog>
               <DialogTrigger asChild>
@@ -2009,14 +2004,15 @@ export default function LayupScheduler() {
             )}
           </div>
         </div>
+      </div>
 
-          {/* Week-based Calendar Layout */}
-          {viewType === 'week' || viewType === 'day' ? (
+        {/* Sticky Date Headers */}
+        {(viewType === 'week' || viewType === 'day') && (
+          <div className="sticky top-[calc(theme(spacing.20)+theme(spacing.32))] z-[9] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-2">
             <div
               className="grid gap-1"
               style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
             >
-              {/* Header */}
               {dates.map(date => (
                 <div
                   key={date.toISOString()}
@@ -2028,6 +2024,25 @@ export default function LayupScheduler() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-auto">
+        <DndContext 
+          sensors={sensors} 
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="px-6 pb-6">
+            {/* Week-based Calendar Layout */}
+            {viewType === 'week' || viewType === 'day' ? (
+              <div
+                className="grid gap-1"
+                style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+              >
 
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
@@ -2141,151 +2156,23 @@ export default function LayupScheduler() {
                 </React.Fragment>
                 ));
               })()}
-            </div>
-          ) : (
-            /* Month view - organized by weeks */
-            <div className="space-y-4">
-              {weekGroups?.map((week, weekIndex) => (
-                <div key={`week-${weekIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                  {/* Week Header */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                      Week of {format(week[0], 'MMM d')} - {format(week[week.length - 1], 'MMM d')}
-                    </h3>
-                  </div>
-                  
-                  {/* Week Calendar Grid */}
-                  <div
-                    className="grid gap-1"
-                    style={{ gridTemplateColumns: `repeat(${week.length}, 1fr)` }}
-                  >
-                    {/* Day Headers */}
-                    {week.map(date => (
-                      <div
-                        key={date.toISOString()}
-                        className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center text-xs font-medium"
-                      >
-                        {format(date, 'EEE MM/dd')}
-                      </div>
-                    ))}
-
-                    {/* Mold Rows for this week - Show relevant molds sorted by order count */}
-                    {(() => {
-                      // Get molds that either have orders OR are compatible with existing orders in queue
-                      const getCompatibleMolds = (order: any) => {
-                        const modelId = order.stockModelId || order.modelId;
-                        return molds.filter(mold => {
-                          if (!mold.enabled) return false;
-                          if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
-                          return mold.stockModels.includes(modelId);
-                        });
-                      };
-                      
-                      // Find molds that are compatible with any order in the current queue
-                      const compatibleMoldIds = new Set<string>();
-                      orders.forEach(order => {
-                        const compatible = getCompatibleMolds(order);
-                        compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
-                      });
-                      
-                      // Get molds that either have assignments OR are compatible with queue orders
-                      const relevantMolds = molds.filter(m => {
-                        if (!m.enabled) return false;
-                        
-                        // Include if mold has orders assigned
-                        const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
-                        if (hasAssignments) return true;
-                        
-                        // Include if mold is compatible with orders in queue (genuinely available)
-                        const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
-                        return isCompatibleWithQueue;
-                      });
-                      
-                      // Calculate order counts for this week and sort molds accordingly
-                      const moldOrderCounts = relevantMolds.map(mold => {
-                        const totalOrdersForMold = week.reduce((count, date) => {
-                          const dateString = date.toISOString();
-                          const cellDateOnly = dateString.split('T')[0];
-                          
-                          const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-                            const assignmentDateOnly = assignment.date.split('T')[0];
-                            return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                          }).length;
-                          
-                          return count + ordersForThisMoldDate;
-                        }, 0);
-                        
-                        return { mold, orderCount: totalOrdersForMold };
-                      });
-                      
-                      // Sort by order count (descending), then alphabetically
-                      const sortedMolds = moldOrderCounts.sort((a, b) => {
-                        if (b.orderCount !== a.orderCount) {
-                          return b.orderCount - a.orderCount;
-                        }
-                        return a.mold.moldId.localeCompare(b.mold.moldId);
-                      });
-                      
-                      const activeMolds = sortedMolds.map(({ mold }) => mold);
-                      
-                      return activeMolds.map(mold => (
-                      <React.Fragment key={`${weekIndex}-${mold.moldId}`}>
-                        {week.map(date => {
-                          const dateString = date.toISOString();
-                          const cellDateOnly = dateString.split('T')[0];
-                          
-                          const cellOrders = Object.entries(orderAssignments)
-                            .filter(([orderId, assignment]) => {
-                              const assignmentDateOnly = assignment.date.split('T')[0];
-                              return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                            })
-                            .map(([orderId]) => {
-                              const order = orders.find(o => o.orderId === orderId);
-                              return order;
-                            })
-                            .filter(order => order !== undefined) as any[];
-
-                          const dropId = `${mold.moldId}|${dateString}`;
-
-                          return (
-                            <DroppableCell
-                              key={dropId}
-                              moldId={mold.moldId}
-                              date={date}
-                              orders={cellOrders}
-                              onDrop={(orderId, moldId, date) => {
-                                // Handle drop (this is handled by DndContext now)
-                              }}
-                              moldInfo={{
-                                moldId: mold.moldId,
-                                instanceNumber: mold.instanceNumber
-                              }}
-                              getModelDisplayName={getModelDisplayName}
-                              features={features}
-                              processedOrders={processedOrders}
-                            />
-                          );
-                        })}
-                      </React.Fragment>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-        </main>
-      </div>
-      
-      <DragOverlay>
-        {activeId ? (
-          <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-            {activeId}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Month view not yet implemented
+              </div>
+            )}
           </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+          
+          <DragOverlay>
+            {activeId ? (
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
+                {activeId}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
     </div>
   );
 }

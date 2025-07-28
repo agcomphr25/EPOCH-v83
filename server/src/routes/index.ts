@@ -76,14 +76,38 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
+  // NEW: Direct employee layup settings route for LayupScheduler
+  app.get('/api/employee-layup-data', async (req, res) => {
+    try {
+      console.log('🚀 NEW ROUTE CALLED: /api/employee-layup-data');
+      const { storage } = await import('../../storage');
+      const settings = await storage.getAllEmployeeLayupSettings();
+      console.log('🚀 Employee data retrieved:', settings.length, 'employees');
+      res.setHeader('Content-Type', 'application/json');
+      res.json(settings);
+    } catch (error) {
+      console.error('🚀 Employee data fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch employee data" });
+    }
+  });
+
   // Temporary bypass route for employee layup settings (different path to avoid conflicts)
   app.get('/api/layup-employee-settings', async (req, res) => {
     try {
-      console.log('🔧 Bypass employee layup-settings route called');
+      console.log('🔧 BYPASS ROUTE CALLED: /api/layup-employee-settings');
+      console.log('🔧 Request method:', req.method);
+      console.log('🔧 Request path:', req.path);
+      
       const { storage } = await import('../../storage');
       const settings = await storage.getAllEmployeeLayupSettings();
-      console.log('🔧 Found employees:', settings);
+      console.log('🔧 Found employees from database:', settings);
+      console.log('🔧 Employee count:', settings.length);
+      console.log('🔧 Returning JSON response...');
+      
+      // Set explicit headers to ensure JSON response
+      res.setHeader('Content-Type', 'application/json');
       res.json(settings);
+      console.log('🔧 JSON response sent successfully');
     } catch (error) {
       console.error('🔧 Employee layup settings fetch error:', error);
       res.status(500).json({ error: "Failed to fetch employee layup settings" });

@@ -1089,7 +1089,14 @@ export default function OrderEntry() {
                         const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
                         
                         if (!otherOptionsFeature || !otherOptionsFeature.options) {
-                          return <div className="text-gray-500 text-sm">No options available</div>;
+                          return <div className="text-gray-500 text-sm">
+                            No Other Options available (Features loaded: {featureDefs.length}, Looking for: other_options)
+                            {featureDefs.length > 0 && (
+                              <div className="text-xs mt-1">
+                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
+                              </div>
+                            )}
+                          </div>;
                         }
                         
                         return otherOptionsFeature.options.map((option) => (
@@ -1213,7 +1220,14 @@ export default function OrderEntry() {
                         const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
                         
                         if (!railsFeature || !railsFeature.options) {
-                          return <div className="text-gray-500 text-sm">No options available</div>;
+                          return <div className="text-gray-500 text-sm">
+                            No Rails options available (Features loaded: {featureDefs.length}, Looking for: rail_accessory)
+                            {featureDefs.length > 0 && (
+                              <div className="text-xs mt-1">
+                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
+                              </div>
+                            )}
+                          </div>;
                         }
                         
                         return railsFeature.options.map((option) => (

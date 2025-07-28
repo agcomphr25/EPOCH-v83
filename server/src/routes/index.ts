@@ -10,6 +10,7 @@ import customersRoutes from './customers';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
+import layupPdfRoute from './layupPdfRoute';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -41,6 +42,9 @@ export function registerRoutes(app: Express): Server {
   
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
+  
+  // Layup PDF generation routes
+  app.use('/api/pdf', layupPdfRoute);
   
   // Features routes - bypass to old monolithic routes temporarily
   app.get('/api/features', async (req, res) => {

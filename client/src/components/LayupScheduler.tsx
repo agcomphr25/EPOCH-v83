@@ -566,6 +566,58 @@ export default function LayupScheduler() {
   // Debug molds data
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
+
+  // Save functionality
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedScheduleChanges, setHasUnsavedScheduleChanges] = useState(false);
+
+  const saveScheduleMutation = useMutation({
+    mutationFn: async (assignments: {[orderId: string]: { moldId: string, date: string }}) => {
+      // Convert assignments to schedule entries
+      const scheduleEntries = Object.entries(assignments).map(([orderId, assignment]) => ({
+        orderId,
+        scheduledDate: new Date(assignment.date),
+        moldId: assignment.moldId,
+        employeeAssignments: [], // Will be calculated by backend
+        isOverride: true, // Mark as manual assignment
+        overriddenBy: 'user' // Could be enhanced with actual user info
+      }));
+
+      // Save each schedule entry
+      const savePromises = scheduleEntries.map(entry => 
+        apiRequest('/api/layup-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(entry)
+        })
+      );
+
+      return Promise.all(savePromises);
+    },
+    onSuccess: () => {
+      setHasUnsavedScheduleChanges(false);
+      console.log('✅ Schedule saved successfully');
+      // Optionally refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+    },
+    onError: (error) => {
+      console.error('❌ Failed to save schedule:', error);
+    }
+  });
+
+  const handleSaveSchedule = async () => {
+    if (Object.keys(orderAssignments).length === 0) {
+      console.log('No assignments to save');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await saveScheduleMutation.mutateAsync(orderAssignments);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
 
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
@@ -838,6 +890,7 @@ export default function LayupScheduler() {
     ).slice(0, 8));
     
     setOrderAssignments(newAssignments);
+    setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
   // Fetch stock models to get display names
@@ -1110,6 +1163,7 @@ export default function LayupScheduler() {
       });
       
       setOrderAssignments(autoAssignments);
+      setHasUnsavedScheduleChanges(true);
       console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
       console.log('✅ Production orders assigned:', Object.keys(autoAssignments).filter(orderId => {
         const order = orders.find(o => o.orderId === orderId);
@@ -1190,6 +1244,9 @@ export default function LayupScheduler() {
       ...prev,
       [orderId]: { moldId, date: dateIso }
     }));
+    
+    // Mark as having unsaved changes
+    setHasUnsavedScheduleChanges(true);
   };
 
   const handleDragStart = (event: any) => {
@@ -1867,6 +1924,28 @@ export default function LayupScheduler() {
           </div>
           
           <div className="flex items-center space-x-2">
+            {hasUnsavedScheduleChanges && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSaveSchedule}
+                disabled={isSaving}
+                className="mr-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Save Schedule
+                  </>
+                )}
+              </Button>
+            )}
+            
             <Button
               variant="outline"
               size="sm"

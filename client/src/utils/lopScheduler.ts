@@ -1,12 +1,12 @@
 import { LayupOrder } from '@shared/schema';
 
-interface LOPOrder extends LayupOrder {
+interface LOPOrder extends Omit<LayupOrder, 'priority'> {
   needsLOPAdjustment: boolean;
   priority: number;
-  priorityChangedAt?: Date | null;
-  lastScheduledLOPAdjustmentDate?: Date | null;
-  scheduledLOPAdjustmentDate?: Date | null;
-  lopAdjustmentOverrideReason?: string | null;
+  priorityChangedAt: Date | null;
+  lastScheduledLOPAdjustmentDate: Date | null;
+  scheduledLOPAdjustmentDate: Date | null;
+  lopAdjustmentOverrideReason: string | null;
 }
 
 function todayIsMonday(date: Date = new Date()): boolean {
@@ -15,9 +15,11 @@ function todayIsMonday(date: Date = new Date()): boolean {
 
 function nextMonday(fromDate: Date = new Date()): Date {
   const day = fromDate.getDay();
-  const diff = (8 - day) % 7 || 7; // Always at least 1 day ahead
+  // Days until next Monday: if today is Sunday (0), next Monday is 1 day. 
+  // If today is Monday (1), next Monday is 7 days, etc.
+  const daysUntilMonday = day === 0 ? 1 : 8 - day;
   const result = new Date(fromDate);
-  result.setDate(result.getDate() + diff);
+  result.setDate(result.getDate() + daysUntilMonday);
   return result;
 }
 

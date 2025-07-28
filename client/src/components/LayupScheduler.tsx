@@ -45,7 +45,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import LOPManager from './LOPManager';
 
 // Draggable Order Item Component with responsive sizing
-function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[] }) {
+function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) {
   const {
     attributes,
     listeners,
@@ -380,7 +380,8 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
 
         {/* Show LOP Adjustment Status */}
         {(() => {
-          const lopOrder = identifyLOPOrders([order])[0];
+          // Use the processed orders that have been run through LOP scheduler
+          const lopOrder = processedOrders?.find(o => o.orderId === order.orderId) || identifyLOPOrders([order])[0];
           const lopStatus = getLOPStatus(lopOrder);
           
           if (lopStatus.status === 'none') return null;
@@ -468,7 +469,8 @@ function DroppableCell({
   onDrop,
   moldInfo,
   getModelDisplayName,
-  features
+  features,
+  processedOrders
 }: { 
   moldId: string; 
   date: Date; 
@@ -477,6 +479,7 @@ function DroppableCell({
   moldInfo?: { moldId: string, instanceNumber?: number };
   getModelDisplayName?: (modelId: string) => string;
   features?: any[];
+  processedOrders?: any[];
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -521,6 +524,7 @@ function DroppableCell({
               moldInfo={moldInfo}
               getModelDisplayName={getModelDisplayName}
               features={features}
+              processedOrders={processedOrders}
             />
           );
         })}
@@ -561,6 +565,23 @@ export default function LayupScheduler() {
   
 
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  
+  // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
+  const processedOrders = useMemo(() => {
+    if (orders.length === 0) return [];
+    
+    const lopOrders = identifyLOPOrders(orders as any[]);
+    const scheduledOrders = scheduleLOPAdjustments(lopOrders);
+    
+    console.log('🔧 LOP Scheduler auto-run:', {
+      totalOrders: orders.length,
+      lopOrdersNeedingAdjustment: lopOrders.filter(o => o.needsLOPAdjustment).length,
+      today: new Date().toDateString(),
+      isMonday: new Date().getDay() === 1
+    });
+    
+    return scheduledOrders;
+  }, [orders]);
   
   // Debug production orders specifically
   useEffect(() => {
@@ -1693,7 +1714,7 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            <LOPManager orders={orders} />
+            <LOPManager orders={processedOrders} />
 
 
 
@@ -1851,6 +1872,7 @@ export default function LayupScheduler() {
                         }}
                         getModelDisplayName={getModelDisplayName}
                         features={features}
+                        processedOrders={processedOrders}
                       />
                     );
                   })}
@@ -1925,6 +1947,7 @@ export default function LayupScheduler() {
                               }}
                               getModelDisplayName={getModelDisplayName}
                               features={features}
+                              processedOrders={processedOrders}
                             />
                           );
                         })}

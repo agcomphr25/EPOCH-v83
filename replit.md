@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 28, 2025 - Order Entry Pricing Calculation Fix for Rails and Paint Options (COMPLETED)**
+- ✅ **Stock Model Dropdown Fix**: Resolved critical server routing issue by correcting import path from "./src/routes" to "./routes" in server/index.ts, enabling Stock Model dropdown to load 40 available models
+- ✅ **Reactive Price Calculation**: Implemented proper reactive price calculation using useMemo hooks, replacing static calculations that didn't trigger on form state changes
+- ✅ **Rails Pricing Resolution**: Fixed Rails pricing by updating calculation logic to check both `railAccessory` state variable and `features.rail_accessory` where form checkboxes actually store selections
+- ✅ **Paint Options Pricing Fix**: Resolved Paint pricing by implementing multi-location checking logic that searches `paintOptions` state, `features.metallic_finishes`, `features.paint_options`, and `features.paint_options_combined`
+- ✅ **Order Summary Accuracy**: All selected features (QDs, LOP, Swivel Studs, Rails, Paint options) now correctly display individual prices and contribute to accurate subtotal calculations
+- ✅ **Comprehensive Debugging**: Added detailed console logging for price calculation troubleshooting and verification of proper data flow from form selections to subtotal
+
 **July 28, 2025 - Customer Address Display Issue Resolution (COMPLETED)**
 - ✅ **Root Cause Analysis**: Identified that `/api/addresses/all` endpoint existed in monolithic routes but wasn't registered in new modular routing system
 - ✅ **API Route Integration**: Added address endpoints to modular routing system in `server/src/routes/index.ts` with proper storage integration

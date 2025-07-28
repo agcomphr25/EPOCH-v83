@@ -454,11 +454,29 @@ export default function OrderEntry() {
 
   const loadStockModels = async () => {
     try {
+      console.log('🔍 Loading stock models from API...');
       const models = await apiRequest('/api/stock-models');
-      setModelOptions(models.filter((m: StockModel) => m.isActive));
-      console.log('Stock models loaded:', models.length);
+      console.log('🔍 Raw models from API:', models);
+      console.log('🔍 Total models received:', models?.length || 0);
+      
+      if (models && models.length > 0) {
+        console.log('🔍 First model sample:', models[0]);
+        console.log('🔍 Model properties:', Object.keys(models[0]));
+        
+        const activeModels = models.filter((m: StockModel) => m.isActive);
+        console.log('🔍 Active models filtered:', activeModels.length);
+        console.log('🔍 Active models IDs:', activeModels.map((m: StockModel) => m.id));
+        console.log('🔍 Active models display names:', activeModels.map((m: StockModel) => m.displayName));
+        
+        setModelOptions(activeModels);
+        console.log('✅ Stock models loaded successfully:', activeModels.length);
+      } else {
+        console.log('⚠️ No models received from API');
+        setModelOptions([]);
+      }
     } catch (error) {
-      console.error('Failed to load stock models:', error);
+      console.error('❌ Failed to load stock models:', error);
+      setModelOptions([]);
     }
   };
 

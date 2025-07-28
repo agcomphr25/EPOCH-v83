@@ -348,6 +348,10 @@ export default function OrderEntry() {
         
         console.log('Setting modelId:', order.modelId || '');
         console.log('Current modelOptions available:', modelOptions.length);
+        console.log('Available model IDs:', modelOptions.map(m => m.id));
+        console.log('Looking for model ID:', order.modelId);
+        const modelExists = modelOptions.find(m => m.id === order.modelId);
+        console.log('Model exists in options:', !!modelExists, modelExists?.displayName);
         setModelId(order.modelId || '');
         // CRITICAL: Only use the features object - don't set separate state variables
         console.log('✅ Setting features object:', order.features || {});

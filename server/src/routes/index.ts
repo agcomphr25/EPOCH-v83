@@ -1,4 +1,5 @@
 import { Express } from 'express';
+import { createServer, type Server } from "http";
 import authRoutes from './auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
@@ -10,7 +11,7 @@ import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 
-export function registerRoutes(app: Express) {
+export function registerRoutes(app: Express): Server {
   // Authentication routes
   app.use('/api/auth', authRoutes);
   
@@ -40,6 +41,48 @@ export function registerRoutes(app: Express) {
   
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
+  
+  // Features routes - bypass to old monolithic routes temporarily
+  app.get('/api/features', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const features = await storage.getAllFeatures();
+      console.log('🎯 Features API Debug - Features count:', features.length);
+      console.log('🎯 Features API Debug - First few features:', features.slice(0, 3).map(f => ({ 
+        id: f.id, 
+        name: f.name, 
+        type: f.type,
+        optionsType: typeof f.options,
+        optionsLength: Array.isArray(f.options) ? f.options.length : 'not array'
+      })));
+      res.json(features);
+    } catch (error) {
+      console.error('🎯 Features API Error:', error);
+      res.status(500).json({ error: "Failed to retrieve features" });
+    }
+  });
+
+  app.get('/api/feature-categories', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const categories = await storage.getAllFeatureCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Get feature categories error:", error);
+      res.status(500).json({ error: "Failed to get feature categories" });
+    }
+  });
+
+  app.get('/api/feature-sub-categories', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const subCategories = await storage.getAllFeatureSubCategories();
+      res.json(subCategories);
+    } catch (error) {
+      console.error("Get feature sub-categories error:", error);
+      res.status(500).json({ error: "Failed to get feature sub-categories" });
+    }
+  });
   
   // Temporary bypass route for employee layup settings (different path to avoid conflicts)
   app.get('/api/layup-employee-settings', async (req, res) => {
@@ -216,5 +259,6 @@ export function registerRoutes(app: Express) {
   // app.use('/api/scheduling', schedulingRoutes);
   // app.use('/api/bom', bomRoutes);
   
-  return app;
+  // Create and return HTTP server
+  return createServer(app);
 }

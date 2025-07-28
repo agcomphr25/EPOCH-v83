@@ -590,8 +590,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/features", async (req, res) => {
     try {
       const features = await storage.getAllFeatures();
+      console.log('🎯 Features API Debug - Features count:', features.length);
+      console.log('🎯 Features API Debug - First few features:', features.slice(0, 3).map(f => ({ 
+        id: f.id, 
+        name: f.name, 
+        type: f.type,
+        optionsType: typeof f.options,
+        optionsLength: Array.isArray(f.options) ? f.options.length : 'not array'
+      })));
       res.json(features);
     } catch (error) {
+      console.error('🎯 Features API Error:', error);
       res.status(500).json({ error: "Failed to retrieve features" });
     }
   });

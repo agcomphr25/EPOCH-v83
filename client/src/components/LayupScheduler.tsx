@@ -533,11 +533,7 @@ function DroppableCell({
           />
         );
       })}
-      {orders.length === 0 && (
-        <div className="text-xs text-gray-400 text-center py-4">
-          Empty cell
-        </div>
-      )}
+      {/* No empty cell display - cells with no orders are filtered out at parent level */}
     </div>
   );
 }
@@ -2029,23 +2025,46 @@ export default function LayupScheduler() {
                 </div>
               ))}
 
-              {/* Rows for each mold - Only show molds with assigned orders */}
+              {/* Rows for each mold - Only show molds with assigned orders per day */}
               {(() => {
-                // Only show molds that have orders assigned to them
-                const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-                const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-                
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
-                console.log(`  • Used mold IDs:`, Array.from(usedMoldIds));
-                console.log(`  • Active molds with orders: ${activeMolds.length}`);
-                console.log(`  • Active mold details:`, activeMolds.map(m => ({ moldId: m.moldId, modelName: m.modelName })));
                 
-                if (activeMolds.length === 0 && Object.keys(orderAssignments).length > 0) {
-                  console.log(`❌ MISMATCH: Have ${Object.keys(orderAssignments).length} assignments but no active molds!`);
-                  console.log(`  • Assignment details:`, Object.entries(orderAssignments).slice(0, 5));
-                }
+                // For each date, determine which molds have orders and render them
+                const moldRowsPerDate = dates.map(date => {
+                  const dateString = date.toISOString();
+                  const cellDateOnly = dateString.split('T')[0];
+                  
+                  // Find which molds have orders for this specific date
+                  const moldsWithOrdersThisDate = molds.filter(m => {
+                    if (!m.enabled) return false;
+                    
+                    // Check if this mold has any orders assigned for this date
+                    const hasOrdersForDate = Object.entries(orderAssignments).some(([orderId, assignment]) => {
+                      const assignmentDateOnly = assignment.date.split('T')[0];
+                      return assignment.moldId === m.moldId && assignmentDateOnly === cellDateOnly;
+                    });
+                    
+                    return hasOrdersForDate;
+                  });
+                  
+                  return { date, moldsWithOrders: moldsWithOrdersThisDate };
+                });
+                
+                // Get unique molds that have orders on any day
+                const allUsedMolds = new Set<string>();
+                moldRowsPerDate.forEach(({ moldsWithOrders }) => {
+                  moldsWithOrders.forEach(mold => allUsedMolds.add(mold.moldId));
+                });
+                
+                console.log(`  • Molds with orders (any day): ${allUsedMolds.size}`);
+                console.log(`  • Molds per date:`, moldRowsPerDate.map(({ date, moldsWithOrders }) => 
+                  `${format(date, 'MM/dd')}: ${moldsWithOrders.length} molds`
+                ));
+                
+                // Only render molds that have orders on at least one day
+                const activeMolds = molds.filter(m => m.enabled && allUsedMolds.has(m.moldId));
                 
                 return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>

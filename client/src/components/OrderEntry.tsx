@@ -277,32 +277,52 @@ export default function OrderEntry() {
       
       // If appliesTo is 'stock_model', apply discount only to base model price
       if (discountDetails.appliesTo === 'stock_model') {
-        // Extract percentage from label (e.g., "10% off")
-        const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
-        if (percentMatch) {
-          const percent = parseInt(percentMatch[1]);
-          return (baseAmount * percent) / 100;
+        // Handle percentage discounts
+        if (discountDetails.percent) {
+          return (baseAmount * discountDetails.percent) / 100;
         }
         
-        // Extract dollar amount from label (e.g., "$50.00 off")
-        const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
-        if (dollarMatch) {
-          const amount = parseFloat(dollarMatch[1]);
-          return amount;
+        // Handle fixed amount discounts
+        if (discountDetails.fixedAmount) {
+          return discountDetails.fixedAmount / 100; // Convert from cents to dollars
         }
       }
       // If appliesTo is 'total_order', apply to full subtotal (existing behavior)
+      else {
+        // Handle percentage discounts on total order
+        if (discountDetails.percent) {
+          return (subtotal * discountDetails.percent) / 100;
+        }
+        
+        // Handle fixed amount discounts on total order
+        if (discountDetails.fixedAmount) {
+          return discountDetails.fixedAmount / 100; // Convert from cents to dollars
+        }
+      }
     }
     
-    // Default behavior for short-term sales and total_order persistent discounts
-    // Extract percentage from label (e.g., "10% off")
+    // For short-term sales, check appliesTo setting
+    if (discountCode.startsWith('short_term_') && discountDetails) {
+      if (discountDetails.appliesTo === 'stock_model') {
+        const baseAmount = priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0);
+        if (discountDetails.percent) {
+          return (baseAmount * discountDetails.percent) / 100;
+        }
+      } else {
+        // Apply to total order
+        if (discountDetails.percent) {
+          return (subtotal * discountDetails.percent) / 100;
+        }
+      }
+    }
+    
+    // Fallback to label parsing for compatibility
     const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
     if (percentMatch) {
       const percent = parseInt(percentMatch[1]);
       return (subtotal * percent) / 100;
     }
     
-    // Extract dollar amount from label (e.g., "$50.00 off")
     const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
     if (dollarMatch) {
       const amount = parseFloat(dollarMatch[1]);

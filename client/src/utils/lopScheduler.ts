@@ -69,14 +69,22 @@ export function scheduleLOPAdjustments(orders: LOPOrder[]): LOPOrder[] {
 // Helper function to identify orders needing LOP adjustment
 export function identifyLOPOrders(orders: LayupOrder[]): LOPOrder[] {
   return orders.map(order => {
-    // For testing purposes, mark some orders as needing LOP adjustment
     // Check if order has any LOP-related features that aren't standard
     const hasLOPFeatures = (order as any).features?.length_of_pull && 
                           (order as any).features.length_of_pull !== 'no_lop_change' && 
                           (order as any).features.length_of_pull !== 'standard';
     
-    // For testing: mark every 10th order as needing LOP adjustment
-    const needsLOPTest = (order.id % 10 === 0) || hasLOPFeatures;
+    // Only flag orders that actually have LOP features requiring adjustment
+    const needsLOPTest = hasLOPFeatures;
+    
+    // Debug logging for LOP identification
+    if (needsLOPTest) {
+      console.log(`🔧 Order ${order.orderId} needs LOP adjustment:`, {
+        lopValue: (order as any).features?.length_of_pull,
+        hasLOPFeatures,
+        needsLOPTest
+      });
+    }
     
     return {
       ...order,

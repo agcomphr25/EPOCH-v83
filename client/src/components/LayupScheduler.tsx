@@ -588,7 +588,7 @@ export default function LayupScheduler() {
         apiRequest('/api/layup-schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry)
+          body: entry
         })
       );
 

@@ -395,7 +395,6 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
                   : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
               }`}>
-                {lopStatus.status === 'immediate' && '🔥 '}
                 {lopStatus.status === 'scheduled' && '📅 '}
                 {lopStatus.status === 'deferred' && '⏰ '}
                 LOP {lopStatus.status.toUpperCase()}

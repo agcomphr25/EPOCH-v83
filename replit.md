@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 28, 2025 - Monday-Thursday Primary Work Schedule with Friday Backup Implementation (COMPLETED)**
+- ✅ **Primary Work Schedule**: Configured Layup Scheduler to use Monday-Thursday as primary work days for auto-scheduling algorithm
+- ✅ **Friday Backup Day**: Friday remains visible but designated as backup catch-up day with distinctive amber styling
+- ✅ **Visual Distinction**: Friday headers show amber background with "Backup" label, Friday cells have lighter amber styling
+- ✅ **Smart Auto-Scheduling**: Algorithm focuses scheduling on Mon-Thu while keeping Friday available for manual assignments
+- ✅ **Flexible Workflow**: Supports manual drag-and-drop to Friday for catch-up work when needed
+
 **July 28, 2025 - Save Schedule Persistence Fix and Sticky Header Implementation (COMPLETED)**
 - ✅ **Save Schedule Persistence**: Fixed critical issue where Save Schedule button didn't persist changes across page refreshes by implementing proper database loading and saving
 - ✅ **Schedule Data Loading**: Added automatic loading of existing schedule assignments from database on component initialization

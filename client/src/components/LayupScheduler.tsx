@@ -508,10 +508,18 @@ function DroppableCell({
   // Debug logging for each cell
   console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
 
+  const isFriday = date.getDay() === 5;
+
   return (
     <div 
       ref={setNodeRef}
-      className={`${cellHeight} border ${isOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700'} p-1 bg-white dark:bg-gray-800 transition-all duration-200`}
+      className={`${cellHeight} border p-1 transition-all duration-200 ${
+        isOver 
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+          : isFriday 
+            ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10' 
+            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+      }`}
     >
       {orders.length > 0 && (
         <div className="text-xs text-gray-500 mb-1">
@@ -729,7 +737,7 @@ export default function LayupScheduler() {
 
     console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
     
-    // Get work days for current and next week
+    // Get work days for current and next week (Mon-Thu primary scheduling)
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
@@ -739,8 +747,8 @@ export default function LayupScheduler() {
         current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
       }
       
-      // Add Monday through Friday
-      for (let i = 0; i < 5; i++) {
+      // Add Monday through Thursday (primary work days)
+      for (let i = 0; i < 4; i++) {
         workDays.push(new Date(current));
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
       }
@@ -1216,13 +1224,13 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
-  // Generate date ranges based on view type - work week focus (Mon-Fri only)
+  // Generate date ranges based on view type - Mon-Thu primary with Fri as backup
   const dates = useMemo(() => {
     if (viewType === 'day') return [currentDate];
     if (viewType === 'week') {
-      // Show work week only: Monday through Friday
+      // Show work week: Monday through Friday (with Friday as backup)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      return eachDayOfInterval({ start, end: addDays(start, 4) }); // Only 5 days (Mon-Fri)
+      return eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
     }
     // month - organize by weeks
     const start = startOfMonth(currentDate);
@@ -2051,17 +2059,29 @@ export default function LayupScheduler() {
               className="grid gap-1"
               style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
             >
-              {dates.map(date => (
-                <div
-                  key={date.toISOString()}
-                  className="p-3 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-center font-semibold text-sm"
-                >
-                  {format(date, 'MM/dd')}
-                  <div className="text-xs text-gray-500 mt-1">
-                    {format(date, 'EEE')}
+              {dates.map(date => {
+                const isFriday = date.getDay() === 5;
+                return (
+                  <div
+                    key={date.toISOString()}
+                    className={`p-3 border text-center font-semibold text-sm ${
+                      isFriday 
+                        ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
+                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                    }`}
+                  >
+                    {format(date, 'MM/dd')}
+                    <div className={`text-xs mt-1 ${
+                      isFriday 
+                        ? 'text-amber-600 dark:text-amber-400' 
+                        : 'text-gray-500'
+                    }`}>
+                      {format(date, 'EEE')}
+                      {isFriday && <div className="text-[10px] font-medium">Backup</div>}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

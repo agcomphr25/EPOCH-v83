@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -283,9 +283,23 @@ export default function OrderEntry() {
     return 0;
   }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue, discountDetails, priceOverride, modelOptions, modelId]);
 
-  const subtotalPrice = calculateTotalPrice();
-  const discountAmount = calculateDiscountAmount(subtotalPrice);
-  const totalPrice = subtotalPrice - discountAmount;
+  const subtotalPrice = useMemo(() => {
+    const result = calculateTotalPrice();
+    console.log('💰 Subtotal recalculated:', result);
+    return result;
+  }, [calculateTotalPrice]);
+  
+  const discountAmount = useMemo(() => {
+    const result = calculateDiscountAmount(subtotalPrice);
+    console.log('💰 Discount recalculated:', result);
+    return result;
+  }, [calculateDiscountAmount, subtotalPrice]);
+  
+  const totalPrice = useMemo(() => {
+    const result = subtotalPrice - discountAmount;
+    console.log('💰 Total recalculated:', result);
+    return result;
+  }, [subtotalPrice, discountAmount]);
 
   // Helper function to format currency with commas
   const formatCurrency = (amount: number) => {

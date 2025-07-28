@@ -350,6 +350,9 @@ export default function OrderEntry() {
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   // Force component re-render when loading existing order
   const [renderKey, setRenderKey] = useState(0);
+  // Track if we're editing an existing order
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   // Load initial data first
   useEffect(() => {
@@ -371,8 +374,12 @@ export default function OrderEntry() {
     
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
+      setIsEditMode(true);
+      setEditingOrderId(editOrderId);
       loadExistingOrder(editOrderId);
     } else {
+      setIsEditMode(false);
+      setEditingOrderId(null);
       generateOrderId();
     }
   }, [initialDataLoaded]);
@@ -731,15 +738,31 @@ export default function OrderEntry() {
         paymentTimestamp: paymentTimestamp ? paymentTimestamp.toISOString() : null
       };
 
-      const response = await apiRequest('/api/orders/draft', {
-        method: 'POST',
-        body: orderData
-      });
-
-      toast({
-        title: "Success",
-        description: "Order created successfully",
-      });
+      // Determine if we're creating or updating
+      let response;
+      if (isEditMode && editingOrderId) {
+        // Update existing order
+        response = await apiRequest(`/api/orders/draft/${editingOrderId}`, {
+          method: 'PUT',
+          body: orderData
+        });
+        
+        toast({
+          title: "Success",
+          description: "Order updated successfully",
+        });
+      } else {
+        // Create new order
+        response = await apiRequest('/api/orders/draft', {
+          method: 'POST',
+          body: orderData
+        });
+        
+        toast({
+          title: "Success", 
+          description: "Order created successfully",
+        });
+      }
 
       // Reset form
       console.log('Before resetForm - paymentAmount:', paymentAmount, 'isPaid:', isPaid);
@@ -2068,7 +2091,7 @@ export default function OrderEntry() {
                   disabled={isSubmitting}
                   onClick={() => handleSubmit()}
                 >
-                  {isSubmitting ? "Processing..." : "Create Order"}
+                  {isSubmitting ? "Processing..." : (isEditMode ? "Update Order" : "Create Order")}
                 </Button>
               </div>
 

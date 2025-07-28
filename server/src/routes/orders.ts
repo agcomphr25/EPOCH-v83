@@ -64,8 +64,15 @@ router.get('/outstanding', async (req: Request, res: Response) => {
 // Order Draft Management
 router.get('/drafts', async (req: Request, res: Response) => {
   try {
+    const excludeFinalized = req.query.excludeFinalized === 'true';
     const drafts = await storage.getAllOrderDrafts();
-    res.json(drafts);
+    
+    if (excludeFinalized) {
+      const filteredDrafts = drafts.filter(draft => draft.status !== 'FINALIZED');
+      res.json(filteredDrafts);
+    } else {
+      res.json(drafts);
+    }
   } catch (error) {
     console.error('Get drafts error:', error);
     res.status(500).json({ error: "Failed to fetch order drafts" });

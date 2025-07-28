@@ -32,8 +32,8 @@ export default function DraftOrders() {
   const [, setLocation] = useLocation();
 
   const { data: drafts = [], isLoading, error } = useQuery({
-    queryKey: ['/api/orders/drafts'],
-    queryFn: () => apiRequest('/api/orders/drafts'),
+    queryKey: ['/api/orders/drafts', 'excludeFinalized'],
+    queryFn: () => apiRequest('/api/orders/drafts?excludeFinalized=true'),
   });
 
   const deleteDraftMutation = useMutation({

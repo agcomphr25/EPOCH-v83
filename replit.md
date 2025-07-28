@@ -18,6 +18,15 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Order Summary Accuracy**: All selected features (QDs, LOP, Swivel Studs, Rails, Paint options) now correctly display individual prices and contribute to accurate subtotal calculations
 - ✅ **Comprehensive Debugging**: Added detailed console logging for price calculation troubleshooting and verification of proper data flow from form selections to subtotal
 
+**July 28, 2025 - Stock Model Discount Calculation Fix (COMPLETED)**
+- ✅ **Root Cause Analysis**: Identified that discount calculation logic was applying stock-model-only discounts to entire subtotal instead of just base model price
+- ✅ **Database Integration**: Enhanced discount calculation to use actual discount data from database instead of parsing labels from display text
+- ✅ **Stock Model Discount Logic**: Fixed calculation to apply discounts only to base model price when appliesTo field is 'stock_model'
+- ✅ **Total Order Discount Logic**: Maintained proper calculation for discounts that apply to entire order when appliesTo field is 'total_order'
+- ✅ **Short-Term Sales Support**: Added proper handling for short-term sales with appliesTo field validation
+- ✅ **Enhanced Debugging**: Added detailed console logging to track discount calculations and verify proper application scope
+- ✅ **System Verification**: Confirmed "Inauguration (25% off)" discount marked as "Stock Model Only" now correctly calculates discount based on stock model price rather than total subtotal
+
 **July 28, 2025 - Customer Address Display Issue Resolution (COMPLETED)**
 - ✅ **Root Cause Analysis**: Identified that `/api/addresses/all` endpoint existed in monolithic routes but wasn't registered in new modular routing system
 - ✅ **API Route Integration**: Added address endpoints to modular routing system in `server/src/routes/index.ts` with proper storage integration

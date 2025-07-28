@@ -1996,65 +1996,18 @@ export default function OrderEntry() {
 
               {/* Order Totals */}
               <div className="border-t pt-4 space-y-2">
-                {/* Breakdown for stock model discounts */}
-                {discountCode && discountCode !== 'none' && discountAmount > 0 && discountDetails && discountDetails.appliesTo === 'stock_model' ? (
-                  <div className="space-y-2">
-                    {/* Stock Model Line */}
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Stock Model:</span>
-                      <span className="font-bold">{formatCurrency(priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0))}</span>
-                    </div>
-                    
-                    {/* Stock Model Discount */}
-                    <div className="flex justify-between items-center pl-4">
-                      <span className="font-medium text-green-600 text-sm">
-                        - {discountOptions.find(d => d.value === discountCode)?.label || 'Custom'} (Stock Model Only):
-                      </span>
-                      <span className="font-bold text-green-600 text-sm">-{formatCurrency(discountAmount)}</span>
-                    </div>
-                    
-                    {/* Features & Accessories */}
-                    {(() => {
-                      const basePrice = priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0);
-                      const featuresPrice = subtotalPrice - basePrice;
-                      return featuresPrice > 0 ? (
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">Features & Accessories:</span>
-                          <span className="font-bold">{formatCurrency(featuresPrice)}</span>
-                        </div>
-                      ) : null;
-                    })()}
-                    
-                    {/* Subtotal after discount */}
-                    <div className="flex justify-between items-center border-t pt-2">
-                      <span className="font-medium">Subtotal:</span>
-                      <span className="font-bold">{formatCurrency(subtotalPrice - discountAmount)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {/* Regular subtotal display for total order discounts */}
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Subtotal:</span>
-                      <span className="font-bold">{formatCurrency(subtotalPrice)}</span>
-                    </div>
-                    
-                    {/* Display discount for total order or when no discount */}
-                    {discountCode && discountCode !== 'none' && discountAmount > 0 && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-green-600">
-                            Discount ({discountOptions.find(d => d.value === discountCode)?.label || 'Custom'}):
-                          </span>
-                          <span className="font-bold text-green-600">-{formatCurrency(discountAmount)}</span>
-                        </div>
-                        {discountDetails && discountDetails.appliesTo === 'total_order' && (
-                          <div className="text-xs text-muted-foreground pl-0">
-                            Applied to entire order
-                          </div>
-                        )}
-                      </div>
-                    )}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Subtotal:</span>
+                  <span className="font-bold">{formatCurrency(subtotalPrice)}</span>
+                </div>
+                
+                {/* Display selected discount */}
+                {discountCode && discountCode !== 'none' && discountAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-green-600">
+                      Discount ({discountOptions.find(d => d.value === discountCode)?.label || 'Custom'}):
+                    </span>
+                    <span className="font-bold text-green-600">-{formatCurrency(discountAmount)}</span>
                   </div>
                 )}
                 

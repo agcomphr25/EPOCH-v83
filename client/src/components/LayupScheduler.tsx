@@ -517,6 +517,8 @@ export default function LayupScheduler() {
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [editingMoldId, setEditingMoldId] = useState<string | null>(null);
+  const [editingMoldStockModels, setEditingMoldStockModels] = useState<string[]>([]);
   
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -1311,8 +1313,97 @@ export default function LayupScheduler() {
                               {mold.isActive ? "Active" : "Inactive"}
                             </Badge>
                           </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             Mold ID: {mold.moldId}
+                          </div>
+                          
+                          {/* Stock Models Section */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Models:</span>
+                              {editingMoldId === mold.moldId ? (
+                                <div className="space-x-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      saveMold({ ...mold, stockModels: editingMoldStockModels });
+                                      setEditingMoldId(null);
+                                      setEditingMoldStockModels([]);
+                                    }}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingMoldId(null);
+                                      setEditingMoldStockModels([]);
+                                    }}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingMoldId(mold.moldId);
+                                    setEditingMoldStockModels(mold.stockModels || []);
+                                  }}
+                                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                            </div>
+                            
+                            {editingMoldId === mold.moldId ? (
+                              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
+                                {stockModels.map((model: any) => (
+                                  <div key={model.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`edit-stock-${mold.moldId}-${model.id}`}
+                                      checked={editingMoldStockModels.includes(model.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setEditingMoldStockModels(prev => [...prev, model.id]);
+                                        } else {
+                                          setEditingMoldStockModels(prev => prev.filter(id => id !== model.id));
+                                        }
+                                      }}
+                                    />
+                                    <label 
+                                      htmlFor={`edit-stock-${mold.moldId}-${model.id}`}
+                                      className="text-xs cursor-pointer"
+                                    >
+                                      {model.displayName || model.name || model.id}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {mold.stockModels && mold.stockModels.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {mold.stockModels.map((stockModelId: string) => {
+                                      const stockModel = stockModels.find((sm: any) => sm.id === stockModelId);
+                                      return (
+                                        <span key={stockModelId} className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md text-xs">
+                                          {stockModel?.displayName || stockModel?.name || stockModelId}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <span className="italic">No stock models assigned</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">

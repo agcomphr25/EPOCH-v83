@@ -55,6 +55,33 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Address routes - bypass to old monolithic routes temporarily
+  app.get('/api/addresses/all', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const addresses = await storage.getAllAddresses();
+      res.json(addresses);
+    } catch (error) {
+      console.error("Get all addresses error:", error);
+      res.status(500).json({ error: "Failed to get all addresses" });
+    }
+  });
+  
+  app.get('/api/addresses', async (req, res) => {
+    try {
+      const { customerId } = req.query;
+      if (!customerId) {
+        return res.status(400).json({ error: "Customer ID is required" });
+      }
+      const { storage } = await import('../../storage');
+      const addresses = await storage.getCustomerAddresses(customerId as string);
+      res.json(addresses);
+    } catch (error) {
+      console.error("Get customer addresses error:", error);
+      res.status(500).json({ error: "Failed to get customer addresses" });
+    }
+  });
+  
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

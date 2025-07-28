@@ -573,11 +573,18 @@ export default function LayupScheduler() {
     const lopOrders = identifyLOPOrders(orders as any[]);
     const scheduledOrders = scheduleLOPAdjustments(lopOrders);
     
+    const lopOrdersNeedingAdjustment = lopOrders.filter(o => o.needsLOPAdjustment);
+    
     console.log('🔧 LOP Scheduler auto-run:', {
       totalOrders: orders.length,
-      lopOrdersNeedingAdjustment: lopOrders.filter(o => o.needsLOPAdjustment).length,
+      lopOrdersNeedingAdjustment: lopOrdersNeedingAdjustment.length,
       today: new Date().toDateString(),
-      isMonday: new Date().getDay() === 1
+      isMonday: new Date().getDay() === 1,
+      sampleLOPOrders: lopOrdersNeedingAdjustment.slice(0, 3).map(o => ({
+        orderId: o.orderId,
+        needsLOP: o.needsLOPAdjustment,
+        scheduledDate: o.scheduledLOPAdjustmentDate?.toDateString()
+      }))
     });
     
     return scheduledOrders;

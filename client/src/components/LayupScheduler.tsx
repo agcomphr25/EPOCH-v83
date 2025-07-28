@@ -519,6 +519,7 @@ export default function LayupScheduler() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [editingMoldId, setEditingMoldId] = useState<string | null>(null);
   const [editingMoldStockModels, setEditingMoldStockModels] = useState<string[]>([]);
+  const [editingMoldName, setEditingMoldName] = useState<string>('');
   
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -1306,9 +1307,18 @@ export default function LayupScheduler() {
                         />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-1">
-                            <div className="font-medium text-base">
-                              {mold.modelName} #{mold.instanceNumber}
-                            </div>
+                            {editingMoldId === mold.moldId ? (
+                              <Input
+                                value={editingMoldName}
+                                onChange={(e) => setEditingMoldName(e.target.value)}
+                                className="font-medium text-base h-6 px-2"
+                                placeholder="Mold Name"
+                              />
+                            ) : (
+                              <div className="font-medium text-base">
+                                {mold.modelName} #{mold.instanceNumber}
+                              </div>
+                            )}
                             <Badge variant={mold.isActive ? "default" : "secondary"}>
                               {mold.isActive ? "Active" : "Inactive"}
                             </Badge>
@@ -1317,19 +1327,24 @@ export default function LayupScheduler() {
                             Mold ID: {mold.moldId}
                           </div>
                           
-                          {/* Stock Models Section */}
+                          {/* Edit Controls */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Models:</span>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Configuration:</span>
                               {editingMoldId === mold.moldId ? (
                                 <div className="space-x-1">
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
-                                      saveMold({ ...mold, stockModels: editingMoldStockModels });
+                                      saveMold({ 
+                                        ...mold, 
+                                        modelName: editingMoldName.trim() || mold.modelName,
+                                        stockModels: editingMoldStockModels 
+                                      });
                                       setEditingMoldId(null);
                                       setEditingMoldStockModels([]);
+                                      setEditingMoldName('');
                                     }}
                                     className="h-6 px-2 text-xs"
                                   >
@@ -1341,6 +1356,7 @@ export default function LayupScheduler() {
                                     onClick={() => {
                                       setEditingMoldId(null);
                                       setEditingMoldStockModels([]);
+                                      setEditingMoldName('');
                                     }}
                                     className="h-6 px-2 text-xs"
                                   >
@@ -1354,6 +1370,7 @@ export default function LayupScheduler() {
                                   onClick={() => {
                                     setEditingMoldId(mold.moldId);
                                     setEditingMoldStockModels(mold.stockModels || []);
+                                    setEditingMoldName(mold.modelName || '');
                                   }}
                                   className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
                                 >
@@ -1362,7 +1379,11 @@ export default function LayupScheduler() {
                               )}
                             </div>
                             
-                            {editingMoldId === mold.moldId ? (
+                            {/* Stock Models Display */}
+                            <div>
+                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Stock Models:</span>
+                              
+                              {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
                                 {stockModels.map((model: any) => (
                                   <div key={model.id} className="flex items-center space-x-2">
@@ -1403,7 +1424,8 @@ export default function LayupScheduler() {
                                   <span className="italic">No stock models assigned</span>
                                 )}
                               </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">

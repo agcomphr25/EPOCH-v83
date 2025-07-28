@@ -66,7 +66,7 @@ export default function OrderEntry() {
   const [fbOrderNumber, setFbOrderNumber] = useState('');
   const [hasAGROrder, setHasAGROrder] = useState(false);
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
-  const [handedness, setHandedness] = useState('');
+
   const [actionLength, setActionLength] = useState('');
   const [bottomMetal, setBottomMetal] = useState('');
   const [barrelInlet, setBarrelInlet] = useState('');
@@ -718,24 +718,11 @@ export default function OrderEntry() {
         return;
       }
 
-      // CRITICAL FIX: Merge all features including rails, other options, and paint into features object
-      // This solves the issue where railAccessory, otherOptions, paintOptions, bottomMetal, and handedness
-      // were stored as separate state variables but not being saved to the database features field.
-      // Without this consolidation, these fields would appear empty when editing orders.
+      // All features are now stored directly in the features object by form controls
+      // No need to merge separate state variables since handedness, action_inlet, etc. 
+      // are directly updated in features by their respective form controls
       const completeFeatures = {
-        ...features,
-        // Add handedness to features if set
-        ...(handedness && { handedness }),
-        // Add action length to features if set
-        ...(actionLength && { action_length: actionLength }),
-        // Add bottom metal to features if set  
-        ...(bottomMetal && { bottom_metal: bottomMetal }),
-        // Add paint options to features if set
-        ...(paintOptions && { paint_options: paintOptions }),
-        // Add rail accessories if any selected (array field)
-        ...(railAccessory && railAccessory.length > 0 && { rail_accessory: railAccessory }),
-        // Add other options if any selected (array field)
-        ...(otherOptions && otherOptions.length > 0 && { other_options: otherOptions })
+        ...features
       };
 
       console.log('Complete features being saved:', completeFeatures);
@@ -750,7 +737,6 @@ export default function OrderEntry() {
         customerPO: hasCustomerPO ? customerPO : '',
         fbOrderNumber,
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
-        handedness,
         shipping,
         status: 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
@@ -822,7 +808,6 @@ export default function OrderEntry() {
     setFbOrderNumber('');
     setHasAGROrder(false);
     setAgrOrderDetails('');
-    setHandedness('');
     setActionLength('');
     setBottomMetal('');
     setBarrelInlet('');

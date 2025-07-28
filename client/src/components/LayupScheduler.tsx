@@ -792,8 +792,23 @@ export default function LayupScheduler() {
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
+    if (!modelId) return 'Unknown Model';
+    
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
-    return model?.displayName || model?.name || modelId;
+    if (model?.displayName) {
+      return model.displayName;
+    }
+    
+    // If no display name found, try to create a readable version from the ID
+    if (modelId.includes('_')) {
+      // Convert technical IDs like "cf_adj_chalk_branch" to "CF Adj Chalk Branch"
+      return modelId
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+    
+    return model?.name || modelId;
   };
 
   // Debug logging with emojis for visibility

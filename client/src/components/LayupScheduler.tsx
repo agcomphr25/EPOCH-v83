@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -848,6 +848,111 @@ export default function LayupScheduler() {
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
   }) as { data: any[] };
+
+  // Print functionality
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    // Get current date range for title
+    const dateRange = viewType === 'week' 
+      ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
+      : format(currentDate, 'MMMM yyyy');
+
+    // Generate print content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Layup Schedule - ${dateRange}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .schedule-grid { display: grid; grid-template-columns: 150px repeat(${dates.length}, 1fr); gap: 1px; border: 1px solid #333; }
+            .date-header { background: #f5f5f5; padding: 8px; text-align: center; font-weight: bold; border: 1px solid #ccc; }
+            .mold-header { background: #e5e5e5; padding: 8px; font-weight: bold; border: 1px solid #ccc; }
+            .cell { padding: 4px; min-height: 60px; border: 1px solid #ccc; }
+            .order-card { background: #f0f8ff; margin: 2px 0; padding: 3px 6px; border-radius: 3px; font-size: 10px; }
+            .order-card.production { background: #fff5e6; }
+            .order-card.p1 { background: #e8f5e8; }
+            .stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
+            .stat { background: #f5f5f5; padding: 10px; border-radius: 5px; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Layup Production Schedule</h1>
+            <h2>${dateRange}</h2>
+            <p>Generated on ${format(new Date(), 'MMMM d, yyyy h:mm a')}</p>
+          </div>
+          
+          <div class="stats">
+            <div class="stat">Orders: ${orders.length}</div>
+            <div class="stat">Active Molds: ${molds.filter(m => m.enabled).length}</div>
+            <div class="stat">Employees: ${employees.length}</div>
+          </div>
+
+          <div class="schedule-grid">
+            <!-- Date Headers -->
+            <div class="date-header">Mold</div>
+            ${dates.map(date => `
+              <div class="date-header">
+                ${format(date, 'MM/dd')}<br>
+                <small>${format(date, 'EEE')}</small>
+              </div>
+            `).join('')}
+            
+            <!-- Schedule Rows -->
+            ${(() => {
+              const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
+              const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
+              
+              return activeMolds.map(mold => `
+                <div class="mold-header">${mold.moldId}<br><small>#${mold.instanceNumber}</small></div>
+                ${dates.map(date => {
+                  const dateString = date.toISOString();
+                  const cellDateOnly = dateString.split('T')[0];
+                  
+                  const cellOrders = Object.entries(orderAssignments)
+                    .filter(([orderId, assignment]) => {
+                      const assignmentDateOnly = assignment.date.split('T')[0];
+                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                    })
+                    .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                    .filter(order => order !== undefined);
+
+                  return `
+                    <div class="cell">
+                      ${cellOrders.map(order => {
+                        const orderClass = order.source === 'production_order' ? 'production' : 
+                                         order.source === 'p1_purchase_order' ? 'p1' : '';
+                        const displayId = order.fbOrderNumber || order.orderNumber || order.orderId || 'No ID';
+                        const modelName = getModelDisplayName(order.stockModelId || order.modelId);
+                        
+                        return `
+                          <div class="order-card ${orderClass}">
+                            <strong>${displayId}</strong><br>
+                            <small>${modelName}</small>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  `;
+                }).join('')}
+              `).join('');
+            })()}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
 
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
@@ -1762,6 +1867,16 @@ export default function LayupScheduler() {
           </div>
           
           <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              className="mr-4"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Schedule
+            </Button>
+            
             <Button
               variant="outline"
               size="sm"

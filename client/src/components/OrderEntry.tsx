@@ -465,13 +465,13 @@ export default function OrderEntry() {
           loadDiscountDetailsForEdit();
         }
         
-        // Reset payment state (orders don't store payment info currently)
-        setIsPaid(false);
+        // Load payment data if available
+        setIsPaid(order.isPaid || false);
+        setPaymentType(order.paymentType || '');
+        setPaymentAmount(order.paymentAmount ? order.paymentAmount.toString() : '');
+        setPaymentDate(order.paymentDate ? new Date(order.paymentDate) : new Date());
+        setPaymentTimestamp(order.paymentTimestamp ? new Date(order.paymentTimestamp) : null);
         setShowPaymentModal(false);
-        setPaymentType('');
-        setPaymentDate(new Date());
-        setPaymentAmount('');
-        setPaymentTimestamp(null);
         setShowTooltip(false);
         
         console.log('All order fields loaded:', {
@@ -709,7 +709,13 @@ export default function OrderEntry() {
         customDiscountType,
         customDiscountValue,
         showCustomDiscount,
-        priceOverride
+        priceOverride,
+        // Payment information
+        isPaid,
+        paymentType: paymentType || null,
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
+        paymentDate: paymentDate ? paymentDate.toISOString() : null,
+        paymentTimestamp: paymentTimestamp ? paymentTimestamp.toISOString() : null
       };
 
       const response = await apiRequest('/api/orders/draft', {

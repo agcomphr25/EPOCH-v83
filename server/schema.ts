@@ -202,6 +202,12 @@ export const orderDrafts = pgTable("order_drafts", {
   // Replacement Information
   isReplacement: boolean("is_replacement").default(false),
   replacedOrderId: text("replaced_order_id"),
+  // Payment Information
+  isPaid: boolean("is_paid").default(false),
+  paymentType: text("payment_type"), // cash, credit, check, etc.
+  paymentAmount: real("payment_amount"),
+  paymentDate: timestamp("payment_date"),
+  paymentTimestamp: timestamp("payment_timestamp"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -647,6 +653,12 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),
   status: z.string().default("DRAFT"),
+  // Payment fields
+  isPaid: z.boolean().default(false),
+  paymentType: z.string().optional().nullable(),
+  paymentAmount: z.number().min(0).optional().nullable(),
+  paymentDate: z.coerce.date().optional().nullable(),
+  paymentTimestamp: z.coerce.date().optional().nullable(),
 });
 
 export const insertFormSchema = createInsertSchema(forms).omit({

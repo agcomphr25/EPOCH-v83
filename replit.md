@@ -10,6 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 28, 2025 - Layup Scheduler Mold Filtering and Display Optimization (COMPLETED)**
+- ✅ **Smart Mold Filtering**: Implemented intelligent mold display showing only relevant molds (those with assigned orders OR compatible with orders in queue)
+- ✅ **Order Count Sorting**: Molds sorted by total order count in descending order, ensuring most active molds appear at top of each day
+- ✅ **Reduced Visual Clutter**: Eliminated excessive "Available" slots for incompatible molds while maintaining genuinely useful empty slots at bottom
+- ✅ **Compatibility Logic**: Added stock model compatibility checking to determine which molds can actually be used for scheduling
+- ✅ **Enhanced UX**: Changed "Empty cell" text to "Available" with muted styling for better visual hierarchy
+- ✅ **Comprehensive Implementation**: Applied smart filtering to both week view and month view layouts
+- ✅ **Performance Optimization**: Molds with most work prioritized at top, empty but useful molds available at bottom for drag-and-drop scheduling
+
 **July 28, 2025 - Order Entry Pricing Calculation Fix for Rails and Paint Options (COMPLETED)**
 - ✅ **Stock Model Dropdown Fix**: Resolved critical server routing issue by correcting import path from "./src/routes" to "./routes" in server/index.ts, enabling Stock Model dropdown to load 40 available models
 - ✅ **Reactive Price Calculation**: Implemented proper reactive price calculation using useMemo hooks, replacing static calculations that didn't trigger on form state changes

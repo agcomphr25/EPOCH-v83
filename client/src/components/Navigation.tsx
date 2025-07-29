@@ -14,6 +14,8 @@ export default function Navigation() {
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
+  const [testDashboardsExpanded, setTestDashboardsExpanded] = useState(false);
+  const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
 
   const navItems = [
     {
@@ -46,18 +48,7 @@ export default function Navigation() {
       icon: Users,
       description: 'Manage customer database'
     },
-    {
-      path: '/purchase-orders',
-      label: 'P1 Purchase Orders',
-      icon: ClipboardList,
-      description: 'Module 12: Customer PO management'
-    },
-    {
-      path: '/p2-purchase-orders',
-      label: 'P2 Purchase Orders',
-      icon: FileText,
-      description: 'P2 customer management and purchase orders with Part #, Quantity, Price'
-    },
+
     {
       path: '/production-tracking',
       label: 'Production Tracking',
@@ -82,24 +73,7 @@ export default function Navigation() {
       icon: Calendar,
       description: 'Schedule and manage layup production orders with drag-and-drop interface'
     },
-    {
-      path: '/agtest-dashboard',
-      label: 'AGTEST Dashboard',
-      icon: BarChart,
-      description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
-    },
-    {
-      path: '/admintest-dashboard',
-      label: 'ADMINTEST Dashboard',
-      icon: Factory,
-      description: 'Complete navigation dashboard for all system sections'
-    },
-    {
-      path: '/stacitest-dashboard',
-      label: 'STACITEST Dashboard',
-      icon: BarChart,
-      description: 'P1 & P2 production pipeline overview dashboard'
-    }
+
     // Documentation button disabled per user request - was causing problems
     // {
     //   path: '/documentation',
@@ -239,6 +213,42 @@ export default function Navigation() {
     }
   ];
 
+  const testDashboardsItems = [
+    {
+      path: '/agtest-dashboard',
+      label: 'AGTEST Dashboard',
+      icon: BarChart,
+      description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
+    },
+    {
+      path: '/admintest-dashboard',
+      label: 'ADMINTEST Dashboard',
+      icon: Factory,
+      description: 'Complete navigation dashboard for all system sections'
+    },
+    {
+      path: '/stacitest-dashboard',
+      label: 'STACITEST Dashboard',
+      icon: BarChart,
+      description: 'P1 & P2 production pipeline overview dashboard'
+    }
+  ];
+
+  const purchaseOrdersItems = [
+    {
+      path: '/purchase-orders',
+      label: 'P1 Purchase Orders',
+      icon: ClipboardList,
+      description: 'Module 12: Customer PO management'
+    },
+    {
+      path: '/p2-purchase-orders',
+      label: 'P2 Purchase Orders',
+      icon: FileText,
+      description: 'P2 customer management and purchase orders with Part #, Quantity, Price'
+    }
+  ];
+
   const verifiedModulesItems = [
     {
       path: '/',
@@ -272,6 +282,8 @@ export default function Navigation() {
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
   const isFinanceActive = financeItems.some(item => location === item.path);
+  const isTestDashboardsActive = testDashboardsItems.some(item => location === item.path);
+  const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -293,7 +305,13 @@ export default function Navigation() {
     if (isFinanceActive) {
       setFinanceExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive]);
+    if (isTestDashboardsActive) {
+      setTestDashboardsExpanded(true);
+    }
+    if (isPurchaseOrdersActive) {
+      setPurchaseOrdersExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -550,6 +568,100 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setFinanceExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Test Dashboards Dropdown */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setTestDashboardsExpanded(true)}
+              onMouseLeave={() => setTestDashboardsExpanded(false)}
+            >
+              <Button
+                variant={isTestDashboardsActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isTestDashboardsActive && "bg-primary text-white"
+                )}
+              >
+                <TestTube className="h-4 w-4" />
+                Test Dashboards
+                {testDashboardsExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {testDashboardsExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {testDashboardsItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setTestDashboardsExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Purchase Orders Dropdown */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setPurchaseOrdersExpanded(true)}
+              onMouseLeave={() => setPurchaseOrdersExpanded(false)}
+            >
+              <Button
+                variant={isPurchaseOrdersActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isPurchaseOrdersActive && "bg-primary text-white"
+                )}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Purchase Orders
+                {purchaseOrdersExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {purchaseOrdersExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {purchaseOrdersItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setPurchaseOrdersExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

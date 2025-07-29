@@ -21,6 +21,7 @@ import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
+import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
 import { FEATURE_IDS, findFeature, getFeatureOptionDisplay, getPaintFeatures } from '@/utils/featureMapping';
 
 interface StockModel {
@@ -85,6 +86,14 @@ export default function OrderEntry() {
     railAccessory,
     otherOptions,
     actionLength
+  });
+  
+  // Data consistency validation (development only)
+  useDataConsistencyValidation(features, {
+    bottomMetal,
+    otherOptions,
+    railAccessory,
+    paintOptions
   });
 
   // Price Override state

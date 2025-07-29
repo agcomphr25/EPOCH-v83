@@ -26,6 +26,16 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Database Schema Enhanced**: Added referenceBomId, assemblyLevel, quantityMultiplier for complex relationships
 - ✅ **Component Library Approach**: Parts can be reused across multiple parent assemblies for maximum manufacturing flexibility
 
+**July 29, 2025 - Order Entry Data Consistency Prevention System Implementation (COMPLETED)**
+- ✅ **Root Cause Documentation**: Created comprehensive guide documenting the recurring data inconsistency pattern between separate state variables and features object
+- ✅ **Data Flow Standardization**: Established "Golden Rule" to always use features object for ALL feature-related data instead of separate state variables
+- ✅ **Prevention Checklist**: Added developer checklist to verify data consistency before making changes to OrderEntry.tsx
+- ✅ **Architecture Decision Record**: Documented decision to use unified features object as single source of truth with rationale and maintenance requirements
+- ✅ **Bottom Metal Display Fix**: Updated Order Summary to read from features.bottom_metal instead of bottomMetal state variable
+- ✅ **Other Options Display Fix**: Updated Order Summary to read from features.other_options instead of otherOptions state variable
+- ✅ **Price Calculation Consistency**: Fixed price calculation logic to use features object data for accurate pricing calculations
+- ✅ **Dependency Array Cleanup**: Updated calculateTotalPrice dependency array to use features object instead of separate state variables
+
 **July 29, 2025 - Dynamic Scheduling Window Implementation (COMPLETED)**
 - ✅ **Root Cause Resolution**: Identified and fixed hardcoded 2-week scheduling limitation at lines 759-761 in LayupScheduler.tsx that was preventing scheduling beyond 8/7/2025
 - ✅ **Dynamic Window Logic**: Replaced fixed 2-week window with intelligent calculation based on latest order due dates in queue

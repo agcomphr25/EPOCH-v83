@@ -2514,49 +2514,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // COMMENTED OUT - Using modular routes instead  
   // app.post('/api/customers', async (req, res) => {
-    try {
-      const result = insertCustomerSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
-      }
-      
-      const customer = await storage.createCustomer(result.data);
-      res.status(201).json(customer);
-    } catch (error) {
-      console.error("Error creating customer:", error);
-      res.status(500).json({ error: "Failed to create customer" });
-    }
-  });
+  //   try {
+  //     const result = insertCustomerSchema.safeParse(req.body);
+  //     if (!result.success) {
+  //       return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
+  //     }
+  //     
+  //     const customer = await storage.createCustomer(result.data);
+  //     res.status(201).json(customer);
+  //   } catch (error) {
+  //     console.error("Error creating customer:", error);
+  //     res.status(500).json({ error: "Failed to create customer" });
+  //   }
+  // });
 
-  app.put('/api/customers/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const result = insertCustomerSchema.partial().safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
-      }
-      
-      const customer = await storage.updateCustomer(id, result.data);
-      res.json(customer);
-    } catch (error) {
-      console.error("Error updating customer:", error);
-      res.status(500).json({ error: "Failed to update customer" });
-    }
-  });
+  // COMMENTED OUT - Using modular routes instead
+  // app.put('/api/customers/:id', async (req, res) => {
+  //   try {
+  //     const id = parseInt(req.params.id);
+  //     const result = insertCustomerSchema.partial().safeParse(req.body);
+  //     if (!result.success) {
+  //       return res.status(400).json({ error: "Invalid customer data", details: result.error.issues });
+  //     }
+  //     
+  //     const customer = await storage.updateCustomer(id, result.data);
+  //     res.json(customer);
+  //   } catch (error) {
+  //     console.error("Error updating customer:", error);
+  //     res.status(500).json({ error: "Failed to update customer" });
+  //   }
+  // });
 
-  app.delete('/api/customers/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteCustomer(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting customer:", error);
-      res.status(500).json({ error: "Failed to delete customer" });
-    }
-  });
+  // COMMENTED OUT - Using modular routes instead
+  // app.delete('/api/customers/:id', async (req, res) => {
+  //   try {
+  //     const id = parseInt(req.params.id);
+  //     await storage.deleteCustomer(id);
+  //     res.status(204).send();
+  //   } catch (error) {
+  //     console.error("Error deleting customer:", error);
+  //     res.status(500).json({ error: "Failed to delete customer" });
+  //   }
+  // });
 
+  // COMMENTED OUT - Using modular routes instead
   // Customer CSV import
-  app.post("/api/customers/import/csv", async (req, res) => {
+  // app.post("/api/customers/import/csv", async (req, res) => {
     try {
       const { csvData } = req.body;
       

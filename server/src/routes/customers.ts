@@ -21,6 +21,21 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: "Search query is required" });
+    }
+    
+    const customers = await storage.searchCustomers(query);
+    res.json(customers);
+  } catch (error) {
+    console.error('Search customers error:', error);
+    res.status(500).json({ error: "Failed to search customers" });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);

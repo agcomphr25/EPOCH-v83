@@ -10,6 +10,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - BOM Hierarchy System Field Naming Enhancement (COMPLETED)**
+- ✅ **Field Name Update**: Changed "Multiplier" to "Purchasing Unit Conversion" in SubAssemblyDialog for better user clarity
+- ✅ **Enhanced User Experience**: Added helpful description explaining conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)
+- ✅ **Input Field Improvements**: Updated field to support decimal values with step="0.01" and proper placeholder text
+- ✅ **API Request Fix**: Added proper Content-Type header to prevent JSON parsing errors in sub-assembly creation
+- ✅ **Manufacturing Context**: Field now clearly communicates its purpose in converting engineering quantities to purchasing units
+
+**July 29, 2025 - Multi-Level BOM Hierarchy System Implementation (COMPLETED)**
+- ✅ **Route Conflict Resolution**: Fixed conflicting BOM routes between old monolithic system and new modular routes
+- ✅ **Runtime Error Fix**: Replaced problematic `Tree` import with `GitBranch` icon in SubAssemblyDialog component
+- ✅ **API Endpoints Working**: All BOM hierarchy endpoints now return proper JSON data instead of HTML
+- ✅ **Complete Hierarchical System**: Unlimited nesting BOMs where any BOM can become a child of another BOM
+- ✅ **SubAssemblyDialog Ready**: Interface for adding sub-assembly relationships with quantity multipliers
+- ✅ **Database Schema Enhanced**: Added referenceBomId, assemblyLevel, quantityMultiplier for complex relationships
+- ✅ **Component Library Approach**: Parts can be reused across multiple parent assemblies for maximum manufacturing flexibility
+
 **July 29, 2025 - Dynamic Scheduling Window Implementation (COMPLETED)**
 - ✅ **Root Cause Resolution**: Identified and fixed hardcoded 2-week scheduling limitation at lines 759-761 in LayupScheduler.tsx that was preventing scheduling beyond 8/7/2025
 - ✅ **Dynamic Window Logic**: Replaced fixed 2-week window with intelligent calculation based on latest order due dates in queue

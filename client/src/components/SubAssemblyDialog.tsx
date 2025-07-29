@@ -30,7 +30,7 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
   const [selectedChildBomId, setSelectedChildBomId] = useState<string>('');
   const [partName, setPartName] = useState('');
   const [quantity, setQuantity] = useState('1');
-  const [quantityMultiplier, setQuantityMultiplier] = useState('1');
+  const [purchasingUnitConversion, setPurchasingUnitConversion] = useState('1');
   const [notes, setNotes] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -45,6 +45,9 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
     mutationFn: async (data: any) => {
       return apiRequest(`/api/boms/${parentBomId}/sub-assemblies`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(data),
       });
     },
@@ -68,7 +71,7 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
     setSelectedChildBomId('');
     setPartName('');
     setQuantity('1');
-    setQuantityMultiplier('1');
+    setPurchasingUnitConversion('1');
     setNotes('');
   };
 
@@ -88,7 +91,7 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
       childBomId: parseInt(selectedChildBomId),
       partName,
       quantity: parseInt(quantity),
-      quantityMultiplier: parseInt(quantityMultiplier),
+      quantityMultiplier: parseFloat(purchasingUnitConversion),
       notes: notes || undefined,
     });
   };
@@ -166,15 +169,20 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="quantityMultiplier">Multiplier</Label>
+              <Label htmlFor="purchasingUnitConversion">Purchasing Unit Conversion</Label>
               <Input
-                id="quantityMultiplier"
+                id="purchasingUnitConversion"
                 type="number"
-                min="1"
-                value={quantityMultiplier}
-                onChange={(e) => setQuantityMultiplier(e.target.value)}
-                title="Multiplies the quantities of all child components"
+                step="0.01"
+                min="0.01"
+                value={purchasingUnitConversion}
+                onChange={(e) => setPurchasingUnitConversion(e.target.value)}
+                title="Factor to convert engineering quantities to purchasing units (e.g., 0.01 if items are sold in packs of 100)"
+                placeholder="1.0"
               />
+              <p className="text-xs text-muted-foreground">
+                Conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)
+              </p>
             </div>
           </div>
 

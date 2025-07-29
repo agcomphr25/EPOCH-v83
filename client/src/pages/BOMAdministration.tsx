@@ -25,18 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface BomDefinition {
-  id: number;
-  sku?: string;
-  modelName: string;
-  revision: string;
-  description?: string;
-  notes?: string;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { BomDefinition } from "@shared/schema";
 
 export function BOMAdministration() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,9 +55,9 @@ export function BOMAdministration() {
     },
   });
 
-  // Filter BOMs based on search term
+  // Filter BOMs based on search term - using database field names
   const filteredBOMs = boms.filter(bom => 
-    bom.modelName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (bom as any).model_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     bom.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     bom.revision.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -195,7 +184,7 @@ export function BOMAdministration() {
                     {filteredBOMs.map((bom) => (
                       <TableRow key={bom.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                         <TableCell className="text-sm text-gray-600">{bom.sku || "—"}</TableCell>
-                        <TableCell className="font-medium">{bom.modelName}</TableCell>
+                        <TableCell className="font-medium">{(bom as any).model_name}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{bom.revision}</Badge>
                         </TableCell>

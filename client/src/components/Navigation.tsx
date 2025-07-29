@@ -16,6 +16,7 @@ export default function Navigation() {
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [testDashboardsExpanded, setTestDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
+  const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
 
   const navItems = [
     {
@@ -36,12 +37,7 @@ export default function Navigation() {
       icon: FilePenLine,
       description: 'Manage saved draft orders'
     },
-    {
-      path: '/module8-test',
-      label: 'Module 8 Test',
-      icon: TestTube,
-      description: 'Test API integrations and communications'
-    },
+
     {
       path: '/customers',
       label: 'Customer Management',
@@ -49,12 +45,7 @@ export default function Navigation() {
       description: 'Manage customer database'
     },
 
-    {
-      path: '/production-tracking',
-      label: 'Production Tracking',
-      icon: TrendingUp,
-      description: 'Track production orders from POs'
-    },
+
     {
       path: '/bom-administration',
       label: 'BOM Administration',
@@ -67,12 +58,7 @@ export default function Navigation() {
       icon: Scan,
       description: 'Scan order barcodes to view pricing summary and payment status'
     },
-    {
-      path: '/layup-scheduler',
-      label: 'Layup Scheduler',
-      icon: Calendar,
-      description: 'Schedule and manage layup production orders with drag-and-drop interface'
-    },
+
 
     // Documentation button disabled per user request - was causing problems
     // {
@@ -273,6 +259,27 @@ export default function Navigation() {
       label: 'Stock Models',
       icon: Package,
       description: 'Manage stock models and pricing'
+    },
+    {
+      path: '/module8-test',
+      label: 'Module 8 Test',
+      icon: TestTube,
+      description: 'Test API integrations and communications'
+    }
+  ];
+
+  const productionSchedulingItems = [
+    {
+      path: '/layup-scheduler',
+      label: 'Layup Scheduler',
+      icon: Calendar,
+      description: 'Schedule and manage layup production orders with drag-and-drop interface'
+    },
+    {
+      path: '/production-tracking',
+      label: 'Production Tracking',
+      icon: TrendingUp,
+      description: 'Track production orders from POs'
     }
   ];
 
@@ -284,6 +291,7 @@ export default function Navigation() {
   const isFinanceActive = financeItems.some(item => location === item.path);
   const isTestDashboardsActive = testDashboardsItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
+  const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -311,7 +319,10 @@ export default function Navigation() {
     if (isPurchaseOrdersActive) {
       setPurchaseOrdersExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive]);
+    if (isProductionSchedulingActive) {
+      setProductionSchedulingExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -662,6 +673,53 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setPurchaseOrdersExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Production Scheduling Dropdown */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setProductionSchedulingExpanded(true)}
+              onMouseLeave={() => setProductionSchedulingExpanded(false)}
+            >
+              <Button
+                variant={isProductionSchedulingActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isProductionSchedulingActive && "bg-primary text-white"
+                )}
+              >
+                <Calendar className="h-4 w-4" />
+                Production Scheduling
+                {productionSchedulingExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {productionSchedulingExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  {productionSchedulingItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setProductionSchedulingExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

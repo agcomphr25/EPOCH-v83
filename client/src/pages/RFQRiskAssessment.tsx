@@ -92,8 +92,17 @@ export default function RFQRiskAssessment() {
     const totalOverallPoints = internalSubtotal + externalSubtotal;
     
     // Calculate total risk reduction from mitigation actions
-    const totalReduction = parseInt(formData.mitigationReductionA) + parseInt(formData.mitigationReductionB) + parseInt(formData.mitigationReductionC);
+    const totalReduction = parseInt(formData.mitigationReductionA || '0') + parseInt(formData.mitigationReductionB || '0') + parseInt(formData.mitigationReductionC || '0');
     const adjustedRiskLevel = Math.max(0, totalOverallPoints - totalReduction);
+    
+    console.log('Risk Calculation Debug:', {
+      totalOverallPoints,
+      totalReduction,
+      adjustedRiskLevel,
+      mitigationA: formData.mitigationReductionA,
+      mitigationB: formData.mitigationReductionB,
+      mitigationC: formData.mitigationReductionC
+    });
     
     // Determine risk level based on adjusted points
     let riskDetermination = '';
@@ -112,20 +121,64 @@ export default function RFQRiskAssessment() {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Recalculate scores if it's a risk field or mitigation reduction field
-    const riskFields = [
-      'trainedStaff', 'equipmentRequirements', 'manufacturingSpace', 
-      'regulatoryRequirements', 'conflictingPriorities', 'customerConcentration', 
-      'climateEnvironmental', 'supplyChainDisruptions', 'supplierVariability', 
-      'contractProvisions', 'timelines', 'qualityExpectations',
-      'mitigationReductionA', 'mitigationReductionB', 'mitigationReductionC'
-    ];
-    
-    if (riskFields.includes(field)) {
-      setTimeout(calculateScores, 0);
-    }
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      
+      // Recalculate scores if it's a risk field or mitigation reduction field
+      const riskFields = [
+        'trainedStaff', 'equipmentRequirements', 'manufacturingSpace', 
+        'regulatoryRequirements', 'conflictingPriorities', 'customerConcentration', 
+        'climateEnvironmental', 'supplyChainDisruptions', 'supplierVariability', 
+        'contractProvisions', 'timelines', 'qualityExpectations',
+        'mitigationReductionA', 'mitigationReductionB', 'mitigationReductionC'
+      ];
+      
+      if (riskFields.includes(field)) {
+        // Calculate immediately with new data
+        const internalRisks = [
+          newData.trainedStaff,
+          newData.equipmentRequirements,
+          newData.manufacturingSpace,
+          newData.regulatoryRequirements,
+          newData.conflictingPriorities,
+          newData.customerConcentration,
+          newData.climateEnvironmental
+        ];
+        
+        const externalRisks = [
+          newData.supplyChainDisruptions,
+          newData.supplierVariability,
+          newData.contractProvisions,
+          newData.timelines,
+          newData.qualityExpectations
+        ];
+        
+        const internalSubtotal = internalRisks.reduce((sum, risk) => sum + getRiskScore(risk), 0);
+        const externalSubtotal = externalRisks.reduce((sum, risk) => sum + getRiskScore(risk), 0);
+        const totalOverallPoints = internalSubtotal + externalSubtotal;
+        
+        // Calculate total risk reduction from mitigation actions
+        const totalReduction = parseInt(newData.mitigationReductionA || '0') + parseInt(newData.mitigationReductionB || '0') + parseInt(newData.mitigationReductionC || '0');
+        const adjustedRiskLevel = Math.max(0, totalOverallPoints - totalReduction);
+        
+        // Determine risk level based on adjusted points
+        let riskDetermination = '';
+        if (adjustedRiskLevel >= 17) riskDetermination = 'High (17-204 pts)';
+        else if (adjustedRiskLevel >= 4) riskDetermination = 'Medium (4-16 pts)';
+        else riskDetermination = 'Low (0-3 pts)';
+        
+        return {
+          ...newData,
+          internalSubtotal,
+          externalSubtotal,
+          totalOverallPoints,
+          adjustedRiskLevel,
+          riskDetermination
+        };
+      }
+      
+      return newData;
+    });
   };
 
   // Clear signature

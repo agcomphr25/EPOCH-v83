@@ -33,16 +33,28 @@ router.post('/', async (req, res) => {
 });
 
 // Get BOM details with items
-router.get('/:id', async (req, res) => {
+router.get('/:id/details', async (req, res) => {
   try {
+    console.log(`🔧 Getting BOM details for ID: ${req.params.id}`);
     const { id } = req.params;
-    const bom = await storage.getBOMDetails(parseInt(id));
+    const bomId = parseInt(id);
+    
+    if (isNaN(bomId)) {
+      console.log(`❌ Invalid BOM ID: ${id}`);
+      return res.status(400).json({ error: "Invalid BOM ID" });
+    }
+    
+    const bom = await storage.getBOMDetails(bomId);
     if (!bom) {
+      console.log(`❌ BOM ${id} not found`);
       return res.status(404).json({ error: "BOM not found" });
     }
+    
+    console.log(`✅ BOM details found: ${bom.modelName} with ${bom.items?.length || 0} items`);
+    res.setHeader('Content-Type', 'application/json');
     res.json(bom);
   } catch (error) {
-    console.error("Get BOM details error:", error);
+    console.error("❌ Get BOM details error:", error);
     res.status(500).json({ error: "Failed to fetch BOM details" });
   }
 });

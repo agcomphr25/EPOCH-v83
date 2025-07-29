@@ -5094,19 +5094,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/boms/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const bom = await storage.getBOMDetails(parseInt(id));
-      if (!bom) {
-        return res.status(404).json({ error: "BOM not found" });
-      }
-      res.json(bom);
-    } catch (error) {
-      console.error("Get BOM details error:", error);
-      res.status(500).json({ error: "Failed to fetch BOM details" });
-    }
-  });
+  // BOM details route moved to modular routes (/api/boms/:id/details)
+  // app.get("/api/boms/:id", async (req, res) => {
+  //   try {
+  //     const { id } = req.params;
+  //     const bom = await storage.getBOMDetails(parseInt(id));
+  //     if (!bom) {
+  //       return res.status(404).json({ error: "BOM not found" });
+  //     }
+  //     res.json(bom);
+  //   } catch (error) {
+  //     console.error("Get BOM details error:", error);
+  //     res.status(500).json({ error: "Failed to fetch BOM details" });
+  //   }
+  // });
 
   app.put("/api/boms/:id", async (req, res) => {
     try {

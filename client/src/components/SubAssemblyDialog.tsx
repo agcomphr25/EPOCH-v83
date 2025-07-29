@@ -100,7 +100,7 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Tree className="w-5 h-5" />
+            <GitBranch className="w-5 h-5" />
             Add Sub-Assembly
           </DialogTitle>
           <DialogDescription>

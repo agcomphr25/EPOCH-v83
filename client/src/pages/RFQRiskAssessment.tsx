@@ -470,13 +470,6 @@ export default function RFQRiskAssessment() {
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2 pt-2">
-              <Label className="font-medium">Adjusted Risk Level:</Label>
-              <div className="w-20 px-3 py-2 bg-blue-100 border rounded text-center font-medium text-blue-800">
-                {formData.adjustedRiskLevel}
-              </div>
-            </div>
           </CardContent>
         </Card>
 

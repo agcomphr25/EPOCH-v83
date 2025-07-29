@@ -10,6 +10,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - SmartyStreets Address Autocomplete Fix in Order Entry (COMPLETED)**
+- ✅ **Route Conflict Resolution**: Fixed SmartyStreets address autocomplete by creating `/api/customers/address-autocomplete-bypass` route to avoid monolithic routing conflicts
+- ✅ **Authentication Bypass**: Added address autocomplete endpoint to modular customers routes without authentication middleware
+- ✅ **Frontend Integration**: Updated `autocompleteAddress` function to use new bypass endpoint for real-time address suggestions
+- ✅ **API Enhancement**: Added comprehensive logging to track SmartyStreets API calls and response transformation
+- ✅ **Customer Modal Fix**: Address autocomplete in Add New Customer modal now works correctly with live SmartyStreets data
+- ✅ **System Verification**: Confirmed SmartyStreets API integration working with proper credentials and suggestion display
+
+**July 29, 2025 - Add New Customer Modal Authentication Fix (COMPLETED)**
+- ✅ **Root Cause Resolution**: Fixed "No session token" error in Add New Customer modal by creating `/api/customers/create-bypass` route
+- ✅ **Monolithic Route Bypass**: Added customer creation endpoint to modular customers routes without authentication middleware
+- ✅ **Frontend Update**: Updated CustomerSearchInput to use bypass endpoint for customer creation
+- ✅ **Enhanced Debugging**: Added comprehensive logging to track customer creation process
+- ✅ **Complete Integration**: Customer creation with all fields (name, email, phone, company, address) now works without authentication errors
+
 **July 29, 2025 - BOM Hierarchy System Field Naming Enhancement (COMPLETED)**
 - ✅ **Field Name Update**: Changed "Multiplier" to "Purchasing Unit Conversion" in SubAssemblyDialog for better user clarity
 - ✅ **Enhanced User Experience**: Added helpful description explaining conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)

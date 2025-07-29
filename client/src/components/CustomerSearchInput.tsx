@@ -99,7 +99,7 @@ export default function CustomerSearchInput({
         notes: customerData.notes?.trim() || undefined,
       };
 
-      const response = await apiRequest('/api/customers', {
+      const response = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
         body: cleanedData,
       });

@@ -52,6 +52,26 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Customer creation without authentication (for Order Entry)
+router.post('/create-bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS CUSTOMER CREATE ROUTE CALLED');
+    console.log('🔧 Request body:', req.body);
+    
+    const customerData = insertCustomerSchema.parse(req.body);
+    const newCustomer = await storage.createCustomer(customerData);
+    
+    console.log('🔧 Customer created successfully:', newCustomer.id);
+    res.status(201).json(newCustomer);
+  } catch (error) {
+    console.error('Create customer error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create customer" });
+  }
+});
+
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerData = insertCustomerSchema.parse(req.body);

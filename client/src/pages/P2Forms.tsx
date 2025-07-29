@@ -107,10 +107,12 @@ export default function P2Forms() {
                 Shipping forms and delivery documentation
               </p>
               <div className="space-y-2">
-                <Button className="w-full justify-start" variant="outline">
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Packing List
-                </Button>
+                <Link href="/packing-slip">
+                  <Button className="w-full justify-start" variant="outline">
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Packing Slip
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <Barcode className="h-4 w-4 mr-2" />
                   Shipping Labels

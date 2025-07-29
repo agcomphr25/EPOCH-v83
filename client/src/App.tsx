@@ -59,6 +59,7 @@ import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
+import PackingSlip from "./pages/PackingSlip";
 import TaskTracker from "./pages/TaskTracker";
 import DocumentManagement from "./pages/DocumentManagement";
 
@@ -108,6 +109,7 @@ function App() {
                   <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
                   <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
                   <Route path="/manufacturers-certificate" component={ManufacturersCertificate} />
+                  <Route path="/packing-slip" component={PackingSlip} />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/document-management" component={DocumentManagement} />
 

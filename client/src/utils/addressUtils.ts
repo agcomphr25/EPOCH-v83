@@ -15,7 +15,7 @@ export interface AddressData {
  */
 export async function autocompleteAddress(query: string): Promise<string[]> {
   try {
-    const response = await apiRequest('/api/autocomplete-address', {
+    const response = await apiRequest('/api/customers/address-autocomplete-bypass', {
       method: 'POST',
       body: { search: query }
     });

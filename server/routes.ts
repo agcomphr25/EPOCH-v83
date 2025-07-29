@@ -2935,13 +2935,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Address autocomplete endpoint using SmartyStreets API
   app.post("/api/autocomplete-address", async (req, res) => {
     try {
+      console.log('🔧 AUTOCOMPLETE ADDRESS API CALLED');
+      console.log('🔧 Request body:', req.body);
+      
       const { search } = req.body;
+      
+      if (!search || typeof search !== 'string') {
+        console.log('🔧 Invalid search parameter:', search);
+        return res.status(400).json({ error: "Search parameter is required" });
+      }
       
       // Check if we have SmartyStreets credentials
       const authId = process.env.SMARTYSTREETS_AUTH_ID;
       const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
       
+      console.log('🔧 SmartyStreets credentials check:', { 
+        hasAuthId: !!authId, 
+        hasAuthToken: !!authToken 
+      });
+      
       if (!authId || !authToken) {
+        console.log('🔧 Missing SmartyStreets credentials');
         return res.status(500).json({ 
           error: "SmartyStreets credentials not configured" 
         });
@@ -2950,6 +2964,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use SmartyStreets US Autocomplete API with correct parameter name
       const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
       
+      console.log('🔧 Making SmartyStreets API call to:', smartyStreetsUrl.replace(authId, 'HIDDEN').replace(authToken, 'HIDDEN'));
+      
       const response = await fetch(smartyStreetsUrl, {
         method: 'GET',
         headers: {
@@ -2957,12 +2973,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
       
+      console.log('🔧 SmartyStreets response status:', response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
+        console.log('🔧 SmartyStreets error response:', errorText);
         throw new Error(`SmartyStreets Autocomplete API error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('🔧 SmartyStreets raw response:', data);
       
       // Transform SmartyStreets autocomplete response
       const suggestions = data.suggestions?.map((item: any) => ({
@@ -2974,6 +2994,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entries: item.entries
       })) || [];
       
+      console.log('🔧 Transformed suggestions:', suggestions);
+        console.log('🔧 Sending response with suggestions count:', suggestions.length);
       res.json({
         suggestions: suggestions
       });

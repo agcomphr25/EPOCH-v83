@@ -211,4 +211,82 @@ router.delete('/p2/:id', authenticateToken, async (req: Request, res: Response) 
   }
 });
 
+// Address autocomplete bypass route (to avoid monolithic route conflicts)
+router.post('/address-autocomplete-bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS ADDRESS AUTOCOMPLETE CALLED');
+    console.log('🔧 Request body:', req.body);
+    
+    const { search } = req.body;
+    
+    if (!search || typeof search !== 'string') {
+      console.log('🔧 Invalid search parameter:', search);
+      return res.status(400).json({ error: "Search parameter is required" });
+    }
+    
+    // Check if we have SmartyStreets credentials
+    const authId = process.env.SMARTYSTREETS_AUTH_ID;
+    const authToken = process.env.SMARTYSTREETS_AUTH_TOKEN;
+    
+    console.log('🔧 SmartyStreets credentials check:', { 
+      hasAuthId: !!authId, 
+      hasAuthToken: !!authToken 
+    });
+    
+    if (!authId || !authToken) {
+      console.log('🔧 Missing SmartyStreets credentials');
+      return res.status(500).json({ 
+        error: "SmartyStreets credentials not configured" 
+      });
+    }
+    
+    // Use SmartyStreets US Autocomplete API
+    const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
+    
+    console.log('🔧 Making SmartyStreets API call');
+    
+    const response = await fetch(smartyStreetsUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    console.log('🔧 SmartyStreets response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('🔧 SmartyStreets error response:', errorText);
+      throw new Error(`SmartyStreets Autocomplete API error: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('🔧 SmartyStreets raw response:', data);
+    
+    // Transform SmartyStreets autocomplete response
+    const suggestions = data.suggestions?.map((item: any) => ({
+      text: item.text,
+      streetLine: item.street_line,
+      city: item.city,
+      state: item.state,
+      zipCode: item.zipcode,
+      entries: item.entries
+    })) || [];
+    
+    console.log('🔧 Transformed suggestions:', suggestions);
+    console.log('🔧 Sending response with suggestions count:', suggestions.length);
+    
+    res.json({
+      suggestions: suggestions
+    });
+    
+  } catch (error) {
+    console.error('🔧 Address autocomplete error:', error);
+    res.status(500).json({ 
+      error: "Failed to get address suggestions",
+      details: (error as any).message || 'Unknown error'
+    });
+  }
+});
+
 export default router;

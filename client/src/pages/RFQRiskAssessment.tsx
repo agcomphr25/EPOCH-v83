@@ -15,6 +15,7 @@ export default function RFQRiskAssessment() {
 
   const [formData, setFormData] = useState({
     rfqNumber: '',
+    description: '',
     
     // Internal Risks
     trainedStaff: '',
@@ -288,7 +289,7 @@ export default function RFQRiskAssessment() {
           <CardHeader>
             <CardTitle className="text-center">RFQ Risk Assessment</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-center gap-2">
               <Label htmlFor="rfqNumber" className="font-medium">#</Label>
               <Input
@@ -297,6 +298,18 @@ export default function RFQRiskAssessment() {
                 onChange={(e) => handleInputChange('rfqNumber', e.target.value)}
                 className="w-64 text-center"
                 placeholder="Enter RFQ Number"
+              />
+            </div>
+            
+            <div className="flex flex-col items-center gap-2">
+              <Label htmlFor="description" className="font-medium">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                className="w-96 text-center"
+                placeholder="Enter description"
+                rows={3}
               />
             </div>
           </CardContent>

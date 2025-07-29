@@ -92,7 +92,14 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
-    const itemData = insertBomItemSchema.omit({ bomId: true }).parse(req.body);
+    const { purchasingUnitConversion, ...restData } = req.body;
+    
+    // Map purchasingUnitConversion to quantityMultiplier for database
+    const itemData = insertBomItemSchema.omit({ bomId: true }).parse({
+      ...restData,
+      quantityMultiplier: purchasingUnitConversion || 1,
+    });
+    
     const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
     res.status(201).json(item);
   } catch (error) {
@@ -109,7 +116,14 @@ router.post('/:id/items', async (req, res) => {
 router.put('/:bomId/items/:itemId', async (req, res) => {
   try {
     const { bomId, itemId } = req.params;
-    const itemData = insertBomItemSchema.partial().omit({ bomId: true }).parse(req.body);
+    const { purchasingUnitConversion, ...restData } = req.body;
+    
+    // Map purchasingUnitConversion to quantityMultiplier for database
+    const updateData = purchasingUnitConversion !== undefined 
+      ? { ...restData, quantityMultiplier: purchasingUnitConversion }
+      : restData;
+    
+    const itemData = insertBomItemSchema.partial().omit({ bomId: true }).parse(updateData);
     const item = await storage.updateBOMItem(parseInt(bomId), parseInt(itemId), itemData);
     res.json(item);
   } catch (error) {

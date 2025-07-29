@@ -45,6 +45,7 @@ import type { InventoryItem } from '@shared/schema';
 const bomItemSchema = z.object({
   partName: z.string().min(1, "Part name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
+  purchasingUnitConversion: z.number().min(0.001, "Conversion must be greater than 0").default(1),
   firstDept: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']).default('Layup'),
   itemType: z.enum(['manufactured', 'material']).default('manufactured'),
   isActive: z.boolean().default(true),
@@ -57,6 +58,7 @@ interface BomItem {
   bomId: number;
   partName: string;
   quantity: number;
+  quantityMultiplier?: number;
   firstDept: string;
   itemType: string;
   isActive: boolean;
@@ -122,8 +124,9 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
     defaultValues: {
       partName: item?.partName || "",
       quantity: item?.quantity || 1,
-      firstDept: item?.firstDept || "Layup",
-      itemType: item?.itemType || "manufactured",
+      purchasingUnitConversion: item?.quantityMultiplier || 1,
+      firstDept: item?.firstDept as any || "Layup",
+      itemType: item?.itemType as any || "manufactured",
       isActive: item?.isActive ?? true,
     },
   });
@@ -260,8 +263,35 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
 
           <FormField
             control={form.control}
-            name="firstDept"
+            name="purchasingUnitConversion"
             render={({ field }) => (
+              <FormItem>
+                <FormLabel>Purchasing Unit Conversion</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number"
+                    step="0.01"
+                    min="0.001"
+                    placeholder="1.00"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Conversion factor for procurement (e.g., 0.02 if screws come in packs of 50)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+
+        <FormField
+          control={form.control}
+          name="firstDept"
+          render={({ field }) => (
               <FormItem>
                 <FormLabel>First Department *</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>

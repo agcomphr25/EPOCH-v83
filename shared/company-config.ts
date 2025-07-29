@@ -3,15 +3,15 @@
 // Update these values as needed for your organization
 
 export const COMPANY_INFO = {
-  name: 'Strata-G Solutions, LLC',
-  streetAddress: '2901 Wall Triana Hwy SW, #200',
-  city: 'Huntsville',
+  name: 'AG Advanced Technologies',
+  streetAddress: '230 Hamer Road',
+  city: 'Owens Cross Roads',
   state: 'AL',
-  zipCode: '35824',
+  zipCode: '35763',
   
   // Additional company details for future use
-  phone: '',
-  email: '',
+  phone: '256-723-8381',
+  email: 'glenn@agcomposites.com',
   website: '',
   
   // Quality/Manufacturing specific info

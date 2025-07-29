@@ -219,19 +219,19 @@ export default function ManufacturersCertificate() {
               <div>
                 <Label className="text-sm font-semibold">STREET ADDRESS:</Label>
                 <div className="mt-1 text-sm">{formData.streetAddress}</div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-sm font-semibold">CITY:</Label>
-                  <div className="mt-1 text-sm">{formData.city}</div>
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">STATE:</Label>
-                  <div className="mt-1 text-sm">{formData.state}</div>
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">ZIPCODE:</Label>
-                  <div className="mt-1 text-sm">{formData.zipCode}</div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div>
+                    <Label className="text-sm font-semibold">CITY:</Label>
+                    <div className="mt-1 text-sm">{formData.city}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">STATE:</Label>
+                    <div className="mt-1 text-sm">{formData.state}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">ZIPCODE:</Label>
+                    <div className="mt-1 text-sm">{formData.zipCode}</div>
+                  </div>
                 </div>
               </div>
             </div>

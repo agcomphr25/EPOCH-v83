@@ -68,33 +68,11 @@ export default function OrderEntry() {
   const [hasAGROrder, setHasAGROrder] = useState(false);
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
 
-  const [actionLength, setActionLength] = useState('');
-  const [bottomMetal, setBottomMetal] = useState('');
-  const [barrelInlet, setBarrelInlet] = useState('');
-  const [qdQuickDetach, setQdQuickDetach] = useState('');
-  const [swivelStuds, setSwivelStuds] = useState('');
-  const [texture, setTexture] = useState('');
-  const [paintOptions, setPaintOptions] = useState('');
-  const [otherOptions, setOtherOptions] = useState<string[]>([]);
-  const [railAccessory, setRailAccessory] = useState<string[]>([]);
+  // Note: All feature data is now stored in the unified features object
+  // Legacy separate state variables removed to prevent data consistency issues
 
   // Feature validation hooks (development only)
   useFeatureValidation(featureDefs);
-  useFeatureStateValidation(features, {
-    paintOptions,
-    bottomMetal,
-    railAccessory,
-    otherOptions,
-    actionLength
-  });
-  
-  // Data consistency validation (development only)
-  useDataConsistencyValidation(features, {
-    bottomMetal,
-    otherOptions,
-    railAccessory,
-    paintOptions
-  });
 
   // Price Override state
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
@@ -171,14 +149,12 @@ export default function OrderEntry() {
       }
     }
 
-    // Add paint options price (check both state variable and features object)
-    const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
-    const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-    const currentPaint = paintFromState || paintFromFeatures;
+    // Add paint options price (from features object)
+    const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
     
     if (currentPaint && currentPaint !== 'none') {
       console.log('💰 Paint calculation - current paint:', currentPaint);
-      console.log('💰 Paint calculation - sources:', { paintFromState, paintFromFeatures });
+      console.log('💰 Paint calculation - from features object');
       
       const paintFeatures = featureDefs.filter(f => 
         f.displayName?.includes('Options') || 
@@ -213,8 +189,8 @@ export default function OrderEntry() {
       }
     }
 
-    // Add rail accessory prices (check both state variable and features object)
-    const currentRails = railAccessory && railAccessory.length > 0 ? railAccessory : (features.rail_accessory || []);
+    // Add rail accessory prices (from features object)
+    const currentRails = features.rail_accessory || [];
     if (currentRails && currentRails.length > 0) {
       console.log('💰 Rails calculation - current rails:', currentRails);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
@@ -223,7 +199,7 @@ export default function OrderEntry() {
       if (railFeature?.options) {
         console.log('💰 Rails calculation - available options:', railFeature.options.map(opt => `${opt.label}: ${opt.value} = $${opt.price}`));
         let railsTotal = 0;
-        currentRails.forEach(optionValue => {
+        currentRails.forEach((optionValue: string) => {
           const option = railFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
             railsTotal += option.price;
@@ -259,7 +235,7 @@ export default function OrderEntry() {
 
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, paintOptions, railAccessory]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -818,15 +794,6 @@ export default function OrderEntry() {
     setFbOrderNumber('');
     setHasAGROrder(false);
     setAgrOrderDetails('');
-    setActionLength('');
-    setBottomMetal('');
-    setBarrelInlet('');
-    setQdQuickDetach('');
-    setSwivelStuds('');
-    setTexture('');
-    setPaintOptions('');
-    setOtherOptions([]);
-    setRailAccessory([]);
     setDiscountCode('');
     setCustomDiscountType('percent');
     setCustomDiscountValue(0);
@@ -1286,7 +1253,7 @@ export default function OrderEntry() {
                                 if (checked) {
                                   setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
                                 } else {
-                                  setFeatures(prev => ({ ...prev, other_options: currentOther.filter(item => item !== option.value) }));
+                                  setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
                                 }
                               }}
                             />
@@ -1417,7 +1384,7 @@ export default function OrderEntry() {
                                 if (checked) {
                                   setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
                                 } else {
-                                  setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter(item => item !== option.value) }));
+                                  setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
                                 }
                               }}
                             />
@@ -1724,13 +1691,9 @@ export default function OrderEntry() {
                   })()}:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{(() => {
-                      // Check both railAccessory state and features.rail_accessory
-                      const railsFromState = railAccessory && railAccessory.length > 0 ? railAccessory : null;
-                      const railsFromFeatures = features.rail_accessory && features.rail_accessory.length > 0 ? features.rail_accessory : null;
-                      const currentRails = railsFromState || railsFromFeatures;
+                      const currentRails = features.rail_accessory || [];
                       
                       console.log('🔧 Rails state debug:', {
-                        railAccessory,
                         'features.rail_accessory': features.rail_accessory,
                         currentRails,
                         featureDefsCount: featureDefs.length
@@ -1742,7 +1705,7 @@ export default function OrderEntry() {
                           console.log('🔧 Rails feature found but no options:', feature);
                           return currentRails.join(', ');
                         }
-                        const labels = currentRails.map(optionValue => {
+                        const labels = currentRails.map((optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           console.log('🔧 Rails option lookup:', optionValue, '→', option?.label);
                           return option?.label || optionValue;
@@ -1752,15 +1715,12 @@ export default function OrderEntry() {
                       return 'Not selected';
                     })()}</span>
                     <span className="text-blue-600 font-bold">${(() => {
-                      // Check both railAccessory state and features.rail_accessory
-                      const railsFromState = railAccessory && railAccessory.length > 0 ? railAccessory : null;
-                      const railsFromFeatures = features.rail_accessory && features.rail_accessory.length > 0 ? features.rail_accessory : null;
-                      const currentRails = railsFromState || railsFromFeatures;
+                      const currentRails = features.rail_accessory || [];
                       
                       if (currentRails && currentRails.length > 0) {
                         const feature = featureDefs.find(f => f.id === 'rail_accessory');
                         if (!feature?.options) return '0.00';
-                        const totalPrice = currentRails.reduce((sum, optionValue) => {
+                        const totalPrice = currentRails.reduce((sum: number, optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           return sum + (option?.price || 0);
                         }, 0);
@@ -1844,13 +1804,9 @@ export default function OrderEntry() {
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{(() => {
-                      // Check both paintOptions state and features for paint-related values
-                      const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
-                      const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-                      const currentPaint = paintFromState || paintFromFeatures;
+                      const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
                       
                       console.log('🎨 Paint state debug:', {
-                        paintOptions,
                         'features.metallic_finishes': features.metallic_finishes,
                         'features.paint_options': features.paint_options,
                         'features.paint_options_combined': features.paint_options_combined,
@@ -1890,10 +1846,7 @@ export default function OrderEntry() {
                       return 'Not selected';
                     })()}</span>
                     <span className="text-blue-600 font-bold">${(() => {
-                      // Check both paintOptions state and features for paint-related values
-                      const paintFromState = paintOptions && paintOptions !== 'none' ? paintOptions : null;
-                      const paintFromFeatures = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-                      const currentPaint = paintFromState || paintFromFeatures;
+                      const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
                       
                       if (currentPaint && currentPaint !== 'none') {
                         // Search through ALL paint-related features to find the matching option

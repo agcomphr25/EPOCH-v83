@@ -53,6 +53,20 @@ export function registerRoutes(app: Express): Server {
   
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+
+  // P2 Customer bypass route to avoid monolithic conflicts
+  app.get('/api/p2-customers-bypass', async (req, res) => {
+    try {
+      console.log('🔧 DIRECT P2 CUSTOMERS BYPASS ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const p2Customers = await storage.getAllP2Customers();
+      console.log('🔧 Found P2 customers:', p2Customers.length);
+      res.json(p2Customers);
+    } catch (error) {
+      console.error('Get P2 customers error:', error);
+      res.status(500).json({ error: "Failed to fetch P2 customers" });
+    }
+  });
   
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {

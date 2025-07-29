@@ -10,6 +10,19 @@ import {
 
 const router = Router();
 
+// P2 Customers Management - Bypass route (must be before parameterized routes)
+router.get('/p2-customers-bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 P2 CUSTOMERS BYPASS ROUTE CALLED');
+    const p2Customers = await storage.getAllP2Customers();
+    console.log('🔧 Found P2 customers:', p2Customers.length);
+    res.json(p2Customers);
+  } catch (error) {
+    console.error('Get P2 customers error:', error);
+    res.status(500).json({ error: "Failed to fetch P2 customers" });
+  }
+});
+
 // Regular Customers Management
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -163,18 +176,9 @@ router.post('/:id/communications', authenticateToken, async (req: Request, res: 
   }
 });
 
-// P2 Customers Management
-router.get('/p2', async (req: Request, res: Response) => {
-  try {
-    const p2Customers = await storage.getAllP2Customers();
-    res.json(p2Customers);
-  } catch (error) {
-    console.error('Get P2 customers error:', error);
-    res.status(500).json({ error: "Failed to fetch P2 customers" });
-  }
-});
 
-router.post('/p2', authenticateToken, async (req: Request, res: Response) => {
+
+router.post('/customers', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerData = insertP2CustomerSchema.parse(req.body);
     const newCustomer = await storage.createP2Customer(customerData);
@@ -188,7 +192,7 @@ router.post('/p2', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/p2/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const updates = req.body;
@@ -200,7 +204,7 @@ router.put('/p2/:id', authenticateToken, async (req: Request, res: Response) => 
   }
 });
 
-router.delete('/p2/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     await storage.deleteP2Customer(customerId);

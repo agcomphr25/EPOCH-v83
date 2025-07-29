@@ -17,9 +17,9 @@ export default function ManufacturersCertificate() {
   const { toast } = useToast();
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   
-  // Fetch P2 customers for dropdown
+  // Fetch P2 customers for dropdown using bypass route
   const { data: p2Customers = [] } = useQuery({
-    queryKey: ['/api/p2/customers'],
+    queryKey: ['/api/p2-customers-bypass'],
     select: (data: any[]) => data.map(customer => ({
       id: customer.id,
       customerId: customer.customerId,

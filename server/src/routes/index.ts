@@ -67,6 +67,63 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ error: "Failed to fetch P2 customers" });
     }
   });
+
+  // P2 Purchase Orders bypass route to avoid monolithic conflicts
+  app.get('/api/p2-purchase-orders-bypass', async (req, res) => {
+    try {
+      console.log('🔧 DIRECT P2 PURCHASE ORDERS BYPASS ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const pos = await storage.getAllP2PurchaseOrders();
+      console.log('🔧 Found P2 purchase orders:', pos.length);
+      res.json(pos);
+    } catch (error) {
+      console.error('🔧 P2 purchase orders bypass error:', error);
+      res.status(500).json({ error: "Failed to fetch P2 purchase orders via bypass route" });
+    }
+  });
+
+  app.post('/api/p2-purchase-orders-bypass', async (req, res) => {
+    try {
+      console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const poData = req.body;
+      const po = await storage.createP2PurchaseOrder(poData);
+      console.log('🔧 Created P2 purchase order:', po.id);
+      res.status(201).json(po);
+    } catch (error) {
+      console.error('🔧 P2 purchase order create bypass error:', error);
+      res.status(500).json({ error: "Failed to create P2 purchase order via bypass route" });
+    }
+  });
+
+  app.put('/api/p2-purchase-orders-bypass/:id', async (req, res) => {
+    try {
+      console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const poData = req.body;
+      const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
+      console.log('🔧 Updated P2 purchase order:', po.id);
+      res.json(po);
+    } catch (error) {
+      console.error('🔧 P2 purchase order update bypass error:', error);
+      res.status(500).json({ error: "Failed to update P2 purchase order via bypass route" });
+    }
+  });
+
+  app.delete('/api/p2-purchase-orders-bypass/:id', async (req, res) => {
+    try {
+      console.log('🔧 P2 PURCHASE ORDER DELETE BYPASS ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      await storage.deleteP2PurchaseOrder(parseInt(id));
+      console.log('🔧 Deleted P2 purchase order:', id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('🔧 P2 purchase order delete bypass error:', error);
+      res.status(500).json({ error: "Failed to delete P2 purchase order via bypass route" });
+    }
+  });
   
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {

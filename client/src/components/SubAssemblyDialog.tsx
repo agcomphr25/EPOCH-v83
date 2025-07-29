@@ -45,10 +45,7 @@ export function SubAssemblyDialog({ open, onOpenChange, parentBomId, onSuccess }
     mutationFn: async (data: any) => {
       return apiRequest(`/api/boms/${parentBomId}/sub-assemblies`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+        body: data,
       });
     },
     onSuccess: () => {

@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - Centralized Company Configuration System Implementation (COMPLETED)**
+- ✅ **Shared Configuration File**: Created `shared/company-config.ts` with centralized company information (name, address, phone, email) for reuse across forms and documents
+- ✅ **Certificate Templates**: Added reusable certification text templates for Manufacturer's Certificate of Conformance and other quality forms
+- ✅ **Manufacturer's Certificate Integration**: Updated form to use shared company configuration instead of hardcoded values for better maintainability
+- ✅ **Easy Updates**: Company information now stored in single location for easy updates across entire application
+- ✅ **Template System**: Standardized certification text templates for consistent quality documentation
+
 **July 29, 2025 - SmartyStreets Address Autocomplete Fix in Order Entry (COMPLETED)**
 - ✅ **Route Conflict Resolution**: Fixed SmartyStreets address autocomplete by creating `/api/customers/address-autocomplete-bypass` route to avoid monolithic routing conflicts
 - ✅ **Authentication Bypass**: Added address autocomplete endpoint to modular customers routes without authentication middleware

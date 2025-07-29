@@ -11,6 +11,7 @@ import { Save, Printer, Download, FileText, Award } from "lucide-react";
 import SignatureCanvas from 'react-signature-canvas';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { COMPANY_INFO, CERTIFICATE_TEMPLATES } from "@shared/company-config";
 
 export default function ManufacturersCertificate() {
   const { toast } = useToast();
@@ -38,12 +39,12 @@ export default function ManufacturersCertificate() {
   });
 
   const [formData, setFormData] = useState({
-    // Company Information (Static from template)
-    companyName: 'Strata-G Solutions, LLC',
-    streetAddress: '2901 Wall Triana Hwy SW, #200',
-    city: 'Huntsville',
-    state: 'AL',
-    zipCode: '35824',
+    // Company Information (from shared config)
+    companyName: COMPANY_INFO.name,
+    streetAddress: COMPANY_INFO.streetAddress,
+    city: COMPANY_INFO.city,
+    state: COMPANY_INFO.state,
+    zipCode: COMPANY_INFO.zipCode,
     
     // Customer & Order Information (Dropdowns)
     customerId: '',
@@ -65,9 +66,9 @@ export default function ManufacturersCertificate() {
     specialProcesses: 'n/a',
     serialNumbers: '',
     
-    // Certification Text (from PDF)
-    certificationText: 'THIS IS TO CERTIFY THAT THE VERTICAL STABILIZER HAS BEEN MANUFACTURED, PROCESSED AND INSPECTED IN ACCORDANCE WITH THE MATERIALS AND PROCEDURES SPECIFIED ON PROVIDED DRAWING. FURTHERMORE, INSPECTION RESULTS SIGNIFY THAT THE TAIL CONE DELIVERED IS FULLY ACCEPTABLE AND IN COMPLETE CONFORMANCE TO ALL SPECIFICATIONS.',
-    otherDataText: 'OTHER DATA, NOT ENCLOSED WITH THIS SHIPMENT, ARE MAINTAINED ON FILE AND ARE AVAILABLE UPON REQUEST.',
+    // Certification Text (from shared templates)
+    certificationText: CERTIFICATE_TEMPLATES.manufacturersConformance.certificationText,
+    otherDataText: CERTIFICATE_TEMPLATES.manufacturersConformance.otherDataText,
     
     // Signature Fields
     signatureDataURL: '',
@@ -142,11 +143,11 @@ export default function ManufacturersCertificate() {
         // Reset to initial state but keep company info
         setFormData(prev => ({
           ...{
-            companyName: 'Strata-G Solutions, LLC',
-            streetAddress: '2901 Wall Triana Hwy SW, #200',
-            city: 'Huntsville',
-            state: 'AL',
-            zipCode: '35824',
+            companyName: COMPANY_INFO.name,
+            streetAddress: COMPANY_INFO.streetAddress,
+            city: COMPANY_INFO.city,
+            state: COMPANY_INFO.state,
+            zipCode: COMPANY_INFO.zipCode,
             customerId: '',
             customerName: '',
             customerAddress: '',
@@ -163,8 +164,8 @@ export default function ManufacturersCertificate() {
             description: '',
             specialProcesses: 'n/a',
             serialNumbers: '',
-            certificationText: 'THIS IS TO CERTIFY THAT THE VERTICAL STABILIZER HAS BEEN MANUFACTURED, PROCESSED AND INSPECTED IN ACCORDANCE WITH THE MATERIALS AND PROCEDURES SPECIFIED ON PROVIDED DRAWING. FURTHERMORE, INSPECTION RESULTS SIGNIFY THAT THE TAIL CONE DELIVERED IS FULLY ACCEPTABLE AND IN COMPLETE CONFORMANCE TO ALL SPECIFICATIONS.',
-            otherDataText: 'OTHER DATA, NOT ENCLOSED WITH THIS SHIPMENT, ARE MAINTAINED ON FILE AND ARE AVAILABLE UPON REQUEST.',
+            certificationText: CERTIFICATE_TEMPLATES.manufacturersConformance.certificationText,
+            otherDataText: CERTIFICATE_TEMPLATES.manufacturersConformance.otherDataText,
             signatureDataURL: '',
             signatureDate: '',
             signerTitle: '',

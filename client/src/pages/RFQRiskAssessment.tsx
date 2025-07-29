@@ -39,8 +39,14 @@ export default function RFQRiskAssessment() {
     mitigationActionB: '',
     mitigationActionC: '',
     
+    // Risk Reduction Values
+    mitigationReductionA: '0',
+    mitigationReductionB: '0',
+    mitigationReductionC: '0',
+    
     // Totals and Determination
     totalOverallPoints: 0,
+    adjustedRiskLevel: 0,
     riskDetermination: '',
     bidDecision: '',
     
@@ -85,10 +91,14 @@ export default function RFQRiskAssessment() {
     const externalSubtotal = externalRisks.reduce((sum, risk) => sum + getRiskScore(risk), 0);
     const totalOverallPoints = internalSubtotal + externalSubtotal;
     
-    // Determine risk level based on total points
+    // Calculate total risk reduction from mitigation actions
+    const totalReduction = parseInt(formData.mitigationReductionA) + parseInt(formData.mitigationReductionB) + parseInt(formData.mitigationReductionC);
+    const adjustedRiskLevel = Math.max(0, totalOverallPoints - totalReduction);
+    
+    // Determine risk level based on adjusted points
     let riskDetermination = '';
-    if (totalOverallPoints >= 17) riskDetermination = 'High (17-204 pts)';
-    else if (totalOverallPoints >= 4) riskDetermination = 'Medium (4-16 pts)';
+    if (adjustedRiskLevel >= 17) riskDetermination = 'High (17-204 pts)';
+    else if (adjustedRiskLevel >= 4) riskDetermination = 'Medium (4-16 pts)';
     else riskDetermination = 'Low (0-3 pts)';
     
     setFormData(prev => ({
@@ -96,6 +106,7 @@ export default function RFQRiskAssessment() {
       internalSubtotal,
       externalSubtotal,
       totalOverallPoints,
+      adjustedRiskLevel,
       riskDetermination
     }));
   };
@@ -103,12 +114,13 @@ export default function RFQRiskAssessment() {
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
-    // Recalculate scores if it's a risk field
+    // Recalculate scores if it's a risk field or mitigation reduction field
     const riskFields = [
       'trainedStaff', 'equipmentRequirements', 'manufacturingSpace', 
       'regulatoryRequirements', 'conflictingPriorities', 'customerConcentration', 
       'climateEnvironmental', 'supplyChainDisruptions', 'supplierVariability', 
-      'contractProvisions', 'timelines', 'qualityExpectations'
+      'contractProvisions', 'timelines', 'qualityExpectations',
+      'mitigationReductionA', 'mitigationReductionB', 'mitigationReductionC'
     ];
     
     if (riskFields.includes(field)) {
@@ -132,20 +144,7 @@ export default function RFQRiskAssessment() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      console.log('Saving RFQ Risk Assessment:', formData);
-      // TODO: Implement save functionality
-      alert('RFQ Risk Assessment saved successfully!');
-    } catch (error) {
-      console.error('Error saving assessment:', error);
-      alert('Failed to save assessment. Please try again.');
-    }
-  };
 
-  const handlePrint = () => {
-    window.print();
-  };
 
   const RiskRadioGroup = ({ 
     name, 
@@ -181,9 +180,32 @@ export default function RFQRiskAssessment() {
     </div>
   );
 
+  // Validation function for required mitigation actions
+  const validateForm = () => {
+    if (!formData.mitigationActionA.trim() || !formData.mitigationActionB.trim() || !formData.mitigationActionC.trim()) {
+      alert('All Mitigation Actions are required. Please fill in all three mitigation action fields.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSave = () => {
+    if (!validateForm()) return;
+    
+    // Form is valid, proceed with save
+    console.log('Form data saved:', formData);
+    alert('RFQ Risk Assessment saved successfully!');
+  };
+
+  const handlePrint = () => {
+    if (!validateForm()) return;
+    
+    window.print();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto ml-16">
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mb-4">
@@ -347,45 +369,112 @@ export default function RFQRiskAssessment() {
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>3. Mitigation Actions and Score Adjustment</CardTitle>
+            <p className="text-sm text-gray-600">All mitigation actions are required. Enter numeric values to reduce overall risk level.</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="mitigationA">a.</Label>
-              <Textarea
-                id="mitigationA"
-                value={formData.mitigationActionA}
-                onChange={(e) => handleInputChange('mitigationActionA', e.target.value)}
-                rows={2}
-                className="mt-1"
-              />
+            <div className="flex gap-4 items-start">
+              <div className="flex-1">
+                <Label htmlFor="mitigationA" className="text-red-500">a. * (Required)</Label>
+                <Textarea
+                  id="mitigationA"
+                  value={formData.mitigationActionA}
+                  onChange={(e) => handleInputChange('mitigationActionA', e.target.value)}
+                  rows={2}
+                  className="mt-1"
+                  placeholder="Describe mitigation action..."
+                  required
+                />
+              </div>
+              <div className="w-24">
+                <Label htmlFor="reductionA" className="text-sm">Risk Reduction</Label>
+                <Input
+                  id="reductionA"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={formData.mitigationReductionA}
+                  onChange={(e) => handleInputChange('mitigationReductionA', (parseInt(e.target.value) || 0).toString())}
+                  className="mt-1 text-center"
+                  placeholder="0"
+                />
+              </div>
             </div>
             
-            <div>
-              <Label htmlFor="mitigationB">b.</Label>
-              <Textarea
-                id="mitigationB"
-                value={formData.mitigationActionB}
-                onChange={(e) => handleInputChange('mitigationActionB', e.target.value)}
-                rows={2}
-                className="mt-1"
-              />
+            <div className="flex gap-4 items-start">
+              <div className="flex-1">
+                <Label htmlFor="mitigationB" className="text-red-500">b. * (Required)</Label>
+                <Textarea
+                  id="mitigationB"
+                  value={formData.mitigationActionB}
+                  onChange={(e) => handleInputChange('mitigationActionB', e.target.value)}
+                  rows={2}
+                  className="mt-1"
+                  placeholder="Describe mitigation action..."
+                  required
+                />
+              </div>
+              <div className="w-24">
+                <Label htmlFor="reductionB" className="text-sm">Risk Reduction</Label>
+                <Input
+                  id="reductionB"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={formData.mitigationReductionB}
+                  onChange={(e) => handleInputChange('mitigationReductionB', (parseInt(e.target.value) || 0).toString())}
+                  className="mt-1 text-center"
+                  placeholder="0"
+                />
+              </div>
             </div>
             
-            <div>
-              <Label htmlFor="mitigationC">c.</Label>
-              <Textarea
-                id="mitigationC"
-                value={formData.mitigationActionC}
-                onChange={(e) => handleInputChange('mitigationActionC', e.target.value)}
-                rows={2}
-                className="mt-1"
-              />
+            <div className="flex gap-4 items-start">
+              <div className="flex-1">
+                <Label htmlFor="mitigationC" className="text-red-500">c. * (Required)</Label>
+                <Textarea
+                  id="mitigationC"
+                  value={formData.mitigationActionC}
+                  onChange={(e) => handleInputChange('mitigationActionC', e.target.value)}
+                  rows={2}
+                  className="mt-1"
+                  placeholder="Describe mitigation action..."
+                  required
+                />
+              </div>
+              <div className="w-24">
+                <Label htmlFor="reductionC" className="text-sm">Risk Reduction</Label>
+                <Input
+                  id="reductionC"
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={formData.mitigationReductionC}
+                  onChange={(e) => handleInputChange('mitigationReductionC', (parseInt(e.target.value) || 0).toString())}
+                  className="mt-1 text-center"
+                  placeholder="0"
+                />
+              </div>
             </div>
             
-            <div className="flex items-center gap-2 pt-4 border-t">
-              <Label className="font-medium">Total Overall Points:</Label>
-              <div className="w-20 px-3 py-2 bg-gray-100 border rounded text-center font-medium">
-                {formData.totalOverallPoints}
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Label className="font-medium">Original Total Points:</Label>
+                <div className="w-20 px-3 py-2 bg-gray-100 border rounded text-center font-medium">
+                  {formData.totalOverallPoints}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="font-medium">Total Risk Reduction:</Label>
+                <div className="w-20 px-3 py-2 bg-green-100 border rounded text-center font-medium text-green-800">
+                  -{parseInt(formData.mitigationReductionA) + parseInt(formData.mitigationReductionB) + parseInt(formData.mitigationReductionC)}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 pt-2">
+              <Label className="font-medium">Adjusted Risk Level:</Label>
+              <div className="w-20 px-3 py-2 bg-blue-100 border rounded text-center font-medium text-blue-800">
+                {formData.adjustedRiskLevel}
               </div>
             </div>
           </CardContent>
@@ -398,9 +487,12 @@ export default function RFQRiskAssessment() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="font-medium mb-3 block">Risk Level (automatically calculated):</Label>
+              <Label className="font-medium mb-3 block">Risk Level (automatically calculated with mitigations):</Label>
               <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                 <span className="font-medium text-blue-800">{formData.riskDetermination}</span>
+                <div className="text-sm text-gray-600 mt-1">
+                  Based on adjusted risk level: {formData.adjustedRiskLevel} points
+                </div>
               </div>
             </div>
             

@@ -2468,48 +2468,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Module 8: Address Management routes
   
   // Customers CRUD
-  app.get('/api/customers', async (req, res) => {
-    try {
-      const customers = await storage.getAllCustomers();
-      res.json(customers);
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-      res.status(500).json({ error: "Failed to fetch customers" });
-    }
-  });
+  // COMMENTED OUT - Using modular routes instead
+  // app.get('/api/customers', async (req, res) => {
+  //   try {
+  //     const customers = await storage.getAllCustomers();
+  //     res.json(customers);
+  //   } catch (error) {
+  //     console.error("Error fetching customers:", error);
+  //     res.status(500).json({ error: "Failed to fetch customers" });
+  //   }
+  // });
 
-  app.get('/api/customers/search', async (req, res) => {
-    try {
-      const { query } = req.query;
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ error: "Search query is required" });
-      }
-      
-      const customers = await storage.searchCustomers(query);
-      res.json(customers);
-    } catch (error) {
-      console.error("Error searching customers:", error);
-      res.status(500).json({ error: "Failed to search customers" });
-    }
-  });
+  // COMMENTED OUT - Using modular routes instead
+  // app.get('/api/customers/search', async (req, res) => {
+  //   try {
+  //     const { query } = req.query;
+  //     if (!query || typeof query !== 'string') {
+  //       return res.status(400).json({ error: "Search query is required" });
+  //     }
+  //     
+  //     const customers = await storage.searchCustomers(query);
+  //     res.json(customers);
+  //   } catch (error) {
+  //     console.error("Error searching customers:", error);
+  //     res.status(500).json({ error: "Failed to search customers" });
+  //   }
+  // });
 
-  app.get('/api/customers/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const customer = await storage.getCustomer(id);
-      
-      if (!customer) {
-        return res.status(404).json({ error: "Customer not found" });
-      }
-      
-      res.json(customer);
-    } catch (error) {
-      console.error("Error fetching customer:", error);
-      res.status(500).json({ error: "Failed to fetch customer" });
-    }
-  });
+  // COMMENTED OUT - Using modular routes instead
+  // app.get('/api/customers/:id', async (req, res) => {
+  //   try {
+  //     const id = parseInt(req.params.id);
+  //     const customer = await storage.getCustomer(id);
+  //     
+  //     if (!customer) {
+  //       return res.status(404).json({ error: "Customer not found" });
+  //     }
+  //     
+  //     res.json(customer);
+  //   } catch (error) {
+  //     console.error("Error fetching customer:", error);
+  //     res.status(500).json({ error: "Failed to fetch customer" });
+  //   }
+  // });
 
-  app.post('/api/customers', async (req, res) => {
+  // COMMENTED OUT - Using modular routes instead  
+  // app.post('/api/customers', async (req, res) => {
     try {
       const result = insertCustomerSchema.safeParse(req.body);
       if (!result.success) {

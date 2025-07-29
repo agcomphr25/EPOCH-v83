@@ -78,12 +78,6 @@ export default function P2Forms() {
                 QC inspection and validation forms for P2 products
               </p>
               <div className="space-y-2">
-                <Link href="/manufacturers-certificate">
-                  <Button className="w-full justify-start" variant="outline">
-                    <Award className="h-4 w-4 mr-2" />
-                    Manufacturer's Certificate of Conformance
-                  </Button>
-                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <ClipboardList className="h-4 w-4 mr-2" />
                   QC Inspection Checklist
@@ -121,6 +115,12 @@ export default function P2Forms() {
                   <Barcode className="h-4 w-4 mr-2" />
                   Shipping Labels
                 </Button>
+                <Link href="/manufacturers-certificate">
+                  <Button className="w-full justify-start" variant="outline">
+                    <Award className="h-4 w-4 mr-2" />
+                    Manufacturer's Certificate of Conformance
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="h-4 w-4 mr-2" />
                   Certificate of Compliance

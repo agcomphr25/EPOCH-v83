@@ -10,6 +10,19 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - P2 Forms Navigation Reorganization (COMPLETED)**
+- ✅ **Manufacturer's Certificate Relocation**: Moved Manufacturer's Certificate of Conformance from Quality Control Forms section to Shipping & Documentation section in P2 Forms
+- ✅ **Logical Organization**: Certificate now appears alongside other shipping documents (Packing List, Shipping Labels, Certificate of Compliance)
+- ✅ **Improved User Experience**: Better categorization aligns with shipping workflow where certificates are prepared for delivery
+- ✅ **Navigation Update**: Form remains fully functional with same route (/manufacturers-certificate) but better positioned for user workflow
+
+**July 29, 2025 - P2 Customer Management System Fix (COMPLETED)**
+- ✅ **Display Issue Resolution**: Fixed P2 Customer Management page showing "No P2 Customers" despite existing data in database
+- ✅ **Bypass Route Implementation**: Created `/api/p2-customers-bypass` route to circumvent monolithic vs modular routing conflicts
+- ✅ **Component Updates**: Updated P2CustomerManager to use working bypass route for data retrieval, create, update, and delete operations
+- ✅ **Cache Management**: Fixed query invalidation to use correct bypass route key for real-time updates
+- ✅ **System Verification**: Confirmed Strata-G customer now displays properly in both Customer Management interface and form dropdowns
+
 **July 29, 2025 - Centralized Company Configuration System Implementation (COMPLETED)**
 - ✅ **Shared Configuration File**: Created `shared/company-config.ts` with centralized company information (name, address, phone, email) for reuse across forms and documents
 - ✅ **Certificate Templates**: Added reusable certification text templates for Manufacturer's Certificate of Conformance and other quality forms

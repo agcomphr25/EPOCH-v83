@@ -150,13 +150,14 @@ export default function OrderEntry() {
       }
     });
 
-    // Add bottom metal price (separate state variable)
-    if (bottomMetal) {
+    // Add bottom metal price (from features object)
+    if (features.bottom_metal) {
       const bottomMetalFeature = featureDefs.find(f => f.id === 'bottom_metal');
       if (bottomMetalFeature?.options) {
-        const option = bottomMetalFeature.options.find(opt => opt.value === bottomMetal);
+        const option = bottomMetalFeature.options.find(opt => opt.value === features.bottom_metal);
         if (option?.price) {
           total += option.price;
+          console.log('💰 Price calculation - Bottom metal:', features.bottom_metal, 'price:', option.price);
         }
       }
     }
@@ -231,25 +232,25 @@ export default function OrderEntry() {
       console.log('💰 Rails calculation - No rails selected');
     }
 
-    // Add other options prices (separate state variable)
-    if (otherOptions && otherOptions.length > 0) {
+    // Add other options prices (from features object)
+    if (features.other_options && features.other_options.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
         let otherTotal = 0;
-        otherOptions.forEach(optionValue => {
+        features.other_options.forEach((optionValue: string) => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
             otherTotal += option.price;
             total += option.price;
           }
         });
-        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', otherOptions);
+        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', features.other_options);
       }
     }
 
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, bottomMetal, paintOptions, railAccessory, otherOptions]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, paintOptions, railAccessory]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -1632,14 +1633,14 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Bottom Metal';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{bottomMetal ? (() => {
+                    <span className="font-medium">{features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                      const option = feature?.options?.find(opt => opt.value === bottomMetal);
-                      return option?.label || bottomMetal;
+                      const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
+                      return option?.label || features.bottom_metal;
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${bottomMetal ? (() => {
+                    <span className="text-blue-600 font-bold">${features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
-                      const option = feature?.options?.find(opt => opt.value === bottomMetal);
+                      const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
                       return (option?.price || 0).toFixed(2);
                     })() : '0.00'}</span>
                   </div>
@@ -1808,19 +1809,19 @@ export default function OrderEntry() {
                     return feature?.displayName || 'Other Options';
                   })()}:</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{otherOptions && otherOptions.length > 0 ? (() => {
+                    <span className="font-medium">{features.other_options && features.other_options.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
-                      if (!feature?.options) return otherOptions.join(', ');
-                      const labels = otherOptions.map(optionValue => {
+                      if (!feature?.options) return features.other_options.join(', ');
+                      const labels = features.other_options.map((optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return option?.label || optionValue;
                       });
                       return labels.join(', ');
                     })() : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">${otherOptions && otherOptions.length > 0 ? (() => {
+                    <span className="text-blue-600 font-bold">${features.other_options && features.other_options.length > 0 ? (() => {
                       const feature = featureDefs.find(f => f.id === 'other_options');
                       if (!feature?.options) return '0.00';
-                      const totalPrice = otherOptions.reduce((sum, optionValue) => {
+                      const totalPrice = features.other_options.reduce((sum: number, optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
                         return sum + (option?.price || 0);
                       }, 0);

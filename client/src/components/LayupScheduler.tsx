@@ -737,7 +737,26 @@ export default function LayupScheduler() {
 
     console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
     
-    // Get work days for current and next week (Mon-Thu primary scheduling)
+    // Calculate dynamic scheduling window based on order due dates
+    const calculateSchedulingWindow = () => {
+      // Find the latest due date in orders
+      const latestDueDate = Math.max(...orders.map(o => {
+        const dueDate = o.dueDate || o.orderDate;
+        return new Date(dueDate).getTime();
+      }));
+      
+      const currentTime = currentDate.getTime();
+      const weeksNeeded = Math.ceil((latestDueDate - currentTime) / (7 * 24 * 60 * 60 * 1000));
+      
+      // Min 2 weeks, max 8 weeks for performance
+      const schedulingWeeks = Math.max(2, Math.min(weeksNeeded, 8));
+      
+      console.log(`📅 Dynamic scheduling window: ${schedulingWeeks} weeks (based on due dates extending to ${new Date(latestDueDate).toDateString()})`);
+      
+      return schedulingWeeks;
+    };
+
+    // Get work days for dynamic window (Mon-Thu primary scheduling)
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
@@ -756,9 +775,15 @@ export default function LayupScheduler() {
       return workDays;
     };
 
-    const currentWeekDays = getWorkDaysInWeek(currentDate);
-    const nextWeekDays = getWorkDaysInWeek(new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000));
-    const allWorkDays = [...currentWeekDays, ...nextWeekDays];
+    // Generate all work days for the dynamic window
+    const schedulingWeeks = calculateSchedulingWindow();
+    const allWorkDays = [];
+    
+    for (let week = 0; week < schedulingWeeks; week++) {
+      const weekStartDate = new Date(currentDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+      const weekDays = getWorkDaysInWeek(weekStartDate);
+      allWorkDays.push(...weekDays);
+    }
 
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {

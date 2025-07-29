@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - Dynamic Scheduling Window Implementation (COMPLETED)**
+- ✅ **Root Cause Resolution**: Identified and fixed hardcoded 2-week scheduling limitation at lines 759-761 in LayupScheduler.tsx that was preventing scheduling beyond 8/7/2025
+- ✅ **Dynamic Window Logic**: Replaced fixed 2-week window with intelligent calculation based on latest order due dates in queue
+- ✅ **Adaptive Scheduling**: System now automatically extends scheduling horizon (2-8 weeks) based on actual order backlog requirements
+- ✅ **Performance Optimization**: Added 8-week maximum limit to maintain system performance while providing adequate scheduling capacity
+- ✅ **Comprehensive Logging**: Enhanced debugging with dynamic window calculations showing weeks needed and target due dates
+
 **July 28, 2025 - Monday-Thursday Primary Work Schedule with Friday Backup Implementation (COMPLETED)**
 - ✅ **Primary Work Schedule**: Configured Layup Scheduler to use Monday-Thursday as primary work days for auto-scheduling algorithm
 - ✅ **Friday Backup Day**: Friday remains visible but designated as backup catch-up day with distinctive amber styling

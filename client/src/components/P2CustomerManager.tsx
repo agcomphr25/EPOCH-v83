@@ -42,7 +42,7 @@ export function P2CustomerManager() {
   const queryClient = useQueryClient();
 
   const { data: customers = [], isLoading } = useQuery<P2Customer[]>({
-    queryKey: ["/api/p2/customers"],
+    queryKey: ["/api/p2-customers-bypass"],
   });
 
   const form = useForm<P2CustomerForm>({
@@ -66,7 +66,7 @@ export function P2CustomerManager() {
       body: data,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
       toast({ title: "Success", description: "P2 Customer created successfully" });
       setDialogOpen(false);
       form.reset();
@@ -83,7 +83,7 @@ export function P2CustomerManager() {
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
       toast({ title: "Success", description: "P2 Customer updated successfully" });
       setDialogOpen(false);
       setSelectedCustomer(null);
@@ -97,7 +97,7 @@ export function P2CustomerManager() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest(`/api/p2/customers/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-customers-bypass"] });
       toast({ title: "Success", description: "P2 Customer deleted successfully" });
     },
     onError: (error: any) => {

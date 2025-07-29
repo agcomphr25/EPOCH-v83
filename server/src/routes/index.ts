@@ -12,6 +12,7 @@ import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
 import discountsRoutes from './discounts';
+import bomsRoutes from './boms';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -49,6 +50,9 @@ export function registerRoutes(app: Express): Server {
   
   // Discount management routes
   app.use('/api', discountsRoutes);
+  
+  // BOM management routes
+  app.use('/api/boms', bomsRoutes);
   
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {

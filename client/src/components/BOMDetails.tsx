@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -114,8 +114,15 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
     return inventoryItem?.agPartNumber || "N/A";
   };
 
-  // Filter items based on search term
+  // Filter items based on search term and view mode
   const filteredItems = bom?.items?.filter(item => 
+    item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
+
+  // Filter hierarchical items based on search term
+  const filteredHierarchicalItems = hierarchyData?.hierarchicalItems?.filter((item: any) => 
     item.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.firstDept.toLowerCase().includes(searchTerm.toLowerCase()) ||
     getPartNumber(item.partName).toLowerCase().includes(searchTerm.toLowerCase())
@@ -145,10 +152,86 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
     toast.success("Sub-assembly created successfully");
   };
 
-  // Calculate total quantity
-  const totalQuantity = filteredItems.reduce((sum, item) => {
-    return sum + item.quantity;
-  }, 0);
+  // Calculate total quantity based on view mode
+  const totalQuantity = viewMode === 'hierarchical' 
+    ? filteredHierarchicalItems.reduce((sum: number, item: any) => sum + item.quantity, 0)
+    : filteredItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Get items to display based on view mode
+  const itemsToDisplay = viewMode === 'hierarchical' ? filteredHierarchicalItems : filteredItems;
+
+  // Hierarchical item rendering component
+  const renderHierarchicalItem = (item: any, level: number = 0) => {
+    const indentStyle = level > 0 ? { paddingLeft: `${level * 1.5}rem` } : {};
+    const isSubAssembly = !!item.subAssembly;
+    
+    return (
+      <React.Fragment key={`${item.id}-${level}`}>
+        <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-800">
+          <TableCell className="font-mono text-sm" style={indentStyle}>
+            {level > 0 && <span className="text-gray-400 mr-2">{'└─'}</span>}
+            {getPartNumber(item.partName)}
+          </TableCell>
+          <TableCell className="font-medium">
+            <div className="flex items-center" style={indentStyle}>
+              {level > 0 && <span className="text-gray-400 mr-2">└─</span>}
+              {isSubAssembly && <GitBranch className="w-4 h-4 mr-2 text-blue-600" />}
+              {item.partName}
+              {isSubAssembly && (
+                <Badge variant="outline" className="ml-2 text-xs">
+                  Sub-Assembly
+                </Badge>
+              )}
+            </div>
+          </TableCell>
+          <TableCell>
+            {item.quantity}
+            {isSubAssembly && item.subAssembly?.calculatedQuantity && (
+              <span className="text-gray-500 text-sm ml-2">
+                (× {item.subAssembly.calculatedQuantity} = {item.quantity * item.subAssembly.calculatedQuantity})
+              </span>
+            )}
+          </TableCell>
+          <TableCell>
+            <Badge variant="outline">{item.firstDept}</Badge>
+          </TableCell>
+          <TableCell>
+            <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
+              {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
+            </Badge>
+          </TableCell>
+          <TableCell>
+            <Badge variant={item.isActive ? "default" : "secondary"}>
+              {item.isActive ? "Active" : "Inactive"}
+            </Badge>
+          </TableCell>
+          <TableCell className="text-right">
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingItem(item)}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteItem(item.id)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+        {/* Render sub-assembly items recursively */}
+        {isSubAssembly && item.subAssembly?.bomDefinition?.items?.map((subItem: any) => 
+          renderHierarchicalItem(subItem, level + 1)
+        )}
+      </React.Fragment>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -288,7 +371,7 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
       {/* Items table */}
       <div className="flex-1 overflow-auto">
         <div className="p-6">
-          {filteredItems.length === 0 ? (
+          {itemsToDisplay.length === 0 ? (
             <Card>
               <CardHeader className="text-center">
                 <Package className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -307,6 +390,11 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                 </CardTitle>
                 <CardDescription>
                   Components and materials required for {bom.modelName}
+                  {viewMode === 'hierarchical' && (
+                    <span className="ml-2 text-blue-600 text-sm">
+                      • Showing hierarchical structure with sub-assemblies
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -323,45 +411,48 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredItems.map((item) => (
-                      <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <TableCell className="font-mono text-sm">{getPartNumber(item.partName)}</TableCell>
-                        <TableCell className="font-medium">{item.partName}</TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{item.firstDept}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
-                            {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={item.isActive ? "default" : "secondary"}>
-                            {item.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setEditingItem(item)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteItem(item.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {viewMode === 'hierarchical' 
+                      ? itemsToDisplay.map((item: any) => renderHierarchicalItem(item, 0))
+                      : itemsToDisplay.map((item) => (
+                          <TableRow key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <TableCell className="font-mono text-sm">{getPartNumber(item.partName)}</TableCell>
+                            <TableCell className="font-medium">{item.partName}</TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{item.firstDept}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={item.itemType === 'manufactured' ? "default" : "secondary"}>
+                                {item.itemType === 'manufactured' ? "Manufactured" : "Material"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={item.isActive ? "default" : "secondary"}>
+                                {item.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingItem(item)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    }
                   </TableBody>
                 </Table>
               </CardContent>

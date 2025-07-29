@@ -4,10 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Edit, Trash2, Package, Search } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, Package, Search, GitBranch, Layers } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { BOMItemForm } from "./BOMItemForm";
+import { SubAssemblyDialog } from "./SubAssemblyDialog";
 import type { InventoryItem } from '@shared/schema';
 import {
   Dialog,
@@ -32,9 +33,21 @@ interface BomItem {
   partName: string;
   quantity: number;
   firstDept: string;
+  itemType: string;
+  referenceBomId?: number;
+  assemblyLevel: number;
+  quantityMultiplier: number;
+  notes?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface HierarchicalBomItem extends BomItem {
+  subAssembly?: {
+    bomDefinition: BomDefinition;
+    calculatedQuantity: number;
+  };
 }
 
 interface BomDefinition {
@@ -47,6 +60,7 @@ interface BomDefinition {
   createdAt: Date;
   updatedAt: Date;
   items: BomItem[];
+  hierarchicalItems?: HierarchicalBomItem[];
 }
 
 interface BOMDetailsProps {
@@ -57,12 +71,20 @@ interface BOMDetailsProps {
 export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isNewItemOpen, setIsNewItemOpen] = useState(false);
+  const [isSubAssemblyOpen, setIsSubAssemblyOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BomItem | null>(null);
+  const [viewMode, setViewMode] = useState<'flat' | 'hierarchical'>('hierarchical');
   const queryClient = useQueryClient();
 
   // Fetch BOM details with items
   const { data: bom, isLoading } = useQuery<BomDefinition>({
-    queryKey: ["/api/boms", bomId],
+    queryKey: [`/api/boms/${bomId}/details`],
+  });
+
+  // Also fetch hierarchical structure
+  const { data: hierarchyData } = useQuery({
+    queryKey: [`/api/boms/${bomId}/hierarchy`],
+    enabled: viewMode === 'hierarchical',
   });
 
   // Fetch inventory items to get part numbers
@@ -107,14 +129,20 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
 
   const handleItemCreated = () => {
     setIsNewItemOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["/api/boms", bomId] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
     toast.success("Item added successfully");
   };
 
   const handleItemUpdated = () => {
     setEditingItem(null);
-    queryClient.invalidateQueries({ queryKey: ["/api/boms", bomId] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
     toast.success("Item updated successfully");
+  };
+
+  const handleSubAssemblyCreated = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/details`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/boms/${bomId}/hierarchy`] });
+    toast.success("Sub-assembly created successfully");
   };
 
   // Calculate total quantity
@@ -164,27 +192,37 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
               {bom.isActive ? "Active" : "Inactive"}
             </Badge>
           </div>
-          <Dialog open={isNewItemOpen} onOpenChange={setIsNewItemOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add BOM Item</DialogTitle>
-                <DialogDescription>
-                  Add a new component to this Bill of Materials
-                </DialogDescription>
-              </DialogHeader>
-              <BOMItemForm 
-                bomId={bomId}
-                onSuccess={handleItemCreated}
-                onCancel={() => setIsNewItemOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => setIsSubAssemblyOpen(true)}
+              className="border-green-600 text-green-600 hover:bg-green-50"
+            >
+              <GitBranch className="w-4 h-4 mr-2" />
+              Add Sub-Assembly  
+            </Button>
+            <Dialog open={isNewItemOpen} onOpenChange={setIsNewItemOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Add BOM Item</DialogTitle>
+                  <DialogDescription>
+                    Add a new component to this Bill of Materials
+                  </DialogDescription>
+                </DialogHeader>
+                <BOMItemForm 
+                  bomId={bomId}
+                  onSuccess={handleItemCreated}
+                  onCancel={() => setIsNewItemOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
 
@@ -205,6 +243,25 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
               <span className="ml-2 font-semibold">
                 {new Date(bom.updatedAt).toLocaleDateString()}
               </span>
+            </div>
+            {/* View Mode Toggle */}
+            <div className="flex items-center space-x-2 ml-6">
+              <Button
+                variant={viewMode === 'flat' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('flat')}
+              >
+                <Layers className="w-4 h-4 mr-1" />
+                Flat
+              </Button>
+              <Button
+                variant={viewMode === 'hierarchical' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('hierarchical')}
+              >
+                <GitBranch className="w-4 h-4 mr-1" />
+                Hierarchical
+              </Button>
             </div>
           </div>
           <div className="relative max-w-md">
@@ -332,6 +389,14 @@ export function BOMDetails({ bomId, onBack }: BOMDetailsProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Sub-Assembly Dialog */}
+      <SubAssemblyDialog 
+        open={isSubAssemblyOpen}
+        onOpenChange={setIsSubAssemblyOpen}
+        parentBomId={bomId}
+        onSuccess={handleSubAssemblyCreated}
+      />
     </div>
   );
 }

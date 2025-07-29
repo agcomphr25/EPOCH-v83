@@ -2867,7 +2867,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[] }) | undefined> {
+  async getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[], hierarchicalItems?: any[] }) | undefined> {
     try {
       const [bom] = await db
         .select()
@@ -2880,11 +2880,109 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomItems)
         .where(and(eq(bomItems.bomId, bomId), eq(bomItems.isActive, true)))
-        .orderBy(bomItems.partName);
+        .orderBy(bomItems.assemblyLevel, bomItems.partName);
 
-      return { ...bom, items };
+      // Build hierarchical structure for items that reference other BOMs
+      const hierarchicalItems = await this.buildHierarchicalItems(items);
+
+      return { ...bom, items, hierarchicalItems };
     } catch (error) {
       console.error('Error fetching BOM details:', error);
+      throw error;
+    }
+  }
+
+  // New method to build hierarchical BOM structure
+  private async buildHierarchicalItems(items: BomItem[]): Promise<any[]> {
+    try {
+      const hierarchical = [];
+      
+      for (const item of items) {
+        const hierarchicalItem: any = { ...item };
+        
+        // If this item references another BOM (sub-assembly)
+        if (item.referenceBomId) {
+          const referencedBom = await this.getBOMDetails(item.referenceBomId);
+          if (referencedBom) {
+            hierarchicalItem.subAssembly = {
+              bomDefinition: referencedBom,
+              calculatedQuantity: item.quantity * item.quantityMultiplier
+            };
+          }
+        }
+        
+        hierarchical.push(hierarchicalItem);
+      }
+      
+      return hierarchical;
+    } catch (error) {
+      console.error('Error building hierarchical items:', error);
+      return items;
+    }
+  }
+
+  // Method to create sub-assembly relationships
+  async createSubAssemblyReference(parentBomId: number, childBomId: number, partName: string, quantity: number, quantityMultiplier: number = 1, notes?: string): Promise<BomItem> {
+    try {
+      // First verify both BOMs exist
+      const parentBom = await this.getBOMDefinition(parentBomId);
+      const childBom = await this.getBOMDefinition(childBomId);
+      
+      if (!parentBom || !childBom) {
+        throw new Error('Parent or child BOM not found');
+      }
+
+      // Calculate assembly level (child level + 1)
+      const childItems = await db
+        .select()
+        .from(bomItems)
+        .where(eq(bomItems.bomId, childBomId));
+      
+      const maxChildLevel = Math.max(...childItems.map(item => item.assemblyLevel || 0), 0);
+      const assemblyLevel = maxChildLevel + 1;
+
+      const [newItem] = await db
+        .insert(bomItems)
+        .values({
+          bomId: parentBomId,
+          partName,
+          quantity,
+          firstDept: 'Assembly/Disassembly', // Sub-assemblies typically go to assembly dept
+          itemType: 'sub_assembly',
+          referenceBomId: childBomId,
+          assemblyLevel,
+          quantityMultiplier,
+          notes,
+          isActive: true,
+        })
+        .returning();
+
+      return newItem;
+    } catch (error) {
+      console.error('Error creating sub-assembly reference:', error);
+      throw error;
+    }
+  }
+
+  // Method to get available BOMs that can be used as sub-assemblies
+  async getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]> {
+    try {
+      let whereCondition = eq(bomDefinitions.isActive, true);
+      
+      if (excludeBomId) {
+        whereCondition = and(
+          eq(bomDefinitions.isActive, true),
+          ne(bomDefinitions.id, excludeBomId)
+        );
+      }
+
+      return await db
+        .select()
+        .from(bomDefinitions)
+        .where(whereCondition)
+        .orderBy(bomDefinitions.modelName);
+    } catch (error) {
+      console.error('Error fetching available sub-assemblies:', error);
       throw error;
     }
   }

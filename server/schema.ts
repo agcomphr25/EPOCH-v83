@@ -1643,7 +1643,13 @@ export const bomItems = pgTable('bom_items', {
   partName: text('part_name').notNull(),
   quantity: integer('quantity').notNull().default(1),
   firstDept: text('first_dept').notNull().default('Layup'),
-  itemType: text('item_type').notNull().default('manufactured'), // 'manufactured' or 'material'
+  itemType: text('item_type').notNull().default('manufactured'), // 'manufactured', 'material', or 'sub_assembly'
+  // Multi-Level Hierarchy Support
+  referenceBomId: integer('reference_bom_id').references(() => bomDefinitions.id), // Points to another BOM if this item is a sub-assembly
+  assemblyLevel: integer('assembly_level').default(0), // 0=top level, 1=sub-assembly, 2=component, etc.
+  // Component Library Support
+  quantityMultiplier: integer('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
+  notes: text('notes'), // Manufacturing notes or special instructions
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -1671,6 +1677,11 @@ export const insertBomItemSchema = createInsertSchema(bomItems).omit({
   partName: z.string().min(1, "Part name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1").default(1),
   firstDept: z.enum(['Layup', 'Assembly/Disassembly', 'Finish', 'Paint', 'QC', 'Shipping']).default('Layup'),
+  itemType: z.enum(['manufactured', 'material', 'sub_assembly']).default('manufactured'),
+  referenceBomId: z.number().optional(), // Optional reference to another BOM
+  assemblyLevel: z.number().default(0),
+  quantityMultiplier: z.number().min(1).default(1),
+  notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });
 

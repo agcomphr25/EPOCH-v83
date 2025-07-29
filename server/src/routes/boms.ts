@@ -122,4 +122,64 @@ router.delete('/:bomId/items/:itemId', async (req, res) => {
   }
 });
 
+// Multi-Level BOM Hierarchy Endpoints
+
+// Get available BOMs that can be used as sub-assemblies
+router.get('/:bomId/available-sub-assemblies', async (req, res) => {
+  try {
+    const { bomId } = req.params;
+    const availableBOMs = await storage.getAvailableSubAssemblies(parseInt(bomId));
+    res.json(availableBOMs);
+  } catch (error) {
+    console.error("Get available sub-assemblies error:", error);
+    res.status(500).json({ error: "Failed to get available sub-assemblies" });
+  }
+});
+
+// Create sub-assembly reference
+router.post('/:parentBomId/sub-assemblies', async (req, res) => {
+  try {
+    const { parentBomId } = req.params;
+    const { childBomId, partName, quantity, quantityMultiplier, notes } = req.body;
+    
+    if (!childBomId || !partName || !quantity) {
+      return res.status(400).json({ error: "childBomId, partName, and quantity are required" });
+    }
+
+    const subAssemblyItem = await storage.createSubAssemblyReference(
+      parseInt(parentBomId),
+      parseInt(childBomId),
+      partName,
+      parseInt(quantity),
+      quantityMultiplier ? parseInt(quantityMultiplier) : 1,
+      notes
+    );
+    
+    res.status(201).json(subAssemblyItem);
+  } catch (error) {
+    console.error("Create sub-assembly reference error:", error);
+    res.status(500).json({ error: "Failed to create sub-assembly reference" });
+  }
+});
+
+// Get hierarchical BOM structure
+router.get('/:bomId/hierarchy', async (req, res) => {
+  try {
+    const { bomId } = req.params;
+    const bomWithHierarchy = await storage.getBOMDetails(parseInt(bomId));
+    
+    if (!bomWithHierarchy) {
+      return res.status(404).json({ error: "BOM not found" });
+    }
+
+    res.json({
+      bom: bomWithHierarchy,
+      hierarchicalItems: bomWithHierarchy.hierarchicalItems || []
+    });
+  } catch (error) {
+    console.error("Get BOM hierarchy error:", error);
+    res.status(500).json({ error: "Failed to get BOM hierarchy" });
+  }
+});
+
 export default router;

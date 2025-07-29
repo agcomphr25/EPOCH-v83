@@ -58,11 +58,11 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const queryClient = useQueryClient();
 
   const { data: purchaseOrders = [], isLoading } = useQuery<P2PurchaseOrder[]>({
-    queryKey: ["/api/p2/purchase-orders"],
+    queryKey: ["/api/p2-purchase-orders-bypass"],
   });
 
   const { data: customers = [] } = useQuery<P2Customer[]>({
-    queryKey: ["/api/p2/customers"],
+    queryKey: ["/api/p2-customers-bypass"],
   });
 
   const form = useForm<P2PurchaseOrderForm>({
@@ -79,12 +79,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: P2PurchaseOrderForm) => apiRequest("/api/p2/purchase-orders", {
+    mutationFn: (data: P2PurchaseOrderForm) => apiRequest("/api/p2-purchase-orders-bypass", {
       method: "POST",
       body: data,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
       toast({ title: "Success", description: "P2 Purchase Order created successfully" });
       setDialogOpen(false);
       form.reset();
@@ -96,12 +96,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<P2PurchaseOrderForm> }) =>
-      apiRequest(`/api/p2/purchase-orders/${id}`, {
+      apiRequest(`/api/p2-purchase-orders-bypass/${id}`, {
         method: "PUT",
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
       toast({ title: "Success", description: "P2 Purchase Order updated successfully" });
       setDialogOpen(false);
       setSelectedPO(null);
@@ -113,9 +113,9 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/p2/purchase-orders/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) => apiRequest(`/api/p2-purchase-orders-bypass/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/p2/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2-purchase-orders-bypass"] });
       toast({ title: "Success", description: "P2 Purchase Order deleted successfully" });
     },
     onError: (error: any) => {

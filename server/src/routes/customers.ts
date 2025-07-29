@@ -23,6 +23,59 @@ router.get('/p2-customers-bypass', async (req: Request, res: Response) => {
   }
 });
 
+// P2 Purchase Orders Bypass Routes (to avoid monolithic route conflicts)
+router.get('/p2-purchase-orders-bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 DIRECT P2 PURCHASE ORDERS BYPASS ROUTE CALLED');
+    const pos = await storage.getAllP2PurchaseOrders();
+    console.log('🔧 Found P2 purchase orders:', pos.length);
+    res.json(pos);
+  } catch (error) {
+    console.error('🔧 P2 purchase orders bypass error:', error);
+    res.status(500).json({ error: "Failed to fetch P2 purchase orders via bypass route" });
+  }
+});
+
+router.post('/p2-purchase-orders-bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
+    const poData = req.body;
+    const po = await storage.createP2PurchaseOrder(poData);
+    console.log('🔧 Created P2 purchase order:', po.id);
+    res.status(201).json(po);
+  } catch (error) {
+    console.error('🔧 P2 purchase order create bypass error:', error);
+    res.status(500).json({ error: "Failed to create P2 purchase order via bypass route" });
+  }
+});
+
+router.put('/p2-purchase-orders-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
+    const { id } = req.params;
+    const poData = req.body;
+    const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
+    console.log('🔧 Updated P2 purchase order:', po.id);
+    res.json(po);
+  } catch (error) {
+    console.error('🔧 P2 purchase order update bypass error:', error);
+    res.status(500).json({ error: "Failed to update P2 purchase order via bypass route" });
+  }
+});
+
+router.delete('/p2-purchase-orders-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 P2 PURCHASE ORDER DELETE BYPASS ROUTE CALLED');
+    const { id } = req.params;
+    await storage.deleteP2PurchaseOrder(parseInt(id));
+    console.log('🔧 Deleted P2 purchase order:', id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('🔧 P2 purchase order delete bypass error:', error);
+    res.status(500).json({ error: "Failed to delete P2 purchase order via bypass route" });
+  }
+});
+
 // Regular Customers Management
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -126,7 +179,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
 router.get('/:id/addresses', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
-    const addresses = await storage.getCustomerAddresses(customerId);
+    const addresses = await storage.getCustomerAddresses(customerId.toString());
     res.json(addresses);
   } catch (error) {
     console.error('Get customer addresses error:', error);
@@ -153,7 +206,7 @@ router.post('/:id/addresses', authenticateToken, async (req: Request, res: Respo
 router.get('/:id/communications', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
-    const communications = await storage.getCommunicationLogs(customerId);
+    const communications = await storage.getCommunicationLogs(customerId.toString());
     res.json(communications);
   } catch (error) {
     console.error('Get communication logs error:', error);

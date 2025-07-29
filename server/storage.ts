@@ -5,7 +5,7 @@ import {
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists,
+  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
   // Task tracker table
   taskItems,
   // Document management tables
@@ -63,6 +63,7 @@ import {
   type BomDefinition, type InsertBomDefinition,
   type BomItem, type InsertBomItem,
   type PurchaseReviewChecklist, type InsertPurchaseReviewChecklist,
+  type ManufacturersCertificate, type InsertManufacturersCertificate,
   // Task tracker types
   type TaskItem, type InsertTaskItem,
   // Document management types
@@ -3649,6 +3650,45 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(purchaseReviewChecklists)
       .where(eq(purchaseReviewChecklists.id, id));
+  }
+
+  // Manufacturer's Certificate of Conformance Methods
+  async getAllManufacturersCertificates(): Promise<ManufacturersCertificate[]> {
+    return await db
+      .select()
+      .from(manufacturersCertificates)
+      .orderBy(desc(manufacturersCertificates.createdAt));
+  }
+
+  async getManufacturersCertificate(id: number): Promise<ManufacturersCertificate | undefined> {
+    const [result] = await db
+      .select()
+      .from(manufacturersCertificates)
+      .where(eq(manufacturersCertificates.id, id));
+    return result || undefined;
+  }
+
+  async createManufacturersCertificate(data: InsertManufacturersCertificate): Promise<ManufacturersCertificate> {
+    const [result] = await db
+      .insert(manufacturersCertificates)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async updateManufacturersCertificate(id: number, data: Partial<InsertManufacturersCertificate>): Promise<ManufacturersCertificate> {
+    const [result] = await db
+      .update(manufacturersCertificates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(manufacturersCertificates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteManufacturersCertificate(id: number): Promise<void> {
+    await db
+      .delete(manufacturersCertificates)
+      .where(eq(manufacturersCertificates.id, id));
   }
 
   // Task Tracker Methods

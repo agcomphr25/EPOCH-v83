@@ -4,7 +4,8 @@ import { authenticateToken } from '../../middleware/auth';
 import {
   insertFormSchema,
   insertFormSubmissionSchema,
-  insertPurchaseReviewChecklistSchema
+  insertPurchaseReviewChecklistSchema,
+  insertManufacturersCertificateSchema
 } from '@shared/schema';
 
 const router = Router();
@@ -158,6 +159,70 @@ router.delete('/purchase-review-checklists/:id', async (req: Request, res: Respo
   } catch (error) {
     console.error('Delete purchase review checklist error:', error);
     res.status(500).json({ error: "Failed to delete purchase review checklist" });
+  }
+});
+
+// Manufacturer's Certificate of Conformance routes
+router.get('/manufacturers-certificates', async (req: Request, res: Response) => {
+  try {
+    const certificates = await storage.getAllManufacturersCertificates();
+    res.json(certificates);
+  } catch (error) {
+    console.error('Get manufacturers certificates error:', error);
+    res.status(500).json({ error: "Failed to fetch manufacturers certificates" });
+  }
+});
+
+router.get('/manufacturers-certificates/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const certificate = await storage.getManufacturersCertificate(id);
+    
+    if (!certificate) {
+      return res.status(404).json({ error: "Manufacturer's certificate not found" });
+    }
+    
+    res.json(certificate);
+  } catch (error) {
+    console.error('Get manufacturers certificate error:', error);
+    res.status(500).json({ error: "Failed to fetch manufacturers certificate" });
+  }
+});
+
+router.post('/manufacturers-certificates', async (req: Request, res: Response) => {
+  try {
+    const certificateData = insertManufacturersCertificateSchema.parse(req.body);
+    const newCertificate = await storage.createManufacturersCertificate(certificateData);
+    res.status(201).json(newCertificate);
+  } catch (error) {
+    console.error('Create manufacturers certificate error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create manufacturers certificate" });
+  }
+});
+
+router.put('/manufacturers-certificates/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCertificate = await storage.updateManufacturersCertificate(id, updates);
+    res.json(updatedCertificate);
+  } catch (error) {
+    console.error('Update manufacturers certificate error:', error);
+    res.status(500).json({ error: "Failed to update manufacturers certificate" });
+  }
+});
+
+router.delete('/manufacturers-certificates/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteManufacturersCertificate(id);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete manufacturers certificate error:', error);
+    res.status(500).json({ error: "Failed to delete manufacturers certificate" });
   }
 });
 

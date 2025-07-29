@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar } from "lucide-react";
+import { FileText, Download, Printer, ClipboardList, Package, Receipt, Barcode, Calendar, Award } from "lucide-react";
 import { Link } from "wouter";
 
 export default function P2Forms() {
@@ -78,6 +78,12 @@ export default function P2Forms() {
                 QC inspection and validation forms for P2 products
               </p>
               <div className="space-y-2">
+                <Link href="/manufacturers-certificate">
+                  <Button className="w-full justify-start" variant="outline">
+                    <Award className="h-4 w-4 mr-2" />
+                    Manufacturer's Certificate of Conformance
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <ClipboardList className="h-4 w-4 mr-2" />
                   QC Inspection Checklist

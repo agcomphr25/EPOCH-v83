@@ -1051,6 +1051,41 @@ export const insertPurchaseReviewChecklistSchema = createInsertSchema(purchaseRe
 export type InsertPurchaseReviewChecklist = z.infer<typeof insertPurchaseReviewChecklistSchema>;
 export type PurchaseReviewChecklist = typeof purchaseReviewChecklists.$inferSelect;
 
+// Manufacturer's Certificate of Conformance Table
+export const manufacturersCertificates = pgTable("manufacturers_certificates", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id"),
+  customerName: text("customer_name"),
+  customerAddress: text("customer_address"),
+  poNumber: text("po_number"),
+  partNumber: text("part_number"),
+  lotNumber: text("lot_number"),
+  formData: jsonb("form_data").notNull(),
+  createdBy: text("created_by"),
+  status: text("status").default("DRAFT").notNull(), // DRAFT, SUBMITTED, APPROVED, REJECTED
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertManufacturersCertificateSchema = createInsertSchema(manufacturersCertificates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  customerAddress: z.string().optional().nullable(),
+  poNumber: z.string().optional().nullable(),
+  partNumber: z.string().optional().nullable(),
+  lotNumber: z.string().optional().nullable(),
+  formData: z.record(z.any()),
+  createdBy: z.string().optional().nullable(),
+  status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']).default('DRAFT'),
+});
+
+export type InsertManufacturersCertificate = z.infer<typeof insertManufacturersCertificateSchema>;
+export type ManufacturersCertificate = typeof manufacturersCertificates.$inferSelect;
+
 // Layup Scheduler Tables
 export const molds = pgTable("molds", {
   id: serial("id").primaryKey(),

@@ -157,9 +157,9 @@ export default function RFQRiskAssessment() {
     onChange: (value: string) => void; 
     label: string; 
   }) => (
-    <div className="space-y-2">
+    <div className="space-y-3 pl-4">
       <Label className="text-sm font-medium">{label}</Label>
-      <RadioGroup value={value} onValueChange={onChange} className="flex gap-6">
+      <RadioGroup value={value} onValueChange={onChange} className="flex gap-8 pl-2">
         <div className="flex items-center space-x-2">
           <RadioGroupItem value="extreme" id={`${name}-extreme`} />
           <Label htmlFor={`${name}-extreme`} className="text-sm">Extreme</Label>
@@ -255,7 +255,7 @@ export default function RFQRiskAssessment() {
             <CardTitle>1. Internal Risks</CardTitle>
             <p className="text-sm text-gray-600">Score: Extreme - 17 pts, High - 3 pts, Medium - 1 pt, Low - 0 pt</p>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 px-6">
             <RiskRadioGroup
               name="trainedStaff"
               value={formData.trainedStaff}
@@ -320,7 +320,7 @@ export default function RFQRiskAssessment() {
             <CardTitle>2. External Risks</CardTitle>
             <p className="text-sm text-gray-600">Score: Extreme - 17 pts, High - 3 pts, Medium - 1 pts, Low - 0 pt</p>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 px-6">
             <RiskRadioGroup
               name="supplyChainDisruptions"
               value={formData.supplyChainDisruptions}

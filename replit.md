@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 29, 2025 - RFQ Risk Assessment Form Enhancement with Smart Risk Mitigation (COMPLETED)**
+- ✅ **Required Mitigation Actions**: Made all three mitigation action fields mandatory with red asterisk labels and validation
+- ✅ **Numeric Risk Reduction**: Added numeric input fields (0-50 range) next to each mitigation action for point-based risk reduction
+- ✅ **Real-Time Risk Calculation**: Implemented smart calculation showing Original Total Points, Total Risk Reduction, and Adjusted Risk Level
+- ✅ **Enhanced Layout Spacing**: Added proper left margin whitespace and improved spacing for Internal/External Risk sections without centering
+- ✅ **Form Validation**: Prevents saving/printing without completing all required mitigation actions
+- ✅ **Professional Workflow**: Complete risk assessment process that accounts for planned mitigation strategies in final risk determination
+
 **July 29, 2025 - P2 Purchase Orders Display Fix (COMPLETED)**
 - ✅ **Root Cause Resolution**: Fixed P2 Purchase Orders not displaying despite existing database data using bypass route pattern
 - ✅ **Bypass Route Implementation**: Created `/api/p2-purchase-orders-bypass` route to circumvent monolithic routing conflicts

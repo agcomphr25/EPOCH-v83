@@ -1450,8 +1450,12 @@ export default function CustomerManagement() {
                       <div
                         key={index}
                         className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                        onClick={() => {
-                          console.log('🔧 Suggestion clicked!', suggestion);
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('🔧 DIRECT CLICK HANDLER FIRED!', suggestion);
+                          console.log('🔧 Suggestion properties:', Object.keys(suggestion));
+                          alert(`Clicked: ${JSON.stringify(suggestion, null, 2)}`);
                           handleSuggestionSelect(suggestion);
                         }}
                       >

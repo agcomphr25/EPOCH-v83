@@ -31,7 +31,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.json({
       success: true,
       user: result.user,
-      token: result.token
+      sessionToken: result.sessionToken
     });
   } catch (error) {
     console.error('Login error:', error);

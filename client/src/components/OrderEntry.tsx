@@ -45,6 +45,7 @@ interface FeatureDefinition {
 }
 
 export default function OrderEntry() {
+  console.log("OrderEntry component rendering...");
   const { toast } = useToast();
   const [location] = useLocation();
 

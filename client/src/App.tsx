@@ -67,6 +67,54 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 
 function App() {
   console.log("App component is rendering...");
+  console.log("Environment:", import.meta.env.MODE);
+  console.log("Base URL:", import.meta.env.BASE_URL);
+  
+  // Add error boundary
+  const [error, setError] = React.useState<Error | null>(null);
+  
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Global error caught:", event.error);
+      setError(event.error);
+    };
+    
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      setError(new Error(event.reason));
+    };
+    
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Application Error</h1>
+          <p className="text-gray-700 mb-4">
+            An error occurred while loading the application:
+          </p>
+          <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">
+            {error.message}
+            {error.stack && "\n\nStack trace:\n" + error.stack}
+          </pre>
+          <button 
+            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            onClick={() => window.location.reload()}
+          >
+            Reload Application
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   try {
     return (

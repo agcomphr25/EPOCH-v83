@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deployment Debug Test</title>
+</head>
+<body>
+    <h1>Testing Deployment Issues</h1>
+    <div id="test-area">
+        <p>If you can see this, the basic HTML is working.</p>
+        <button onclick="testConsole()">Test Console</button>
+        <button onclick="testAPI()">Test API</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        console.log("Debug script loading...");
+        
+        function testConsole() {
+            console.log("Console test button clicked");
+            document.getElementById('results').innerHTML += '<p>Console test: OK</p>';
+        }
+        
+        async function testAPI() {
+            try {
+                console.log("Testing API call...");
+                const response = await fetch('/api/auth/session');
+                const data = await response.json();
+                console.log("API response:", data);
+                document.getElementById('results').innerHTML += '<p>API test: ' + JSON.stringify(data) + '</p>';
+            } catch (error) {
+                console.error("API test error:", error);
+                document.getElementById('results').innerHTML += '<p>API test error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Test for common issues
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            document.getElementById('results').innerHTML += '<p style="color: red;">Error: ' + e.error.message + '</p>';
+        });
+        
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+            document.getElementById('results').innerHTML += '<p style="color: red;">Promise rejection: ' + e.reason + '</p>';
+        });
+    </script>
+</body>
+</html>

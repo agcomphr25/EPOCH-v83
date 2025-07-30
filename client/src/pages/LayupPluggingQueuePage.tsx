@@ -29,11 +29,11 @@ export default function LayupPluggingQueuePage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Get all available orders from P1 layup queue
+  // Get all available orders from unified layup queue (same as scheduler)
   const { data: availableOrders = [] } = useQuery({
-    queryKey: ['/api/p1-layup-queue'],
+    queryKey: ['/api/layup-queue'],
     queryFn: async () => {
-      return await apiRequest('/api/p1-layup-queue');
+      return await apiRequest('/api/layup-queue');
     },
     refetchInterval: 30000,
   });

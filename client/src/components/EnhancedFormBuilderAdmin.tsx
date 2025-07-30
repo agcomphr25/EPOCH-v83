@@ -259,9 +259,7 @@ export default function EnhancedFormBuilderAdmin() {
 
     const fetchTables = async () => {
       try {
-        const response = await apiRequest('/api/enhanced-forms/schema', {
-          params: { category: formDef.categoryId }
-        });
+        const response = await apiRequest(`/api/enhanced-forms/schema?category=${formDef.categoryId}`);
         setTables(response.tables || []);
       } catch (error) {
         toast.error('Failed to load tables');

@@ -113,11 +113,21 @@ const initialFormData: CustomerFormData = {
 const CustomerFormFields = ({ 
   formData, 
   setFormData, 
-  formErrors 
+  formErrors,
+  handleCustomerAddressChange,
+  customerFormSuggestions,
+  showCustomerFormSuggestions,
+  isValidatingCustomerAddress,
+  handleCustomerFormSuggestionSelect
 }: { 
   formData: CustomerFormData;
   setFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
   formErrors: Record<string, string>;
+  handleCustomerAddressChange: (field: string, value: string) => void;
+  customerFormSuggestions: any[];
+  showCustomerFormSuggestions: boolean;
+  isValidatingCustomerAddress: boolean;
+  handleCustomerFormSuggestionSelect: (suggestion: any) => void;
 }) => (
   <div className="space-y-6 py-4">
     {/* Customer Information Section */}
@@ -256,13 +266,53 @@ const CustomerFormFields = ({
 
       <div className="space-y-2">
         <Label htmlFor="street" className="text-sm font-medium">Street Address</Label>
-        <Input
-          id="street"
-          value={formData.street}
-          onChange={(e) => setFormData(prev => ({ ...prev, street: e.target.value }))}
-          className={formErrors.street ? "border-red-500" : ""}
-          placeholder="123 Main Street"
-        />
+        <div className="relative">
+          <Input
+            id="street"
+            value={formData.street}
+            onChange={(e) => handleCustomerAddressChange('street', e.target.value)}
+            className={`${formErrors.street ? "border-red-500" : ""} ${isValidatingCustomerAddress ? "pr-10" : ""}`}
+            placeholder="123 Main Street"
+          />
+          {isValidatingCustomerAddress && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+            </div>
+          )}
+          
+          {/* Address Suggestions Dropdown */}
+          {showCustomerFormSuggestions && customerFormSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+              <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
+                Address Suggestions
+              </div>
+              {customerFormSuggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 transition-colors"
+                  onClick={() => handleCustomerFormSuggestionSelect(suggestion)}
+                >
+                  <div className="font-medium text-gray-900">
+                    {suggestion.text || suggestion.streetLine || suggestion.street_line || ''}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    SmartyStreets suggestion
+                  </div>
+                </div>
+              ))}
+              <div className="p-2 text-center">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {/* Handle close - will be managed by parent */}}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Close suggestions
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
         {formErrors.street && (
           <p className="text-sm text-red-500">{formErrors.street}</p>
         )}
@@ -274,7 +324,7 @@ const CustomerFormFields = ({
           <Input
             id="city"
             value={formData.city}
-            onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+            onChange={(e) => handleCustomerAddressChange('city', e.target.value)}
             className={formErrors.city ? "border-red-500" : ""}
             placeholder="City name"
           />
@@ -288,7 +338,7 @@ const CustomerFormFields = ({
           <Input
             id="state"
             value={formData.state}
-            onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value.toUpperCase().slice(0, 2) }))}
+            onChange={(e) => handleCustomerAddressChange('state', e.target.value.toUpperCase().slice(0, 2))}
             className={formErrors.state ? "border-red-500" : ""}
             placeholder="SC"
             maxLength={2}
@@ -305,7 +355,7 @@ const CustomerFormFields = ({
           <Input
             id="zipCode"
             value={formData.zipCode}
-            onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+            onChange={(e) => handleCustomerAddressChange('zipCode', e.target.value)}
             className={formErrors.zipCode ? "border-red-500" : ""}
             placeholder="29406"
           />
@@ -406,9 +456,14 @@ export default function CustomerManagement() {
     return matchesSearch && matchesFilter;
   });
 
-  // Address suggestions state
+  // Address suggestions state for separate address dialog
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Customer form address suggestions state
+  const [customerFormSuggestions, setCustomerFormSuggestions] = useState<any[]>([]);
+  const [showCustomerFormSuggestions, setShowCustomerFormSuggestions] = useState(false);
+  const [isValidatingCustomerAddress, setIsValidatingCustomerAddress] = useState(false);
   
   // Auto-fill address when street, city, state, or zipCode change
   const handleAddressFieldChange = async (field: string, value: string) => {
@@ -506,6 +561,109 @@ export default function CustomerManagement() {
     toast({
       title: "Address Selected",
       description: "All address fields have been populated.",
+      duration: 2000
+    });
+  };
+
+  // Handle customer form address field changes with SmartyStreets autocomplete
+  const handleCustomerAddressChange = async (field: string, value: string) => {
+    console.log('🔧 handleCustomerAddressChange called with:', field, value);
+    const updatedFormData = { ...formData, [field]: value };
+    setFormData(updatedFormData);
+    
+    // Trigger SmartyStreets autocomplete for street address
+    if (field === 'street' && value && value.length > 3) {
+      setIsValidatingCustomerAddress(true);
+      try {
+        const response = await fetch('/api/customers/address-autocomplete-bypass', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: value
+          })
+        });
+        
+        const data = await response.json();
+        console.log('🔧 SmartyStreets response for customer form:', data);
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+          setCustomerFormSuggestions(data.suggestions);
+          setShowCustomerFormSuggestions(true);
+        } else {
+          setCustomerFormSuggestions([]);
+          setShowCustomerFormSuggestions(false);
+        }
+      } catch (error) {
+        console.error('Customer address autocomplete error:', error);
+        setCustomerFormSuggestions([]);
+        setShowCustomerFormSuggestions(false);
+      } finally {
+        setIsValidatingCustomerAddress(false);
+      }
+    } else if (field === 'street') {
+      setCustomerFormSuggestions([]);
+      setShowCustomerFormSuggestions(false);
+    }
+  };
+
+  // Handle customer form suggestion selection
+  const handleCustomerFormSuggestionSelect = async (suggestion: any) => {
+    console.log('🔧 Customer form suggestion selected:', suggestion);
+    
+    // Parse the address from suggestion
+    const parsedAddress = parseAddressString(suggestion.text || suggestion.streetLine || '');
+    
+    // Try to get full address details using SmartyStreets Street API
+    try {
+      const response = await fetch('/api/customers/address-autocomplete-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: suggestion.text || suggestion.streetLine || '',
+          getFullDetails: true
+        })
+      });
+      
+      const data = await response.json();
+      console.log('🔧 Full address details:', data);
+      
+      if (data.fullAddress) {
+        // Use full address details if available
+        setFormData(prev => ({
+          ...prev,
+          street: data.fullAddress.delivery_line_1 || parsedAddress.street,
+          city: data.fullAddress.components?.city_name || parsedAddress.city,
+          state: data.fullAddress.components?.state_abbreviation || parsedAddress.state,
+          zipCode: data.fullAddress.components?.zipcode || parsedAddress.zipCode,
+        }));
+      } else {
+        // Fall back to parsed address
+        setFormData(prev => ({
+          ...prev,
+          street: parsedAddress.street,
+          city: parsedAddress.city,
+          state: parsedAddress.state,
+          zipCode: parsedAddress.zipCode,
+        }));
+      }
+    } catch (error) {
+      console.error('Error getting full address details:', error);
+      // Fall back to parsed address
+      setFormData(prev => ({
+        ...prev,
+        street: parsedAddress.street,
+        city: parsedAddress.city,
+        state: parsedAddress.state,
+        zipCode: parsedAddress.zipCode,
+      }));
+    }
+    
+    setShowCustomerFormSuggestions(false);
+    setCustomerFormSuggestions([]);
+    
+    toast({
+      title: "Address Selected",
+      description: "Address fields have been filled automatically.",
       duration: 2000
     });
   };
@@ -1019,6 +1177,11 @@ export default function CustomerManagement() {
                 formData={formData}
                 setFormData={setFormData}
                 formErrors={formErrors}
+                handleCustomerAddressChange={handleCustomerAddressChange}
+                customerFormSuggestions={customerFormSuggestions}
+                showCustomerFormSuggestions={showCustomerFormSuggestions}
+                isValidatingCustomerAddress={isValidatingCustomerAddress}
+                handleCustomerFormSuggestionSelect={handleCustomerFormSuggestionSelect}
               />
               <div className="flex justify-end gap-2 pt-6 border-t">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -1345,6 +1508,11 @@ export default function CustomerManagement() {
                 formData={formData}
                 setFormData={setFormData}
                 formErrors={formErrors}
+                handleCustomerAddressChange={handleCustomerAddressChange}
+                customerFormSuggestions={customerFormSuggestions}
+                showCustomerFormSuggestions={showCustomerFormSuggestions}
+                isValidatingCustomerAddress={isValidatingCustomerAddress}
+                handleCustomerFormSuggestionSelect={handleCustomerFormSuggestionSelect}
               />
             </TabsContent>
             

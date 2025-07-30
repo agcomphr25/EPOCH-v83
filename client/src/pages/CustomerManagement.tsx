@@ -894,6 +894,13 @@ export default function CustomerManagement() {
       customerType: customer.customerType,
       notes: customer.notes || '',
       isActive: customer.isActive,
+      // Address defaults for edit mode
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'United States',
+      addressType: 'both'
     });
     setFormErrors({});
     setIsEditDialogOpen(true);

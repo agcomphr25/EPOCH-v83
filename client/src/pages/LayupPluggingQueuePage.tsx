@@ -18,9 +18,24 @@ export default function LayupPluggingQueuePage() {
   const queryClient = useQueryClient();
   
   // Get current week's layup schedule assignments
-  const { data: currentSchedule = [] } = useQuery({
+  const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
     queryKey: ['/api/layup-schedule'],
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
+
+  // Enhanced debugging
+  React.useEffect(() => {
+    console.log('🔍 LAYUP QUEUE DEBUG:');
+    console.log('- Schedule entries:', (currentSchedule as any[]).length);
+    console.log('- Current week dates:', currentWeekDates.length);
+    console.log('- Orders available:', orders.length);
+    
+    if ((currentSchedule as any[]).length > 0) {
+      console.log('- First schedule entry:', (currentSchedule as any[])[0]);
+    } else {
+      console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
+    }
+  }, [currentSchedule, currentWeekDates, orders]);
 
   // Get orders queued for barcode department (next department after layup)
   const { data: allOrders = [] } = useQuery({

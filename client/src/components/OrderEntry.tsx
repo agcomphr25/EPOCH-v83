@@ -1128,7 +1128,8 @@ export default function OrderEntry() {
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'action_inlet' || f.id === 'action_inlet')
-                          ?.options?.map((option) => (
+                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -1150,7 +1151,8 @@ export default function OrderEntry() {
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'barrel_inlet' || f.id === 'barrel_inlet')
-                          ?.options?.map((option) => (
+                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -1185,11 +1187,13 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return lopFeature.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ));
+                          return lopFeature.options
+                            .filter(option => option.value && option.value.trim() !== '')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
                         })()}
                       </SelectContent>
                     </Select>
@@ -1219,11 +1223,13 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return textureFeature.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ));
+                          return textureFeature.options
+                            .filter(option => option.value && option.value.trim() !== '')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
                         })()}
                       </SelectContent>
                     </Select>
@@ -1247,7 +1253,9 @@ export default function OrderEntry() {
                           </div>;
                         }
 
-                        return otherOptionsFeature.options.map((option) => (
+                        return otherOptionsFeature.options
+                          .filter(option => option.value && option.value.trim() !== '')
+                          .map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
                               id={`other-option-${option.value}`}
@@ -1315,7 +1323,8 @@ export default function OrderEntry() {
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'bottom_metal' || f.id === 'bottom_metal')
-                          ?.options?.map((option) => (
+                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -1350,11 +1359,13 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return qdFeature.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ));
+                          return qdFeature.options
+                            .filter(option => option.value && option.value.trim() !== '')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
                         })()}
                       </SelectContent>
                     </Select>
@@ -1378,7 +1389,9 @@ export default function OrderEntry() {
                           </div>;
                         }
 
-                        return railsFeature.options.map((option) => (
+                        return railsFeature.options
+                          .filter(option => option.value && option.value.trim() !== '')
+                          .map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
                               id={`rail-option-${option.value}`}
@@ -1435,11 +1448,13 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return swivelFeature.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ));
+                          return swivelFeature.options
+                            .filter(option => option.value && option.value.trim() !== '')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
                         })()}
                       </SelectContent>
                     </Select>
@@ -1480,11 +1495,14 @@ export default function OrderEntry() {
                           paintFeatures.forEach(feature => {
                             if (feature.options) {
                               feature.options.forEach(option => {
-                                allOptions.push({
-                                  value: option.value,
-                                  label: `${feature.displayName || feature.name} - ${option.label}`,
-                                  category: feature.displayName || feature.name
-                                });
+                                // Only add options with valid, non-empty values
+                                if (option.value && option.value.trim() !== '') {
+                                  allOptions.push({
+                                    value: option.value,
+                                    label: `${feature.displayName || feature.name} - ${option.label}`,
+                                    category: feature.displayName || feature.name
+                                  });
+                                }
                               });
                             }
                           });

@@ -290,7 +290,9 @@ export default function CustomerManagement() {
   
   // Auto-fill address when street, city, state, or zipCode change
   const handleAddressFieldChange = async (field: string, value: string) => {
+    console.log('🔧 handleAddressFieldChange called with:', field, value);
     const updatedAddress = { ...addressFormData, [field]: value };
+    console.log('🔧 Updated address:', updatedAddress);
     setAddressFormData(updatedAddress);
     
     // Trigger validation if we have at least a street address
@@ -330,12 +332,13 @@ export default function CustomerManagement() {
     console.log('🔧 handleSuggestionSelect called with:', suggestion);
     console.log('🔧 Current addressFormData before update:', addressFormData);
     
+    // Handle data from /api/validate-address endpoint which returns: { street, city, state, zipCode }
     const newAddressData = {
       ...addressFormData,
-      street: suggestion.streetLine || suggestion.street_line || suggestion.street || '',
+      street: suggestion.street || '',
       city: suggestion.city || '',
       state: suggestion.state || '',
-      zipCode: suggestion.zipCode || suggestion.zipcode || ''
+      zipCode: suggestion.zipCode || ''
     };
     
     console.log('🔧 New address data being set:', newAddressData);
@@ -1414,12 +1417,12 @@ export default function CustomerManagement() {
                         onClick={() => handleSuggestionSelect(suggestion)}
                       >
                         <div className="font-medium text-gray-900">
-                          {suggestion.streetLine || suggestion.street_line || suggestion.street || suggestion.text}
+                          {suggestion.street || ''}
                         </div>
                         <div className="text-sm text-gray-600">
                           {(suggestion.city && suggestion.state) ? 
-                            `${suggestion.city}, ${suggestion.state}${suggestion.zipCode || suggestion.zipcode ? ' ' + (suggestion.zipCode || suggestion.zipcode) : ''}` :
-                            (suggestion.text || 'Address information')
+                            `${suggestion.city}, ${suggestion.state}${suggestion.zipCode ? ' ' + suggestion.zipCode : ''}` :
+                            'Address information'
                           }
                         </div>
                       </div>

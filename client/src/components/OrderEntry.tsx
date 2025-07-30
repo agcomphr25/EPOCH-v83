@@ -970,7 +970,7 @@ export default function OrderEntry() {
                   <Label>Stock Model</Label>
                   <Select 
                     key={`stock-model-${renderKey}-${modelId || 'empty'}`}
-                    value={modelId} 
+                    value={modelId || undefined} 
                     onValueChange={setModelId}
                   >
                     <SelectTrigger>
@@ -1101,7 +1101,7 @@ export default function OrderEntry() {
                     <Label>Handedness</Label>
                     <Select 
                       key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
-                      value={features.handedness || ''} 
+                      value={features.handedness || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
                     >
                       <SelectTrigger>
@@ -1119,7 +1119,7 @@ export default function OrderEntry() {
                     <Label>Action Inlet</Label>
                     <Select 
                       key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
-                      value={features.action_inlet || ''} 
+                      value={features.action_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
                     >
                       <SelectTrigger>
@@ -1141,7 +1141,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Barrel Inlet</Label>
                     <Select 
-                      value={features.barrel_inlet || ''} 
+                      value={features.barrel_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, barrel_inlet: value }))}
                     >
                       <SelectTrigger>
@@ -1163,7 +1163,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>LOP Length Of Pull</Label>
                     <Select 
-                      value={features.length_of_pull || ''} 
+                      value={features.length_of_pull || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, length_of_pull: value }))}
                     >
                       <SelectTrigger>
@@ -1199,7 +1199,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Texture</Label>
                     <Select 
-                      value={features.texture_options || ''} 
+                      value={features.texture_options || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, texture_options: value }))}
                     >
                       <SelectTrigger>
@@ -1287,7 +1287,7 @@ export default function OrderEntry() {
                     <Label>Action Length</Label>
                     <Select 
                       key={`action-length-${renderKey}-${features.action_length || 'empty'}`}
-                      value={features.action_length || ''} 
+                      value={features.action_length || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
                     >
                       <SelectTrigger>
@@ -1306,7 +1306,7 @@ export default function OrderEntry() {
                     <Label>Bottom Metal</Label>
                     <Select 
                       key={`bottom-metal-${renderKey}-${features.bottom_metal || 'empty'}`}
-                      value={features.bottom_metal || ''} 
+                      value={features.bottom_metal || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
                     >
                       <SelectTrigger>
@@ -1329,7 +1329,7 @@ export default function OrderEntry() {
                     <Label>QD Quick Detach Cups</Label>
                     <Select 
                       key={`qd-accessory-${renderKey}-${features.qd_accessory || 'empty'}`}
-                      value={features.qd_accessory || ''} 
+                      value={features.qd_accessory || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, qd_accessory: value }))}
                     >
                       <SelectTrigger>
@@ -1414,7 +1414,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Swivel Studs</Label>
                     <Select 
-                      value={features.swivel_studs || ''} 
+                      value={features.swivel_studs || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, swivel_studs: value }))}
                     >
                       <SelectTrigger>
@@ -1449,7 +1449,7 @@ export default function OrderEntry() {
                   <div>
                     <Label>Paint Options</Label>
                     <Select 
-                      value={features.paint_options || ''} 
+                      value={features.paint_options || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, paint_options: value }))}
                     >
                       <SelectTrigger>

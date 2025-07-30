@@ -493,6 +493,172 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
+  // CRITICAL PRODUCTION FIX: Override Order ID generation and draft creation to prevent duplicate IDs
+  console.log('🚨 REGISTERING CRITICAL ORDER ID FIX ROUTES');
+  
+  // Order ID generation endpoint - DIRECT IMPLEMENTATION to prevent duplicates
+  app.post('/api/orders/generate-id', async (req, res) => {
+    try {
+      console.log('🚨 CRITICAL FIX: Direct Order ID generation called');
+      
+      const { db } = await import('../../db');
+      const { orderIdReservations, orderDrafts } = await import('../../schema');
+      const { desc, eq, and, gt, lt, like } = await import('drizzle-orm');
+      
+      const now = new Date();
+      const currentPrefix = 'AG'; // Current year-month prefix
+      
+      console.log('🚨 Starting direct atomic Order ID generation');
+      
+      // Clean up expired reservations first
+      try {
+        const cleanupResult = await db.delete(orderIdReservations).where(
+          and(
+            eq(orderIdReservations.isUsed, false),
+            lt(orderIdReservations.expiresAt, now)
+          )
+        );
+        console.log('🚨 Cleaned up expired reservations');
+      } catch (cleanupError) {
+        console.warn('🚨 Cleanup error (non-critical):', cleanupError);
+      }
+      
+      // Retry loop for handling race conditions
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          console.log(`🚨 Attempt ${attempt + 1} for Order ID generation`);
+          
+          // Find the highest sequence number for current year-month prefix
+          const [orderResult, reservationResult] = await Promise.all([
+            // Get highest sequence from actual orders
+            db
+              .select({ orderId: orderDrafts.orderId })
+              .from(orderDrafts)
+              .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+              .orderBy(desc(orderDrafts.orderId))
+              .limit(1),
+            
+            // Get highest sequence from active reservations
+            db
+              .select({ sequenceNumber: orderIdReservations.sequenceNumber })
+              .from(orderIdReservations)
+              .where(
+                and(
+                  eq(orderIdReservations.yearMonthPrefix, currentPrefix),
+                  eq(orderIdReservations.isUsed, false),
+                  gt(orderIdReservations.expiresAt, now)
+                )
+              )
+              .orderBy(desc(orderIdReservations.sequenceNumber))
+              .limit(1)
+          ]);
+
+          let maxSequence = 0;
+
+          // Check highest sequence from orders
+          if (orderResult.length > 0) {
+            const orderId = orderResult[0].orderId;
+            const match = orderId.match(/^AG(\d+)$/);
+            if (match) {
+              maxSequence = Math.max(maxSequence, parseInt(match[1], 10));
+            }
+          }
+
+          // Check highest sequence from active reservations
+          if (reservationResult.length > 0) {
+            maxSequence = Math.max(maxSequence, reservationResult[0].sequenceNumber);
+          }
+
+          console.log(`🚨 Max sequence found: ${maxSequence}`);
+
+          // Generate next sequence number
+          const nextSequence = maxSequence + 1;
+          const nextOrderId = `${currentPrefix}${nextSequence}`;
+
+          console.log(`🚨 Attempting to reserve Order ID: ${nextOrderId}`);
+
+          // Atomically reserve the Order ID using INSERT (will fail if duplicate)
+          const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
+          
+          const insertResult = await db.insert(orderIdReservations).values({
+            orderId: nextOrderId,
+            yearMonthPrefix: currentPrefix,
+            sequenceNumber: nextSequence,
+            reservedAt: now,
+            expiresAt: expiresAt,
+            isUsed: false,
+          }).returning();
+
+          console.log(`🚨 SUCCESS: Reserved Order ID: ${nextOrderId} (expires: ${expiresAt.toISOString()})`);
+          console.log(`🚨 Insert result:`, JSON.stringify(insertResult, null, 2));
+          
+          res.json({ orderId: nextOrderId });
+          return;
+
+        } catch (insertError: any) {
+          console.error(`🚨 Insert error on attempt ${attempt + 1}:`, insertError);
+          
+          // If unique constraint violation, retry with next sequence
+          if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('unique')) {
+            console.log(`🚨 Order ID conflict on attempt ${attempt + 1}, retrying...`);
+            continue;
+          }
+          throw insertError;
+        }
+      }
+
+      // If all retries failed, fall back to timestamp-based ID
+      const fallbackId = currentPrefix + String(Date.now() % 10000).padStart(4, '0');
+      console.warn(`🚨 All Order ID generation attempts failed, using fallback: ${fallbackId}`);
+      res.json({ orderId: fallbackId });
+
+    } catch (error) {
+      console.error('🚨 CRITICAL ERROR: Direct Order ID generation failed:', error);
+      console.error('🚨 ERROR STACK:', error.stack);
+      res.status(500).json({ error: "Failed to generate order ID" });
+    }
+  });
+
+  // Order draft creation endpoint - MUST mark Order ID as used
+  app.post('/api/orders/draft', async (req, res) => {
+    try {
+      console.log('🚨 CRITICAL FIX: Order draft creation called');
+      console.log('🚨 Request body:', JSON.stringify(req.body, null, 2));
+      
+      const { insertOrderDraftSchema } = await import('../../schema');
+      const { storage } = await import('../../storage');
+      
+      const result = insertOrderDraftSchema.parse(req.body);
+      console.log('🚨 CRITICAL FIX: Parsed result:', JSON.stringify(result, null, 2));
+      
+      // Check if draft already exists with this orderId (for editing existing orders)
+      const existingDraft = await storage.getOrderDraft(result.orderId);
+      console.log('🚨 CRITICAL FIX: Existing draft found:', existingDraft ? 'Yes' : 'No');
+      
+      if (existingDraft) {
+        console.log('🚨 CRITICAL FIX: Existing draft status:', existingDraft.status);
+        // Update existing draft
+        const updatedDraft = await storage.updateOrderDraft(result.orderId, result);
+        console.log('🚨 CRITICAL FIX: Updated existing draft');
+        res.json(updatedDraft);
+      } else {
+        // Create new draft with the provided order ID
+        console.log('🚨 CRITICAL FIX: Creating new draft with order ID:', result.orderId);
+        const draft = await storage.createOrderDraft(result);
+        console.log('🚨 CRITICAL FIX: Created new draft:', draft.id);
+        
+        // CRITICAL: Mark reserved Order ID as used when order is actually created
+        await storage.markOrderIdAsUsed(result.orderId);
+        console.log('🚨 CRITICAL FIX: Marked Order ID as used:', result.orderId);
+        
+        res.json(draft);
+      }
+    } catch (error) {
+      console.error('🚨 CRITICAL ERROR: Order draft creation failed:', error);
+      res.status(500).json({ error: "Failed to create order draft" });
+    }
+  });
+
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

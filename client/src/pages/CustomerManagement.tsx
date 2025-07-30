@@ -71,6 +71,13 @@ type CustomerFormData = {
   customerType: string;
   notes: string;
   isActive: boolean;
+  // Address fields
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  addressType: 'shipping' | 'billing' | 'both';
 };
 
 type AddressFormData = {
@@ -91,7 +98,14 @@ const initialFormData: CustomerFormData = {
   company: '',
   customerType: 'standard',
   notes: '',
-  isActive: true
+  isActive: true,
+  // Address defaults
+  street: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  country: 'United States',
+  addressType: 'both'
 };
 
 // Move CustomerFormFields outside the main component to prevent cursor reset
@@ -207,6 +221,106 @@ const CustomerFormFields = ({
         <SelectContent>
           <SelectItem value="active">Active</SelectItem>
           <SelectItem value="inactive">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {/* Address Section Header */}
+    <div className="col-span-4 pt-4 border-t">
+      <div className="flex items-center gap-2 mb-4">
+        <MapPin className="h-4 w-4 text-gray-500" />
+        <h3 className="text-sm font-medium text-gray-700">Address Information</h3>
+      </div>
+    </div>
+
+    {/* Address Type */}
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="addressType" className="text-right">Address Type</Label>
+      <Select 
+        value={formData.addressType} 
+        onValueChange={(value: 'shipping' | 'billing' | 'both') => setFormData(prev => ({ ...prev, addressType: value }))}
+      >
+        <SelectTrigger className="col-span-3">
+          <SelectValue placeholder="Select address type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="shipping">Shipping Only</SelectItem>
+          <SelectItem value="billing">Billing Only</SelectItem>
+          <SelectItem value="both">Both Shipping & Billing</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {/* Street Address with SmartyStreets Autocomplete */}
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="street" className="text-right">Street Address</Label>
+      <div className="col-span-3">
+        <Input
+          id="street"
+          value={formData.street}
+          onChange={(e) => setFormData(prev => ({ ...prev, street: e.target.value }))}
+          className={formErrors.street ? "border-red-500" : ""}
+          placeholder="123 Main Street"
+        />
+        {formErrors.street && (
+          <p className="text-sm text-red-500 mt-1">{formErrors.street}</p>
+        )}
+      </div>
+    </div>
+
+    {/* City */}
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="city" className="text-right">City</Label>
+      <div className="col-span-3">
+        <Input
+          id="city"
+          value={formData.city}
+          onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+          className={formErrors.city ? "border-red-500" : ""}
+          placeholder="City name"
+        />
+        {formErrors.city && (
+          <p className="text-sm text-red-500 mt-1">{formErrors.city}</p>
+        )}
+      </div>
+    </div>
+
+    {/* State and ZIP Code */}
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="state" className="text-right">State / ZIP</Label>
+      <div className="col-span-3 flex gap-2">
+        <Input
+          id="state"
+          value={formData.state}
+          onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+          className={`flex-1 ${formErrors.state ? "border-red-500" : ""}`}
+          placeholder="SC"
+          maxLength={2}
+        />
+        <Input
+          id="zipCode"
+          value={formData.zipCode}
+          onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+          className={`w-32 ${formErrors.zipCode ? "border-red-500" : ""}`}
+          placeholder="29406"
+        />
+      </div>
+    </div>
+
+    {/* Country */}
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="country" className="text-right">Country</Label>
+      <Select 
+        value={formData.country} 
+        onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
+      >
+        <SelectTrigger className="col-span-3">
+          <SelectValue placeholder="Select country" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="United States">United States</SelectItem>
+          <SelectItem value="Canada">Canada</SelectItem>
+          <SelectItem value="Other">Other</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -388,19 +502,50 @@ export default function CustomerManagement() {
     });
   };
 
-  // Create customer mutation
+  // Create customer mutation with address support
   const createCustomerMutation = useMutation({
-    mutationFn: (data: CustomerFormData) => apiRequest('/api/customers', {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: async (data: CustomerFormData) => {
+      // Create customer first
+      const customer = await apiRequest('/api/customers', {
+        method: 'POST',
+        body: {
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          company: data.company,
+          customerType: data.customerType,
+          notes: data.notes,
+          isActive: data.isActive,
+        },
+      });
+
+      // Create address if address fields are provided
+      if (data.street && data.city && data.state) {
+        await apiRequest('/api/addresses', {
+          method: 'POST',
+          body: {
+            customerId: customer.id.toString(),
+            street: data.street,
+            city: data.city,
+            state: data.state,
+            zipCode: data.zipCode || '',
+            country: data.country,
+            type: data.addressType,
+            isDefault: true,
+          },
+        });
+      }
+
+      return customer;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
       setIsCreateDialogOpen(false);
       resetForm();
       toast({
         title: "Success",
-        description: "Customer created successfully",
+        description: "Customer and address created successfully",
       });
     },
     onError: (error: any) => {

@@ -19,23 +19,39 @@ export default function LayupPluggingQueuePage() {
   
   // Get current week's layup schedule assignments
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
-    queryKey: ['/api/layup-schedule'],
+    queryKey: ['layup-schedule'],
+    queryFn: async () => {
+      const response = await fetch('/api/layup-schedule');
+      if (!response.ok) {
+        throw new Error('Failed to fetch layup schedule');
+      }
+      return response.json();
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Enhanced debugging
   React.useEffect(() => {
     console.log('🔍 LAYUP QUEUE DEBUG:');
-    console.log('- Schedule entries:', (currentSchedule as any[]).length);
+    console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
     console.log('- Current week dates:', currentWeekDates.length);
     console.log('- Orders available:', orders.length);
+    console.log('- Schedule loading:', scheduleLoading);
     
-    if ((currentSchedule as any[]).length > 0) {
-      console.log('- First schedule entry:', (currentSchedule as any[])[0]);
+    if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
+      console.log('- First schedule entry:', currentSchedule[0]);
+      console.log('- Sample scheduled dates:', currentSchedule.slice(0, 3).map((s: any) => ({
+        orderId: s.orderId,
+        scheduledDate: s.scheduledDate,
+        dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
+      })));
     } else {
       console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
+      console.log('- Current schedule data:', currentSchedule);
     }
-  }, [currentSchedule, currentWeekDates, orders]);
+    
+    console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
+  }, [currentSchedule, currentWeekDates, orders, scheduleLoading]);
 
   // Get orders queued for barcode department (next department after layup)
   const { data: allOrders = [] } = useQuery({
@@ -63,15 +79,35 @@ export default function LayupPluggingQueuePage() {
 
   // Get current week scheduled orders grouped by date
   const currentWeekOrdersByDate = useMemo(() => {
+    if (!Array.isArray(currentSchedule) || currentSchedule.length === 0) {
+      console.log('🔍 No schedule data available for grouping');
+      return {};
+    }
+
     const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
+    console.log('🔍 Week date strings for filtering:', weekDateStrings);
     
-    const weekOrders = (currentSchedule as any[]).filter((scheduleItem: any) => {
+    const weekOrders = currentSchedule.filter((scheduleItem: any) => {
+      if (!scheduleItem.scheduledDate) return false;
       const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-      return weekDateStrings.includes(scheduledDate);
+      const isInWeek = weekDateStrings.includes(scheduledDate);
+      if (isInWeek) {
+        console.log('🔍 Found schedule item for current week:', {
+          orderId: scheduleItem.orderId,
+          scheduledDate: scheduledDate,
+          originalDate: scheduleItem.scheduledDate
+        });
+      }
+      return isInWeek;
     }).map((scheduleItem: any) => {
       const order = orders.find((o: any) => o.orderId === scheduleItem.orderId);
+      if (!order) {
+        console.log('🔍 Warning: Schedule item has no matching order:', scheduleItem.orderId);
+      }
       return { ...order, ...scheduleItem };
     }).filter((order: any) => order.orderId);
+
+    console.log('🔍 Week orders found:', weekOrders.length);
 
     // Group orders by date
     const grouped: {[key: string]: any[]} = {};
@@ -83,6 +119,7 @@ export default function LayupPluggingQueuePage() {
       });
     });
 
+    console.log('🔍 Grouped orders by date:', grouped);
     return grouped;
   }, [currentSchedule, orders, currentWeekDates]);
 
@@ -93,12 +130,25 @@ export default function LayupPluggingQueuePage() {
 
   // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {
+    if (!Array.isArray(currentSchedule)) {
+      return 0;
+    }
+
     const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
+    console.log('🔍 Next week date strings:', nextWeekDateStrings);
     
-    return (currentSchedule as any[]).filter((scheduleItem: any) => {
+    const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
+      if (!scheduleItem.scheduledDate) return false;
       const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-      return nextWeekDateStrings.includes(scheduledDate);
-    }).length;
+      const isNextWeek = nextWeekDateStrings.includes(scheduledDate);
+      if (isNextWeek) {
+        console.log('🔍 Found next week order:', scheduleItem.orderId, scheduledDate);
+      }
+      return isNextWeek;
+    });
+
+    console.log('🔍 Next week layup count:', nextWeekOrders.length);
+    return nextWeekOrders.length;
   }, [currentSchedule, nextWeekDates]);
 
   // Calculate barcode queue count (orders that completed layup/plugging)

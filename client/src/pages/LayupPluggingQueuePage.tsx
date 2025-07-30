@@ -11,10 +11,265 @@ import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
+import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
+
+// Queue Order Item Component - simplified version of DraggableOrderItem for display only
+function QueueOrderItem({ order, getModelDisplayName, features, processedOrders }: { 
+  order: any, 
+  getModelDisplayName?: (modelId: string) => string, 
+  features?: any[], 
+  processedOrders?: any[] 
+}) {
+  // Determine material type for styling
+  const getMaterialType = (modelId: string) => {
+    if (modelId.startsWith('cf_')) return 'CF';
+    if (modelId.startsWith('fg_')) return 'FG';
+    if (modelId.includes('carbon')) return 'CF';
+    if (modelId.includes('fiberglass')) return 'FG';
+    return null;
+  };
+  
+  const modelId = order.stockModelId || order.modelId;
+  const materialType = getMaterialType(modelId || '');
+  
+  // Determine card styling based on source and material
+  const getCardStyling = () => {
+    if (order.source === 'p1_purchase_order') {
+      return {
+        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
+        text: 'text-green-800 dark:text-green-200'
+      };
+    } else if (order.source === 'production_order') {
+      return {
+        bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
+        text: 'text-orange-800 dark:text-orange-200'
+      };
+    } else if (materialType === 'FG') {
+      return {
+        bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
+        text: 'text-white dark:text-blue-100'
+      };
+    } else {
+      return {
+        bg: 'bg-blue-100 dark:bg-blue-800/50 hover:bg-blue-200 dark:hover:bg-blue-800/70 border-2 border-blue-300 dark:border-blue-600',
+        text: 'text-blue-800 dark:text-blue-200'
+      };
+    }
+  };
+  
+  const cardStyling = getCardStyling();
+
+  return (
+    <div className={`p-3 mb-2 min-h-[3rem] ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200`}>
+      <div className={`${cardStyling.text} text-base font-bold text-center flex flex-col items-center justify-center h-full`}>
+        <div className="flex items-center font-bold">
+          {getDisplayOrderId(order) || 'No ID'}
+          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
+          {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
+        </div>
+        
+        {/* Show stock model display name with material type */}
+        {(() => {
+          if (!getModelDisplayName || !modelId) return null;
+          
+          const displayName = getModelDisplayName(modelId);
+          
+          return (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              {materialType && <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">{materialType}</span>}
+              {displayName}
+            </div>
+          );
+        })()}
+        
+        {/* Show Action Length Display */}
+        {(() => {
+          const modelId = order.stockModelId || order.modelId;
+          const isAPR = modelId && modelId.toLowerCase().includes('apr');
+          
+          // For APR orders, show both action type AND action length
+          if (isAPR) {
+            const getAPRActionDisplay = (orderFeatures: any) => {
+              if (!orderFeatures) return null;
+              
+              let actionType = orderFeatures.action_inlet;
+              if (!actionType) {
+                actionType = orderFeatures.action;
+              }
+              
+              let actionLength = orderFeatures.action_length;
+              if (!actionLength || actionLength === 'none') {
+                if (actionType && actionType.includes('short')) actionLength = 'SA';
+                else if (actionType && actionType.includes('long')) actionLength = 'LA';
+                else actionLength = 'SA';
+              }
+              
+              const lengthMap: {[key: string]: string} = {
+                'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+                'long': 'LA', 'medium': 'MA', 'short': 'SA',
+                'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+              };
+              
+              const actionLengthAbbr = lengthMap[actionLength] || actionLength;
+              
+              if (!actionType || actionType === 'none') {
+                return actionLengthAbbr;
+              }
+              
+              const actionMap: {[key: string]: string} = {
+                'anti_ten_hunter_def': 'Anti-X Hunter',
+                'apr': 'APR',
+                'rem_700': 'Rem 700',
+                'tikka': 'Tikka',
+                'savage': 'Savage'
+              };
+              
+              const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+              
+              return `${actionLengthAbbr} ${actionDisplay}`;
+            };
+            
+            const aprActionDisplay = getAPRActionDisplay(order.features);
+            
+            return aprActionDisplay ? (
+              <div className="text-xs opacity-80 mt-0.5 font-medium">
+                {aprActionDisplay}
+              </div>
+            ) : null;
+          }
+          
+          // For non-APR orders, show action length
+          const getActionInletDisplayNonAPR = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+            
+            let actionLengthValue = orderFeatures.action_length;
+            
+            if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
+              const actionInlet = orderFeatures.action_inlet;
+              
+              const inletToLengthMap: {[key: string]: string} = {
+                'anti_ten_hunter_def': 'SA',
+                'remington_700': 'SA',
+                'remington_700_long': 'LA',
+                'rem_700': 'SA',
+                'rem_700_short': 'SA',
+                'rem_700_long': 'LA', 
+                'tikka_t3': 'SA',
+                'tikka_short': 'SA',
+                'tikka_long': 'LA',
+                'savage_short': 'SA',
+                'savage_long': 'LA',
+                'savage_110': 'LA',
+                'winchester_70': 'LA',
+                'howa_1500': 'SA',
+                'bergara_b14': 'SA',
+                'carbon_six_medium': 'MA'
+              };
+              
+              actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
+            }
+            
+            if (!actionLengthValue || actionLengthValue === 'none') return null;
+            
+            const displayMap: {[key: string]: string} = {
+              'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+              'long': 'LA', 'medium': 'MA', 'short': 'SA',
+              'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+            };
+            
+            return displayMap[actionLengthValue] || actionLengthValue;
+          };
+          
+          const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
+          
+          return actionInletDisplayNonAPR ? (
+            <div className="text-xs opacity-80 mt-0.5 font-medium">
+              {actionInletDisplayNonAPR}
+            </div>
+          ) : null;
+        })()}
+
+        {/* Show LOP Adjustment Status */}
+        {(() => {
+          const lopOrder = processedOrders?.find(o => o.orderId === order.orderId) || identifyLOPOrders([order])[0];
+          const lopStatus = getLOPStatus(lopOrder);
+          
+          if (lopStatus.status === 'none') return null;
+          
+          return (
+            <div className="text-xs mt-1">
+              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                lopStatus.status === 'immediate' 
+                  ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  : lopStatus.status === 'scheduled'
+                  ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                  : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+              }`}>
+                {lopStatus.status === 'scheduled' && '📅 '}
+                {lopStatus.status === 'deferred' && '⏰ '}
+                LOP {lopStatus.status.toUpperCase()}
+              </span>
+            </div>
+          );
+        })()}
+        
+        {/* Show Heavy Fill if selected */}
+        {(() => {
+          const getHeavyFillDisplay = (orderFeatures: any) => {
+            if (!orderFeatures) return null;
+            
+            const otherOptions = orderFeatures.other_options;
+            if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
+              return 'Heavy Fill';
+            }
+            
+            const heavyFillValue = orderFeatures.heavy_fill || 
+                                   orderFeatures.heavyFill || 
+                                   orderFeatures.heavy_fill_option ||
+                                   orderFeatures['heavy-fill'];
+            
+            if (heavyFillValue === 'true' || 
+                heavyFillValue === true || 
+                heavyFillValue === 'yes' ||
+                heavyFillValue === 'heavy_fill') {
+              return 'Heavy Fill';
+            }
+            
+            return null;
+          };
+          
+          const heavyFillDisplay = getHeavyFillDisplay(order.features);
+          
+          return heavyFillDisplay ? (
+            <div className="text-xs mt-0.5">
+              <span className="bg-orange-200 dark:bg-orange-700 px-1 rounded text-xs font-bold">
+                {heavyFillDisplay}
+              </span>
+            </div>
+          ) : null;
+        })()}
+      </div>
+    </div>
+  );
+}
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const queryClient = useQueryClient();
+  
+  // Use the same data source as LayupScheduler
+  const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  
+  // Apply LOP processing exactly like LayupScheduler
+  const processedOrders = useMemo(() => {
+    if (availableOrders.length === 0) return [];
+    
+    const lopOrders = identifyLOPOrders(availableOrders as any[]);
+    const scheduledOrders = scheduleLOPAdjustments(lopOrders);
+    
+    return scheduledOrders;
+  }, [availableOrders]);
   
   // Get current week's layup schedule assignments
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
@@ -27,15 +282,6 @@ export default function LayupPluggingQueuePage() {
       return response.json();
     },
     refetchInterval: 30000, // Refresh every 30 seconds
-  });
-
-  // Get all available orders from unified layup queue (same as scheduler)
-  const { data: availableOrders = [] } = useQuery({
-    queryKey: ['/api/layup-queue'],
-    queryFn: async () => {
-      return await apiRequest('/api/layup-queue');
-    },
-    refetchInterval: 30000,
   });
 
   // Get orders queued for barcode department (next department after layup)
@@ -68,7 +314,7 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
   }, []);
 
-  // Get current week scheduled orders grouped by date
+  // Get current week scheduled orders grouped by date - using processed orders
   const currentWeekOrdersByDate = useMemo(() => {
     if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
       console.log('🔍 No schedule data available for grouping. Schedule length:', (currentSchedule as any[]).length);
@@ -101,24 +347,35 @@ export default function LayupPluggingQueuePage() {
             originalDate: scheduleItem.scheduledDate
           });
 
-          // Find matching order from available orders
-          const matchingOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
+          // Find matching order from processed orders (includes LOP processing)
+          const matchingOrder = processedOrders.find((o: any) => o.orderId === scheduleItem.orderId);
           
           if (matchingOrder) {
-            // Use the full order data with schedule date
+            // Use the full processed order data with schedule date
             const mergedOrder = { 
               ...matchingOrder, 
               scheduledDate: scheduleItem.scheduledDate,
               source: matchingOrder.source || 'main_orders'
             };
-            console.log('🔍 Found matching order:', {
+            console.log('🔍 Found matching processed order:', {
               orderId: mergedOrder.orderId,
               hasFeatures: !!mergedOrder.features,
               stockModelId: mergedOrder.stockModelId,
-              source: mergedOrder.source
+              source: mergedOrder.source,
+              hasLOPProcessing: !!mergedOrder.needsLOPAdjustment
             });
             return mergedOrder;
           } else {
+            // Fallback to original available orders
+            const fallbackOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
+            if (fallbackOrder) {
+              return { 
+                ...fallbackOrder, 
+                scheduledDate: scheduleItem.scheduledDate,
+                source: fallbackOrder.source || 'main_orders'
+              };
+            }
+            
             // Create a minimal order from schedule data if no match found
             console.log('🔍 No matching order found, creating minimal order for:', scheduleItem.orderId);
             return {
@@ -170,7 +427,7 @@ export default function LayupPluggingQueuePage() {
       console.error('🔍 Error in currentWeekOrdersByDate calculation:', error);
       return {};
     }
-  }, [currentSchedule, availableOrders, currentWeekDates]);
+  }, [currentSchedule, processedOrders, availableOrders, currentWeekDates]);
 
   // Get all current week orders for cards view
   const currentWeekOrders = useMemo(() => {
@@ -182,8 +439,10 @@ export default function LayupPluggingQueuePage() {
     console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
     console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
     console.log('- Current week dates:', currentWeekDates.length);
-    console.log('- Available orders:', availableOrders.length);
+    console.log('- Available orders (raw):', availableOrders.length);
+    console.log('- Processed orders (with LOP):', processedOrders.length);
     console.log('- Schedule loading:', scheduleLoading);
+    console.log('- Orders loading:', ordersLoading);
     console.log('- Current week orders calculated:', currentWeekOrders.length);
     
     if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
@@ -210,12 +469,21 @@ export default function LayupPluggingQueuePage() {
       })));
     }
     
+    if (processedOrders.length > 0) {
+      console.log('- Processed orders sample:', processedOrders.slice(0, 3).map((o: any) => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId,
+        needsLOPAdjustment: o.needsLOPAdjustment
+      })));
+    }
+    
     console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
       date,
       count: orders.length,
       orderIds: orders.map((o: any) => o.orderId)
     })));
-  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading, currentWeekOrders, currentWeekOrdersByDate]);
+  }, [currentSchedule, currentWeekDates, availableOrders, processedOrders, scheduleLoading, ordersLoading, currentWeekOrders, currentWeekOrdersByDate]);
 
   // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {
@@ -448,15 +716,17 @@ export default function LayupPluggingQueuePage() {
               <h3 className="text-xl font-medium mb-2">No Orders in Queue</h3>
               <p className="text-sm">Orders from the Layup Scheduler will appear here automatically</p>
               <p className="text-xs text-gray-400 mt-2">Go to Production Scheduling → Layup Scheduler to assign orders</p>
-              {scheduleLoading && (
+              {(scheduleLoading || ordersLoading) && (
                 <p className="text-xs text-blue-500 mt-2">Loading schedule data...</p>
               )}
               <div className="text-xs text-gray-400 mt-4 space-y-1">
                 <p>Debug Info:</p>
                 <p>Schedule entries: {(currentSchedule as any[]).length}</p>
                 <p>Available orders: {availableOrders.length}</p>
+                <p>Processed orders: {processedOrders.length}</p>
                 <p>Current week orders: {currentWeekOrders.length}</p>
                 <p>Schedule loading: {scheduleLoading ? 'Yes' : 'No'}</p>
+                <p>Orders loading: {ordersLoading ? 'Yes' : 'No'}</p>
               </div>
             </div>
           ) : (
@@ -494,21 +764,7 @@ export default function LayupPluggingQueuePage() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                         {dayOrders.map((order: any) => {
-                          const modelId = order.stockModelId || order.modelId;
-                          const materialType = modelId?.includes('cf_') ? 'CF' : 
-                                             modelId?.includes('fg_') ? 'FG' : null;
                           const isSelected = selectedOrders.includes(order.orderId);
-                          
-                          // Heavy Fill detection
-                          const hasHeavyFill = order.features?.other_options && 
-                            Array.isArray(order.features.other_options) && 
-                            order.features.other_options.includes('heavy_fill');
-                          
-                          // Action Length for APR orders  
-                          const actionLength = order.features?.action_length;
-                          const actionAbbr = actionLength === 'long' ? 'LA' : 
-                                           actionLength === 'medium' ? 'MA' : 
-                                           actionLength === 'short' ? 'SA' : null;
                           
                           return (
                             <Card key={order.orderId} className={`relative border-l-4 transition-all ${
@@ -525,59 +781,29 @@ export default function LayupPluggingQueuePage() {
                                 />
                               </div>
                               
-                              <CardHeader className="pb-2 pr-8">
-                                <div className="flex justify-between items-start">
-                                  <div className="font-semibold">
-                                    {getDisplayOrderId(order)}
-                                    {order.source === 'p1_purchase_order' && (
-                                      <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">P1</Badge>
+                              <CardContent className="p-0">
+                                <QueueOrderItem
+                                  order={order}
+                                  getModelDisplayName={getModelDisplayName}
+                                  features={features}
+                                  processedOrders={processedOrders}
+                                />
+                                
+                                {/* Additional queue-specific info */}
+                                <div className="px-3 pb-3 pt-0">
+                                  <div className="space-y-1 text-xs text-gray-500">
+                                    {order.moldId && (
+                                      <div>Mold: {order.moldId}</div>
                                     )}
-                                    {order.source === 'production_order' && (
-                                      <Badge variant="secondary" className="ml-2 text-xs bg-orange-100 text-orange-800">PO</Badge>
+                                    
+                                    {order.customer && (
+                                      <div>Customer: {order.customer}</div>
+                                    )}
+                                    
+                                    {order.dueDate && (
+                                      <div>Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}</div>
                                     )}
                                   </div>
-                                </div>
-                                {actionAbbr && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {actionAbbr}
-                                  </div>
-                                )}
-                              </CardHeader>
-                              <CardContent className="pt-0">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {materialType && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        {materialType}
-                                      </Badge>
-                                    )}
-                                    {hasHeavyFill && (
-                                      <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">
-                                        Heavy Fill
-                                      </Badge>
-                                    )}
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      {getModelDisplayName(modelId)}
-                                    </span>
-                                  </div>
-                                  
-                                  {order.moldId && (
-                                    <div className="text-xs text-gray-500">
-                                      Mold: {order.moldId}
-                                    </div>
-                                  )}
-                                  
-                                  {order.customer && (
-                                    <div className="text-xs text-gray-500">
-                                      Customer: {order.customer}
-                                    </div>
-                                  )}
-                                  
-                                  {order.dueDate && (
-                                    <div className="text-xs text-gray-500">
-                                      Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                                    </div>
-                                  )}
                                 </div>
                               </CardContent>
                             </Card>

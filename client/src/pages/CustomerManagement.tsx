@@ -25,6 +25,7 @@ import {
   Download,
   Upload,
   UserCheck,
+  UserPlus,
   UserX,
   AlertCircle,
   Eye,
@@ -118,143 +119,143 @@ const CustomerFormFields = ({
   setFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
   formErrors: Record<string, string>;
 }) => (
-  <div className="grid gap-4 py-4">
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="name" className="text-right">Name *</Label>
-      <div className="col-span-3">
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-          className={formErrors.name ? "border-red-500" : ""}
-          placeholder="Customer name"
-        />
-        {formErrors.name && (
-          <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>
-        )}
+  <div className="space-y-6 py-4">
+    {/* Customer Information Section */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+        <UserCheck className="h-4 w-4 text-blue-600" />
+        <h3 className="text-sm font-semibold text-gray-900">Customer Information</h3>
       </div>
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="email" className="text-right">Email</Label>
-      <div className="col-span-3">
-        <Input
-          id="email"
-          type="email"
-          value={formData.email}
-          onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-          className={formErrors.email ? "border-red-500" : ""}
-          placeholder="customer@example.com"
-        />
-        {formErrors.email && (
-          <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
-        )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="name" className="text-sm font-medium">Name *</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            className={formErrors.name ? "border-red-500" : ""}
+            placeholder="Enter customer name"
+          />
+          {formErrors.name && (
+            <p className="text-sm text-red-500">{formErrors.name}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            className={formErrors.email ? "border-red-500" : ""}
+            placeholder="customer@example.com"
+          />
+          {formErrors.email && (
+            <p className="text-sm text-red-500">{formErrors.email}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="phone" className="text-sm font-medium">Phone</Label>
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            className={formErrors.phone ? "border-red-500" : ""}
+            placeholder="(555) 123-4567"
+          />
+          {formErrors.phone && (
+            <p className="text-sm text-red-500">{formErrors.phone}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="company" className="text-sm font-medium">Company</Label>
+          <Input
+            id="company"
+            value={formData.company}
+            onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+            placeholder="Company name"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="customerType" className="text-sm font-medium">Type</Label>
+          <Select 
+            value={formData.customerType} 
+            onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select customer type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="premium">Premium</SelectItem>
+              <SelectItem value="wholesale">Wholesale</SelectItem>
+              <SelectItem value="retail">Retail</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="isActive" className="text-sm font-medium">Status</Label>
+          <Select 
+            value={formData.isActive ? 'active' : 'inactive'} 
+            onValueChange={(value) => setFormData(prev => ({ ...prev, isActive: value === 'active' }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="phone" className="text-right">Phone</Label>
-      <div className="col-span-3">
-        <Input
-          id="phone"
-          value={formData.phone}
-          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-          className={formErrors.phone ? "border-red-500" : ""}
-          placeholder="(555) 123-4567"
+      
+      <div className="space-y-2">
+        <Label htmlFor="notes" className="text-sm font-medium">Notes</Label>
+        <Textarea
+          id="notes"
+          value={formData.notes}
+          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+          placeholder="Additional notes about this customer..."
+          rows={3}
+          className="resize-none"
         />
-        {formErrors.phone && (
-          <p className="text-sm text-red-500 mt-1">{formErrors.phone}</p>
-        )}
-      </div>
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="company" className="text-right">Company</Label>
-      <Input
-        id="company"
-        value={formData.company}
-        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-        className="col-span-3"
-        placeholder="Company name"
-      />
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="customerType" className="text-right">Type</Label>
-      <Select 
-        value={formData.customerType} 
-        onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Select customer type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="standard">Standard</SelectItem>
-          <SelectItem value="premium">Premium</SelectItem>
-          <SelectItem value="wholesale">Wholesale</SelectItem>
-          <SelectItem value="retail">Retail</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="notes" className="text-right">Notes</Label>
-      <Textarea
-        id="notes"
-        value={formData.notes}
-        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-        className="col-span-3"
-        placeholder="Additional notes..."
-        rows={3}
-      />
-    </div>
-    
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="isActive" className="text-right">Status</Label>
-      <Select 
-        value={formData.isActive ? 'active' : 'inactive'} 
-        onValueChange={(value) => setFormData(prev => ({ ...prev, isActive: value === 'active' }))}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Select status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="inactive">Inactive</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-
-    {/* Address Section Header */}
-    <div className="col-span-4 pt-4 border-t">
-      <div className="flex items-center gap-2 mb-4">
-        <MapPin className="h-4 w-4 text-gray-500" />
-        <h3 className="text-sm font-medium text-gray-700">Address Information</h3>
       </div>
     </div>
 
-    {/* Address Type */}
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="addressType" className="text-right">Address Type</Label>
-      <Select 
-        value={formData.addressType} 
-        onValueChange={(value: 'shipping' | 'billing' | 'both') => setFormData(prev => ({ ...prev, addressType: value }))}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Select address type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="shipping">Shipping Only</SelectItem>
-          <SelectItem value="billing">Billing Only</SelectItem>
-          <SelectItem value="both">Both Shipping & Billing</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+    {/* Address Information Section */}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+        <MapPin className="h-4 w-4 text-blue-600" />
+        <h3 className="text-sm font-semibold text-gray-900">Address Information</h3>
+        <span className="text-xs text-gray-500">(Optional)</span>
+      </div>
 
-    {/* Street Address with SmartyStreets Autocomplete */}
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="street" className="text-right">Street Address</Label>
-      <div className="col-span-3">
+      <div className="space-y-2">
+        <Label htmlFor="addressType" className="text-sm font-medium">Address Type</Label>
+        <Select 
+          value={formData.addressType} 
+          onValueChange={(value: 'shipping' | 'billing' | 'both') => setFormData(prev => ({ ...prev, addressType: value }))}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select address type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="both">Both Shipping & Billing</SelectItem>
+            <SelectItem value="shipping">Shipping Only</SelectItem>
+            <SelectItem value="billing">Billing Only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="street" className="text-sm font-medium">Street Address</Label>
         <Input
           id="street"
           value={formData.street}
@@ -263,66 +264,73 @@ const CustomerFormFields = ({
           placeholder="123 Main Street"
         />
         {formErrors.street && (
-          <p className="text-sm text-red-500 mt-1">{formErrors.street}</p>
+          <p className="text-sm text-red-500">{formErrors.street}</p>
         )}
       </div>
-    </div>
 
-    {/* City */}
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="city" className="text-right">City</Label>
-      <div className="col-span-3">
-        <Input
-          id="city"
-          value={formData.city}
-          onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-          className={formErrors.city ? "border-red-500" : ""}
-          placeholder="City name"
-        />
-        {formErrors.city && (
-          <p className="text-sm text-red-500 mt-1">{formErrors.city}</p>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 space-y-2">
+          <Label htmlFor="city" className="text-sm font-medium">City</Label>
+          <Input
+            id="city"
+            value={formData.city}
+            onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+            className={formErrors.city ? "border-red-500" : ""}
+            placeholder="City name"
+          />
+          {formErrors.city && (
+            <p className="text-sm text-red-500">{formErrors.city}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="state" className="text-sm font-medium">State</Label>
+          <Input
+            id="state"
+            value={formData.state}
+            onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value.toUpperCase().slice(0, 2) }))}
+            className={formErrors.state ? "border-red-500" : ""}
+            placeholder="SC"
+            maxLength={2}
+          />
+          {formErrors.state && (
+            <p className="text-sm text-red-500">{formErrors.state}</p>
+          )}
+        </div>
       </div>
-    </div>
 
-    {/* State and ZIP Code */}
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="state" className="text-right">State / ZIP</Label>
-      <div className="col-span-3 flex gap-2">
-        <Input
-          id="state"
-          value={formData.state}
-          onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-          className={`flex-1 ${formErrors.state ? "border-red-500" : ""}`}
-          placeholder="SC"
-          maxLength={2}
-        />
-        <Input
-          id="zipCode"
-          value={formData.zipCode}
-          onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
-          className={`w-32 ${formErrors.zipCode ? "border-red-500" : ""}`}
-          placeholder="29406"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="zipCode" className="text-sm font-medium">ZIP Code</Label>
+          <Input
+            id="zipCode"
+            value={formData.zipCode}
+            onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+            className={formErrors.zipCode ? "border-red-500" : ""}
+            placeholder="29406"
+          />
+          {formErrors.zipCode && (
+            <p className="text-sm text-red-500">{formErrors.zipCode}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="country" className="text-sm font-medium">Country</Label>
+          <Select 
+            value={formData.country} 
+            onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select country" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="United States">United States</SelectItem>
+              <SelectItem value="Canada">Canada</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-    </div>
-
-    {/* Country */}
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="country" className="text-right">Country</Label>
-      <Select 
-        value={formData.country} 
-        onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Select country" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="United States">United States</SelectItem>
-          <SelectItem value="Canada">Canada</SelectItem>
-          <SelectItem value="Other">Other</SelectItem>
-        </SelectContent>
-      </Select>
     </div>
   </div>
 );
@@ -1000,24 +1008,38 @@ export default function CustomerManagement() {
                 Add Customer
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create New Customer</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  <UserPlus className="h-5 w-5" />
+                  Create New Customer
+                </DialogTitle>
               </DialogHeader>
               <CustomerFormFields 
                 formData={formData}
                 setFormData={setFormData}
                 formErrors={formErrors}
               />
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex justify-end gap-2 pt-6 border-t">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleCreateCustomer}
                   disabled={createCustomerMutation.isPending || !formData.name}
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
+                  {createCustomerMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Customer
+                    </>
+                  )}
                 </Button>
               </div>
             </DialogContent>

@@ -327,19 +327,60 @@ export default function CustomerManagement() {
     }
   };
   
+  // Parse address string into components if structured data isn't available
+  const parseAddressString = (addressText: string) => {
+    const parts = addressText.split(', ');
+    if (parts.length >= 2) {
+      const street = parts[0];
+      const cityStateZip = parts[1];
+      
+      // Parse "City ST" or "City ST 12345" format
+      const match = cityStateZip.match(/^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+      if (match) {
+        return {
+          street,
+          city: match[1],
+          state: match[2],
+          zipCode: match[3] || ''
+        };
+      }
+    }
+    return { street: addressText, city: '', state: '', zipCode: '' };
+  };
+
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion: any) => {
     console.log('🔧 handleSuggestionSelect called with:', suggestion);
     console.log('🔧 Current addressFormData before update:', addressFormData);
     
-    // Handle data from both endpoints - bypass returns streetLine, validate returns street
-    const newAddressData = {
-      ...addressFormData,
-      street: suggestion.street || suggestion.streetLine || suggestion.street_line || '',
-      city: suggestion.city || '',
-      state: suggestion.state || '',
-      zipCode: suggestion.zipCode || suggestion.zipcode || ''
-    };
+    let newAddressData;
+    
+    // Check if we have structured data from API
+    if (suggestion.city && suggestion.state) {
+      // Use structured data from API
+      newAddressData = {
+        ...addressFormData,
+        street: suggestion.street || suggestion.streetLine || suggestion.street_line || '',
+        city: suggestion.city || '',
+        state: suggestion.state || '',
+        zipCode: suggestion.zipCode || suggestion.zipcode || ''
+      };
+    } else if (suggestion.text) {
+      // Parse address string if only text is available
+      const parsed = parseAddressString(suggestion.text);
+      newAddressData = {
+        ...addressFormData,
+        ...parsed
+      };
+    } else {
+      // Fallback - try to parse whatever string we have
+      const addressString = suggestion.street || suggestion.streetLine || suggestion.street_line || suggestion.text || '';
+      const parsed = parseAddressString(addressString);
+      newAddressData = {
+        ...addressFormData,
+        ...parsed
+      };
+    }
     
     console.log('🔧 New address data being set:', newAddressData);
     
@@ -349,14 +390,9 @@ export default function CustomerManagement() {
     
     toast({
       title: "Address Selected",
-      description: "Address has been validated and filled.",
+      description: "Address components have been filled.",
       duration: 2000
     });
-    
-    // Log the state after a short delay to see if it was set properly
-    setTimeout(() => {
-      console.log('🔧 Address form data after state update (delayed check):', addressFormData);
-    }, 100);
   };
 
   // Create customer mutation

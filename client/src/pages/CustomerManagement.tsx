@@ -353,34 +353,15 @@ export default function CustomerManagement() {
     console.log('🔧 handleSuggestionSelect called with:', suggestion);
     console.log('🔧 Current addressFormData before update:', addressFormData);
     
-    let newAddressData;
-    
-    // Check if we have structured data from API
-    if (suggestion.city && suggestion.state) {
-      // Use structured data from API
-      newAddressData = {
-        ...addressFormData,
-        street: suggestion.street || suggestion.streetLine || suggestion.street_line || '',
-        city: suggestion.city || '',
-        state: suggestion.state || '',
-        zipCode: suggestion.zipCode || suggestion.zipcode || ''
-      };
-    } else if (suggestion.text) {
-      // Parse address string if only text is available
-      const parsed = parseAddressString(suggestion.text);
-      newAddressData = {
-        ...addressFormData,
-        ...parsed
-      };
-    } else {
-      // Fallback - try to parse whatever string we have
-      const addressString = suggestion.street || suggestion.streetLine || suggestion.street_line || suggestion.text || '';
-      const parsed = parseAddressString(addressString);
-      newAddressData = {
-        ...addressFormData,
-        ...parsed
-      };
-    }
+    // Direct mapping from the API response structure we confirmed
+    const newAddressData = {
+      ...addressFormData,
+      street: suggestion.streetLine || suggestion.street_line || suggestion.street || '',  // Use streetLine first
+      city: suggestion.city || '',
+      state: suggestion.state || '',
+      zipCode: suggestion.zipCode || suggestion.zipcode || '',
+      country: 'USA'  // Default country
+    };
     
     console.log('🔧 New address data being set:', newAddressData);
     
@@ -390,7 +371,7 @@ export default function CustomerManagement() {
     
     toast({
       title: "Address Selected",
-      description: "Address components have been filled.",
+      description: "All address fields have been populated.",
       duration: 2000
     });
   };
@@ -1450,14 +1431,7 @@ export default function CustomerManagement() {
                       <div
                         key={index}
                         className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('🔧 DIRECT CLICK HANDLER FIRED!', suggestion);
-                          console.log('🔧 Suggestion properties:', Object.keys(suggestion));
-                          alert(`Clicked: ${JSON.stringify(suggestion, null, 2)}`);
-                          handleSuggestionSelect(suggestion);
-                        }}
+                        onClick={() => handleSuggestionSelect(suggestion)}
                       >
                         <div className="font-medium text-gray-900">
                           {suggestion.street || suggestion.streetLine || suggestion.street_line || ''}

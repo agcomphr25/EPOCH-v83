@@ -352,6 +352,9 @@ export default function CustomerManagement() {
   const handleSuggestionSelect = (suggestion: any) => {
     console.log('🔧 handleSuggestionSelect called with:', suggestion);
     console.log('🔧 Current addressFormData before update:', addressFormData);
+    console.log('🔧 Suggestion streetLine:', suggestion.streetLine);
+    console.log('🔧 Suggestion city:', suggestion.city);
+    console.log('🔧 Suggestion state:', suggestion.state);
     
     // Direct mapping from the API response structure we confirmed
     const newAddressData = {
@@ -364,8 +367,17 @@ export default function CustomerManagement() {
     };
     
     console.log('🔧 New address data being set:', newAddressData);
+    console.log('🔧 Street field will be:', newAddressData.street);
+    console.log('🔧 City field will be:', newAddressData.city);
+    console.log('🔧 State field will be:', newAddressData.state);
     
     setAddressFormData(newAddressData);
+    
+    // Verify the state was actually set
+    setTimeout(() => {
+      console.log('🔧 Address form data after setState (delayed check):', addressFormData);
+    }, 100);
+    
     setShowSuggestions(false);
     setAddressSuggestions([]);
     

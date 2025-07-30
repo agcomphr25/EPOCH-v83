@@ -28,13 +28,13 @@ import {
   UserPlus,
   UserX,
   AlertCircle,
-  Eye,
+
   RefreshCw,
   CheckCircle,
   FileText
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 type Customer = {
   id: number;
@@ -396,7 +396,7 @@ export default function CustomerManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [selectedCustomers, setSelectedCustomers] = useState<number[]>([]);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
@@ -579,7 +579,7 @@ export default function CustomerManagement() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input: value
+            search: value  // Use 'search' parameter instead of 'input'
           })
         });
         
@@ -613,14 +613,14 @@ export default function CustomerManagement() {
     // Parse the address from suggestion
     const parsedAddress = parseAddressString(suggestion.text || suggestion.streetLine || '');
     
-    // Try to get full address details using SmartyStreets Street API
+    // Try to get full address details using SmartyStreets Street API for ZIP code
     try {
       const response = await fetch('/api/customers/address-autocomplete-bypass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: suggestion.text || suggestion.streetLine || '',
-          getFullDetails: true
+          search: suggestion.text || suggestion.streetLine || '',
+          getZipCode: true
         })
       });
       
@@ -873,19 +873,82 @@ export default function CustomerManagement() {
     createCustomerMutation.mutate(formData);
   };
 
-  const handleUpdateCustomer = () => {
+  const handleUpdateCustomer = async () => {
     if (!validateForm()) return;
     
     if (selectedCustomer) {
+      // Update customer information
       updateCustomerMutation.mutate({
         id: selectedCustomer.id,
-        data: formData,
+        data: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          customerType: formData.customerType,
+          notes: formData.notes,
+          isActive: formData.isActive
+        },
       });
+      
+      // Also handle address update if address fields are filled
+      if (formData.street || formData.city || formData.state || formData.zipCode) {
+        try {
+          // Find existing address for this customer
+          const customerAddresses = addressesData?.filter(addr => {
+            const addrCustomerId = typeof addr.customerId === 'string' ? 
+              parseInt(addr.customerId) : addr.customerId;
+            return addrCustomerId === selectedCustomer.id;
+          }) || [];
+          const existingAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
+          
+          const addressData = {
+            customerId: selectedCustomer.id.toString(),
+            street: formData.street,
+            city: formData.city,
+            state: formData.state,
+            zipCode: formData.zipCode,
+            country: formData.country,
+            type: formData.addressType,
+            isDefault: true
+          };
+          
+          if (existingAddress) {
+            // Update existing address
+            await fetch(`/api/addresses/${existingAddress.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(addressData)
+            });
+          } else {
+            // Create new address
+            await fetch('/api/addresses', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(addressData)
+            });
+          }
+          
+          // Refresh addresses data
+          queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
+        } catch (error) {
+          console.error('Error updating address:', error);
+        }
+      }
     }
   };
 
   const handleEditCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
+    
+    // Find the customer's primary/default address
+    const customerAddresses = addressesData?.filter(addr => {
+      const addrCustomerId = typeof addr.customerId === 'string' ? 
+        parseInt(addr.customerId) : addr.customerId;
+      return addrCustomerId === customer.id;
+    }) || [];
+    const defaultAddress = customerAddresses.find(addr => addr.isDefault) || customerAddresses[0];
+    
     setFormData({
       name: customer.name,
       email: customer.email || '',
@@ -894,22 +957,19 @@ export default function CustomerManagement() {
       customerType: customer.customerType,
       notes: customer.notes || '',
       isActive: customer.isActive,
-      // Address defaults for edit mode
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'United States',
-      addressType: 'both'
+      // Load existing address if available
+      street: defaultAddress?.street || '',  
+      city: defaultAddress?.city || '',
+      state: defaultAddress?.state || '',
+      zipCode: defaultAddress?.zipCode || '',
+      country: defaultAddress?.country || 'United States',
+      addressType: defaultAddress?.type || 'shipping'
     });
     setFormErrors({});
     setIsEditDialogOpen(true);
   };
 
-  const handleViewCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setIsViewDialogOpen(true);
-  };
+
 
   const resetForm = () => {
     setFormData(initialFormData);
@@ -1383,16 +1443,8 @@ export default function CustomerManagement() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handleViewCustomer(customer)}
-                            title="View Customer Details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
                             onClick={() => handleEditCustomer(customer)}
-                            title="Edit Customer"
+                            title="Edit Customer & Address"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -1498,97 +1550,187 @@ export default function CustomerManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* Edit Customer Dialog - Redesigned */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Customer</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Edit Customer & Address
+            </DialogTitle>
           </DialogHeader>
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="details">Customer Info</TabsTrigger>
-              <TabsTrigger value="addresses">Addresses</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="details" className="space-y-4">
-              <CustomerFormFields 
-                formData={formData}
-                setFormData={setFormData}
-                formErrors={formErrors}
-                handleCustomerAddressChange={handleCustomerAddressChange}
-                customerFormSuggestions={customerFormSuggestions}
-                showCustomerFormSuggestions={showCustomerFormSuggestions}
-                isValidatingCustomerAddress={isValidatingCustomerAddress}
-                handleCustomerFormSuggestionSelect={handleCustomerFormSuggestionSelect}
-              />
-            </TabsContent>
-            
-            <TabsContent value="addresses" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Customer Addresses</h3>
-                <Button size="sm" onClick={handleAddAddress}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Address
-                </Button>
-              </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Customer Information Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold border-b pb-2">Customer Information</h3>
               
-              {addressesLoading ? (
-                <div className="text-center py-4">Loading addresses...</div>
-              ) : addresses.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No addresses found</p>
-                  <p className="text-sm">Add an address to get started</p>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="edit-name">Name *</Label>
+                  <Input
+                    id="edit-name"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className={formErrors.name ? 'border-red-500' : ''}
+                  />
+                  {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
                 </div>
-              ) : (
-                <div className="grid gap-4">
-                  {addresses.map((address) => (
-                    <Card key={address.id} className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <MapPin className="h-4 w-4 text-gray-500" />
-                            <span className="font-medium">{address.street}</span>
-                            {address.isDefault && (
-                              <Badge variant="secondary" className="text-xs">Default</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mb-1">
-                            {address.city}, {address.state} {address.zipCode}
-                          </p>
-                          <p className="text-sm text-gray-600 mb-2">{address.country}</p>
-                          <div className="flex gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {address.type}
-                            </Badge>
-                            {address.isValidated && (
-                              <Badge variant="default" className="text-xs">Validated</Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEditAddress(address)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteAddress(address.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+
+                <div>
+                  <Label htmlFor="edit-email">Email</Label>
+                  <Input
+                    id="edit-email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  />
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
+
+                <div>
+                  <Label htmlFor="edit-phone">Phone</Label>
+                  <Input
+                    id="edit-phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-company">Company</Label>
+                  <Input
+                    id="edit-company"
+                    value={formData.company}
+                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-customerType">Customer Type</Label>
+                  <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
+                    <SelectTrigger id="edit-customerType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="wholesale">Wholesale</SelectItem>
+                      <SelectItem value="dealer">Dealer</SelectItem>
+                      <SelectItem value="oem">OEM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Textarea
+                    id="edit-notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Address Information Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold border-b pb-2">Primary Address</h3>
+              
+              <div className="space-y-4">
+                <div className="relative">
+                  <Label htmlFor="edit-street">Street Address</Label>
+                  <Input
+                    id="edit-street"
+                    value={formData.street}
+                    onChange={(e) => handleCustomerAddressChange('street', e.target.value)}
+                    placeholder="Start typing for address suggestions..."
+                  />
+                  {isValidatingCustomerAddress && (
+                    <div className="absolute right-3 top-8">
+                      <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                  
+                  {/* Address Suggestions Dropdown */}
+                  {showCustomerFormSuggestions && customerFormSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {customerFormSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b last:border-b-0"
+                          onClick={() => handleCustomerFormSuggestionSelect(suggestion)}
+                        >
+                          <div className="font-medium">{suggestion.text}</div>
+                          {suggestion.streetLine && suggestion.streetLine !== suggestion.text && (
+                            <div className="text-sm text-gray-600">{suggestion.streetLine}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-city">City</Label>
+                    <Input
+                      id="edit-city"
+                      value={formData.city}
+                      onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-state">State</Label>
+                    <Input
+                      id="edit-state"
+                      value={formData.state}
+                      onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                      maxLength={2}
+                      placeholder="SC"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-zipCode">ZIP Code</Label>
+                    <Input
+                      id="edit-zipCode"
+                      value={formData.zipCode}
+                      onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-country">Country</Label>
+                    <Select value={formData.country} onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}>
+                      <SelectTrigger id="edit-country">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="United States">United States</SelectItem>
+                        <SelectItem value="Canada">Canada</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-addressType">Address Type</Label>
+                  <Select value={formData.addressType} onValueChange={(value: 'shipping' | 'billing' | 'both') => setFormData(prev => ({ ...prev, addressType: value }))}>
+                    <SelectTrigger id="edit-addressType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="shipping">Shipping</SelectItem>
+                      <SelectItem value="billing">Billing</SelectItem>
+                      <SelectItem value="both">Both</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
@@ -1598,7 +1740,8 @@ export default function CustomerManagement() {
               onClick={handleUpdateCustomer}
               disabled={updateCustomerMutation.isPending || !formData.name}
             >
-              {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer'}
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer & Address'}
             </Button>
           </div>
         </DialogContent>

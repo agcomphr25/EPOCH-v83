@@ -30,6 +30,23 @@ export default function LayupPluggingQueuePage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Get orders queued for barcode department (next department after layup)
+  const { data: allOrders = [] } = useQuery({
+    queryKey: ['/api/orders/all'],
+  });
+
+  // Get molds data for better display
+  const { data: molds = [] } = useQuery({
+    queryKey: ['/api/molds'],
+  });
+
+  // Calculate current week dates (Monday-Friday)
+  const currentWeekDates = useMemo(() => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
+    return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
+  }, []);
+
   // Enhanced debugging
   React.useEffect(() => {
     console.log('🔍 LAYUP QUEUE DEBUG:');
@@ -53,23 +70,6 @@ export default function LayupPluggingQueuePage() {
     console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
   }, [currentSchedule, currentWeekDates, orders, scheduleLoading]);
 
-  // Get orders queued for barcode department (next department after layup)
-  const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
-  });
-
-  // Get molds data for better display
-  const { data: molds = [] } = useQuery({
-    queryKey: ['/api/molds'],
-  });
-
-  // Calculate current week dates (Monday-Friday)
-  const currentWeekDates = useMemo(() => {
-    const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
-    return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
-  }, []);
-
   // Calculate next week dates
   const nextWeekDates = useMemo(() => {
     const today = new Date();
@@ -79,48 +79,64 @@ export default function LayupPluggingQueuePage() {
 
   // Get current week scheduled orders grouped by date
   const currentWeekOrdersByDate = useMemo(() => {
-    if (!Array.isArray(currentSchedule) || currentSchedule.length === 0) {
+    if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
       console.log('🔍 No schedule data available for grouping');
       return {};
     }
 
-    const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
-    console.log('🔍 Week date strings for filtering:', weekDateStrings);
-    
-    const weekOrders = currentSchedule.filter((scheduleItem: any) => {
-      if (!scheduleItem.scheduledDate) return false;
-      const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-      const isInWeek = weekDateStrings.includes(scheduledDate);
-      if (isInWeek) {
-        console.log('🔍 Found schedule item for current week:', {
-          orderId: scheduleItem.orderId,
-          scheduledDate: scheduledDate,
-          originalDate: scheduleItem.scheduledDate
+    try {
+      const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
+      console.log('🔍 Week date strings for filtering:', weekDateStrings);
+      
+      const weekOrders = currentSchedule.filter((scheduleItem: any) => {
+        if (!scheduleItem?.scheduledDate) return false;
+        try {
+          const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
+          const isInWeek = weekDateStrings.includes(scheduledDate);
+          if (isInWeek) {
+            console.log('🔍 Found schedule item for current week:', {
+              orderId: scheduleItem.orderId,
+              scheduledDate: scheduledDate,
+              originalDate: scheduleItem.scheduledDate
+            });
+          }
+          return isInWeek;
+        } catch (dateError) {
+          console.warn('🔍 Date parsing error for schedule item:', scheduleItem, dateError);
+          return false;
+        }
+      }).map((scheduleItem: any) => {
+        const order = orders.find((o: any) => o.orderId === scheduleItem.orderId);
+        if (!order) {
+          console.log('🔍 Warning: Schedule item has no matching order:', scheduleItem.orderId);
+          return { ...scheduleItem }; // Return schedule item even without order data
+        }
+        return { ...order, ...scheduleItem };
+      }).filter((order: any) => order.orderId);
+
+      console.log('🔍 Week orders found:', weekOrders.length);
+
+      // Group orders by date
+      const grouped: {[key: string]: any[]} = {};
+      currentWeekDates.forEach(date => {
+        const dateStr = date.toISOString().split('T')[0];
+        grouped[dateStr] = weekOrders.filter(order => {
+          try {
+            const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
+            return orderDate === dateStr;
+          } catch (dateError) {
+            console.warn('🔍 Date parsing error for order:', order, dateError);
+            return false;
+          }
         });
-      }
-      return isInWeek;
-    }).map((scheduleItem: any) => {
-      const order = orders.find((o: any) => o.orderId === scheduleItem.orderId);
-      if (!order) {
-        console.log('🔍 Warning: Schedule item has no matching order:', scheduleItem.orderId);
-      }
-      return { ...order, ...scheduleItem };
-    }).filter((order: any) => order.orderId);
-
-    console.log('🔍 Week orders found:', weekOrders.length);
-
-    // Group orders by date
-    const grouped: {[key: string]: any[]} = {};
-    currentWeekDates.forEach(date => {
-      const dateStr = date.toISOString().split('T')[0];
-      grouped[dateStr] = weekOrders.filter(order => {
-        const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
-        return orderDate === dateStr;
       });
-    });
 
-    console.log('🔍 Grouped orders by date:', grouped);
-    return grouped;
+      console.log('🔍 Grouped orders by date:', grouped);
+      return grouped;
+    } catch (error) {
+      console.error('🔍 Error in currentWeekOrdersByDate calculation:', error);
+      return {};
+    }
   }, [currentSchedule, orders, currentWeekDates]);
 
   // Get all current week orders for cards view
@@ -130,33 +146,51 @@ export default function LayupPluggingQueuePage() {
 
   // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {
-    if (!Array.isArray(currentSchedule)) {
+    if (!Array.isArray(currentSchedule) || !nextWeekDates.length) {
       return 0;
     }
 
-    const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
-    console.log('🔍 Next week date strings:', nextWeekDateStrings);
-    
-    const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
-      if (!scheduleItem.scheduledDate) return false;
-      const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-      const isNextWeek = nextWeekDateStrings.includes(scheduledDate);
-      if (isNextWeek) {
-        console.log('🔍 Found next week order:', scheduleItem.orderId, scheduledDate);
-      }
-      return isNextWeek;
-    });
+    try {
+      const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
+      console.log('🔍 Next week date strings:', nextWeekDateStrings);
+      
+      const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
+        if (!scheduleItem?.scheduledDate) return false;
+        try {
+          const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
+          const isNextWeek = nextWeekDateStrings.includes(scheduledDate);
+          if (isNextWeek) {
+            console.log('🔍 Found next week order:', scheduleItem.orderId, scheduledDate);
+          }
+          return isNextWeek;
+        } catch (dateError) {
+          console.warn('🔍 Date parsing error for next week calculation:', scheduleItem, dateError);
+          return false;
+        }
+      });
 
-    console.log('🔍 Next week layup count:', nextWeekOrders.length);
-    return nextWeekOrders.length;
+      console.log('🔍 Next week layup count:', nextWeekOrders.length);
+      return nextWeekOrders.length;
+    } catch (error) {
+      console.error('🔍 Error calculating next week layup count:', error);
+      return 0;
+    }
   }, [currentSchedule, nextWeekDates]);
 
   // Calculate barcode queue count (orders that completed layup/plugging)
   const barcodeQueueCount = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Barcode' || 
-      (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
-    ).length;
+    if (!Array.isArray(allOrders)) {
+      return 0;
+    }
+    try {
+      return allOrders.filter((order: any) => 
+        order?.currentDepartment === 'Barcode' || 
+        (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
+      ).length;
+    } catch (error) {
+      console.error('🔍 Error calculating barcode queue count:', error);
+      return 0;
+    }
   }, [allOrders]);
 
   // Get stock models for display names

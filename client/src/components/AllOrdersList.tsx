@@ -198,7 +198,11 @@ export default function AllOrdersList() {
                       {getDisplayOrderId(order)}
                     </TableCell>
                     <TableCell>
-                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '-'}
+                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: '2-digit', 
+                        day: '2-digit' 
+                      }) : '-'}
                     </TableCell>
                     <TableCell>{order.customer || order.customerId}</TableCell>
                     <TableCell>
@@ -213,7 +217,11 @@ export default function AllOrdersList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : '-'}
+                      {order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: '2-digit', 
+                        day: '2-digit' 
+                      }) : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={isScrapped ? 'destructive' : 'default'}>

@@ -94,6 +94,125 @@ const initialFormData: CustomerFormData = {
   isActive: true
 };
 
+// Move CustomerFormFields outside the main component to prevent cursor reset
+const CustomerFormFields = ({ 
+  formData, 
+  setFormData, 
+  formErrors 
+}: { 
+  formData: CustomerFormData;
+  setFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
+  formErrors: Record<string, string>;
+}) => (
+  <div className="grid gap-4 py-4">
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="name" className="text-right">Name *</Label>
+      <div className="col-span-3">
+        <Input
+          id="name"
+          value={formData.name}
+          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          className={formErrors.name ? "border-red-500" : ""}
+          placeholder="Customer name"
+        />
+        {formErrors.name && (
+          <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>
+        )}
+      </div>
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="email" className="text-right">Email</Label>
+      <div className="col-span-3">
+        <Input
+          id="email"
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+          className={formErrors.email ? "border-red-500" : ""}
+          placeholder="customer@example.com"
+        />
+        {formErrors.email && (
+          <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
+        )}
+      </div>
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="phone" className="text-right">Phone</Label>
+      <div className="col-span-3">
+        <Input
+          id="phone"
+          value={formData.phone}
+          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+          className={formErrors.phone ? "border-red-500" : ""}
+          placeholder="(555) 123-4567"
+        />
+        {formErrors.phone && (
+          <p className="text-sm text-red-500 mt-1">{formErrors.phone}</p>
+        )}
+      </div>
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="company" className="text-right">Company</Label>
+      <Input
+        id="company"
+        value={formData.company}
+        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+        className="col-span-3"
+        placeholder="Company name"
+      />
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="customerType" className="text-right">Type</Label>
+      <Select 
+        value={formData.customerType} 
+        onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}
+      >
+        <SelectTrigger className="col-span-3">
+          <SelectValue placeholder="Select customer type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="standard">Standard</SelectItem>
+          <SelectItem value="premium">Premium</SelectItem>
+          <SelectItem value="wholesale">Wholesale</SelectItem>
+          <SelectItem value="retail">Retail</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="notes" className="text-right">Notes</Label>
+      <Textarea
+        id="notes"
+        value={formData.notes}
+        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+        className="col-span-3"
+        placeholder="Additional notes..."
+        rows={3}
+      />
+    </div>
+    
+    <div className="grid grid-cols-4 items-center gap-4">
+      <Label htmlFor="isActive" className="text-right">Status</Label>
+      <Select 
+        value={formData.isActive ? 'active' : 'inactive'} 
+        onValueChange={(value) => setFormData(prev => ({ ...prev, isActive: value === 'active' }))}
+      >
+        <SelectTrigger className="col-span-3">
+          <SelectValue placeholder="Select status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="inactive">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+);
+
 export default function CustomerManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -659,115 +778,7 @@ export default function CustomerManagement() {
     }
   };
 
-  const CustomerFormFields = () => (
-    <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="name" className="text-right">Name *</Label>
-        <div className="col-span-3">
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            className={formErrors.name ? "border-red-500" : ""}
-            placeholder="Customer name"
-          />
-          {formErrors.name && (
-            <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="email" className="text-right">Email</Label>
-        <div className="col-span-3">
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            className={formErrors.email ? "border-red-500" : ""}
-            placeholder="customer@example.com"
-          />
-          {formErrors.email && (
-            <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="phone" className="text-right">Phone</Label>
-        <div className="col-span-3">
-          <Input
-            id="phone"
-            value={formData.phone}
-            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            className={formErrors.phone ? "border-red-500" : ""}
-            placeholder="(555) 123-4567"
-          />
-          {formErrors.phone && (
-            <p className="text-sm text-red-500 mt-1">{formErrors.phone}</p>
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="company" className="text-right">Company</Label>
-        <Input
-          id="company"
-          value={formData.company}
-          onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-          className="col-span-3"
-          placeholder="Company name"
-        />
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="customerType" className="text-right">Type</Label>
-        <Select 
-          value={formData.customerType} 
-          onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}
-        >
-          <SelectTrigger className="col-span-3">
-            <SelectValue placeholder="Select customer type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="standard">Standard</SelectItem>
-            <SelectItem value="premium">Premium</SelectItem>
-            <SelectItem value="wholesale">Wholesale</SelectItem>
-            <SelectItem value="retail">Retail</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="notes" className="text-right">Notes</Label>
-        <Textarea
-          id="notes"
-          value={formData.notes}
-          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-          className="col-span-3"
-          placeholder="Additional notes..."
-          rows={3}
-        />
-      </div>
-      
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="isActive" className="text-right">Status</Label>
-        <Select 
-          value={formData.isActive ? 'active' : 'inactive'} 
-          onValueChange={(value) => setFormData(prev => ({ ...prev, isActive: value === 'active' }))}
-        >
-          <SelectTrigger className="col-span-3">
-            <SelectValue placeholder="Select status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
+
 
   return (
     <div className="space-y-6">
@@ -804,7 +815,11 @@ export default function CustomerManagement() {
               <DialogHeader>
                 <DialogTitle>Create New Customer</DialogTitle>
               </DialogHeader>
-              <CustomerFormFields />
+              <CustomerFormFields 
+                formData={formData}
+                setFormData={setFormData}
+                formErrors={formErrors}
+              />
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
@@ -1115,7 +1130,11 @@ export default function CustomerManagement() {
             </TabsList>
             
             <TabsContent value="details" className="space-y-4">
-              <CustomerFormFields />
+              <CustomerFormFields 
+                formData={formData}
+                setFormData={setFormData}
+                formErrors={formErrors}
+              />
             </TabsContent>
             
             <TabsContent value="addresses" className="space-y-4">

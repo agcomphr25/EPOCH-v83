@@ -62,6 +62,7 @@ import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PackingSlip from "./pages/PackingSlip";
 import TaskTracker from "./pages/TaskTracker";
+import KickbackTracking from "./components/KickbackTracking";
 import DocumentManagement from "./pages/DocumentManagement";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
@@ -215,6 +216,7 @@ function App() {
                   
                   {/* Task and Document Management */}
                   <Route path="/task-tracker" component={TaskTracker} />
+                  <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
                   
                   {/* Queue Management Routes */}
@@ -249,7 +251,7 @@ function App() {
             '/module8-test', '/agtest', '/admintest', '/stacitest', '/finance/ap-journal', '/finance/ar-journal',
             '/finance/cogs-report', '/finance/dashboard', '/forms', '/reports', '/enhanced-forms', '/enhanced-reports',
             '/documentation', '/p2-forms', '/purchase-review-checklist', '/purchase-review-submissions',
-            '/rfq-risk-assessment', '/manufacturers-certificate', '/packing-slip', '/task-tracker', '/document-management',
+            '/rfq-risk-assessment', '/manufacturers-certificate', '/packing-slip', '/task-tracker', '/kickback-tracking', '/document-management',
             '/purchase-order-items-queue', '/layup-scheduler', '/ag-bottom-metal-report', '/department-queue/layup-plugging',
             '/department-queue/barcode', '/department-queue/cnc', '/department-queue/finish-qc', '/department-queue/paint',
             '/department-queue/qc-shipping'

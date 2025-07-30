@@ -8,6 +8,8 @@ import {
   molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
   // Task tracker table
   taskItems,
+  // Kickback tracking table
+  kickbacks,
   // Document management tables
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
@@ -66,6 +68,8 @@ import {
   type ManufacturersCertificate, type InsertManufacturersCertificate,
   // Task tracker types
   type TaskItem, type InsertTaskItem,
+  // Kickback tracking types
+  type Kickback, type InsertKickback,
   // Document management types
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
@@ -3749,6 +3753,127 @@ export class DatabaseStorage implements IStorage {
       .update(taskItems)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(taskItems.id, id));
+  }
+
+  // Kickback Tracking CRUD
+  async getAllKickbacks(): Promise<Kickback[]> {
+    return await db.select().from(kickbacks).orderBy(desc(kickbacks.createdAt));
+  }
+
+  async getKickbacksByOrderId(orderId: string): Promise<Kickback[]> {
+    return await db.select()
+      .from(kickbacks)
+      .where(eq(kickbacks.orderId, orderId))
+      .orderBy(desc(kickbacks.createdAt));
+  }
+
+  async getKickbacksByStatus(status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'): Promise<Kickback[]> {
+    return await db.select()
+      .from(kickbacks)
+      .where(eq(kickbacks.status, status))
+      .orderBy(desc(kickbacks.createdAt));
+  }
+
+  async getKickbacksByDepartment(department: string): Promise<Kickback[]> {
+    return await db.select()
+      .from(kickbacks)
+      .where(eq(kickbacks.kickbackDept, department))
+      .orderBy(desc(kickbacks.createdAt));
+  }
+
+  async getKickback(id: number): Promise<Kickback | undefined> {
+    const [kickback] = await db.select().from(kickbacks).where(eq(kickbacks.id, id));
+    return kickback || undefined;
+  }
+
+  async createKickback(data: InsertKickback): Promise<Kickback> {
+    const [kickback] = await db.insert(kickbacks).values(data).returning();
+    return kickback;
+  }
+
+  async updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback> {
+    const [kickback] = await db.update(kickbacks)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(kickbacks.id, id))
+      .returning();
+    return kickback;
+  }
+
+  async deleteKickback(id: number): Promise<void> {
+    await db.delete(kickbacks).where(eq(kickbacks.id, id));
+  }
+
+  // Kickback Analytics Methods
+  async getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
+    totalKickbacks: number;
+    byDepartment: { [key: string]: number };
+    byReasonCode: { [key: string]: number };
+    byStatus: { [key: string]: number };
+    byPriority: { [key: string]: number };
+    resolvedKickbacks: number;
+    averageResolutionTime: number | null;
+  }> {
+    let baseQuery = db.select().from(kickbacks);
+    
+    if (dateRange) {
+      baseQuery = baseQuery.where(
+        and(
+          gte(kickbacks.kickbackDate, dateRange.start),
+          lte(kickbacks.kickbackDate, dateRange.end)
+        )
+      );
+    }
+
+    const allKickbacks = await baseQuery;
+
+    const totalKickbacks = allKickbacks.length;
+    const byDepartment: { [key: string]: number } = {};
+    const byReasonCode: { [key: string]: number } = {};
+    const byStatus: { [key: string]: number } = {};
+    const byPriority: { [key: string]: number } = {};
+    
+    let resolvedKickbacks = 0;
+    let totalResolutionTime = 0;
+    let resolutionCount = 0;
+
+    allKickbacks.forEach(kickback => {
+      // Department counts
+      byDepartment[kickback.kickbackDept] = (byDepartment[kickback.kickbackDept] || 0) + 1;
+      
+      // Reason code counts
+      byReasonCode[kickback.reasonCode] = (byReasonCode[kickback.reasonCode] || 0) + 1;
+      
+      // Status counts
+      byStatus[kickback.status] = (byStatus[kickback.status] || 0) + 1;
+      
+      // Priority counts
+      byPriority[kickback.priority] = (byPriority[kickback.priority] || 0) + 1;
+
+      // Resolution tracking
+      if (kickback.status === 'RESOLVED' || kickback.status === 'CLOSED') {
+        resolvedKickbacks++;
+        
+        if (kickback.resolvedAt) {
+          const resolutionTime = kickback.resolvedAt.getTime() - kickback.kickbackDate.getTime();
+          totalResolutionTime += resolutionTime;
+          resolutionCount++;
+        }
+      }
+    });
+
+    const averageResolutionTime = resolutionCount > 0 
+      ? totalResolutionTime / resolutionCount / (1000 * 60 * 60 * 24) // Convert to days
+      : null;
+
+    return {
+      totalKickbacks,
+      byDepartment,
+      byReasonCode,
+      byStatus,
+      byPriority,
+      resolvedKickbacks,
+      averageResolutionTime
+    };
   }
 
   // Document Management System CRUD Methods

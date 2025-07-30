@@ -1844,6 +1844,51 @@ export const insertTaskItemSchema = createInsertSchema(taskItems).omit({
 export type InsertTaskItem = z.infer<typeof insertTaskItemSchema>;
 export type TaskItem = typeof taskItems.$inferSelect;
 
+// Kickback Tracking Table
+export const kickbacks = pgTable("kickbacks", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  kickbackDept: text("kickback_dept").notNull(), // Department where kickback occurred
+  reasonCode: text("reason_code").notNull(), // MATERIAL_DEFECT, OPERATOR_ERROR, MACHINE_FAILURE, etc.
+  reasonText: text("reason_text"), // Detailed description
+  kickbackDate: timestamp("kickback_date").notNull(),
+  reportedBy: text("reported_by").notNull(), // User who reported the kickback
+  resolvedAt: timestamp("resolved_at"), // When the kickback was resolved
+  resolvedBy: text("resolved_by"), // User who resolved the kickback
+  resolutionNotes: text("resolution_notes"), // Notes about the resolution
+  status: text("status").default("OPEN").notNull(), // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority: text("priority").default("MEDIUM").notNull(), // LOW, MEDIUM, HIGH, CRITICAL
+  impactedDepartments: text("impacted_departments").array().default(["?"]), // Other departments affected
+  rootCause: text("root_cause"), // Identified root cause
+  correctiveAction: text("corrective_action"), // Actions taken to prevent recurrence
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertKickbackSchema = createInsertSchema(kickbacks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  kickbackDept: z.enum(['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping']),
+  reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER']),
+  reasonText: z.string().optional().nullable(),
+  kickbackDate: z.coerce.date(),
+  reportedBy: z.string().min(1, "Reporter is required"),
+  resolvedAt: z.coerce.date().optional().nullable(),
+  resolvedBy: z.string().optional().nullable(),
+  resolutionNotes: z.string().optional().nullable(),
+  status: z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']).default('OPEN'),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+  impactedDepartments: z.array(z.string()).default([]),
+  rootCause: z.string().optional().nullable(),
+  correctiveAction: z.string().optional().nullable(),
+});
+
+export type InsertKickback = z.infer<typeof insertKickbackSchema>;
+export type Kickback = typeof kickbacks.$inferSelect;
+
 // Document Management System Tables
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),

@@ -5,6 +5,7 @@ import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
+import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
 import qualityRoutes from './quality';
@@ -29,6 +30,9 @@ export function registerRoutes(app: Express): Server {
 
   // Task tracker routes
   app.use('/api/task-items', tasksRoutes);
+
+  // Kickback tracking routes
+  app.use('/api/kickbacks', kickbackRoutes);
 
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);

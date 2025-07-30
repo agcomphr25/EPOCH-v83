@@ -130,6 +130,12 @@ export default function Navigation() {
       description: 'Collaborative task management with GJ, TM, and Finished checkboxes'
     },
     {
+      path: '/kickback-tracking',
+      label: 'Kickback Tracking',
+      icon: TrendingDown,
+      description: 'Track production issues and resolutions'
+    },
+    {
       path: '/document-management',
       label: 'Document Management',
       icon: FileText,

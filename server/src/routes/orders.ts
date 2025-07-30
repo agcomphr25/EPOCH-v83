@@ -195,25 +195,21 @@ router.get('/last-id', async (req: Request, res: Response) => {
 // Support both GET and POST for generate-id to maintain compatibility
 router.get('/generate-id', async (req: Request, res: Response) => {
   try {
-    const lastOrderId = await storage.getLastOrderId();
-    const orderId = generateP1OrderId(new Date(), lastOrderId || '');
+    const orderId = await storage.generateNextOrderId();
     res.json({ orderId });
   } catch (error) {
-    console.error('Generate ID error:', error);
-    const fallbackId = `AG${Date.now().toString().slice(-6)}`;
-    res.json({ orderId: fallbackId });
+    console.error('Order ID generation failed:', error);
+    res.status(500).json({ error: "Failed to generate order ID" });
   }
 });
 
 router.post('/generate-id', async (req: Request, res: Response) => {
   try {
-    const lastOrderId = await storage.getLastOrderId();
-    const orderId = generateP1OrderId(new Date(), lastOrderId || '');
+    const orderId = await storage.generateNextOrderId();
     res.json({ orderId });
   } catch (error) {
-    console.error('Generate ID error:', error);
-    const fallbackId = `AG${Date.now().toString().slice(-6)}`;
-    res.json({ orderId: fallbackId });
+    console.error('Order ID generation failed:', error);
+    res.status(500).json({ error: "Failed to generate order ID" });
   }
 });
 

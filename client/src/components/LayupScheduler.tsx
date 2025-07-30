@@ -551,6 +551,7 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
+  console.log("LayupScheduler component rendering...");
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -583,9 +584,9 @@ export default function LayupScheduler() {
 
   // Update local assignments when schedule data loads
   useEffect(() => {
-    if (existingSchedule && existingSchedule.length > 0) {
+    if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      existingSchedule.forEach((entry: any) => {
+      (existingSchedule as any[]).forEach((entry: any) => {
         assignments[entry.orderId] = {
           moldId: entry.moldId,
           date: entry.scheduledDate
@@ -777,7 +778,7 @@ export default function LayupScheduler() {
 
     // Generate all work days for the dynamic window
     const schedulingWeeks = calculateSchedulingWindow();
-    const allWorkDays = [];
+    const allWorkDays: Date[] = [];
     
     for (let week = 0; week < schedulingWeeks; week++) {
       const weekStartDate = new Date(currentDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);

@@ -200,7 +200,18 @@ export default function PurchaseReviewChecklist() {
   };
 
   const selectAddressSuggestion = (suggestion: any) => {
-    const fullAddress = `${suggestion.street_line}, ${suggestion.city}, ${suggestion.state} ${suggestion.zipcode}`;
+    console.log('Selected address suggestion:', suggestion);
+    
+    // Handle different possible data structures from SmartyStreets API
+    const streetLine = suggestion.streetLine || suggestion.street_line || suggestion.street || '';
+    const city = suggestion.city || '';
+    const state = suggestion.state || '';
+    const zipcode = suggestion.zipCode || suggestion.zipcode || '';
+    
+    const fullAddress = streetLine && city && state ? 
+      `${streetLine}, ${city}, ${state}${zipcode ? ' ' + zipcode : ''}` :
+      (suggestion.text || streetLine);
+      
     handleInputChange('address', fullAddress);
     setAddressQuery(fullAddress);
     setShowAddressSuggestions(false);
@@ -415,8 +426,15 @@ export default function PurchaseReviewChecklist() {
                       className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                       onClick={() => selectAddressSuggestion(suggestion)}
                     >
-                      <div className="font-medium">{suggestion.street_line}</div>
-                      <div className="text-sm text-gray-600">{suggestion.city}, {suggestion.state} {suggestion.zipcode}</div>
+                      <div className="font-medium">
+                        {suggestion.streetLine || suggestion.street_line || suggestion.street || suggestion.text}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {(suggestion.city && suggestion.state) ? 
+                          `${suggestion.city}, ${suggestion.state}${suggestion.zipCode || suggestion.zipcode ? ' ' + (suggestion.zipCode || suggestion.zipcode) : ''}` :
+                          'Address information'
+                        }
+                      </div>
                     </div>
                   ))}
                 </div>

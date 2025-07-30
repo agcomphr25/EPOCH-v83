@@ -327,12 +327,14 @@ export default function CustomerManagement() {
   
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion: any) => {
+    console.log('Selected suggestion:', suggestion);
+    
     setAddressFormData(prev => ({
       ...prev,
-      street: suggestion.street,
-      city: suggestion.city,
-      state: suggestion.state,
-      zipCode: suggestion.zipCode
+      street: suggestion.streetLine || suggestion.street_line || suggestion.street || '',
+      city: suggestion.city || '',
+      state: suggestion.state || '',
+      zipCode: suggestion.zipCode || suggestion.zipcode || ''
     }));
     setShowSuggestions(false);
     setAddressSuggestions([]);
@@ -1401,9 +1403,14 @@ export default function CustomerManagement() {
                         className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
                         onClick={() => handleSuggestionSelect(suggestion)}
                       >
-                        <div className="font-medium text-gray-900">{suggestion.street}</div>
+                        <div className="font-medium text-gray-900">
+                          {suggestion.streetLine || suggestion.street_line || suggestion.street || suggestion.text}
+                        </div>
                         <div className="text-sm text-gray-600">
-                          {suggestion.city}, {suggestion.state} {suggestion.zipCode}
+                          {(suggestion.city && suggestion.state) ? 
+                            `${suggestion.city}, ${suggestion.state}${suggestion.zipCode || suggestion.zipcode ? ' ' + (suggestion.zipCode || suggestion.zipcode) : ''}` :
+                            (suggestion.text || 'Address information')
+                          }
                         </div>
                       </div>
                     ))}

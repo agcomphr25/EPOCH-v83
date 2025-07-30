@@ -332,13 +332,13 @@ export default function CustomerManagement() {
     console.log('🔧 handleSuggestionSelect called with:', suggestion);
     console.log('🔧 Current addressFormData before update:', addressFormData);
     
-    // Handle data from /api/validate-address endpoint which returns: { street, city, state, zipCode }
+    // Handle data from both endpoints - bypass returns streetLine, validate returns street
     const newAddressData = {
       ...addressFormData,
-      street: suggestion.street || '',
+      street: suggestion.street || suggestion.streetLine || suggestion.street_line || '',
       city: suggestion.city || '',
       state: suggestion.state || '',
-      zipCode: suggestion.zipCode || ''
+      zipCode: suggestion.zipCode || suggestion.zipcode || ''
     };
     
     console.log('🔧 New address data being set:', newAddressData);
@@ -1414,10 +1414,13 @@ export default function CustomerManagement() {
                       <div
                         key={index}
                         className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                        onClick={() => handleSuggestionSelect(suggestion)}
+                        onClick={() => {
+                          console.log('🔧 Suggestion clicked!', suggestion);
+                          handleSuggestionSelect(suggestion);
+                        }}
                       >
                         <div className="font-medium text-gray-900">
-                          {suggestion.street || ''}
+                          {suggestion.street || suggestion.streetLine || suggestion.street_line || ''}
                         </div>
                         <div className="text-sm text-gray-600">
                           {(suggestion.city && suggestion.state) ? 

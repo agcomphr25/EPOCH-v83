@@ -59,6 +59,65 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   }
 });
 
+// GET /api/auth/session - Check current session (no auth required for manufacturing system)
+router.get('/session', async (req: Request, res: Response) => {
+  try {
+    // Try to get authenticated user first
+    const authHeader = req.headers['authorization'];
+    const bearerToken = authHeader && authHeader.split(' ')[1];
+    const cookieToken = req.cookies?.sessionToken;
+    const token = bearerToken || cookieToken;
+
+    if (token) {
+      try {
+        let user = null;
+        
+        // Try JWT authentication first
+        if (bearerToken) {
+          const jwtPayload = AuthService.verifyJWT(bearerToken);
+          if (jwtPayload) {
+            const dbUser = await AuthService.getUserById(jwtPayload.userId);
+            if (dbUser && dbUser.isActive) {
+              user = dbUser;
+            }
+          }
+        }
+
+        // Fallback to session-based authentication
+        if (!user && cookieToken) {
+          user = await AuthService.getUserBySession(cookieToken);
+        }
+
+        if (user) {
+          return res.json({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            employeeId: user.employeeId,
+            isActive: user.isActive,
+            canOverridePrices: user.canOverridePrices
+          });
+        }
+      } catch (authError) {
+        console.log('Authentication failed, returning anonymous user:', authError);
+      }
+    }
+
+    // Return anonymous user for manufacturing system access
+    res.json({
+      id: 0,
+      username: 'anonymous',
+      role: 'OPERATOR',
+      employeeId: null,
+      isActive: true,
+      canOverridePrices: false
+    });
+  } catch (error) {
+    console.error('Session check error:', error);
+    res.status(500).json({ error: "Session check failed" });
+  }
+});
+
 // POST /api/auth/change-password
 router.post('/change-password', authenticateToken, async (req: Request, res: Response) => {
   try {

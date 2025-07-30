@@ -327,15 +327,20 @@ export default function CustomerManagement() {
   
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion: any) => {
-    console.log('Selected suggestion:', suggestion);
+    console.log('🔧 handleSuggestionSelect called with:', suggestion);
+    console.log('🔧 Current addressFormData before update:', addressFormData);
     
-    setAddressFormData(prev => ({
-      ...prev,
+    const newAddressData = {
+      ...addressFormData,
       street: suggestion.streetLine || suggestion.street_line || suggestion.street || '',
       city: suggestion.city || '',
       state: suggestion.state || '',
       zipCode: suggestion.zipCode || suggestion.zipcode || ''
-    }));
+    };
+    
+    console.log('🔧 New address data being set:', newAddressData);
+    
+    setAddressFormData(newAddressData);
     setShowSuggestions(false);
     setAddressSuggestions([]);
     
@@ -344,6 +349,11 @@ export default function CustomerManagement() {
       description: "Address has been validated and filled.",
       duration: 2000
     });
+    
+    // Log the state after a short delay to see if it was set properly
+    setTimeout(() => {
+      console.log('🔧 Address form data after state update (delayed check):', addressFormData);
+    }, 100);
   };
 
   // Create customer mutation

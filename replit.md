@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 30, 2025 - SelectItem Error Investigation and LSP Diagnostics Resolution (IN PROGRESS)**
+- ✅ **CustomerManagement.tsx Fix**: Added missing address fields to handleEditCustomer function to resolve TypeScript LSP errors
+- ✅ **API Endpoint Verification**: Confirmed all layup schedule API endpoints are working correctly with proper JSON responses
+- ✅ **Root Cause Identification**: Identified that layup schedule database is empty (0 entries), requiring users to assign orders in Layup Scheduler first
+- ✅ **SelectItem Investigation**: Systematically searched all SelectItem components and found they all have proper value props
+- 🔄 **Runtime Error Analysis**: SelectItem error appears to be runtime-based rather than static code issue, investigating dynamic rendering patterns
+- 📋 **Next Steps**: Need to identify which specific component is dynamically rendering SelectItem without value prop during runtime
+
 **July 30, 2025 - Customer Creation Modal UX Enhancement (COMPLETED)**
 - ✅ **Terrible UX Redesign**: Completely redesigned Create New Customer modal with professional two-section layout replacing cramped 4-column grid system
 - ✅ **Address Fields Implementation**: Added complete address functionality including Street Address, City, State, ZIP Code, Country, and Address Type fields

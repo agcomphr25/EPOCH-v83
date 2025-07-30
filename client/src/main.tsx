@@ -6,6 +6,7 @@ import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Ensure React is globally available before any components load
 (window as any).React = React;
@@ -17,6 +18,21 @@ import App from "./App";
 (window as any).useCallback = React.useCallback;
 (window as any).createContext = React.createContext;
 (window as any).useContext = React.useContext;
+
+// Enhanced error tracking for deployment debugging
+let globalErrors = [];
+const originalConsoleError = console.error;
+console.error = function(...args) {
+  globalErrors.push({
+    timestamp: new Date().toISOString(),
+    message: args.join(' '),
+    type: 'console.error'
+  });
+  originalConsoleError.apply(console, args);
+};
+
+// Make errors accessible for debugging
+(window as any).getGlobalErrors = () => globalErrors;
 
 console.log("React initialized:", React);
 console.log("React hooks:", { useState: React.useState, useEffect: React.useEffect });
@@ -30,7 +46,9 @@ if (rootElement) {
     console.log("Rendering React app...");
     root.render(
       <StrictMode>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </StrictMode>
     );
     console.log("React app rendered successfully");

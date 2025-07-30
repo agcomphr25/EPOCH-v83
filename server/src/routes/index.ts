@@ -54,6 +54,41 @@ export function registerRoutes(app: Express): Server {
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
 
+  // Health check endpoint for deployment debugging
+  app.get('/api/health', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { testDatabaseConnection } = await import('../../db');
+      
+      const dbConnected = await testDatabaseConnection();
+      const status = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        database: dbConnected ? 'connected' : 'disconnected',
+        environment: process.env.NODE_ENV || 'development',
+        server: 'running'
+      };
+      
+      if (dbConnected) {
+        // Test a simple query to verify storage works
+        try {
+          const stockModels = await storage.getAllStockModels();
+          status.database = `connected (${stockModels.length} stock models)`;
+        } catch (error) {
+          status.database = 'connected but storage error';
+        }
+      }
+      
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ 
+        status: 'error', 
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // Layup Schedule API endpoints - missing route handler
   app.get('/api/layup-schedule', async (req, res) => {
     try {

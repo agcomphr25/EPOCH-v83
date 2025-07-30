@@ -7,13 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Factory, Calendar, ArrowRight, Package, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function LayupPluggingQueuePage() {
-  const { orders } = useUnifiedLayupOrders();
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const queryClient = useQueryClient();
   
@@ -30,14 +29,29 @@ export default function LayupPluggingQueuePage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Get all available orders from P1 layup queue
+  const { data: availableOrders = [] } = useQuery({
+    queryKey: ['/api/p1-layup-queue'],
+    queryFn: async () => {
+      return await apiRequest('/api/p1-layup-queue');
+    },
+    refetchInterval: 30000,
+  });
+
   // Get orders queued for barcode department (next department after layup)
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
+    queryFn: async () => {
+      return await apiRequest('/api/orders/all');
+    },
   });
 
   // Get molds data for better display
   const { data: molds = [] } = useQuery({
     queryKey: ['/api/molds'],
+    queryFn: async () => {
+      return await apiRequest('/api/molds');
+    },
   });
 
   // Calculate current week dates (Monday-Friday)
@@ -52,7 +66,7 @@ export default function LayupPluggingQueuePage() {
     console.log('🔍 LAYUP QUEUE DEBUG:');
     console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
     console.log('- Current week dates:', currentWeekDates.length);
-    console.log('- Orders available:', orders.length);
+    console.log('- Available orders:', availableOrders.length);
     console.log('- Schedule loading:', scheduleLoading);
     
     if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
@@ -68,7 +82,7 @@ export default function LayupPluggingQueuePage() {
     }
     
     console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
-  }, [currentSchedule, currentWeekDates, orders, scheduleLoading]);
+  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading]);
 
   // Calculate next week dates
   const nextWeekDates = useMemo(() => {
@@ -106,12 +120,31 @@ export default function LayupPluggingQueuePage() {
           return false;
         }
       }).map((scheduleItem: any) => {
-        const order = orders.find((o: any) => o.orderId === scheduleItem.orderId);
+        // Find matching order from available orders
+        const order = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
         if (!order) {
-          console.log('🔍 Warning: Schedule item has no matching order:', scheduleItem.orderId);
-          return { ...scheduleItem }; // Return schedule item even without order data
+          console.log('🔍 Warning: Schedule item has no matching order, creating basic order:', scheduleItem.orderId);
+          // Create a basic order object from schedule data
+          return {
+            orderId: scheduleItem.orderId,
+            scheduledDate: scheduleItem.scheduledDate,
+            customer: 'Unknown Customer',
+            stockModelId: 'unknown',
+            modelId: 'unknown',
+            features: {},
+            source: 'scheduled_order',
+            dueDate: null
+          };
         }
-        return { ...order, ...scheduleItem };
+        // Merge order data with schedule data
+        const mergedOrder = { ...order, scheduledDate: scheduleItem.scheduledDate };
+        console.log('🔍 Merged order with schedule:', {
+          orderId: mergedOrder.orderId,
+          hasFeatures: !!mergedOrder.features,
+          hasStockModel: !!mergedOrder.stockModelId,
+          scheduledDate: mergedOrder.scheduledDate
+        });
+        return mergedOrder;
       }).filter((order: any) => order.orderId);
 
       console.log('🔍 Week orders found:', weekOrders.length);
@@ -137,7 +170,7 @@ export default function LayupPluggingQueuePage() {
       console.error('🔍 Error in currentWeekOrdersByDate calculation:', error);
       return {};
     }
-  }, [currentSchedule, orders, currentWeekDates]);
+  }, [currentSchedule, availableOrders, currentWeekDates]);
 
   // Get all current week orders for cards view
   const currentWeekOrders = useMemo(() => {
@@ -196,6 +229,9 @@ export default function LayupPluggingQueuePage() {
   // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
+    queryFn: async () => {
+      return await apiRequest('/api/stock-models');
+    },
   });
 
   const getModelDisplayName = (modelId: string) => {
@@ -330,8 +366,9 @@ export default function LayupPluggingQueuePage() {
               <div className="text-xs text-gray-400 mt-4 space-y-1">
                 <p>Debug Info:</p>
                 <p>Schedule entries: {(currentSchedule as any[]).length}</p>
-                <p>Available orders: {orders.length}</p>
+                <p>Available orders: {availableOrders.length}</p>
                 <p>Current week orders: {currentWeekOrders.length}</p>
+                <p>Schedule loading: {scheduleLoading ? 'Yes' : 'No'}</p>
               </div>
             </div>
           ) : (

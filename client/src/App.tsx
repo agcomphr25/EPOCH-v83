@@ -102,6 +102,7 @@ function App() {
   }, []);
 
   if (error) {
+    console.error("App-level error:", error);
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full">
@@ -115,7 +116,10 @@ function App() {
           </pre>
           <button 
             className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setError(null);
+              window.location.reload();
+            }}
           >
             Reload Application
           </button>

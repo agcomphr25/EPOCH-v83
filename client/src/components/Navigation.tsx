@@ -271,12 +271,6 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/layup-scheduler',
-      label: 'Layup Scheduler',
-      icon: Calendar,
-      description: 'Schedule and manage layup production orders with drag-and-drop interface'
-    },
-    {
       path: '/production-tracking',
       label: 'Production Tracking',
       icon: TrendingUp,
@@ -286,10 +280,16 @@ export default function Navigation() {
 
   const departmentQueueItems = [
     {
-      path: '/department-queue/layup-plugging',
-      label: 'Layup/Plugging',
+      path: '/layup-scheduler',
+      label: 'Layup Scheduler',
+      icon: Calendar,
+      description: 'Schedule and manage layup production orders with drag-and-drop interface'
+    },
+    {
+      path: '/department-queue/layup-department',
+      label: 'Layup Department',
       icon: Factory,
-      description: 'Layup and plugging department queue management'
+      description: 'Complete layup department management with scheduling and queue'
     },
     {
       path: '/department-queue/barcode',

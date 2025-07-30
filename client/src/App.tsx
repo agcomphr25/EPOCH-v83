@@ -43,6 +43,7 @@ import P2PurchaseOrders from "./pages/P2PurchaseOrders";
 import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
+import LayupDepartmentPage from "./pages/LayupDepartmentPage";
 import AllOrdersPage from "./pages/AllOrdersPage";
 import AGTestDashboard from "./pages/AGTestDashboard";
 import ADMINTestDashboard from "./pages/GLENNTestDashboard";
@@ -169,6 +170,7 @@ function App() {
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
+                  <Route path="/department-queue/layup-department" component={LayupDepartmentPage} />
 
             {/* Department Queue Management Routes */}
             <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />

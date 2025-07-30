@@ -708,6 +708,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(features.id, id))
       .returning();
 
+    if (!feature) {
+      throw new Error(`Feature with id ${id} not found`);
+    }
+
     // Parse JSON options field if it's a string
     return {
       ...feature,

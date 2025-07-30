@@ -174,6 +174,50 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.post('/api/features', async (req, res) => {
+    try {
+      console.log('🔧 FEATURE CREATE ROUTE CALLED');
+      console.log('🔧 Request body:', req.body);
+      const { storage } = await import('../../storage');
+      const feature = await storage.createFeature(req.body);
+      console.log('🔧 Created feature:', feature.id);
+      res.status(201).json(feature);
+    } catch (error) {
+      console.error('🔧 Feature create error:', error);
+      res.status(500).json({ error: "Failed to create feature" });
+    }
+  });
+
+  app.put('/api/features/:id', async (req, res) => {
+    try {
+      console.log('🔧 FEATURE UPDATE ROUTE CALLED');
+      console.log('🔧 Feature ID:', req.params.id);
+      console.log('🔧 Request body:', req.body);
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const feature = await storage.updateFeature(id, req.body);
+      console.log('🔧 Updated feature:', feature.id);
+      res.json(feature);
+    } catch (error) {
+      console.error('🔧 Feature update error:', error);
+      res.status(500).json({ error: "Failed to update feature" });
+    }
+  });
+
+  app.delete('/api/features/:id', async (req, res) => {
+    try {
+      console.log('🔧 FEATURE DELETE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      await storage.deleteFeature(id);
+      console.log('🔧 Deleted feature:', id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('🔧 Feature delete error:', error);
+      res.status(500).json({ error: "Failed to delete feature" });
+    }
+  });
+
   app.get('/api/feature-categories', async (req, res) => {
     try {
       const { storage } = await import('../../storage');

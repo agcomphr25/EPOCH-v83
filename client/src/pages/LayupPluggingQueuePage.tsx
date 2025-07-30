@@ -63,26 +63,43 @@ export default function LayupPluggingQueuePage() {
 
   // Enhanced debugging
   React.useEffect(() => {
-    console.log('🔍 LAYUP QUEUE DEBUG:');
+    console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
     console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
     console.log('- Current week dates:', currentWeekDates.length);
     console.log('- Available orders:', availableOrders.length);
     console.log('- Schedule loading:', scheduleLoading);
+    console.log('- Current week orders calculated:', currentWeekOrders.length);
     
     if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
-      console.log('- First schedule entry:', currentSchedule[0]);
-      console.log('- Sample scheduled dates:', currentSchedule.slice(0, 3).map((s: any) => ({
+      console.log('- Schedule entries sample:', currentSchedule.slice(0, 5).map((s: any) => ({
         orderId: s.orderId,
         scheduledDate: s.scheduledDate,
         dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
       })));
+      
+      console.log('- All scheduled order IDs:', currentSchedule.map((s: any) => s.orderId));
     } else {
       console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
-      console.log('- Current schedule data:', currentSchedule);
+      console.log('- Current schedule data type:', typeof currentSchedule);
+      console.log('- Current schedule value:', currentSchedule);
     }
     
     console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
-  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading]);
+    
+    if (availableOrders.length > 0) {
+      console.log('- Available orders sample:', availableOrders.slice(0, 3).map((o: any) => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId
+      })));
+    }
+    
+    console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
+      date,
+      count: orders.length,
+      orderIds: orders.map((o: any) => o.orderId)
+    })));
+  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading, currentWeekOrders, currentWeekOrdersByDate]);
 
   // Calculate next week dates
   const nextWeekDates = useMemo(() => {
@@ -94,77 +111,100 @@ export default function LayupPluggingQueuePage() {
   // Get current week scheduled orders grouped by date
   const currentWeekOrdersByDate = useMemo(() => {
     if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
-      console.log('🔍 No schedule data available for grouping');
+      console.log('🔍 No schedule data available for grouping. Schedule length:', (currentSchedule as any[]).length);
       return {};
     }
 
     try {
       const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
       console.log('🔍 Week date strings for filtering:', weekDateStrings);
+      console.log('🔍 Total schedule entries to process:', currentSchedule.length);
       
-      const weekOrders = currentSchedule.filter((scheduleItem: any) => {
-        if (!scheduleItem?.scheduledDate) return false;
+      // Process all schedule entries for current week
+      const weekOrders = currentSchedule.map((scheduleItem: any) => {
+        if (!scheduleItem?.scheduledDate || !scheduleItem?.orderId) {
+          console.log('🔍 Invalid schedule item:', scheduleItem);
+          return null;
+        }
+
         try {
           const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
           const isInWeek = weekDateStrings.includes(scheduledDate);
-          if (isInWeek) {
-            console.log('🔍 Found schedule item for current week:', {
-              orderId: scheduleItem.orderId,
-              scheduledDate: scheduledDate,
-              originalDate: scheduleItem.scheduledDate
-            });
+          
+          if (!isInWeek) {
+            return null; // Not in current week
           }
-          return isInWeek;
+
+          console.log('🔍 Processing schedule item for current week:', {
+            orderId: scheduleItem.orderId,
+            scheduledDate: scheduledDate,
+            originalDate: scheduleItem.scheduledDate
+          });
+
+          // Find matching order from available orders
+          const matchingOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
+          
+          if (matchingOrder) {
+            // Use the full order data with schedule date
+            const mergedOrder = { 
+              ...matchingOrder, 
+              scheduledDate: scheduleItem.scheduledDate,
+              source: matchingOrder.source || 'main_orders'
+            };
+            console.log('🔍 Found matching order:', {
+              orderId: mergedOrder.orderId,
+              hasFeatures: !!mergedOrder.features,
+              stockModelId: mergedOrder.stockModelId,
+              source: mergedOrder.source
+            });
+            return mergedOrder;
+          } else {
+            // Create a minimal order from schedule data if no match found
+            console.log('🔍 No matching order found, creating minimal order for:', scheduleItem.orderId);
+            return {
+              orderId: scheduleItem.orderId,
+              scheduledDate: scheduleItem.scheduledDate,
+              customer: 'Unknown Customer',
+              stockModelId: 'unknown',
+              modelId: 'unknown',
+              features: {},
+              source: 'scheduled_order',
+              dueDate: null
+            };
+          }
         } catch (dateError) {
           console.warn('🔍 Date parsing error for schedule item:', scheduleItem, dateError);
-          return false;
+          return null;
         }
-      }).map((scheduleItem: any) => {
-        // Find matching order from available orders
-        const order = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
-        if (!order) {
-          console.log('🔍 Warning: Schedule item has no matching order, creating basic order:', scheduleItem.orderId);
-          // Create a basic order object from schedule data
-          return {
-            orderId: scheduleItem.orderId,
-            scheduledDate: scheduleItem.scheduledDate,
-            customer: 'Unknown Customer',
-            stockModelId: 'unknown',
-            modelId: 'unknown',
-            features: {},
-            source: 'scheduled_order',
-            dueDate: null
-          };
-        }
-        // Merge order data with schedule data
-        const mergedOrder = { ...order, scheduledDate: scheduleItem.scheduledDate };
-        console.log('🔍 Merged order with schedule:', {
-          orderId: mergedOrder.orderId,
-          hasFeatures: !!mergedOrder.features,
-          hasStockModel: !!mergedOrder.stockModelId,
-          scheduledDate: mergedOrder.scheduledDate
-        });
-        return mergedOrder;
-      }).filter((order: any) => order.orderId);
+      }).filter((order: any) => order !== null);
 
-      console.log('🔍 Week orders found:', weekOrders.length);
+      console.log('🔍 Processed week orders:', weekOrders.length);
 
       // Group orders by date
       const grouped: {[key: string]: any[]} = {};
       currentWeekDates.forEach(date => {
         const dateStr = date.toISOString().split('T')[0];
-        grouped[dateStr] = weekOrders.filter(order => {
-          try {
-            const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
-            return orderDate === dateStr;
-          } catch (dateError) {
-            console.warn('🔍 Date parsing error for order:', order, dateError);
-            return false;
-          }
-        });
+        grouped[dateStr] = [];
       });
 
-      console.log('🔍 Grouped orders by date:', grouped);
+      // Distribute orders into date groups
+      weekOrders.forEach(order => {
+        try {
+          const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
+          if (grouped[orderDate]) {
+            grouped[orderDate].push(order);
+          }
+        } catch (dateError) {
+          console.warn('🔍 Date parsing error for grouping:', order, dateError);
+        }
+      });
+
+      console.log('🔍 Final grouped orders by date:', Object.entries(grouped).map(([date, orders]) => ({
+        date,
+        count: orders.length,
+        orderIds: orders.map(o => o.orderId)
+      })));
+      
       return grouped;
     } catch (error) {
       console.error('🔍 Error in currentWeekOrdersByDate calculation:', error);

@@ -56,7 +56,7 @@ export default function OrderEntry() {
   const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
-  
+
   const [orderDate, setOrderDate] = useState(new Date());
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
   const [orderId, setOrderId] = useState('');
@@ -77,7 +77,7 @@ export default function OrderEntry() {
   // Price Override state
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [showPriceOverride, setShowPriceOverride] = useState(false);
-  
+
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
@@ -86,7 +86,7 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
-  
+
   // Payment state
   const [isPaid, setIsPaid] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -114,7 +114,7 @@ export default function OrderEntry() {
       if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
         return;
       }
-      
+
       if (value && value !== 'none') {
         const feature = featureDefs.find(f => f.id === featureId);
         if (feature?.options) {
@@ -151,11 +151,11 @@ export default function OrderEntry() {
 
     // Add paint options price (from features object)
     const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-    
+
     if (currentPaint && currentPaint !== 'none') {
       console.log('💰 Paint calculation - current paint:', currentPaint);
       console.log('💰 Paint calculation - from features object');
-      
+
       const paintFeatures = featureDefs.filter(f => 
         f.displayName?.includes('Options') || 
         f.displayName?.includes('Camo') || 
@@ -168,9 +168,9 @@ export default function OrderEntry() {
         f.category === 'paint' ||
         f.subcategory === 'paint'
       );
-      
+
       console.log('💰 Paint calculation - found features:', paintFeatures.length, paintFeatures.map(f => f.displayName));
-      
+
       let paintPriceAdded = false;
       for (const feature of paintFeatures) {
         if (feature.options) {
@@ -183,7 +183,7 @@ export default function OrderEntry() {
           }
         }
       }
-      
+
       if (!paintPriceAdded) {
         console.log('💰 Paint calculation - NO PRICE FOUND for:', currentPaint);
       }
@@ -195,7 +195,7 @@ export default function OrderEntry() {
       console.log('💰 Rails calculation - current rails:', currentRails);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
       console.log('💰 Rails calculation - found feature:', railFeature?.displayName || railFeature?.name);
-      
+
       if (railFeature?.options) {
         console.log('💰 Rails calculation - available options:', railFeature.options.map(opt => `${opt.label}: ${opt.value} = $${opt.price}`));
         let railsTotal = 0;
@@ -243,7 +243,7 @@ export default function OrderEntry() {
   // Calculate discount amount based on selected discount code
   const calculateDiscountAmount = useCallback((subtotal: number) => {
     if (!discountCode || discountCode === 'none') return 0;
-    
+
     // Handle custom discount
     if (showCustomDiscount) {
       if (customDiscountType === 'percent') {
@@ -252,22 +252,22 @@ export default function OrderEntry() {
         return customDiscountValue;
       }
     }
-    
+
     // Handle predefined discount codes
     const selectedDiscount = discountOptions.find(d => d.value === discountCode);
     if (!selectedDiscount) return 0;
-    
+
     // For persistent discounts, check appliesTo setting
     if (discountCode.startsWith('persistent_') && discountDetails) {
       const baseAmount = priceOverride !== null ? priceOverride : (modelOptions.find(m => m.id === modelId)?.price || 0);
-      
+
       // If appliesTo is 'stock_model', apply discount only to base model price
       if (discountDetails.appliesTo === 'stock_model') {
         // Handle percentage discounts
         if (discountDetails.percent) {
           return (baseAmount * discountDetails.percent) / 100;
         }
-        
+
         // Handle fixed amount discounts
         if (discountDetails.fixedAmount) {
           return discountDetails.fixedAmount / 100; // Convert from cents to dollars
@@ -279,14 +279,14 @@ export default function OrderEntry() {
         if (discountDetails.percent) {
           return (subtotal * discountDetails.percent) / 100;
         }
-        
+
         // Handle fixed amount discounts on total order
         if (discountDetails.fixedAmount) {
           return discountDetails.fixedAmount / 100; // Convert from cents to dollars
         }
       }
     }
-    
+
     // For short-term sales, check appliesTo setting
     if (discountCode.startsWith('short_term_') && discountDetails) {
       if (discountDetails.appliesTo === 'stock_model') {
@@ -301,20 +301,20 @@ export default function OrderEntry() {
         }
       }
     }
-    
+
     // Fallback to label parsing for compatibility
     const percentMatch = selectedDiscount.label.match(/(\d+)% off/);
     if (percentMatch) {
       const percent = parseInt(percentMatch[1]);
       return (subtotal * percent) / 100;
     }
-    
+
     const dollarMatch = selectedDiscount.label.match(/\$(\d+\.?\d*) off/);
     if (dollarMatch) {
       const amount = parseFloat(dollarMatch[1]);
       return amount;
     }
-    
+
     return 0;
   }, [discountCode, discountOptions, showCustomDiscount, customDiscountType, customDiscountValue, discountDetails, priceOverride, modelOptions, modelId]);
 
@@ -323,7 +323,7 @@ export default function OrderEntry() {
     console.log('💰 Subtotal recalculated:', result);
     return result;
   }, [calculateTotalPrice]);
-  
+
   const discountAmount = useMemo(() => {
     const result = calculateDiscountAmount(subtotalPrice);
     console.log('💰 Discount recalculated:', result);
@@ -337,7 +337,7 @@ export default function OrderEntry() {
     }
     return result;
   }, [calculateDiscountAmount, subtotalPrice, discountDetails, priceOverride, modelOptions, modelId]);
-  
+
   const totalPrice = useMemo(() => {
     const result = subtotalPrice - discountAmount;
     console.log('💰 Total recalculated:', result);
@@ -378,14 +378,14 @@ export default function OrderEntry() {
       ]);
       setInitialDataLoaded(true);
     };
-    
+
     loadInitialData();
   }, []);
 
   // Load order data only after initial data is loaded
   useEffect(() => {
     if (!initialDataLoaded) return;
-    
+
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
       setIsEditMode(true);
@@ -409,7 +409,7 @@ export default function OrderEntry() {
         setOrderId(order.orderId);
         setOrderDate(new Date(order.orderDate));
         setDueDate(new Date(order.dueDate));
-        
+
         if (order.customerId) {
           // Load customer data
           const customers = await apiRequest('/api/customers');
@@ -418,7 +418,7 @@ export default function OrderEntry() {
             setCustomer(customer);
           }
         }
-        
+
         console.log('Setting modelId:', order.modelId || '');
         console.log('Current modelOptions available:', modelOptions.length);
         console.log('Available model IDs:', modelOptions.map(m => m.id));
@@ -441,13 +441,13 @@ export default function OrderEntry() {
         console.log('  - paint_options:', featuresObj.paint_options);
         console.log('  - rail_accessory:', featuresObj.rail_accessory);
         console.log('  - other_options:', featuresObj.other_options);
-        
+
         // Set ONLY the features object - all form controls now read from this
         setFeatures(featuresObj);
-        
+
         // Force component re-render by incrementing render key
         setRenderKey(prev => prev + 1);
-        
+
         setCustomerPO(order.customerPO || '');
         setHasCustomerPO(!!order.customerPO);
         setFbOrderNumber(order.fbOrderNumber || '');
@@ -467,7 +467,7 @@ export default function OrderEntry() {
         setShowCustomDiscount(order.showCustomDiscount || false);
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
-        
+
         // CRITICAL FIX: Load discount details after setting discount code
         if (order.discountCode && order.discountCode !== 'none') {
           const loadDiscountDetailsForEdit = async () => {
@@ -490,7 +490,7 @@ export default function OrderEntry() {
           };
           loadDiscountDetailsForEdit();
         }
-        
+
         // Load payment data if available
         setIsPaid(order.isPaid || false);
         setPaymentType(order.paymentType || '');
@@ -499,7 +499,7 @@ export default function OrderEntry() {
         setPaymentTimestamp(order.paymentTimestamp ? new Date(order.paymentTimestamp) : null);
         setShowPaymentModal(false);
         setShowTooltip(false);
-        
+
         console.log('All order fields loaded:', {
           orderId: order.orderId,
           modelId: order.modelId,
@@ -513,7 +513,7 @@ export default function OrderEntry() {
           isCustomOrder: order.isCustomOrder,
           discountCode: order.discountCode
         });
-        
+
         toast({
           title: "Order Loaded",
           description: `Editing order ${order.orderId}`,
@@ -536,11 +536,11 @@ export default function OrderEntry() {
       const models = await apiRequest('/api/stock-models');
       console.log('🔍 Raw models from API:', models);
       console.log('🔍 Total models received:', models?.length || 0);
-      
+
       if (models && Array.isArray(models) && models.length > 0) {
         console.log('🔍 First model sample:', models[0]);
         console.log('🔍 Model properties:', Object.keys(models[0]));
-        
+
         // Ensure models have the required fields
         const validModels = models.filter((m: any) => 
           m && typeof m === 'object' && 
@@ -548,12 +548,12 @@ export default function OrderEntry() {
           (m.displayName || m.name) && 
           typeof m.price === 'number'
         );
-        
+
         const activeModels = validModels.filter((m: StockModel) => m.isActive !== false);
         console.log('🔍 Active models filtered:', activeModels.length);
         console.log('🔍 Active models IDs:', activeModels.map((m: StockModel) => m.id));
         console.log('🔍 Active models display names:', activeModels.map((m: StockModel) => m.displayName || m.name));
-        
+
         setModelOptions(activeModels);
         console.log('✅ Stock models loaded successfully:', activeModels.length);
       } else {
@@ -589,10 +589,10 @@ export default function OrderEntry() {
         apiRequest('/api/short-term-sales'),
         apiRequest('/api/persistent-discounts')
       ]);
-      
+
       const discounts: {value: string; label: string}[] = [];
       const discountDetailsMap: Record<string, any> = {};
-      
+
       // Add active short-term sales
       const now = new Date();
       shortTermSales
@@ -612,7 +612,7 @@ export default function OrderEntry() {
             appliesTo: sale.appliesTo || 'total_order'
           };
         });
-      
+
       // Add active persistent discounts
       persistentDiscounts
         .filter((discount: any) => discount.isActive)
@@ -627,7 +627,7 @@ export default function OrderEntry() {
           });
           discountDetailsMap[value] = discount;
         });
-      
+
       console.log('💳 Discount options processed:', discounts.length, 'total discounts');
       console.log('💳 Discount options:', discounts);
       setDiscountOptions(discounts);
@@ -645,13 +645,13 @@ export default function OrderEntry() {
       const response = await apiRequest('/api/orders/generate-id', {
         method: 'POST'
       });
-      
+
       // Validate the generated ID format (e.g., AG001)
       const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
       if (!orderIdPattern.test(response.orderId)) {
         throw new Error('Invalid Order ID format generated');
       }
-      
+
       setOrderId(response.orderId);
       setErrors(prev => ({ ...prev, orderId: '' })); // Clear any previous errors
     } catch (error) {
@@ -671,7 +671,7 @@ export default function OrderEntry() {
     if (e) {
       e.preventDefault();
     }
-    
+
     setErrors({});
     setIsSubmitting(true);
 
@@ -681,12 +681,12 @@ export default function OrderEntry() {
         setErrors(prev => ({ ...prev, customer: 'Customer is required' }));
         return;
       }
-      
+
       if (!orderId || orderId.startsWith('ERROR')) {
         setErrors(prev => ({ ...prev, orderId: 'Valid Order ID is required' }));
         return;
       }
-      
+
       // Validate Order ID format
       const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
       if (!orderIdPattern.test(orderId)) {
@@ -748,7 +748,7 @@ export default function OrderEntry() {
           method: 'PUT',
           body: orderData
         });
-        
+
         toast({
           title: "Success",
           description: "Order updated successfully",
@@ -759,7 +759,7 @@ export default function OrderEntry() {
           method: 'POST',
           body: orderData
         });
-        
+
         toast({
           title: "Success", 
           description: "Order created successfully",
@@ -882,7 +882,7 @@ export default function OrderEntry() {
                     error={errors.customer}
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="customer-po">Customer PO</Label>
                   <div className="flex items-center space-x-2">
@@ -903,7 +903,7 @@ export default function OrderEntry() {
                       Enable Customer PO
                     </Label>
                   </div>
-                  
+
                   {hasCustomerPO && (
                     <div className="mt-2">
                       <Input
@@ -927,7 +927,7 @@ export default function OrderEntry() {
                     placeholder="Enter FB Order #"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="agr-order">AGR Order</Label>
                   <div className="flex items-center gap-4">
@@ -950,7 +950,7 @@ export default function OrderEntry() {
                       </Label>
                     </div>
                   </div>
-                  
+
                   {hasAGROrder && (
                     <div className="mt-2">
                       <Input
@@ -989,7 +989,7 @@ export default function OrderEntry() {
                         } else {
                           console.log('  - No models available in dropdown');
                         }
-                        
+
                         if (modelOptions.length === 0) {
                           return (
                             <SelectItem value="no-models" disabled>
@@ -997,7 +997,7 @@ export default function OrderEntry() {
                             </SelectItem>
                           );
                         }
-                        
+
                         return modelOptions.map((model) => (
                           <SelectItem key={model.id} value={model.id}>
                             {model.displayName || model.name} - ${model.price?.toFixed(2) || '0.00'}
@@ -1031,7 +1031,7 @@ export default function OrderEntry() {
                         Override Price
                       </Button>
                     </div>
-                    
+
                     {showPriceOverride && (
                       <div className="mt-3 space-y-3">
                         <div className="grid grid-cols-2 gap-4">
@@ -1082,7 +1082,7 @@ export default function OrderEntry() {
                         </div>
                       </div>
                     )}
-                    
+
                     {priceOverride !== null && !showPriceOverride && (
                       <div className="mt-2 text-sm text-green-700">
                         Price overridden to: <span className="font-semibold">${priceOverride.toFixed(2)}</span>
@@ -1180,11 +1180,11 @@ export default function OrderEntry() {
                             f.displayName?.toLowerCase().includes('length of pull') ||
                             f.displayName?.toLowerCase().includes('lop')
                           );
-                          
+
                           if (!lopFeature || !lopFeature.options) {
                             return null;
                           }
-                          
+
                           return lopFeature.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1214,11 +1214,11 @@ export default function OrderEntry() {
                             f.name?.toLowerCase().includes('texture') ||
                             f.displayName?.toLowerCase().includes('texture')
                           );
-                          
+
                           if (!textureFeature || !textureFeature.options) {
                             return null;
                           }
-                          
+
                           return textureFeature.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1235,7 +1235,7 @@ export default function OrderEntry() {
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
                       {(() => {
                         const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
-                        
+
                         if (!otherOptionsFeature || !otherOptionsFeature.options) {
                           return <div className="text-gray-500 text-sm">
                             No Other Options available (Features loaded: {featureDefs.length}, Looking for: other_options)
@@ -1246,7 +1246,7 @@ export default function OrderEntry() {
                             )}
                           </div>;
                         }
-                        
+
                         return otherOptionsFeature.options.map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
@@ -1345,11 +1345,11 @@ export default function OrderEntry() {
                             f.displayName?.toLowerCase().includes('qd') ||
                             f.displayName?.toLowerCase().includes('quick detach')
                           );
-                          
+
                           if (!qdFeature || !qdFeature.options) {
                             return null;
                           }
-                          
+
                           return qdFeature.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1366,7 +1366,7 @@ export default function OrderEntry() {
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
                       {(() => {
                         const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
-                        
+
                         if (!railsFeature || !railsFeature.options) {
                           return <div className="text-gray-500 text-sm">
                             No Rails options available (Features loaded: {featureDefs.length}, Looking for: rail_accessory)
@@ -1377,7 +1377,7 @@ export default function OrderEntry() {
                             )}
                           </div>;
                         }
-                        
+
                         return railsFeature.options.map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
@@ -1430,11 +1430,11 @@ export default function OrderEntry() {
                             f.displayName?.toLowerCase().includes('swivel') ||
                             f.displayName?.toLowerCase().includes('stud')
                           );
-                          
+
                           if (!swivelFeature || !swivelFeature.options) {
                             return null;
                           }
-                          
+
                           return swivelFeature.options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1469,14 +1469,14 @@ export default function OrderEntry() {
                             f.id === 'metallic_finishes' ||
                             f.name === 'metallic_finishes'
                           );
-                          
+
                           if (!paintFeatures || paintFeatures.length === 0) {
                             return <SelectItem value="none">No paint options available</SelectItem>;
                           }
-                          
+
                           // Collect all options from all paint features
                           const allOptions: { value: string; label: string; category?: string }[] = [];
-                          
+
                           paintFeatures.forEach(feature => {
                             if (feature.options) {
                               feature.options.forEach(option => {
@@ -1488,7 +1488,7 @@ export default function OrderEntry() {
                               });
                             }
                           });
-                          
+
                           return allOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -1542,7 +1542,7 @@ export default function OrderEntry() {
               {/* Feature Selections */}
               <div className="space-y-3">
                 <div className="font-medium text-base">Feature Selections</div>
-                
+
                 {/* Stock Model - Always Show */}
                 <div className="flex justify-between items-center">
                   <span>Stock Model:</span>
@@ -1556,7 +1556,7 @@ export default function OrderEntry() {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Handedness - Show if selected or as "Not selected" */}
                 <div className="flex justify-between items-center">
                   <span>Handedness:</span>
@@ -1565,7 +1565,7 @@ export default function OrderEntry() {
                     <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
-                
+
                 {/* Action Length - Show if selected or as "Not selected" */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1585,7 +1585,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Action Inlet */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1605,7 +1605,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Bottom Metal */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1625,7 +1625,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Barrel Inlet */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1645,7 +1645,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* QDs (Quick Detach Cups) */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1665,7 +1665,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* LOP (Length of Pull) */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1685,7 +1685,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Rails */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1696,13 +1696,13 @@ export default function OrderEntry() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{(() => {
                       const currentRails = features.rail_accessory || [];
-                      
+
                       console.log('🔧 Rails state debug:', {
                         'features.rail_accessory': features.rail_accessory,
                         currentRails,
                         featureDefsCount: featureDefs.length
                       });
-                      
+
                       if (currentRails && currentRails.length > 0) {
                         const feature = featureDefs.find(f => f.id === 'rail_accessory');
                         if (!feature?.options) {
@@ -1720,7 +1720,7 @@ export default function OrderEntry() {
                     })()}</span>
                     <span className="text-blue-600 font-bold">${(() => {
                       const currentRails = features.rail_accessory || [];
-                      
+
                       if (currentRails && currentRails.length > 0) {
                         const feature = featureDefs.find(f => f.id === 'rail_accessory');
                         if (!feature?.options) return '0.00';
@@ -1734,7 +1734,7 @@ export default function OrderEntry() {
                     })()}</span>
                   </div>
                 </div>
-                
+
                 {/* Texture */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1754,7 +1754,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Swivel Studs */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1774,7 +1774,7 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Other Options */}
                 <div className="flex justify-between items-center">
                   <span>{(() => {
@@ -1802,14 +1802,14 @@ export default function OrderEntry() {
                     })() : '0.00'}</span>
                   </div>
                 </div>
-                
+
                 {/* Paint Options */}
                 <div className="flex justify-between items-center">
                   <span>Paint Options:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{(() => {
                       const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-                      
+
                       console.log('🎨 Paint state debug:', {
                         'features.metallic_finishes': features.metallic_finishes,
                         'features.paint_options': features.paint_options,
@@ -1817,7 +1817,7 @@ export default function OrderEntry() {
                         currentPaint,
                         featureDefsCount: featureDefs.length
                       });
-                      
+
                       if (currentPaint && currentPaint !== 'none') {
                         // Search through ALL paint-related features to find the matching option
                         const paintFeatures = featureDefs.filter(f => 
@@ -1832,9 +1832,9 @@ export default function OrderEntry() {
                           f.category === 'paint' ||
                           f.subcategory === 'paint'
                         );
-                        
+
                         console.log('🎨 Paint features found:', paintFeatures.length, paintFeatures.map(f => ({ id: f.id, displayName: f.displayName, optionsCount: f.options?.length })));
-                        
+
                         for (const feature of paintFeatures) {
                           if (feature.options) {
                             const option = feature.options.find(opt => opt.value === currentPaint);
@@ -1851,7 +1851,7 @@ export default function OrderEntry() {
                     })()}</span>
                     <span className="text-blue-600 font-bold">${(() => {
                       const currentPaint = features.metallic_finishes || features.paint_options || features.paint_options_combined;
-                      
+
                       if (currentPaint && currentPaint !== 'none') {
                         // Search through ALL paint-related features to find the matching option
                         const paintFeatures = featureDefs.filter(f => 
@@ -1866,7 +1866,7 @@ export default function OrderEntry() {
                           f.category === 'paint' ||
                           f.subcategory === 'paint'
                         );
-                        
+
                         for (const feature of paintFeatures) {
                           if (feature.options) {
                             const option = feature.options.find(opt => opt.value === currentPaint);
@@ -1952,7 +1952,7 @@ export default function OrderEntry() {
                   <span className="font-medium">Subtotal:</span>
                   <span className="font-bold">{formatCurrency(subtotalPrice)}</span>
                 </div>
-                
+
                 {/* Display selected discount */}
                 {discountCode && discountCode !== 'none' && discountAmount > 0 && (
                   <div className="flex justify-between items-center">
@@ -1962,7 +1962,7 @@ export default function OrderEntry() {
                     <span className="font-bold text-green-600">-{formatCurrency(discountAmount)}</span>
                   </div>
                 )}
-                
+
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Shipping & Handling:</span>
                   <span className="font-bold">{formatCurrency(shipping)}</span>
@@ -1971,7 +1971,7 @@ export default function OrderEntry() {
                   <span className="font-bold">Total:</span>
                   <span className="font-bold text-blue-600">{formatCurrency(totalPrice + shipping)}</span>
                 </div>
-                
+
                 {/* Payment Amount - Only show if payment exists */}
                 {isPaid && paymentAmount && paymentAmount.trim() !== '' && (
                   <div className="flex justify-between items-center">
@@ -1979,13 +1979,13 @@ export default function OrderEntry() {
                     <span className="font-bold text-green-600">-{formatCurrency(parseFloat(paymentAmount))}</span>
                   </div>
                 )}
-                
+
                 {/* Balance Due/Credit - Only show if payment exists */}
                 {isPaid && paymentAmount && paymentAmount.trim() !== '' && (() => {
                   const remainingBalance = (totalPrice + shipping) - parseFloat(paymentAmount || '0');
                   const isCredit = remainingBalance < 0;
                   const balanceAmount = Math.abs(remainingBalance);
-                  
+
                   return (
                     <div className="flex justify-between items-center text-lg border-t pt-2">
                       <span className="font-bold">
@@ -1997,7 +1997,7 @@ export default function OrderEntry() {
                     </div>
                   );
                 })()}
-                
+
                 {/* Paid Checkbox */}
                 <div className="flex items-center gap-2 pt-2">
                   <Checkbox 
@@ -2036,7 +2036,7 @@ export default function OrderEntry() {
                     >
                       Paid
                     </span>
-                    
+
                     {/* Custom Tooltip */}
                     {showTooltip && isPaid && paymentType && paymentAmount && paymentTimestamp && (
                       <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg z-50">

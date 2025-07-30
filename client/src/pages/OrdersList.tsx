@@ -5,16 +5,36 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderPricingTooltip from '@/components/OrderPricingTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { insertKickbackSchema } from '@shared/schema';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import toast from 'react-hot-toast';
+
+// Form validation schema for kickback creation
+const kickbackFormSchema = insertKickbackSchema.extend({
+  kickbackDate: z.date(),
+  resolvedAt: z.date().optional().nullable(),
+});
+
+type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 
 interface Order {
   id: number;
@@ -68,6 +88,55 @@ export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{orderId: string, barcode: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<Order | null>(null);
+  const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
+  const { toast: showToast } = useToast();
+
+  // Initialize kickback form
+  const kickbackForm = useForm<KickbackFormData>({
+    resolver: zodResolver(kickbackFormSchema),
+    defaultValues: {
+      kickbackDate: new Date(),
+      status: 'OPEN',
+      priority: 'MEDIUM',
+      impactedDepartments: [],
+    },
+  });
+
+  // Create kickback mutation
+  const createKickbackMutation = useMutation({
+    mutationFn: async (data: KickbackFormData) => {
+      return apiRequest('/api/kickbacks', {
+        method: 'POST',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      showToast({ title: 'Success', description: 'Kickback reported successfully' });
+      kickbackForm.reset();
+      setIsKickbackDialogOpen(false);
+      setSelectedOrderForKickback(null);
+    },
+    onError: (error: any) => {
+      showToast({ 
+        title: 'Error', 
+        description: error?.message || 'Failed to create kickback',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Handle kickback form submission
+  const onKickbackSubmit = (data: KickbackFormData) => {
+    createKickbackMutation.mutate(data);
+  };
+
+  // Handle opening kickback dialog for specific order
+  const handleReportKickback = (order: Order) => {
+    setSelectedOrderForKickback(order);
+    kickbackForm.setValue('orderId', order.orderId);
+    setIsKickbackDialogOpen(true);
+  };
 
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
@@ -494,8 +563,13 @@ export default function OrdersList() {
                             <Edit className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleReportKickback(order)}
+                          title="Report Kickback"
+                        >
+                          <TrendingDown className="h-4 w-4" />
                         </Button>
                         {(() => {
                           const nextDept = getNextDepartment(order.currentDepartment || '');
@@ -558,6 +632,202 @@ export default function OrdersList() {
           </CardContent>
         </Card>
       )}
+
+      {/* Kickback Report Modal */}
+      <Dialog open={isKickbackDialogOpen} onOpenChange={setIsKickbackDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Report Kickback for {selectedOrderForKickback?.orderId}</DialogTitle>
+            <DialogDescription>
+              Report a production issue that requires attention for this order
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...kickbackForm}>
+            <form onSubmit={kickbackForm.handleSubmit(onKickbackSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={kickbackForm.control}
+                  name="orderId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Order ID</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={kickbackForm.control}
+                  name="kickbackDept"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select department" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Layup">Layup</SelectItem>
+                          <SelectItem value="Plugging">Plugging</SelectItem>
+                          <SelectItem value="CNC">CNC</SelectItem>
+                          <SelectItem value="Finish">Finish</SelectItem>
+                          <SelectItem value="Gunsmith">Gunsmith</SelectItem>
+                          <SelectItem value="Paint">Paint</SelectItem>
+                          <SelectItem value="QC">QC</SelectItem>
+                          <SelectItem value="Shipping">Shipping</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={kickbackForm.control}
+                  name="reasonCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason Code</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select reason" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="MATERIAL_DEFECT">Material Defect</SelectItem>
+                          <SelectItem value="OPERATOR_ERROR">Operator Error</SelectItem>
+                          <SelectItem value="MACHINE_FAILURE">Machine Failure</SelectItem>
+                          <SelectItem value="DESIGN_ISSUE">Design Issue</SelectItem>
+                          <SelectItem value="QUALITY_ISSUE">Quality Issue</SelectItem>
+                          <SelectItem value="PROCESS_ISSUE">Process Issue</SelectItem>
+                          <SelectItem value="SUPPLIER_ISSUE">Supplier Issue</SelectItem>
+                          <SelectItem value="OTHER">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={kickbackForm.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Priority</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select priority" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="LOW">Low</SelectItem>
+                          <SelectItem value="MEDIUM">Medium</SelectItem>
+                          <SelectItem value="HIGH">High</SelectItem>
+                          <SelectItem value="CRITICAL">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={kickbackForm.control}
+                  name="kickbackDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Kickback Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={kickbackForm.control}
+                  name="reportedBy"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reported By</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Employee name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={kickbackForm.control}
+                name="reasonText"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Detailed description of the issue..."
+                        className="resize-none"
+                        {...field}
+                        value={field.value || ''}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsKickbackDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createKickbackMutation.isPending}>
+                  {createKickbackMutation.isPending ? 'Reporting...' : 'Report Kickback'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
   } catch (error) {

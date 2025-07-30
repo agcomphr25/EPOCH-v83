@@ -62,6 +62,13 @@ import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PackingSlip from "./pages/PackingSlip";
 import TaskTracker from "./pages/TaskTracker";
 import DocumentManagement from "./pages/DocumentManagement";
+import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
+import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
+import BarcodeQueuePage from "./pages/BarcodeQueuePage";
+import CNCQueuePage from "./pages/CNCQueuePage";
+import FinishQCQueuePage from "./pages/FinishQCQueuePage";
+import PaintQueuePage from "./pages/PaintQueuePage";
+import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -69,30 +76,30 @@ function App() {
   console.log("App component is rendering...");
   console.log("Environment:", import.meta.env.MODE);
   console.log("Base URL:", import.meta.env.BASE_URL);
-  
+
   // Add error boundary
   const [error, setError] = React.useState<Error | null>(null);
-  
+
   React.useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       console.error("Global error caught:", event.error);
       setError(event.error);
     };
-    
+
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       console.error("Unhandled promise rejection:", event.reason);
       setError(new Error(event.reason));
     };
-    
+
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    
+
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
-  
+
   if (error) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
@@ -115,7 +122,7 @@ function App() {
       </div>
     );
   }
-  
+
   try {
     return (
       <QueryClientProvider client={queryClient}>
@@ -160,40 +167,17 @@ function App() {
                   <Route path="/packing-slip" component={PackingSlip} />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
 
-                  <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
-                  <Route path="/forms/render/:formId" component={FormRendererPage} />
-                  <Route path="/documentation" component={DocumentationPageNew} />
-                  <Route path="/customers" component={CustomerManagement} />
-                  <Route path="/purchase-orders" component={PurchaseOrders} />
-                  <Route path="/p2-purchase-orders" component={P2PurchaseOrders} />
-                  <Route path="/production-tracking" component={ProductionTracking} />
-                  <Route path="/bom-administration" component={BOMAdministration} />
-                  <Route path="/barcode-scanner" component={BarcodeScannerPage} />
-                  <Route path="/layup-scheduler" component={LayupSchedulerPage} />
-                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
-                  <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
-                  <Route path="/stacitest-dashboard" component={STACITestDashboard} />
-                  
-                  {/* Employee Management Routes */}
-                  <Route path="/login" component={LoginPage} />
-                  <Route path="/employee">
-                    {() => (
-                      <ProtectedRoute requiredRole={['ADMIN', 'HR Manager']}>
-                        <EmployeeDashboard />
-                      </ProtectedRoute>
-                    )}
-                  </Route>
-                  <Route path="/employee/:id">
-                    {(params) => (
-                      <ProtectedRoute requiredRole={['ADMIN', 'HR Manager']}>
-                        <EmployeeDetail />
-                      </ProtectedRoute>
-                    )}
-                  </Route>
-                  <Route path="/employee-portal/:portalId" component={EmployeePortal} />
-                  
-                  <Route component={NotFound} />
+            {/* Department Queue Management Routes */}
+            <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
+            <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
+            <Route path="/department-queue/cnc" component={CNCQueuePage} />
+            <Route path="/department-queue/finish-qc" component={FinishQCQueuePage} />
+            <Route path="/department-queue/paint" component={PaintQueuePage} />
+            <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
+
+            <Route component={NotFound} />
                 </Switch>
               </main>
           </div>

@@ -72,6 +72,7 @@ import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
+import RouteDebugger from './components/RouteDebugger';
 
 function App() {
   console.log("App component is rendering...");
@@ -145,46 +146,114 @@ function App() {
                   <Route path="/feature-manager" component={FeatureManager} />
                   <Route path="/stock-models" component={StockModels} />
                   <Route path="/draft-orders" component={DraftOrders} />
+                  
+                  {/* Customer Management Routes */}
+                  <Route path="/customer-management" component={CustomerManagement} />
+                  <Route path="/customers" component={CustomerManagement} />
+                  
+                  {/* Purchase Order Routes */}
+                  <Route path="/purchase-orders" component={PurchaseOrders} />
+                  <Route path="/p1-purchase-orders" component={PurchaseOrders} />
+                  <Route path="/p2-purchase-orders" component={P2PurchaseOrders} />
+                  
+                  {/* Production and BOM Routes */}
+                  <Route path="/production-tracking" component={ProductionTracking} />
+                  <Route path="/bom-administration" component={BOMAdministration} />
+                  
+                  {/* Barcode and Scanner Routes */}
+                  <Route path="/barcode-scanner" component={BarcodeScannerPage} />
+                  
+                  {/* Inventory Routes */}
+                  <Route path="/inventory" component={InventoryManagerPage} />
                   <Route path="/inventory/scanner" component={InventoryScannerPage} />
                   <Route path="/inventory/dashboard" component={InventoryDashboardPage} />
                   <Route path="/inventory/manager" component={InventoryManagerPage} />
                   <Route path="/inventory/receiving" component={InventoryReceivingPage} />
+                  
+                  {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />
                   <Route path="/maintenance" component={MaintenancePage} />
+                  
+                  {/* Employee Routes */}
                   <Route path="/employee-portal" component={EmployeePortalPage} />
+                  <Route path="/employee-dashboard" component={EmployeeDashboard} />
+                  <Route path="/employee-detail/:id" component={EmployeeDetail} />
+                  <Route path="/employee-portal-new" component={EmployeePortal} />
                   <Route path="/time-clock-admin" component={TimeClockAdminPage} />
+                  
+                  {/* Auth Routes */}
+                  <Route path="/login" component={LoginPage} />
+                  
+                  {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
+                  <Route path="/agtest" component={AGTestDashboard} />
+                  <Route path="/admintest" component={ADMINTestDashboard} />
+                  <Route path="/stacitest" component={STACITestDashboard} />
+                  
+                  {/* Finance Routes */}
                   <Route path="/finance/ap-journal" component={APJournalPage} />
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/cogs-report" component={COGSReportPage} />
                   <Route path="/finance/dashboard" component={FinanceDashboardPage} />
+                  
+                  {/* Forms and Reports Routes */}
+                  <Route path="/forms" component={AdminFormsPage} />
+                  <Route path="/form/:id" component={FormPage} />
+                  <Route path="/reports" component={ReportPage} />
+                  <Route path="/form-renderer/:id" component={FormRendererPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />
+                  <Route path="/documentation" component={DocumentationPageNew} />
+                  
+                  {/* P2 Forms Routes */}
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/purchase-review-checklist" component={PurchaseReviewChecklist} />
                   <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
                   <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
                   <Route path="/manufacturers-certificate" component={ManufacturersCertificate} />
                   <Route path="/packing-slip" component={PackingSlip} />
+                  
+                  {/* Task and Document Management */}
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/document-management" component={DocumentManagement} />
+                  
+                  {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
+                  
+                  {/* Reports */}
+                  <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
 
-            {/* Department Queue Management Routes */}
-            <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
-            <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
-            <Route path="/department-queue/cnc" component={CNCQueuePage} />
-            <Route path="/department-queue/finish-qc" component={FinishQCQueuePage} />
-            <Route path="/department-queue/paint" component={PaintQueuePage} />
-            <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
+                  {/* Department Queue Management Routes */}
+                  <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
+                  <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
+                  <Route path="/department-queue/cnc" component={CNCQueuePage} />
+                  <Route path="/department-queue/finish-qc" component={FinishQCQueuePage} />
+                  <Route path="/department-queue/paint" component={PaintQueuePage} />
+                  <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
 
-            <Route component={NotFound} />
+                  {/* Catch-all route for 404 */}
+                  <Route component={NotFound} />
                 </Switch>
               </main>
           </div>
           <Toaster />
           <HotToaster />
+          <RouteDebugger routes={[
+            '/', '/order-management', '/order-entry', '/test-order-entry', '/orders', '/orders-list', 
+            '/orders-simple', '/all-orders', '/discounts', '/feature-manager', '/stock-models', '/draft-orders',
+            '/customer-management', '/customers', '/purchase-orders', '/p1-purchase-orders', '/p2-purchase-orders',
+            '/production-tracking', '/bom-administration', '/barcode-scanner', '/inventory', '/inventory/scanner',
+            '/inventory/dashboard', '/inventory/manager', '/inventory/receiving', '/qc', '/maintenance',
+            '/employee-portal', '/employee-dashboard', '/employee-portal-new', '/time-clock-admin', '/login',
+            '/module8-test', '/agtest', '/admintest', '/stacitest', '/finance/ap-journal', '/finance/ar-journal',
+            '/finance/cogs-report', '/finance/dashboard', '/forms', '/reports', '/enhanced-forms', '/enhanced-reports',
+            '/documentation', '/p2-forms', '/purchase-review-checklist', '/purchase-review-submissions',
+            '/rfq-risk-assessment', '/manufacturers-certificate', '/packing-slip', '/task-tracker', '/document-management',
+            '/purchase-order-items-queue', '/layup-scheduler', '/ag-bottom-metal-report', '/department-queue/layup-plugging',
+            '/department-queue/barcode', '/department-queue/cnc', '/department-queue/finish-qc', '/department-queue/paint',
+            '/department-queue/qc-shipping'
+          ]} />
         </Router>
       </QueryClientProvider>
     );

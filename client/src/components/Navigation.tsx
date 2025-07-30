@@ -17,6 +17,7 @@ export default function Navigation() {
   const [testDashboardsExpanded, setTestDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
+  const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
   const navItems = [
     {
@@ -283,6 +284,45 @@ export default function Navigation() {
     }
   ];
 
+  const departmentQueueItems = [
+    {
+      path: '/department-queue/layup-plugging',
+      label: 'Layup/Plugging',
+      icon: Factory,
+      description: 'Layup and plugging department queue management'
+    },
+    {
+      path: '/department-queue/barcode',
+      label: 'Barcode',
+      icon: Scan,
+      description: 'Barcode processing department queue'
+    },
+    {
+      path: '/department-queue/cnc',
+      label: 'CNC',
+      icon: Settings,
+      description: 'CNC machining department queue'
+    },
+    {
+      path: '/department-queue/finish-qc',
+      label: 'Finish QC',
+      icon: Shield,
+      description: 'Finish quality control department queue'
+    },
+    {
+      path: '/department-queue/paint',
+      label: 'Paint',
+      icon: Package,
+      description: 'Paint department queue management'
+    },
+    {
+      path: '/department-queue/qc-shipping',
+      label: 'QC/Shipping',
+      icon: TrendingUp,
+      description: 'Quality control and shipping department queue'
+    }
+  ];
+
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
@@ -292,6 +332,7 @@ export default function Navigation() {
   const isTestDashboardsActive = testDashboardsItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
+  const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
 
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
@@ -322,7 +363,10 @@ export default function Navigation() {
     if (isProductionSchedulingActive) {
       setProductionSchedulingExpanded(true);
     }
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive]);
+    if (isDepartmentQueueActive) {
+      setDepartmentQueueExpanded(true);
+    }
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -720,6 +764,53 @@ export default function Navigation() {
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
                           onClick={() => setProductionSchedulingExpanded(false)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Department Queue Management Dropdown */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setDepartmentQueueExpanded(true)}
+              onMouseLeave={() => setDepartmentQueueExpanded(false)}
+            >
+              <Button
+                variant={isDepartmentQueueActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isDepartmentQueueActive && "bg-primary text-white"
+                )}
+              >
+                <Factory className="h-4 w-4" />
+                Department Queue Management
+                {departmentQueueExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              
+              {departmentQueueExpanded && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                  {departmentQueueItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={() => setDepartmentQueueExpanded(false)}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

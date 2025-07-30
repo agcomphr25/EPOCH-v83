@@ -3,10 +3,10 @@ import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Factory, Calendar, ArrowRight } from 'lucide-react';
+import { Factory, Calendar, ArrowRight, Clock, Package } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
-import { format, addDays, startOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function LayupPluggingQueuePage() {
@@ -20,6 +20,11 @@ export default function LayupPluggingQueuePage() {
   // Get orders queued for barcode department (next department after layup)
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
+  });
+
+  // Get molds data for better display
+  const { data: molds = [] } = useQuery({
+    queryKey: ['/api/molds'],
   });
 
   // Calculate current week dates (Monday-Friday)
@@ -36,18 +41,35 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
   }, []);
 
-  // Get current week scheduled orders
-  const currentWeekOrders = useMemo(() => {
+  // Get current week scheduled orders grouped by date
+  const currentWeekOrdersByDate = useMemo(() => {
     const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
     
-    return currentSchedule.filter((scheduleItem: any) => {
+    const weekOrders = currentSchedule.filter((scheduleItem: any) => {
       const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
       return weekDateStrings.includes(scheduledDate);
     }).map((scheduleItem: any) => {
       const order = orders.find(o => o.orderId === scheduleItem.orderId);
       return { ...order, ...scheduleItem };
     }).filter(order => order.orderId);
+
+    // Group orders by date
+    const grouped: {[key: string]: any[]} = {};
+    currentWeekDates.forEach(date => {
+      const dateStr = date.toISOString().split('T')[0];
+      grouped[dateStr] = weekOrders.filter(order => {
+        const orderDate = new Date(order.scheduledDate).toISOString().split('T')[0];
+        return orderDate === dateStr;
+      });
+    });
+
+    return grouped;
   }, [currentSchedule, orders, currentWeekDates]);
+
+  // Get all current week orders for cards view
+  const currentWeekOrders = useMemo(() => {
+    return Object.values(currentWeekOrdersByDate).flat();
+  }, [currentWeekOrdersByDate]);
 
   // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {

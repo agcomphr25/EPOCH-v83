@@ -1,6 +1,6 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -765,6 +765,10 @@ export default function OrderEntry() {
           description: "Order created successfully",
         });
       }
+
+      // Invalidate drafts cache so Draft Orders page updates immediately
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
       // Reset form
       console.log('Before resetForm - paymentAmount:', paymentAmount, 'isPaid:', isPaid);

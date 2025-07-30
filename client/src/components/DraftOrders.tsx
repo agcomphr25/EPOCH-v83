@@ -41,7 +41,7 @@ export default function DraftOrders() {
       method: 'DELETE',
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
       toast({
         title: "Draft Deleted",
         description: "Draft order has been deleted successfully",

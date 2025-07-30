@@ -250,11 +250,35 @@ export default function LayupPluggingQueuePage() {
   };
 
   // Handle moving orders to next department
+  const moveToDepartmentMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      return await apiRequest('/api/orders/update-department', {
+        method: 'POST',
+        body: {
+          orderIds,
+          department: 'Barcode',
+          status: 'IN_PROGRESS'
+        }
+      });
+    },
+    onSuccess: () => {
+      toast.success(`Successfully moved ${selectedOrders.length} orders to Barcode Department`);
+      setSelectedOrders([]);
+      queryClient.invalidateQueries({ queryKey: ['layup-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error) => {
+      console.error('Error moving orders:', error);
+      toast.error('Failed to move orders to next department');
+    }
+  });
+
   const handleMoveToNextDepartment = () => {
-    // This would typically call an API to update order status/department
-    toast.success(`Moving ${selectedOrders.length} orders to Barcode Department`);
-    setSelectedOrders([]);
-    // TODO: Implement actual API call to move orders
+    if (selectedOrders.length === 0) {
+      toast.error('Please select orders to move');
+      return;
+    }
+    moveToDepartmentMutation.mutate(selectedOrders);
   };
 
   return (
@@ -313,12 +337,12 @@ export default function LayupPluggingQueuePage() {
 
       {/* Multi-select Actions */}
       {selectedOrders.length > 0 && (
-        <Card className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200">
+        <Card className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardContent className="py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-blue-600" />
-                <span className="font-medium text-blue-800">
+                <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span className="font-medium text-blue-800 dark:text-blue-200">
                   {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
                 </span>
               </div>
@@ -327,15 +351,17 @@ export default function LayupPluggingQueuePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedOrders([])}
+                  disabled={moveToDepartmentMutation.isPending}
                 >
                   Clear Selection
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => handleMoveToNextDepartment()}
-                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleMoveToNextDepartment}
+                  disabled={moveToDepartmentMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
                 >
-                  Move to Barcode Department
+                  {moveToDepartmentMutation.isPending ? 'Moving...' : 'Move to Barcode Department'}
                 </Button>
               </div>
             </div>
@@ -346,11 +372,33 @@ export default function LayupPluggingQueuePage() {
       {/* Current Week Layup Queue - Day by Day View */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between flex-wrap gap-2">
             <span>Layup/Plugging Queue - Generated from Scheduler</span>
-            <Badge variant="outline" className="ml-2">
-              {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {currentWeekOrders.length > 0 && (
+                <div className="flex items-center gap-2 mr-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
+                    disabled={selectedOrders.length === currentWeekOrders.length}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedOrders([])}
+                    disabled={selectedOrders.length === 0}
+                  >
+                    Select None
+                  </Button>
+                </div>
+              )}
+              <Badge variant="outline">
+                {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -427,13 +475,13 @@ export default function LayupPluggingQueuePage() {
                               order.source === 'p1_purchase_order' ? 'border-l-green-500' :
                               order.source === 'production_order' ? 'border-l-orange-500' :
                               'border-l-blue-500'
-                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}>
+                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                               {/* Checkbox in top-right corner */}
-                              <div className="absolute top-2 right-2 z-10">
+                              <div className="absolute top-3 right-3 z-10">
                                 <Checkbox
                                   checked={isSelected}
                                   onCheckedChange={(checked) => handleOrderSelect(order.orderId, !!checked)}
-                                  className="bg-white border-2"
+                                  className="bg-white dark:bg-gray-800 border-2 shadow-sm"
                                 />
                               </div>
                               

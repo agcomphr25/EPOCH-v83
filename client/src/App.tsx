@@ -73,7 +73,7 @@ import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
-import RouteDebugger from './components/RouteDebugger';
+
 
 function App() {
   console.log("App component is rendering...");
@@ -244,21 +244,6 @@ function App() {
           </div>
           <Toaster />
           <HotToaster />
-          <RouteDebugger routes={[
-            '/', '/order-management', '/order-entry', '/test-order-entry', '/orders', '/orders-list', 
-            '/orders-simple', '/all-orders', '/discounts', '/feature-manager', '/stock-models', '/draft-orders',
-            '/customer-management', '/customers', '/purchase-orders', '/p1-purchase-orders', '/p2-purchase-orders',
-            '/production-tracking', '/bom-administration', '/barcode-scanner', '/inventory', '/inventory/scanner',
-            '/inventory/dashboard', '/inventory/manager', '/inventory/receiving', '/qc', '/maintenance',
-            '/employee-portal', '/employee-dashboard', '/employee-portal-new', '/time-clock-admin', '/login',
-            '/module8-test', '/agtest', '/agtest-dashboard', '/admintest', '/admintest-dashboard', '/stacitest', '/stacitest-dashboard', '/finance/ap-journal', '/finance/ar-journal',
-            '/finance/cogs-report', '/finance/dashboard', '/forms', '/reports', '/enhanced-forms', '/enhanced-reports',
-            '/documentation', '/p2-forms', '/purchase-review-checklist', '/purchase-review-submissions',
-            '/rfq-risk-assessment', '/manufacturers-certificate', '/packing-slip', '/task-tracker', '/kickback-tracking', '/document-management',
-            '/purchase-order-items-queue', '/layup-scheduler', '/ag-bottom-metal-report', '/department-queue/layup-plugging',
-            '/department-queue/barcode', '/department-queue/cnc', '/department-queue/finish-qc', '/department-queue/paint',
-            '/department-queue/qc-shipping'
-          ]} />
         </Router>
       </QueryClientProvider>
     );

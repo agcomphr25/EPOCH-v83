@@ -188,8 +188,11 @@ function App() {
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/agtest" component={AGTestDashboard} />
+                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route path="/admintest" component={ADMINTestDashboard} />
+                  <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
                   <Route path="/stacitest" component={STACITestDashboard} />
+                  <Route path="/stacitest-dashboard" component={STACITestDashboard} />
                   
                   {/* Finance Routes */}
                   <Route path="/finance/ap-journal" component={APJournalPage} />
@@ -248,7 +251,7 @@ function App() {
             '/production-tracking', '/bom-administration', '/barcode-scanner', '/inventory', '/inventory/scanner',
             '/inventory/dashboard', '/inventory/manager', '/inventory/receiving', '/qc', '/maintenance',
             '/employee-portal', '/employee-dashboard', '/employee-portal-new', '/time-clock-admin', '/login',
-            '/module8-test', '/agtest', '/admintest', '/stacitest', '/finance/ap-journal', '/finance/ar-journal',
+            '/module8-test', '/agtest', '/agtest-dashboard', '/admintest', '/admintest-dashboard', '/stacitest', '/stacitest-dashboard', '/finance/ap-journal', '/finance/ar-journal',
             '/finance/cogs-report', '/finance/dashboard', '/forms', '/reports', '/enhanced-forms', '/enhanced-reports',
             '/documentation', '/p2-forms', '/purchase-review-checklist', '/purchase-review-submissions',
             '/rfq-risk-assessment', '/manufacturers-certificate', '/packing-slip', '/task-tracker', '/kickback-tracking', '/document-management',

@@ -1,16 +1,21 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Factory, Calendar, ArrowRight, Clock, Package } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Factory, Calendar, ArrowRight, Package, CheckCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { toast } from 'react-hot-toast';
 
 export default function LayupPluggingQueuePage() {
   const { orders } = useUnifiedLayupOrders();
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const queryClient = useQueryClient();
   
   // Get current week's layup schedule assignments
   const { data: currentSchedule = [] } = useQuery({
@@ -100,6 +105,23 @@ export default function LayupPluggingQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Handle order selection
+  const handleOrderSelect = (orderId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(prev => [...prev, orderId]);
+    } else {
+      setSelectedOrders(prev => prev.filter(id => id !== orderId));
+    }
+  };
+
+  // Handle moving orders to next department
+  const handleMoveToNextDepartment = () => {
+    // This would typically call an API to update order status/department
+    toast.success(`Moving ${selectedOrders.length} orders to Barcode Department`);
+    setSelectedOrders([]);
+    // TODO: Implement actual API call to move orders
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -111,7 +133,7 @@ export default function LayupPluggingQueuePage() {
       <BarcodeScanner />
       
       {/* Summary Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Next Week Layup Count - Left Corner as requested */}
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-3">
@@ -133,23 +155,7 @@ export default function LayupPluggingQueuePage() {
           </CardContent>
         </Card>
 
-        {/* Current Week Progress */}
-        <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-orange-700 dark:text-orange-300 flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              This Week Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-              {currentWeekOrders.length}
-            </div>
-            <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-              Orders in layup queue this week
-            </p>
-          </CardContent>
-        </Card>
+
 
         {/* Barcode Queue Count */}
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
@@ -169,6 +175,38 @@ export default function LayupPluggingQueuePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Multi-select Actions */}
+      {selectedOrders.length > 0 && (
+        <Card className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-blue-600" />
+                <span className="font-medium text-blue-800">
+                  {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOrders([])}
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleMoveToNextDepartment()}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  Move to Barcode Department
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Current Week Layup Queue - Day by Day View */}
       <Card>
@@ -182,10 +220,11 @@ export default function LayupPluggingQueuePage() {
         </CardHeader>
         <CardContent>
           {currentWeekOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium mb-2">No Orders Scheduled</h3>
-              <p className="text-sm">Use the Layup Scheduler to assign orders to this week</p>
+            <div className="text-center py-12 text-gray-500">
+              <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-xl font-medium mb-2">No Orders in Queue</h3>
+              <p className="text-sm">Orders from the Layup Scheduler will appear here automatically</p>
+              <p className="text-xs text-gray-400 mt-2">Go to Production Scheduling → Layup Scheduler to assign orders</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -225,14 +264,35 @@ export default function LayupPluggingQueuePage() {
                           const modelId = order.stockModelId || order.modelId;
                           const materialType = modelId?.includes('cf_') ? 'CF' : 
                                              modelId?.includes('fg_') ? 'FG' : null;
+                          const isSelected = selectedOrders.includes(order.orderId);
+                          
+                          // Heavy Fill detection
+                          const hasHeavyFill = order.features?.other_options && 
+                            Array.isArray(order.features.other_options) && 
+                            order.features.other_options.includes('heavy_fill');
+                          
+                          // Action Length for APR orders  
+                          const actionLength = order.features?.action_length;
+                          const actionAbbr = actionLength === 'long' ? 'LA' : 
+                                           actionLength === 'medium' ? 'MA' : 
+                                           actionLength === 'short' ? 'SA' : null;
                           
                           return (
-                            <Card key={order.orderId} className={`border-l-4 ${
+                            <Card key={order.orderId} className={`relative border-l-4 transition-all ${
                               order.source === 'p1_purchase_order' ? 'border-l-green-500' :
                               order.source === 'production_order' ? 'border-l-orange-500' :
                               'border-l-blue-500'
-                            }`}>
-                              <CardHeader className="pb-2">
+                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}>
+                              {/* Checkbox in top-right corner */}
+                              <div className="absolute top-2 right-2 z-10">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => handleOrderSelect(order.orderId, !!checked)}
+                                  className="bg-white border-2"
+                                />
+                              </div>
+                              
+                              <CardHeader className="pb-2 pr-8">
                                 <div className="flex justify-between items-start">
                                   <div className="font-semibold">
                                     {getDisplayOrderId(order)}
@@ -244,13 +304,23 @@ export default function LayupPluggingQueuePage() {
                                     )}
                                   </div>
                                 </div>
+                                {actionAbbr && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {actionAbbr}
+                                  </div>
+                                )}
                               </CardHeader>
                               <CardContent className="pt-0">
                                 <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     {materialType && (
                                       <Badge variant="secondary" className="text-xs">
                                         {materialType}
+                                      </Badge>
+                                    )}
+                                    {hasHeavyFill && (
+                                      <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">
+                                        Heavy Fill
                                       </Badge>
                                     )}
                                     <span className="text-sm text-gray-600 dark:text-gray-400">

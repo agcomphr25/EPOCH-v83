@@ -54,6 +54,45 @@ export function registerRoutes(app: Express): Server {
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
 
+  // Layup Schedule API endpoints - missing route handler
+  app.get('/api/layup-schedule', async (req, res) => {
+    try {
+      console.log('🔧 LAYUP SCHEDULE API CALLED');
+      const { storage } = await import('../../storage');
+      const scheduleData = await storage.getAllLayupSchedule();
+      console.log('🔧 Found layup schedule entries:', scheduleData.length);
+      res.json(scheduleData);
+    } catch (error) {
+      console.error('❌ Layup schedule fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch layup schedule" });
+    }
+  });
+
+  app.post('/api/layup-schedule', async (req, res) => {
+    try {
+      console.log('🔧 LAYUP SCHEDULE CREATE CALLED', req.body);
+      const { storage } = await import('../../storage');
+      const result = await storage.createLayupSchedule(req.body);
+      console.log('🔧 Created layup schedule entry:', result);
+      res.json(result);
+    } catch (error) {
+      console.error('❌ Layup schedule create error:', error);
+      res.status(500).json({ error: "Failed to create layup schedule entry" });
+    }
+  });
+
+  app.delete('/api/layup-schedule/by-order/:orderId', async (req, res) => {
+    try {
+      console.log('🔧 LAYUP SCHEDULE DELETE BY ORDER CALLED', req.params.orderId);
+      const { storage } = await import('../../storage');
+      await storage.deleteLayupScheduleByOrder(req.params.orderId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('❌ Layup schedule delete error:', error);
+      res.status(500).json({ error: "Failed to delete layup schedule entries" });
+    }
+  });
+
   // P2 Customer bypass route to avoid monolithic conflicts
   app.get('/api/p2-customers-bypass', async (req, res) => {
     try {

@@ -225,6 +225,15 @@ export default function LayupPluggingQueuePage() {
               <h3 className="text-xl font-medium mb-2">No Orders in Queue</h3>
               <p className="text-sm">Orders from the Layup Scheduler will appear here automatically</p>
               <p className="text-xs text-gray-400 mt-2">Go to Production Scheduling → Layup Scheduler to assign orders</p>
+              {scheduleLoading && (
+                <p className="text-xs text-blue-500 mt-2">Loading schedule data...</p>
+              )}
+              <div className="text-xs text-gray-400 mt-4 space-y-1">
+                <p>Debug Info:</p>
+                <p>Schedule entries: {(currentSchedule as any[]).length}</p>
+                <p>Available orders: {orders.length}</p>
+                <p>Current week orders: {currentWeekOrders.length}</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">

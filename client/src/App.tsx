@@ -168,6 +168,7 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/document-management" component={DocumentManagement} />
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
+                  <Route path="/layup-scheduler" component={LayupSchedulerPage} />
 
             {/* Department Queue Management Routes */}
             <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />

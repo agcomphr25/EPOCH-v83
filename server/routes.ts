@@ -794,6 +794,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Create new draft if it doesn't exist
         const newDraft = await storage.createOrderDraft({ ...result, orderId } as any);
+        // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
+        await storage.markOrderIdAsUsed(orderId);
+        console.log(`FIXED: Marked Order ID ${orderId} as used to prevent duplicates`);
         res.json(newDraft);
       }
     } catch (error) {

@@ -782,6 +782,11 @@ export class DatabaseStorage implements IStorage {
       
       const [draft] = await db.insert(orderDrafts).values(dataWithBarcode).returning();
       console.log('Created draft:', draft.id);
+      
+      // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
+      await this.markOrderIdAsUsed(data.orderId);
+      console.log(`FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`);
+      
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);

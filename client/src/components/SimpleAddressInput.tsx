@@ -103,11 +103,32 @@ export default function SimpleAddressInput({ label, value, onChange, required = 
     setShowSuggestions(false);
     setSelectedIndex(-1);
     
-    // Skip validation since it's causing JSON parsing errors, use parsed address directly
+    // Try to get ZIP code by calling SmartyStreets Street API directly
+    try {
+      const response = await fetch('/api/customers/address-autocomplete-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          search: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}`,
+          getZipCode: true 
+        })
+      });
+      
+      const data = await response.json();
+      console.log('🔧 ZIP code lookup response:', data);
+      
+      // Check if we got ZIP code information
+      if (data.suggestions && data.suggestions.length > 0 && data.suggestions[0].zipCode) {
+        parsedAddress.zipCode = data.suggestions[0].zipCode;
+      }
+    } catch (error) {
+      console.log('🔧 ZIP code lookup failed, using address without ZIP:', error);
+    }
+    
     onChange(parsedAddress);
     toast({
       title: 'Address selected',
-      description: `Street: ${parsedAddress.street}, City: ${parsedAddress.city}, State: ${parsedAddress.state}`,
+      description: `${parsedAddress.street}, ${parsedAddress.city}, ${parsedAddress.state}${parsedAddress.zipCode ? ' ' + parsedAddress.zipCode : ''}`,
     });
   };
 

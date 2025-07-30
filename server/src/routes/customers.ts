@@ -274,7 +274,7 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
     console.log('🔧 BYPASS ADDRESS AUTOCOMPLETE CALLED');
     console.log('🔧 Request body:', req.body);
     
-    const { search } = req.body;
+    const { search, getZipCode } = req.body;
     
     if (!search || typeof search !== 'string') {
       console.log('🔧 Invalid search parameter:', search);
@@ -297,10 +297,52 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       });
     }
     
-    // Use SmartyStreets US Autocomplete API
+    // If getZipCode is true and we have a complete address, use Street API
+    if (getZipCode && search.includes(',')) {
+      console.log('🔧 Using Street API for ZIP code lookup');
+      
+      // Parse the complete address for Street API
+      const addressParts = search.split(', ');
+      if (addressParts.length >= 3) {
+        const street = addressParts[0];
+        const city = addressParts[1];
+        const state = addressParts[2];
+        
+        const streetUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}`;
+        
+        const streetResponse = await fetch(streetUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (streetResponse.ok) {
+          const streetData = await streetResponse.json();
+          console.log('🔧 Street API response:', streetData);
+          
+          if (streetData && streetData.length > 0) {
+            const result = streetData[0];
+            const suggestion = {
+              text: `${result.delivery_line_1}, ${result.components.city_name}, ${result.components.state_abbreviation} ${result.components.zipcode}`,
+              streetLine: result.delivery_line_1,
+              city: result.components.city_name,
+              state: result.components.state_abbreviation,
+              zipCode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : ''),
+              entries: 1
+            };
+            
+            console.log('🔧 Street API suggestion with ZIP:', suggestion);
+            return res.json({ suggestions: [suggestion] });
+          }
+        }
+      }
+    }
+    
+    // Use SmartyStreets US Autocomplete API for partial searches
     const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
     
-    console.log('🔧 Making SmartyStreets API call');
+    console.log('🔧 Making SmartyStreets Autocomplete API call');
     
     const response = await fetch(smartyStreetsUrl, {
       method: 'GET',

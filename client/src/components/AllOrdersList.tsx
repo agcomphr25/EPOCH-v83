@@ -198,11 +198,22 @@ export default function AllOrdersList() {
                       {getDisplayOrderId(order)}
                     </TableCell>
                     <TableCell>
-                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: '2-digit', 
-                        day: '2-digit' 
-                      }) : '-'}
+                      {order.orderDate ? (() => {
+                        // Handle timezone issues by creating date without timezone conversion
+                        const date = new Date(order.orderDate);
+                        // If the date string contains 'T' (ISO format), extract just the date part
+                        if (typeof order.orderDate === 'string' && order.orderDate.includes('T')) {
+                          const datePart = order.orderDate.split('T')[0];
+                          const [year, month, day] = datePart.split('-');
+                          return `${month}/${day}/${year}`;
+                        }
+                        return date.toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: '2-digit', 
+                          day: '2-digit',
+                          timeZone: 'UTC'
+                        });
+                      })() : '-'}
                     </TableCell>
                     <TableCell>{order.customer || order.customerId}</TableCell>
                     <TableCell>
@@ -217,11 +228,22 @@ export default function AllOrdersList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {order.dueDate ? new Date(order.dueDate).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: '2-digit', 
-                        day: '2-digit' 
-                      }) : '-'}
+                      {order.dueDate ? (() => {
+                        // Handle timezone issues by creating date without timezone conversion
+                        const date = new Date(order.dueDate);
+                        // If the date string contains 'T' (ISO format), extract just the date part
+                        if (typeof order.dueDate === 'string' && order.dueDate.includes('T')) {
+                          const datePart = order.dueDate.split('T')[0];
+                          const [year, month, day] = datePart.split('-');
+                          return `${month}/${day}/${year}`;
+                        }
+                        return date.toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: '2-digit', 
+                          day: '2-digit',
+                          timeZone: 'UTC'
+                        });
+                      })() : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={isScrapped ? 'destructive' : 'default'}>

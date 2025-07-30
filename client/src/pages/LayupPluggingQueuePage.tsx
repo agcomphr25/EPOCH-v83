@@ -61,46 +61,6 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
   }, []);
 
-  // Enhanced debugging
-  React.useEffect(() => {
-    console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
-    console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
-    console.log('- Current week dates:', currentWeekDates.length);
-    console.log('- Available orders:', availableOrders.length);
-    console.log('- Schedule loading:', scheduleLoading);
-    console.log('- Current week orders calculated:', currentWeekOrders.length);
-    
-    if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
-      console.log('- Schedule entries sample:', currentSchedule.slice(0, 5).map((s: any) => ({
-        orderId: s.orderId,
-        scheduledDate: s.scheduledDate,
-        dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
-      })));
-      
-      console.log('- All scheduled order IDs:', currentSchedule.map((s: any) => s.orderId));
-    } else {
-      console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
-      console.log('- Current schedule data type:', typeof currentSchedule);
-      console.log('- Current schedule value:', currentSchedule);
-    }
-    
-    console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
-    
-    if (availableOrders.length > 0) {
-      console.log('- Available orders sample:', availableOrders.slice(0, 3).map((o: any) => ({
-        orderId: o.orderId,
-        source: o.source,
-        stockModelId: o.stockModelId
-      })));
-    }
-    
-    console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
-      date,
-      count: orders.length,
-      orderIds: orders.map((o: any) => o.orderId)
-    })));
-  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading, currentWeekOrders, currentWeekOrdersByDate]);
-
   // Calculate next week dates
   const nextWeekDates = useMemo(() => {
     const today = new Date();
@@ -216,6 +176,46 @@ export default function LayupPluggingQueuePage() {
   const currentWeekOrders = useMemo(() => {
     return Object.values(currentWeekOrdersByDate).flat();
   }, [currentWeekOrdersByDate]);
+
+  // Enhanced debugging
+  React.useEffect(() => {
+    console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
+    console.log('- Schedule entries:', Array.isArray(currentSchedule) ? currentSchedule.length : 0);
+    console.log('- Current week dates:', currentWeekDates.length);
+    console.log('- Available orders:', availableOrders.length);
+    console.log('- Schedule loading:', scheduleLoading);
+    console.log('- Current week orders calculated:', currentWeekOrders.length);
+    
+    if (Array.isArray(currentSchedule) && currentSchedule.length > 0) {
+      console.log('- Schedule entries sample:', currentSchedule.slice(0, 5).map((s: any) => ({
+        orderId: s.orderId,
+        scheduledDate: s.scheduledDate,
+        dateString: new Date(s.scheduledDate).toISOString().split('T')[0]
+      })));
+      
+      console.log('- All scheduled order IDs:', currentSchedule.map((s: any) => s.orderId));
+    } else {
+      console.log('- No schedule entries found - users need to assign orders in Layup Scheduler first');
+      console.log('- Current schedule data type:', typeof currentSchedule);
+      console.log('- Current schedule value:', currentSchedule);
+    }
+    
+    console.log('- Current week date strings:', currentWeekDates.map(d => d.toISOString().split('T')[0]));
+    
+    if (availableOrders.length > 0) {
+      console.log('- Available orders sample:', availableOrders.slice(0, 3).map((o: any) => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId
+      })));
+    }
+    
+    console.log('- Orders by date breakdown:', Object.entries(currentWeekOrdersByDate).map(([date, orders]) => ({
+      date,
+      count: orders.length,
+      orderIds: orders.map((o: any) => o.orderId)
+    })));
+  }, [currentSchedule, currentWeekDates, availableOrders, scheduleLoading, currentWeekOrders, currentWeekOrdersByDate]);
 
   // Calculate next week layup count
   const nextWeekLayupCount = useMemo(() => {

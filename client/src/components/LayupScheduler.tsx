@@ -983,89 +983,426 @@ export default function LayupScheduler() {
       ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
       : format(currentDate, 'MMMM yyyy');
 
-    // Generate print content
+    // Helper function to get material type
+    const getMaterialType = (modelId: string) => {
+      if (!modelId) return null;
+      if (modelId.startsWith('cf_')) return 'CF';
+      if (modelId.startsWith('fg_')) return 'FG';
+      if (modelId.includes('carbon')) return 'CF';
+      if (modelId.includes('fiberglass')) return 'FG';
+      return null;
+    };
+
+    // Helper function to get action length display
+    const getActionLengthDisplay = (order: any) => {
+      if (!order.features) return null;
+      
+      const modelId = order.stockModelId || order.modelId;
+      const isAPR = modelId && modelId.toLowerCase().includes('apr');
+      
+      if (isAPR) {
+        // For APR orders, show both action type AND action length
+        let actionType = order.features.action_inlet || order.features.action;
+        let actionLength = order.features.action_length;
+        
+        if (!actionLength || actionLength === 'none') {
+          if (actionType && actionType.includes('short')) actionLength = 'SA';
+          else if (actionType && actionType.includes('long')) actionLength = 'LA';
+          else actionLength = 'SA';
+        }
+        
+        const lengthMap: {[key: string]: string} = {
+          'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+          'long': 'LA', 'medium': 'MA', 'short': 'SA',
+          'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+        };
+        
+        const actionLengthAbbr = lengthMap[actionLength] || actionLength;
+        
+        if (!actionType || actionType === 'none') {
+          return actionLengthAbbr;
+        }
+        
+        const actionMap: {[key: string]: string} = {
+          'anti_ten_hunter_def': 'Anti-X Hunter',
+          'apr': 'APR',
+          'rem_700': 'Rem 700',
+          'tikka': 'Tikka',
+          'savage': 'Savage'
+        };
+        
+        const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
+        return `${actionLengthAbbr} ${actionDisplay}`;
+      } else {
+        // For non-APR orders, show action length
+        let actionLengthValue = order.features.action_length;
+        
+        if ((!actionLengthValue || actionLengthValue === 'none') && order.features.action_inlet) {
+          const inletToLengthMap: {[key: string]: string} = {
+            'anti_ten_hunter_def': 'SA',
+            'remington_700': 'SA',
+            'rem_700': 'SA',
+            'tikka_t3': 'SA',
+            'savage_short': 'SA',
+            'savage_long': 'LA'
+          };
+          actionLengthValue = inletToLengthMap[order.features.action_inlet] || 'SA';
+        }
+        
+        if (!actionLengthValue || actionLengthValue === 'none') return null;
+        
+        const displayMap: {[key: string]: string} = {
+          'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
+          'long': 'LA', 'medium': 'MA', 'short': 'SA',
+          'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
+        };
+        
+        return displayMap[actionLengthValue] || actionLengthValue;
+      }
+    };
+
+    // Helper function to get LOP display
+    const getLOPDisplay = (order: any) => {
+      if (!order.features) return null;
+      
+      const lopValue = order.features.length_of_pull;
+      
+      if (!lopValue || 
+          lopValue === 'none' || 
+          lopValue === 'standard' || 
+          lopValue === 'std' ||
+          lopValue === 'no_lop_change' ||
+          lopValue.toLowerCase().includes('std') ||
+          lopValue.toLowerCase().includes('no extra')) {
+        return null;
+      }
+      
+      return lopValue;
+    };
+
+    // Helper function to check for heavy fill
+    const getHeavyFillDisplay = (order: any) => {
+      if (!order.features) return false;
+      
+      const otherOptions = order.features.other_options;
+      if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
+        return true;
+      }
+      
+      const heavyFillValue = order.features.heavy_fill || order.features.heavyFill;
+      return heavyFillValue === 'true' || heavyFillValue === true || heavyFillValue === 'yes';
+    };
+
+    // Get relevant molds (same logic as scheduler)
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.stockModelId || order.modelId;
+      return molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) return true;
+        return mold.stockModels.includes(modelId);
+      });
+    };
+    
+    const compatibleMoldIds = new Set<string>();
+    orders.forEach(order => {
+      const compatible = getCompatibleMolds(order);
+      compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
+    });
+    
+    const relevantMolds = molds.filter(m => {
+      if (!m.enabled) return false;
+      const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+      const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
+      return hasAssignments || isCompatibleWithQueue;
+    });
+    
+    // Calculate order counts for sorting
+    const moldOrderCounts = relevantMolds.map(mold => {
+      const totalOrdersForMold = dates.reduce((count, date) => {
+        const dateString = date.toISOString();
+        const cellDateOnly = dateString.split('T')[0];
+        
+        const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+          const assignmentDateOnly = assignment.date.split('T')[0];
+          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+        }).length;
+        
+        return count + ordersForThisMoldDate;
+      }, 0);
+      
+      return { mold, orderCount: totalOrdersForMold };
+    });
+    
+    // Sort molds by order count (descending)
+    const sortedMolds = moldOrderCounts.sort((a, b) => {
+      if (b.orderCount !== a.orderCount) {
+        return b.orderCount - a.orderCount;
+      }
+      return a.mold.moldId.localeCompare(b.mold.moldId);
+    });
+    
+    const activeMolds = sortedMolds.map(({ mold }) => mold);
+
+    // Generate print content with exact card styling
     const printContent = `
       <!DOCTYPE html>
       <html>
         <head>
           <title>Layup Schedule - ${dateRange}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .schedule-grid { display: grid; grid-template-columns: 150px repeat(${dates.length}, 1fr); gap: 1px; border: 1px solid #333; }
-            .date-header { background: #f5f5f5; padding: 8px; text-align: center; font-weight: bold; border: 1px solid #ccc; }
-            .mold-header { background: #e5e5e5; padding: 8px; font-weight: bold; border: 1px solid #ccc; }
-            .cell { padding: 4px; min-height: 60px; border: 1px solid #ccc; }
-            .order-card { background: #f0f8ff; margin: 2px 0; padding: 3px 6px; border-radius: 3px; font-size: 10px; }
-            .order-card.production { background: #fff5e6; }
-            .order-card.p1 { background: #e8f5e8; }
-            .stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
-            .stat { background: #f5f5f5; padding: 10px; border-radius: 5px; }
-            @media print { body { margin: 0; } }
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 15px; 
+              font-size: 12px;
+              line-height: 1.3;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 20px; 
+              border-bottom: 2px solid #333; 
+              padding-bottom: 15px; 
+            }
+            .header h1 { 
+              margin: 0 0 5px 0; 
+              font-size: 18px; 
+            }
+            .header h2 { 
+              margin: 0 0 5px 0; 
+              font-size: 14px; 
+              color: #666;
+            }
+            .header p { 
+              margin: 0; 
+              font-size: 10px; 
+              color: #888;
+            }
+            .stats { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-bottom: 15px; 
+              gap: 10px;
+            }
+            .stat { 
+              background: #f5f5f5; 
+              padding: 8px 12px; 
+              border-radius: 4px; 
+              text-align: center;
+              font-size: 11px;
+              font-weight: bold;
+            }
+            .schedule-grid { 
+              display: grid; 
+              grid-template-columns: 120px repeat(${dates.length}, 1fr); 
+              gap: 1px; 
+              border: 1px solid #333; 
+              background: #333;
+            }
+            .date-header { 
+              background: #f5f5f5; 
+              padding: 8px 4px; 
+              text-align: center; 
+              font-weight: bold; 
+              font-size: 11px;
+              border-right: 1px solid #ccc;
+            }
+            .date-header.friday {
+              background: #fff3cd;
+              color: #856404;
+            }
+            .mold-header { 
+              background: #e5e5e5; 
+              padding: 8px 6px; 
+              font-weight: bold; 
+              font-size: 10px;
+              text-align: center;
+              border-right: 1px solid #ccc;
+            }
+            .cell { 
+              background: white;
+              padding: 3px; 
+              min-height: 80px; 
+              border-right: 1px solid #ccc;
+            }
+            .cell.friday {
+              background: #fffbf0;
+            }
+            .order-count {
+              font-size: 9px;
+              color: #666;
+              margin-bottom: 2px;
+            }
+            .order-card { 
+              margin: 1px 0; 
+              padding: 2px 4px; 
+              border-radius: 3px; 
+              font-size: 8px;
+              border: 1px solid;
+              text-align: center;
+              line-height: 1.2;
+            }
+            .order-card.production { 
+              background: #fff5e6; 
+              border-color: #ffc069;
+              color: #d46b08;
+            }
+            .order-card.fg { 
+              background: #1e40af; 
+              border-color: #1e3a8a;
+              color: white;
+            }
+            .order-card.regular { 
+              background: #e6f3ff; 
+              border-color: #69b7ff;
+              color: #1e40af;
+            }
+            .order-id {
+              font-weight: bold;
+              font-size: 9px;
+            }
+            .order-details {
+              font-size: 7px;
+              margin-top: 1px;
+              opacity: 0.9;
+            }
+            .material-badge {
+              display: inline-block;
+              background: rgba(255,255,255,0.3);
+              padding: 1px 3px;
+              border-radius: 2px;
+              font-weight: bold;
+              font-size: 6px;
+              margin-right: 2px;
+            }
+            .po-badge {
+              display: inline-block;
+              background: #ffc069;
+              color: #d46b08;
+              padding: 1px 3px;
+              border-radius: 2px;
+              font-weight: bold;
+              font-size: 6px;
+              margin-left: 2px;
+            }
+            .heavy-fill-badge {
+              display: inline-block;
+              background: #ff7875;
+              color: white;
+              padding: 1px 3px;
+              border-radius: 2px;
+              font-weight: bold;
+              font-size: 6px;
+              margin-top: 1px;
+            }
+            .lop-badge {
+              display: inline-block;
+              background: #ffec3d;
+              color: #874d00;
+              padding: 1px 3px;
+              border-radius: 2px;
+              font-weight: bold;
+              font-size: 6px;
+              margin-top: 1px;
+            }
+            .mold-info {
+              font-size: 7px;
+              margin-top: 1px;
+              font-weight: bold;
+              opacity: 0.8;
+            }
+            @media print { 
+              body { margin: 10px; }
+              .schedule-grid { break-inside: avoid; }
+            }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>Layup Production Schedule</h1>
+            <h1>P1 Layup Production Schedule</h1>
             <h2>${dateRange}</h2>
             <p>Generated on ${format(new Date(), 'MMMM d, yyyy h:mm a')}</p>
           </div>
           
           <div class="stats">
-            <div class="stat">Orders: ${orders.length}</div>
-            <div class="stat">Active Molds: ${molds.filter(m => m.enabled).length}</div>
+            <div class="stat">Total Orders: ${orders.length}</div>
+            <div class="stat">Production Orders: ${orders.filter(o => o.source === 'production_order').length}</div>
+            <div class="stat">Active Molds: ${activeMolds.length}</div>
             <div class="stat">Employees: ${employees.length}</div>
           </div>
 
           <div class="schedule-grid">
             <!-- Date Headers -->
             <div class="date-header">Mold</div>
-            ${dates.map(date => `
-              <div class="date-header">
-                ${format(date, 'MM/dd')}<br>
-                <small>${format(date, 'EEE')}</small>
-              </div>
-            `).join('')}
+            ${dates.map(date => {
+              const isFriday = date.getDay() === 5;
+              return `
+                <div class="date-header ${isFriday ? 'friday' : ''}">
+                  ${format(date, 'MM/dd')}<br>
+                  <small>${format(date, 'EEE')}</small>
+                  ${isFriday ? '<br><small style="font-size: 8px;">Backup</small>' : ''}
+                </div>
+              `;
+            }).join('')}
             
             <!-- Schedule Rows -->
-            ${(() => {
-              const usedMoldIds = new Set(Object.values(orderAssignments).map(assignment => assignment.moldId));
-              const activeMolds = molds.filter(m => m.enabled && usedMoldIds.has(m.moldId));
-              
-              return activeMolds.map(mold => `
-                <div class="mold-header">${mold.moldId}<br><small>#${mold.instanceNumber}</small></div>
-                ${dates.map(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
-                  
-                  const cellOrders = Object.entries(orderAssignments)
-                    .filter(([orderId, assignment]) => {
-                      const assignmentDateOnly = assignment.date.split('T')[0];
-                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                    })
-                    .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                    .filter(order => order !== undefined);
+            ${activeMolds.map(mold => `
+              <div class="mold-header">
+                ${mold.moldId}
+                <br><small>#${mold.instanceNumber}</small>
+              </div>
+              ${dates.map(date => {
+                const dateString = date.toISOString();
+                const cellDateOnly = dateString.split('T')[0];
+                const isFriday = date.getDay() === 5;
+                
+                const cellOrders = Object.entries(orderAssignments)
+                  .filter(([orderId, assignment]) => {
+                    const assignmentDateOnly = assignment.date.split('T')[0];
+                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                  })
+                  .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                  .filter(order => order !== undefined);
 
-                  return `
-                    <div class="cell">
-                      ${cellOrders.map(order => {
-                        const orderClass = order.source === 'production_order' ? 'production' : 
-                                         order.source === 'p1_purchase_order' ? 'p1' : '';
-                        const displayId = order.fbOrderNumber || order.orderNumber || order.orderId || 'No ID';
-                        const modelName = getModelDisplayName(order.stockModelId || order.modelId);
-                        
-                        return `
-                          <div class="order-card ${orderClass}">
-                            <strong>${displayId}</strong><br>
-                            <small>${modelName}</small>
+                return `
+                  <div class="cell ${isFriday ? 'friday' : ''}">
+                    ${cellOrders.length > 0 ? `<div class="order-count">${cellOrders.length} order(s)</div>` : ''}
+                    ${cellOrders.map(order => {
+                      const modelId = order.stockModelId || order.modelId;
+                      const materialType = getMaterialType(modelId);
+                      const isProduction = order.source === 'production_order';
+                      const displayId = getDisplayOrderId(order) || 'No ID';
+                      const modelName = getModelDisplayName(modelId);
+                      const actionLength = getActionLengthDisplay(order);
+                      const lopDisplay = getLOPDisplay(order);
+                      const hasHeavyFill = getHeavyFillDisplay(order);
+                      
+                      let cardClass = 'regular';
+                      if (isProduction) cardClass = 'production';
+                      else if (materialType === 'FG') cardClass = 'fg';
+                      
+                      return `
+                        <div class="order-card ${cardClass}">
+                          <div class="order-id">
+                            ${displayId}
+                            ${isProduction ? '<span class="po-badge">PO</span>' : ''}
                           </div>
-                        `;
-                      }).join('')}
-                    </div>
-                  `;
-                }).join('')}
-              `).join('');
-            })()}
+                          <div class="order-details">
+                            ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
+                            ${modelName}
+                          </div>
+                          ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
+                          <div class="mold-info">
+                            ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
+                          </div>
+                          ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
+                          ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                    ${cellOrders.length === 0 ? '<div style="text-align: center; color: #ccc; font-size: 9px; padding: 10px 0;">Available</div>' : ''}
+                  </div>
+                `;
+              }).join('')}
+            `).join('')}
           </div>
         </body>
       </html>

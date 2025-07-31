@@ -56,7 +56,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
   const createPaymentMutation = useMutation({
     mutationFn: (data: any) => apiRequest(`/api/orders/${orderId}/payments`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     }),
     onSuccess: () => {
       toast({
@@ -81,7 +81,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
     mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest(`/api/orders/payments/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: data,
       }),
     onSuccess: () => {
       toast({
@@ -177,7 +177,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
         data: { ...paymentData, orderId },
       });
     } else {
-      createPaymentMutation.mutate(paymentData);
+      createPaymentMutation.mutate({ ...paymentData, orderId });
     }
   };
 

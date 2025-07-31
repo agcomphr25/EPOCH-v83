@@ -782,7 +782,7 @@ export default function LayupScheduler() {
 
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
-      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();```text
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
@@ -1153,13 +1153,13 @@ export default function LayupScheduler() {
             body { 
               font-family: Arial, sans-serif; 
               margin: 0; 
-              padding: 5px;
-              font-size: 12px;
+              padding: 4px;
+              font-size: 11px;
               line-height: 1.1;
             }
             .header { 
               text-align: center; 
-              margin-bottom: 8px; 
+              margin-bottom: 6px; 
               border-bottom: 1px solid #333; 
               padding-bottom: 4px; 
             }
@@ -1174,21 +1174,21 @@ export default function LayupScheduler() {
             }
             .header p { 
               margin: 0; 
-              font-size: 9px; 
+              font-size: 8px; 
               color: #888;
             }
             .stats { 
               display: flex; 
               justify-content: space-between; 
               margin-bottom: 6px; 
-              gap: 6px;
+              gap: 4px;
             }
             .stat { 
               background: #f5f5f5; 
-              padding: 4px 8px; 
-              border-radius: 3px; 
+              padding: 2px 6px; 
+              border-radius: 2px; 
               text-align: center;
-              font-size: 10px;
+              font-size: 9px;
               font-weight: bold;
             }
             .schedule-grid { 
@@ -1325,18 +1325,28 @@ export default function LayupScheduler() {
             @media print { 
               body { 
                 margin: 0 !important; 
-                padding: 3px !important; 
+                padding: 2px !important; 
               }
               .header { 
-                margin-bottom: 4px !important; 
+                margin-bottom: 3px !important; 
                 padding-bottom: 2px !important; 
               }
               .stats { 
-                margin-bottom: 4px !important; 
+                margin-bottom: 3px !important; 
               }
               .schedule-grid { 
                 break-inside: avoid; 
-                margin-top: 0 !important;
+                margin: 0 !important;
+              }
+              .date-header { 
+                padding: 2px 1px !important; 
+              }
+              .mold-header { 
+                padding: 2px 2px !important; 
+              }
+              .cell { 
+                padding: 1px !important; 
+                min-height: 50px !important; 
               }
             }
           </style>

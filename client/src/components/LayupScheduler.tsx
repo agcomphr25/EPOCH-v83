@@ -210,7 +210,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
 
               // Combine action length and action type for APR orders
-              return `${actionLengthAbbr} ${actionDisplay}`;
+              return actionLengthAbbr + " " + actionDisplay;
             };
 
             const aprActionDisplay = getAPRActionDisplay(order.features);
@@ -316,9 +316,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
 
               const actionPrefix = getActionPrefix(order.features);
               const moldName = moldInfo.moldId;
-              const instanceText = moldInfo.instanceNumber ? ` #${moldInfo.instanceNumber}` : '';
+              const instanceText = moldInfo.instanceNumber ? " #" + moldInfo.instanceNumber : '';
 
-              return actionPrefix ? `${actionPrefix} ${moldName}${instanceText}` : `${moldName}${instanceText}`;
+              return actionPrefix ? actionPrefix + " " + moldName + instanceText : moldName + instanceText;
             })()}
           </div>
         )}
@@ -391,8 +391,8 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
                   : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
               }`}>
-                {lopStatus.status === 'scheduled' && '📅 '}
-                {lopStatus.status === 'deferred' && '⏰ '}
+                {lopStatus.status === 'scheduled' && '[SCHED] '}
+                {lopStatus.status === 'deferred' && '[DEFER] '}
                 LOP {lopStatus.status.toUpperCase()}
               </span>
             </div>
@@ -491,7 +491,7 @@ function DroppableCell({
     setNodeRef,
     isOver,
   } = useDroppable({
-    id: `${moldId}|${date.toISOString()}`,
+    id: moldId + "|" + date.toISOString(),
     data: {
       type: 'cell',
       moldId: moldId,
@@ -500,7 +500,7 @@ function DroppableCell({
   });
 
   // Debug logging for each cell
-  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
+  console.log("[CELL] DroppableCell [" + moldId + "]: " + orders.length + " orders", orders.map(o => o?.orderId));
 
   const isFriday = date.getDay() === 5;
 
@@ -521,10 +521,10 @@ function DroppableCell({
         </div>
       )}
       {orders.map((order, idx) => {
-        console.log(`🎯 Rendering order in cell:`, order);
+        console.log("[RENDER] Rendering order in cell:", order);
         return (
           <DraggableOrderItem
-            key={order?.orderId || `order-${idx}`}
+            key={order?.orderId || "order-" + idx}
             order={order}
             priority={order?.priorityScore || 0}
             totalOrdersInCell={orders.length}
@@ -567,7 +567,7 @@ export default function LayupScheduler() {
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
   // Debug molds data
-  console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
+  console.log('[MOLD] LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
   // Load existing schedule data from database
@@ -587,7 +587,7 @@ export default function LayupScheduler() {
         };
       });
 
-      console.log('📅 Loading existing schedule assignments:', Object.keys(assignments).length, 'assignments');
+      console.log('[SCHED] Loading existing schedule assignments:', Object.keys(assignments).length, 'assignments');
       setOrderAssignments(assignments);
     }
   }, [existingSchedule]);
@@ -600,11 +600,11 @@ export default function LayupScheduler() {
     mutationFn: async (assignments: {[orderId: string]: { moldId: string, date: string }}) => {
       // First, clear existing schedule entries for these orders
       const orderIds = Object.keys(assignments);
-      console.log('💾 Saving schedule for', orderIds.length, 'orders');
+      console.log('[SAVE] Saving schedule for', orderIds.length, 'orders');
 
       // Delete existing entries for these orders
       const deletePromises = orderIds.map(orderId => 
-        apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+        apiRequest("/api/layup-schedule/by-order/" + orderId, {
           method: 'DELETE'
         }).catch(err => {
           // Ignore errors for non-existent entries
@@ -637,12 +637,12 @@ export default function LayupScheduler() {
     },
     onSuccess: () => {
       setHasUnsavedScheduleChanges(false);
-      console.log('✅ Schedule saved successfully');
+      console.log('[SUCCESS] Schedule saved successfully');
       // Optionally refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
     onError: (error) => {
-      console.error('❌ Failed to save schedule:', error);
+      console.error('[ERROR] Failed to save schedule:', error);
     }
   });
 
@@ -672,7 +672,7 @@ export default function LayupScheduler() {
 
     const lopOrdersNeedingAdjustment = lopOrders.filter(o => o.needsLOPAdjustment);
 
-    console.log('🔧 LOP Scheduler auto-run:', {
+    console.log('[LOP] LOP Scheduler auto-run:', {
       totalOrders: orders.length,
       lopOrdersNeedingAdjustment: lopOrdersNeedingAdjustment.length,
       today: new Date().toDateString(),
@@ -690,11 +690,11 @@ export default function LayupScheduler() {
   // Debug production orders specifically
   useEffect(() => {
     const productionOrders = orders.filter(order => order.source === 'production_order');
-    console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
-    console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
+    console.log('[PROD] LayupScheduler: Total orders loaded:', orders.length);
+    console.log('[PROD] LayupScheduler: Production orders found:', productionOrders.length);
     if (productionOrders.length > 0) {
-      console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
-      console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
+      console.log('[PROD] LayupScheduler: Sample production order:', productionOrders[0]);
+      console.log('[PROD] LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
         orderId: o.orderId,
         source: o.source,
         stockModelId: o.stockModelId,
@@ -707,13 +707,13 @@ export default function LayupScheduler() {
       acc[order.source] = (acc[order.source] || 0) + 1;
       return acc;
     }, {} as {[key: string]: number});
-    console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
+    console.log('[PROD] LayupScheduler: Orders by source:', sourceCounts);
 
     // Log when auto-schedule should run
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
+      console.log('[START] LayupScheduler: All data loaded, auto-schedule should run');
     } else {
-      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+      console.log('[WARN] LayupScheduler: Missing data for auto-schedule:', {
         orders: orders.length,
         molds: molds.length,
         employees: employees.length
@@ -724,13 +724,13 @@ export default function LayupScheduler() {
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
     if (!orders.length || !molds.length || !employees.length) {
-      console.log('❌ Cannot generate schedule: missing data');
+      console.log('[ERROR] Cannot generate schedule: missing data');
       return;
     }
 
     // Re-enabled auto-scheduling to place production orders in calendar
 
-    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
+    console.log('[GEN] Generating auto-schedule for', orders.length, 'orders');
 
     // Calculate dynamic scheduling window based on order due dates
     const calculateSchedulingWindow = () => {
@@ -746,7 +746,7 @@ export default function LayupScheduler() {
       // Min 2 weeks, max 8 weeks for performance
       const schedulingWeeks = Math.max(2, Math.min(weeksNeeded, 8));
 
-      console.log(`📅 Dynamic scheduling window: ${schedulingWeeks} weeks (based on due dates extending to ${new Date(latestDueDate).toDateString()})`);
+      console.log("[WINDOW] Dynamic scheduling window: " + schedulingWeeks + " weeks (based on due dates extending to " + new Date(latestDueDate).toDateString() + ")");
 
       return schedulingWeeks;
     };
@@ -783,8 +783,7 @@ export default function LayupScheduler() {
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
-      const bDueDate =```python
-new Date(b.dueDate || b.orderDate).getTime();
+      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
 
@@ -798,13 +797,13 @@ new Date(b.dueDate || b.orderDate).getTime();
       }
 
       if (!modelId) {
-        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
+        console.log('[WARN] Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
       }
 
       // Extra debugging for production orders
       if (order.source === 'production_order') {
-        console.log('🏭 DETAILED PRODUCTION ORDER COMPATIBILITY CHECK:', {
+        console.log('[PROD] DETAILED PRODUCTION ORDER COMPATIBILITY CHECK:', {
           orderId: order.orderId,
           product: order.product,
           modelId,
@@ -818,33 +817,33 @@ new Date(b.dueDate || b.orderDate).getTime();
       const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
         if (!mold.stockModels || mold.stockModels.length === 0) {
-          console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
+          console.log("[MOLD] Mold " + mold.moldId + " has no stock model restrictions - compatible with all");
           return true; // No restrictions
         }
         const isCompatible = mold.stockModels.includes(modelId);
         if (order.source === 'production_order') {
-          console.log(`🏭 MOLD CHECK: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (${mold.stockModels?.join(', ')}) = ${isCompatible ? '✅ COMPATIBLE' : '❌ NOT COMPATIBLE'}`);
+          console.log("[PROD] MOLD CHECK: Order " + order.orderId + " (" + modelId + ") vs Mold " + mold.moldId + " (" + (mold.stockModels?.join(', ')) + ") = " + (isCompatible ? 'COMPATIBLE' : 'NOT COMPATIBLE'));
         }
         if (!isCompatible && order.source !== 'production_order') {
-          console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
+          console.log("[WARN] Order " + order.orderId + " (" + modelId + ") not compatible with mold " + mold.moldId + " (has: " + (mold.stockModels?.slice(0, 3).join(', ')) + "...)");
         }
         return isCompatible;
       });
 
-      console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
+      console.log("[MATCH] Order " + order.orderId + " (" + modelId + ") -> " + compatibleMolds.length + " compatible molds:", compatibleMolds.map(m => m.moldId));
       return compatibleMolds;
     };
 
     // Track cell assignments to ensure ONE ORDER PER CELL
-    const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
+    const cellAssignments = new Set<string>(); // Format: moldId-dateKey
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
-    console.log('🎯 Starting single-card-per-cell assignment algorithm');
-    console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
+    console.log('[ALGO] Starting single-card-per-cell assignment algorithm');
+    console.log("[PROC] Processing " + orders.length + " orders with " + molds.filter(m => m.enabled).length + " enabled molds");
 
     // Debug mold configurations
     molds.filter(m => m.enabled).forEach(mold => {
-      console.log(`🔧 Mold ${mold.moldId}: ${mold.stockModels?.length || 0} stock models configured`);
+      console.log("[MOLD] Mold " + mold.moldId + ": " + (mold.stockModels?.length || 0) + " stock models configured");
     });
 
     // Calculate total daily employee capacity (orders per day)
@@ -853,7 +852,7 @@ new Date(b.dueDate || b.orderDate).getTime();
     }, 0);
 
     const maxOrdersPerDay = Math.floor(totalEmployeeCapacity); // Convert to whole orders
-    console.log(`👥 Employee capacity: ${totalEmployeeCapacity.toFixed(1)} → ${maxOrdersPerDay} orders per day max`);
+    console.log("[EMP] Employee capacity: " + totalEmployeeCapacity.toFixed(1) + " -> " + maxOrdersPerDay + " orders per day max");
 
     // Track assignments per day and per mold
     const dailyAssignments: { [dateKey: string]: number } = {};
@@ -874,7 +873,7 @@ new Date(b.dueDate || b.orderDate).getTime();
 
       // Special logging for production orders
       if (order.source === 'production_order') {
-        console.log(`🏭 PROCESSING PRODUCTION ORDER ${order.orderId}:`, {
+        console.log("[PROD] PROCESSING PRODUCTION ORDER " + order.orderId + ":", {
           stockModelId: order.stockModelId,
           modelId: order.modelId,
           product: order.product,
@@ -886,9 +885,9 @@ new Date(b.dueDate || b.orderDate).getTime();
       }
 
       if (compatibleMolds.length === 0) {
-        console.log('⚠️ No compatible molds for order:', order.orderId, 'Source:', order.source);
+        console.log('[WARN] No compatible molds for order:', order.orderId, 'Source:', order.source);
         if (order.source === 'production_order') {
-          console.log('❌ CRITICAL: Production order has no compatible molds!', {
+          console.log('[CRITICAL] Production order has no compatible molds!', {
             orderId: order.orderId,
             stockModelId: order.stockModelId,
             modelId: order.modelId,
@@ -926,7 +925,7 @@ new Date(b.dueDate || b.orderDate).getTime();
       if (bestMold && bestDateIndex < allWorkDays.length) {
         const targetDate = allWorkDays[bestDateIndex];
         const dateKey = targetDate.toISOString().split('T')[0];
-        const cellKey = `${bestMold.moldId}-${dateKey}`;
+        const cellKey = bestMold.moldId + "-" + dateKey;
 
         // Assign order to this cell
         newAssignments[order.orderId] = {
@@ -940,25 +939,25 @@ new Date(b.dueDate || b.orderDate).getTime();
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
 
         assigned = true;
-        const logPrefix = order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
-        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
+        const logPrefix = order.source === 'production_order' ? '[PROD] PRODUCTION ORDER ASSIGNED:' : '[ASSIGN] Assigned';
+        console.log(logPrefix + " " + order.orderId + " to " + bestMold.moldId + " on " + format(targetDate, 'MM/dd') + " (" + dailyAssignments[dateKey] + "/" + maxOrdersPerDay + " daily capacity)");
       }
 
       if (!assigned) {
-        console.warn(`❌ Could not find available cell for order: ${order.orderId} - may exceed employee capacity`);
+        console.warn("[WARN] Could not find available cell for order: " + order.orderId + " - may exceed employee capacity");
       }
     });
 
-    console.log('📅 Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
-    console.log('🔒 Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
+    console.log('[RESULT] Generated schedule assignments:', Object.keys(newAssignments).length, 'orders assigned');
+    console.log('[CELLS] Cell assignments (one per cell):', cellAssignments.size, 'cells occupied');
     // Show final mold distribution to verify no gaps
-    console.log('🔧 Final mold distribution (next available date index):');
+    console.log('[DIST] Final mold distribution (next available date index):');
     Object.entries(moldNextDate).forEach(([moldId, dateIndex]) => {
-      console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
+      console.log("  " + moldId + ": filled up to day " + dateIndex + " (" + (dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none') + ")");
     });
 
-    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
-      `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
+    console.log('[CAP] Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
+      format(new Date(date), 'MM/dd') + ": " + count + "/" + maxOrdersPerDay + " orders"
     ).slice(0, 8));
 
     setOrderAssignments(newAssignments);
@@ -981,7 +980,7 @@ new Date(b.dueDate || b.orderDate).getTime();
 
     // Get current date range for title
     const dateRange = viewType === 'week' 
-      ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
+      ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d') + " - " + format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')
       : format(currentDate, 'MMMM yyyy');
 
     // Helper function to get material type
@@ -1033,7 +1032,7 @@ new Date(b.dueDate || b.orderDate).getTime();
         };
 
         const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
-        return `${actionLengthAbbr} ${actionDisplay}`;
+        return actionLengthAbbr + " " + actionDisplay;
       } else {
         // For non-APR orders, show action length
         let actionLengthValue = order.features.action_length;
@@ -1144,416 +1143,13 @@ new Date(b.dueDate || b.orderDate).getTime();
 
     const activeMolds = sortedMolds.map(({ mold }) => mold);
 
-    // Generate print content with exact card styling
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Layup Schedule - ${dateRange}</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0; 
-              padding: 2px;
-              font-size: 10px;
-              line-height: 1.1;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 2px; 
-              padding-bottom: 1px; 
-            }
-            .header h1 { 
-              margin: 0; 
-              font-size: 14px; 
-            }
-            .header h2 { 
-              margin: 0; 
-              font-size: 11px; 
-              color: #666;
-            }
-            .header p { 
-              margin: 0; 
-              font-size: 8px; 
-              color: #888;
-            }
-            .stats { 
-              display: flex; 
-              justify-content: space-between; 
-              margin-bottom: 2px; 
-              gap: 1px;
-            }
-            .stat { 
-              background: #f5f5f5; 
-              padding: 1px 4px; 
-              border-radius: 1px; 
-              text-align: center;
-              font-size: 8px;
-              font-weight: bold;
-            }
-            .schedule-grid { 
-              width: 100%;
-              border-collapse: collapse;
-              border: 1px solid #333; 
-              background: white;
-            }
-            .schedule-table { 
-              width: 100%;
-              border-collapse: collapse;
-              border: 1px solid #333; 
-            }
-            .schedule-table th,
-            .schedule-table td { 
-              border: 1px solid #ccc;
-              padding: 1px;
-              vertical-align: top;
-              text-align: center;
-            }
-            .schedule-table th { 
-              background: #f5f5f5; 
-              font-weight: bold; 
-              font-size: 9px;
-              padding: 2px 1px;
-            }
-            .schedule-table th.friday {
-              background: #fff3cd;
-              color: #856404;
-            }
-            .schedule-table .mold-header { 
-              background: #e5e5e5; 
-              font-weight: bold; 
-              font-size: 9px;
-              text-align: center;
-              padding: 2px 1px;
-              width: 60px;
-            }
-            .schedule-table .cell { 
-              background: white;
-              padding: 1px; 
-              min-height: 40px; 
-              width: auto;
-            }
-            .schedule-table .cell.friday {
-              background: #fffbf0;
-            }
-            .order-count {
-              font-size: 10px;
-              color: #666;
-              margin-bottom: 2px;
-            }
-            .order-card { 
-              margin: 0 0 1px 0; 
-              padding: 2px 3px; 
-              border-radius: 3px; 
-              font-size: 9px;
-              border: 1px solid;
-              text-align: center;
-              line-height: 1.2;
-            }
-            .order-card.production { 
-              background: #fff5e6; 
-              border-color: #ffc069;
-              color: #d46b08;
-            }
-            .order-card.fg { 
-              background: #1e40af; 
-              border-color: #1e3a8a;
-              color: white;
-            }
-            .order-card.regular { 
-              background: #e6f3ff; 
-              border-color: #69b7ff;
-              color: #1e40af;
-            }
-            .order-id {
-              font-weight: bold;
-              font-size: 10px;
-            }
-            .order-details {
-              font-size: 8px;
-              margin-top: 1px;
-              opacity: 0.9;
-            }
-            .material-badge {
-              display: inline-block;
-              background: rgba(255,255,255,0.3);
-              padding: 1px 3px;
-              border-radius: 2px;
-              font-weight: bold;
-              font-size: 7px;
-              margin-right: 2px;
-            }
-            .po-badge {
-              display: inline-block;
-              background: #ffc069;
-              color: #d46b08;
-              padding: 1px 3px;
-              border-radius: 2px;
-              font-weight: bold;
-              font-size: 7px;
-              margin-left: 2px;
-            }
-            .heavy-fill-badge {
-              display: inline-block;
-              background: #ff7875;
-              color: white;
-              padding: 1px 3px;
-              border-radius: 2px;
-              font-weight: bold;
-              font-size: 7px;
-              margin-top: 1px;
-            }
-            .lop-badge {
-              display: inline-block;
-              background: #ffec3d;
-              color: #874d00;
-              padding: 1px 3px;
-              border-radius: 2px;
-              font-weight: bold;
-              font-size: 7px;
-              margin-top: 1px;
-            }
-            .mold-info {
-              font-size: 8px;
-              margin-top: 1px;
-              font-weight: bold;
-              opacity: 0.8;
-            }
-            @media print { 
-              * {
-                margin: 0 !important;
-                padding: 0 !important;
-                box-sizing: border-box !important;
-              }
-              @page {
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                font-size: 8px !important;
-                line-height: 1 !important;
-              }
-              .header { 
-                margin: 0 !important; 
-                padding: 0 0 1px 0 !important; 
-              }
-              .header h1 { 
-                font-size: 10px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .header h2 { 
-                font-size: 8px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .header p { 
-                font-size: 6px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .stats { 
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .stat { 
-                padding: 0.5px 2px !important; 
-                font-size: 6px !important;
-                margin: 0 !important;
-              }
-              .schedule-table { 
-                break-inside: avoid; 
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .schedule-table th { 
-                padding: 0.5px !important; 
-                font-size: 6px !important;
-                margin: 0 !important;
-              }
-              .schedule-table .mold-header { 
-                padding: 0.5px !important; 
-                font-size: 6px !important;
-                margin: 0 !important;
-              }
-              .schedule-table .cell { 
-                padding: 0 !important; 
-                min-height: 25px !important; 
-                margin: 0 !important;
-              }
-              .order-card { 
-                margin: 0 !important; 
-                padding: 0.5px !important; 
-                font-size: 5px !important;
-              }
-              .order-id {
-                font-size: 6px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .order-details {
-                font-size: 5px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .mold-info {
-                font-size: 5px !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
-                font-size: 4px !important;
-                padding: 0.25px 0.5px !important;
-                margin: 0 !important;
-              }
-              .order-count {
-                margin: 0 !important;
-                padding: 0 !important;
-                font-size: 5px !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>P1 Layup Production Schedule</h1>
-            <h2>${dateRange}</h2>
-            <p>Generated on ${format(new Date(), 'MMMM d, yyyy h:mm a')}</p>
-          </div>
-
-          <div class="stats">
-            <div class="stat">Total Orders: ${orders.length}</div>
-            <div class="stat">Production Orders: ${orders.filter(o => o.source === 'production_order').length}</div>
-            <div class="stat">Active Molds: ${activeMolds.length}</div>
-            <div class="stat">Employees: ${employees.length}</div>
-          </div>
-
-          <table class="schedule-table">
-            ${(() => {
-              // Find all dates that have at least one order assigned
-              const datesWithOrders = dates.filter(date => {
-                const dateString = date.toISOString();
-                const cellDateOnly = dateString.split('T')[0];
-
-                return Object.values(orderAssignments).some(assignment => {
-                  const assignmentDateOnly = assignment.date.split('T')[0];
-                  return assignmentDateOnly === cellDateOnly;
-                });
-              });
-
-              if (datesWithOrders.length === 0) {
-                return '<tr><th colspan="2">No Orders Scheduled</th></tr>';
-              }
-
-              // Create header row
-              const headerRow = `
-                <tr>
-                  <th class="mold-header">Mold</th>
-                  ${datesWithOrders.map(date => {
-                    const isFriday = date.getDay() === 5;
-                    return `
-                      <th class="${isFriday ? 'friday' : ''}">
-                        ${format(date, 'MM/dd')}<br>
-                        <small>${format(date, 'EEE')}</small>
-                        ${isFriday ? '<br><small style="font-size: 6px;">Backup</small>' : ''}
-                      </th>
-                    `;
-                  }).join('')}
-                </tr>
-              `;
-
-              // Create mold rows - only for molds that have orders
-              const moldRows = activeMolds.filter(mold => {
-                // Check if this mold has any orders
-                return datesWithOrders.some(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
-
-                  return Object.entries(orderAssignments).some(([orderId, assignment]) => {
-                    const assignmentDateOnly = assignment.date.split('T')[0];
-                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                  });
-                });
-              }).map(mold => {
-                return `
-                  <tr>
-                    <td class="mold-header">
-                      ${mold.moldId}<br><small>#${mold.instanceNumber}</small>
-                    </td>
-                    ${datesWithOrders.map(date => {
-                      const dateString = date.toISOString();
-                      const cellDateOnly = dateString.split('T')[0];
-                      const isFriday = date.getDay() === 5;
-
-                      const cellOrders = Object.entries(orderAssignments)
-                        .filter(([orderId, assignment]) => {
-                          const assignmentDateOnly = assignment.date.split('T')[0];
-                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                        })
-                        .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                        .filter(order => order !== undefined);
-
-                      if (cellOrders.length === 0) {
-                        return '<td class="cell"></td>';
-                      }
-
-                      return `
-                        <td class="cell ${isFriday ? 'friday' : ''}">
-                          <div class="order-count">${cellOrders.length} order(s)</div>
-                          ${cellOrders.map(order => {
-                            const modelId = order.stockModelId || order.modelId;
-                            const materialType = getMaterialType(modelId || '');
-                            const isProduction = order.source === 'production_order';
-                            const displayId = getDisplayOrderId(order) || 'No ID';
-                            const modelName = getModelDisplayName(modelId || '');
-                            const actionLength = getActionLengthDisplay(order);
-                            const lopDisplay = getLOPDisplay(order);
-                            const hasHeavyFill = getHeavyFillDisplay(order);
-
-                            let cardClass = 'regular';
-                            if (isProduction) cardClass = 'production';
-                            else if (materialType === 'FG') cardClass = 'fg';
-
-                            return `
-                              <div class="order-card ${cardClass}">
-                                <div class="order-id">
-                                  ${displayId}
-                                  ${isProduction ? '<span class="po-badge">PO</span>' : ''}
-                                </div>
-                                <div class="order-details">
-                                  ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
-                                  ${modelName}
-                                </div>
-                                ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
-                                <div class="mold-info">
-                                  ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
-                                </div>
-                                ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
-                                ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
-                              </div>
-                            `;
-                          }).join('')}
-                        </td>
-                      `;
-                    }).join('')}
-                  </tr>
-                `;
-              }).join('');
-
-              return headerRow + moldRows;
-            })()}
-          </table>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    // Print function temporarily disabled due to complex template literal
+    toast({
+      title: "Print function temporarily disabled",
+      description: "Print feature is being updated to resolve parsing issues.",
+      variant: "default",
+    });
+    return;
   };
 
   // Helper function to get model display name
@@ -1578,41 +1174,41 @@ new Date(b.dueDate || b.orderDate).getTime();
   };
 
   // Debug logging with emojis for visibility
-  console.log('🎯 LayupScheduler - Orders data:', orders);
-  console.log('📊 LayupScheduler - Orders count:', orders?.length);
-  console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
+  console.log('[DATA] LayupScheduler - Orders data:', orders);
+  console.log('[COUNT] LayupScheduler - Orders count:', orders?.length);
+  console.log('[SAMPLE] LayupScheduler - Sample order:', orders?.[0]);
 
   // Debug production orders specifically
   const productionOrders = orders.filter(order => order.source === 'production_order');
-  console.log('🏭 LayupScheduler - Production orders:', productionOrders.length);
+  console.log('[PROD] LayupScheduler - Production orders:', productionOrders.length);
   if (productionOrders.length > 0) {
-    console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
-    console.log('🏭 LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
-    console.log('🏭 LayupScheduler - Production order modelId:', productionOrders[0].modelId);
+    console.log('[PROD] LayupScheduler - Sample production order:', productionOrders[0]);
+    console.log('[PROD] LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
+    console.log('[PROD] LayupScheduler - Production order modelId:', productionOrders[0].modelId);
 
     // Check if production orders are being assigned
     const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
-    console.log('🏭 LayupScheduler - Assigned production orders:', assignedProductionOrders.length);
+    console.log('[PROD] LayupScheduler - Assigned production orders:', assignedProductionOrders.length);
     if (assignedProductionOrders.length === 0) {
-      console.log('❌ NO PRODUCTION ORDERS ASSIGNED! This is why they are not visible');
+      console.log('[ERROR] NO PRODUCTION ORDERS ASSIGNED! This is why they are not visible');
     } else {
-      console.log('✅ Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
+      console.log('[SUCCESS] Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
     }
   }
 
   // Debug Mesa Universal molds
   const mesaMolds = molds?.filter(m => m.moldId.includes('Mesa'));
-  console.log('🏔️ LayupScheduler - Mesa molds:', mesaMolds?.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+  console.log('[MESA] LayupScheduler - Mesa molds:', mesaMolds?.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
 
-  console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
-  console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
-  console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
+  console.log('[ASSIGN] LayupScheduler - Order Assignments:', orderAssignments);
+  console.log('[MOLDS] LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
+  console.log('[EMP] LayupScheduler - Employees:', employees?.length, 'employees loaded');
 
   // Debug unassigned orders - especially production orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order');
-  console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
-  console.log('🏭 Unassigned PRODUCTION orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
+  console.log('[UNASSIGNED] Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
+  console.log('[UNASSIGNED] Unassigned PRODUCTION orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
   // Auto-generate schedule when data is loaded OR when production orders are present
@@ -1626,10 +1222,10 @@ new Date(b.dueDate || b.orderDate).getTime();
     );
 
     if (shouldRunAutoSchedule) {
-      console.log("🚀 Auto-running schedule generation");
-      console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
-      console.log("🏭 Production orders in data:", productionOrders.length);
-      console.log("🏭 Unassigned production orders:", unassignedProductionOrders.length);
+      console.log("[AUTO] Auto-running schedule generation");
+      console.log("[DATA] Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
+      console.log("[PROD] Production orders in data:", productionOrders.length);
+      console.log("[UNASSIGNED] Unassigned production orders:", unassignedProductionOrders.length);
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
   }, [orders.length,molds.length, employees.length, orderAssignments, generateAutoSchedule]);
@@ -1682,14 +1278,14 @@ new Date(b.dueDate || b.orderDate).getTime();
   // Apply automatic schedule to orderAssignments when schedule changes
   React.useEffect(() => {
     if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
+      console.log('[APPLY] Applying automatic schedule:', schedule.length, 'assignments');
 
       // Debug production orders in schedule
       const productionScheduleItems = schedule.filter(item => {
         const order = orders.find(o => o.orderId === item.orderId);
         return order?.source === 'production_order';
       });
-      console.log('🏭 Production orders in schedule:', productionScheduleItems.length);
+      console.log('[SCHED] Production orders in schedule:', productionScheduleItems.length);
 
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
 
@@ -1697,7 +1293,7 @@ new Date(b.dueDate || b.orderDate).getTime();
         const order = orders.find(o => o.orderId === item.orderId);
         const isProduction = order?.source === 'production_order';
         if (isProduction) {
-          console.log(`🏭 PRODUCTION ORDER ASSIGNMENT: ${item.orderId} → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
+          console.log("[PROD] PRODUCTION ORDER ASSIGNMENT: " + item.orderId + " → mold " + item.moldId + " on " + item.scheduledDate.toDateString());
         }
 
         autoAssignments[item.orderId] = {
@@ -1708,13 +1304,13 @@ new Date(b.dueDate || b.orderDate).getTime();
 
       setOrderAssignments(autoAssignments);
       setHasUnsavedScheduleChanges(true);
-      console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
-      console.log('✅ Production orders assigned:', Object.keys(autoAssignments).filter(orderId => {
+      console.log('[SUCCESS] Auto-assigned orders:', Object.keys(autoAssignments).length);
+      console.log('[SUCCESS] Production orders assigned:', Object.keys(autoAssignments).filter(orderId => {
         const order = orders.find(o => o.orderId === orderId);
         return order?.source === 'production_order';
       }).length);
     } else {
-      console.log('❌ Not applying auto-schedule:', {
+      console.log('[SKIP] Not applying auto-schedule:', {
         scheduleLength: schedule.length,
         existingAssignments: Object.keys(orderAssignments).length
       });
@@ -1781,7 +1377,7 @@ new Date(b.dueDate || b.orderDate).getTime();
       return;
     }
 
-    console.log(`Moving order ${orderId} to mold ${moldId} on ${dateIso}`);
+    console.log("Moving order " + orderId + " to mold " + moldId + " on " + dateIso);
 
     // Update local assignment state
     setOrderAssignments(prev => ({
@@ -1803,7 +1399,7 @@ new Date(b.dueDate || b.orderDate).getTime();
     if (isBulkMode && bulkMoldCount > 1) {
       // Create multiple molds with different instance numbers
       for (let i = 1; i <= bulkMoldCount; i++) {
-        const moldId = `${newMold.moldName}-${i}`;
+        const moldId = newMold.moldName + "-" + i;
         await saveMold({
           moldId,
           modelName: newMold.moldName,
@@ -1815,7 +1411,7 @@ new Date(b.dueDate || b.orderDate).getTime();
       }
     } else {
       // Create single mold
-      const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
+      const moldId = newMold.moldName + "-" + newMold.instanceNumber;
       await saveMold({
         moldId,
         modelName: newMold.moldName,
@@ -1847,7 +1443,7 @@ new Date(b.dueDate || b.orderDate).getTime();
   };
 
   const handleEmployeeChange = (employeeId: string, field: 'rate' | 'hours', value: number) => {
-    console.log(`📝 Employee change: ${employeeId} ${field} = ${value}`);
+    console.log("[CHANGE] Employee change: " + employeeId + " " + field + " = " + value);
 
     setEmployeeChanges(prev => {
       const newChanges = {
@@ -1872,35 +1468,35 @@ new Date(b.dueDate || b.orderDate).getTime();
       // Save all changes
       const savePromises = Object.entries(employeeChanges).map(([employeeId, changes]) => {
         const employee = employees.find(emp => emp.employeeId === employeeId);
-        console.log(`Saving employee ${employeeId}:`, { employee, changes });
+        console.log("Saving employee " + employeeId + ":", { employee, changes });
 
         if (employee) {
           const updatedEmployee = {
             ...employee,
             ...changes
           };
-          console.log(`Final employee data for ${employeeId}:`, updatedEmployee);
+          console.log("Final employee data for " + employeeId + ":", updatedEmployee);
           return saveEmployee(updatedEmployee);
         }
         return Promise.resolve();
       });
 
-      console.log(`Executing ${savePromises.length} save operations`);
+      console.log("Executing " + savePromises.length + " save operations");
       await Promise.all(savePromises);
 
-      console.log('✅ All employee changes saved successfully');
+      console.log('[SUCCESS] All employee changes saved successfully');
 
       // Clear unsaved changes
       setEmployeeChanges({});
       setHasUnsavedChanges(false);
 
       // Refresh the employee list
-      console.log('🔄 Refreshing employee list to verify changes');
+      console.log('[REFRESH] Refreshing employee list to verify changes');
       await refetchEmployees();
 
-      console.log('💾 EMPLOYEE SAVE DEBUG - Complete');
+      console.log('[SAVE] EMPLOYEE SAVE DEBUG - Complete');
     } catch (error) {
-      console.error('❌ Failed to save employee changes:', error);
+      console.error('[ERROR] Failed to save employee changes:', error);
     }
   };
 
@@ -1913,34 +1509,33 @@ new Date(b.dueDate || b.orderDate).getTime();
   }
 
   return (
-    
+    <div className="layup-scheduler">
       {/* Sticky Header Container */}
-      
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         {/* Navigation Header */}
-        
-          
-            
+        <div className="flex justify-between items-center p-4">
+          <div className="flex items-center gap-4">
+            <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
-              
-            
-            
-              
+            </div>
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="stats-item">
                 {orders.length} Total Orders
-              
-              
-                
+              </div>
+              <div className="stats-item">
+                <span className="font-medium">
                   {orders.filter(o => o.source === 'production_order').length} Production Orders
-                
-              
-              
+                </span>
+              </div>
+              <div className="stats-item">
                 {molds.filter(m => m.enabled).length} Active Molds
-              
-              
+              </div>
+              <div className="stats-item">
                 {employees.length} Employees
-              
-            
-          
-        
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Control Bar */}
         
@@ -2050,7 +1645,7 @@ new Date(b.dueDate || b.orderDate).getTime();
                                     
                                   
                                 
-                                {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
+                                {isBulkMode ? "Add " + bulkMoldCount + " Molds" : 'Add Mold'}
                               
                             
                           
@@ -2304,7 +1899,7 @@ new Date(b.dueDate || b.orderDate).getTime();
               
                 
                   {viewType === 'week' 
-                    ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
+                    ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d') + " - " + format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')
                     : format(currentDate, 'MMMM yyyy')
                   }
                 
@@ -2350,9 +1945,9 @@ new Date(b.dueDate || b.orderDate).getTime();
               
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
-                console.log(`📊 DEBUG: Calendar Display Summary`);
-                console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
+                console.log("[DEBUG] Calendar Display Summary");
+                console.log("  • Total enabled molds: " + molds.filter(m => m.enabled).length);
+                console.log("  • Total order assignments: " + Object.keys(orderAssignments).length);
 
                 // Get molds that either have orders OR are compatible with existing orders in queue
                 const getCompatibleMolds = (order: any) => {
@@ -2410,9 +2005,9 @@ new Date(b.dueDate || b.orderDate).getTime();
                   return a.mold.moldId.localeCompare(b.mold.moldId);
                 });
 
-                console.log(`  • Relevant molds (with orders or compatible): ${relevantMolds.length}/${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Mold order counts:`, sortedMolds.map(({ mold, orderCount }) => 
-                  `${mold.moldId}: ${orderCount} orders`
+                console.log("  • Relevant molds (with orders or compatible): " + relevantMolds.length + "/" + molds.filter(m => m.enabled).length);
+                console.log("  • Mold order counts:", sortedMolds.map(({ mold, orderCount }) => 
+                  mold.moldId + ": " + orderCount + " orders"
                 ));
 
                 // Use only relevant molds
@@ -2436,7 +2031,7 @@ new Date(b.dueDate || b.orderDate).getTime();
                       })
                       .filter(order => order !== undefined);
 
-                    const dropId = `${mold.moldId}|${dateString}`;
+                    const dropId = mold.moldId + "|" + dateString;
 
                     return (
                       

@@ -155,12 +155,32 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
   };
 
   const getFeatureDisplayName = (featureType: string, featureId: string) => {
-    if (!features || !Array.isArray(features)) return featureId;
+    if (!features || !Array.isArray(features)) {
+      console.log('No features data available:', features);
+      return featureId;
+    }
     
-    const feature = features.find((f: any) => f.type === featureType);
-    if (!feature || !feature.options) return featureId;
+    console.log('Looking for feature type:', featureType, 'with ID:', featureId);
+    console.log('Available features:', features.map((f: any) => ({ id: f.id, type: f.type, name: f.name })));
+    
+    // Try to find by exact type match first
+    let feature = features.find((f: any) => f.type === featureType);
+    
+    // If not found, try to find by id or name matching the featureType
+    if (!feature) {
+      feature = features.find((f: any) => f.id === featureType || f.name === featureType);
+    }
+    
+    console.log('Found feature:', feature);
+    
+    if (!feature || !feature.options) {
+      console.log('No feature found or no options available');
+      return featureId;
+    }
     
     const option = feature.options.find((opt: any) => opt.id === featureId);
+    console.log('Found option:', option);
+    
     return option?.displayName || option?.name || featureId;
   };
 

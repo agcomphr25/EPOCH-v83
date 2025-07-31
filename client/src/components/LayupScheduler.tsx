@@ -1197,44 +1197,50 @@ export default function LayupScheduler() {
               border: 1px solid #333; 
               background: white;
             }
-            .schedule-table { 
+            .compact-schedule {
               width: 100%;
-              border-collapse: collapse;
-              border: 1px solid #333; 
+              background: white;
             }
-            .schedule-table th,
-            .schedule-table td { 
-              border: 1px solid #ccc;
-              padding: 2px;
-              vertical-align: top;
+            .no-orders {
               text-align: center;
+              padding: 20px;
+              font-size: 14px;
+              color: #666;
             }
-            .schedule-table th { 
-              background: #f5f5f5; 
-              font-weight: bold; 
-              font-size: 11px;
-              padding: 6px 4px;
+            .date-section {
+              margin-bottom: 8px;
+              border: 1px solid #ddd;
+              background: #f9f9f9;
             }
-            .schedule-table th.friday {
+            .date-title {
+              background: #e0e0e0;
+              padding: 4px 8px;
+              font-weight: bold;
+              font-size: 12px;
+              border-bottom: 1px solid #ddd;
+            }
+            .date-title.friday {
               background: #fff3cd;
               color: #856404;
             }
-            .schedule-table .mold-header { 
-              background: #e5e5e5; 
-              font-weight: bold; 
-              font-size: 11px;
-              text-align: center;
-              padding: 6px 4px;
-              width: 100px;
+            .molds-for-date {
+              padding: 2px;
             }
-            .schedule-table .cell { 
-              background: white;
-              padding: 2px; 
-              min-height: 70px; 
-              width: auto;
+            .mold-section {
+              margin-bottom: 4px;
+              border-left: 3px solid #ccc;
+              padding-left: 4px;
             }
-            .schedule-table .cell.friday {
-              background: #fffbf0;
+            .mold-title {
+              font-weight: bold;
+              font-size: 10px;
+              color: #333;
+              margin-bottom: 2px;
+            }
+            .orders-for-mold {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 2px;
             }
             .order-count {
               font-size: 10px;
@@ -1345,21 +1351,24 @@ export default function LayupScheduler() {
                 padding: 1px 4px !important; 
                 font-size: 9px !important;
               }
-              .schedule-table { 
+              .compact-schedule { 
                 break-inside: avoid; 
                 margin: 0 !important;
               }
-              .schedule-table th { 
-                padding: 4px 3px !important; 
+              .date-section {
+                margin-bottom: 6px !important;
+                break-inside: avoid;
+              }
+              .date-title { 
+                padding: 3px 6px !important; 
                 font-size: 10px !important;
               }
-              .schedule-table .mold-header { 
-                padding: 4px 3px !important; 
-                font-size: 10px !important;
+              .mold-title { 
+                font-size: 9px !important;
+                margin-bottom: 1px !important;
               }
-              .schedule-table .cell { 
-                padding: 1px !important; 
-                min-height: 60px !important; 
+              .orders-for-mold {
+                gap: 1px !important;
               }
               .order-card { 
                 margin: 0.5px 0 !important; 
@@ -1395,121 +1404,112 @@ export default function LayupScheduler() {
             <div class="stat">Employees: ${employees.length}</div>
           </div>
 
-          <table class="schedule-table">
+          <div class="compact-schedule">
             ${(() => {
-              // Find all dates that have at least one order assigned
-              const datesWithOrders = dates.filter(date => {
-                const dateString = date.toISOString();
-                const cellDateOnly = dateString.split('T')[0];
-
-                return Object.values(orderAssignments).some(assignment => {
-                  const assignmentDateOnly = assignment.date.split('T')[0];
-                  return assignmentDateOnly === cellDateOnly;
-                });
+              // Collect all mold-date combinations that have orders
+              const scheduleEntries = [];
+              
+              Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+                const order = orders.find(o => o.orderId === orderId);
+                if (!order) return;
+                
+                const assignmentDate = new Date(assignment.date);
+                const dateKey = assignmentDate.toISOString().split('T')[0];
+                
+                const existingEntry = scheduleEntries.find(e => 
+                  e.moldId === assignment.moldId && e.dateKey === dateKey
+                );
+                
+                if (existingEntry) {
+                  existingEntry.orders.push(order);
+                } else {
+                  scheduleEntries.push({
+                    moldId: assignment.moldId,
+                    dateKey,
+                    date: assignmentDate,
+                    orders: [order],
+                    mold: activeMolds.find(m => m.moldId === assignment.moldId)
+                  });
+                }
               });
 
-              if (datesWithOrders.length === 0) {
-                return '<tr><th colspan="2">No Orders Scheduled</th></tr>';
+              if (scheduleEntries.length === 0) {
+                return '<div class="no-orders">No Orders Scheduled</div>';
               }
 
-              // Create header row
-              const headerRow = `
-                <tr>
-                  <th class="mold-header">Mold</th>
-                  ${datesWithOrders.map(date => {
-                    const isFriday = date.getDay() === 5;
-                    return `
-                      <th class="${isFriday ? 'friday' : ''}">
-                        ${format(date, 'MM/dd')}<br>
-                        <small>${format(date, 'EEE')}</small>
-                        ${isFriday ? '<br><small style="font-size: 8px;">Backup</small>' : ''}
-                      </th>
-                    `;
-                  }).join('')}
-                </tr>
-              `;
+              // Group by date first
+              const entriesByDate = {};
+              scheduleEntries.forEach(entry => {
+                if (!entriesByDate[entry.dateKey]) {
+                  entriesByDate[entry.dateKey] = [];
+                }
+                entriesByDate[entry.dateKey].push(entry);
+              });
 
-              // Create mold rows - only for molds that have orders
-              const moldRows = activeMolds.filter(mold => {
-                // Check if this mold has any orders
-                return datesWithOrders.some(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
+              // Generate compact layout
+              return Object.entries(entriesByDate)
+                .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                .map(([dateKey, dateEntries]) => {
+                  const date = new Date(dateKey);
+                  const isFriday = date.getDay() === 5;
                   
-                  return Object.entries(orderAssignments).some(([orderId, assignment]) => {
-                    const assignmentDateOnly = assignment.date.split('T')[0];
-                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                  });
-                });
-              }).map(mold => {
-                return `
-                  <tr>
-                    <td class="mold-header">
-                      ${mold.moldId}<br><small>#${mold.instanceNumber}</small>
-                    </td>
-                    ${datesWithOrders.map(date => {
-                      const dateString = date.toISOString();
-                      const cellDateOnly = dateString.split('T')[0];
-                      const isFriday = date.getDay() === 5;
-
-                      const cellOrders = Object.entries(orderAssignments)
-                        .filter(([orderId, assignment]) => {
-                          const assignmentDateOnly = assignment.date.split('T')[0];
-                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                        })
-                        .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                        .filter(order => order !== undefined);
-
-                      if (cellOrders.length === 0) {
-                        return '<td class="cell"></td>';
-                      }
-
-                      return `
-                        <td class="cell ${isFriday ? 'friday' : ''}">
-                          <div class="order-count">${cellOrders.length} order(s)</div>
-                          ${cellOrders.map(order => {
-                            const modelId = order.stockModelId || order.modelId;
-                            const materialType = getMaterialType(modelId || '');
-                            const isProduction = order.source === 'production_order';
-                            const displayId = getDisplayOrderId(order) || 'No ID';
-                            const modelName = getModelDisplayName(modelId || '');
-                            const actionLength = getActionLengthDisplay(order);
-                            const lopDisplay = getLOPDisplay(order);
-                            const hasHeavyFill = getHeavyFillDisplay(order);
-
-                            let cardClass = 'regular';
-                            if (isProduction) cardClass = 'production';
-                            else if (materialType === 'FG') cardClass = 'fg';
-
-                            return `
-                              <div class="order-card ${cardClass}">
-                                <div class="order-id">
-                                  ${displayId}
-                                  ${isProduction ? '<span class="po-badge">PO</span>' : ''}
-                                </div>
-                                <div class="order-details">
-                                  ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
-                                  ${modelName}
-                                </div>
-                                ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
-                                <div class="mold-info">
-                                  ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
-                                </div>
-                                ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
-                                ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
+                  return `
+                    <div class="date-section">
+                      <div class="date-title ${isFriday ? 'friday' : ''}">
+                        ${format(date, 'MM/dd - EEE')}
+                        ${isFriday ? ' (Backup)' : ''}
+                      </div>
+                      <div class="molds-for-date">
+                        ${dateEntries.map(entry => {
+                          const mold = entry.mold;
+                          if (!mold) return '';
+                          
+                          return `
+                            <div class="mold-section">
+                              <div class="mold-title">
+                                ${mold.moldId} #${mold.instanceNumber} (${entry.orders.length} orders)
                               </div>
-                            `;
-                          }).join('')}
-                        </td>
-                      `;
-                    }).join('')}
-                  </tr>
-                `;
-              }).join('');
+                              <div class="orders-for-mold">
+                                ${entry.orders.map(order => {
+                                  const modelId = order.stockModelId || order.modelId;
+                                  const materialType = getMaterialType(modelId || '');
+                                  const isProduction = order.source === 'production_order';
+                                  const displayId = getDisplayOrderId(order) || 'No ID';
+                                  const modelName = getModelDisplayName(modelId || '');
+                                  const actionLength = getActionLengthDisplay(order);
+                                  const lopDisplay = getLOPDisplay(order);
+                                  const hasHeavyFill = getHeavyFillDisplay(order);
 
-              return headerRow + moldRows;
+                                  let cardClass = 'regular';
+                                  if (isProduction) cardClass = 'production';
+                                  else if (materialType === 'FG') cardClass = 'fg';
+
+                                  return `
+                                    <div class="order-card ${cardClass}">
+                                      <div class="order-id">
+                                        ${displayId}
+                                        ${isProduction ? '<span class="po-badge">PO</span>' : ''}
+                                      </div>
+                                      <div class="order-details">
+                                        ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
+                                        ${modelName}
+                                      </div>
+                                      ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
+                                      ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
+                                      ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
+                                    </div>
+                                  `;
+                                }).join('')}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    </div>
+                  `;
+                }).join('');
             })()}
-          </table>
+          </div>
         </body>
       </html>
     `;

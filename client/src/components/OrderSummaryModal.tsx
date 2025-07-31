@@ -241,59 +241,7 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
                 </CardContent>
               </Card>
 
-              {/* Payment and Pricing Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Payment Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Payment Status:</span>
-                    <Badge variant={order.isPaid ? 'default' : 'secondary'}>
-                      {order.isPaid ? 'PAID' : 'UNPAID'}
-                    </Badge>
-                  </div>
 
-                  {payments.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-gray-900">Payment History</h4>
-                      {payments.map((payment: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center text-sm border-b pb-2">
-                          <div>
-                            <span className="font-medium">{payment.paymentType}</span>
-                            <span className="text-gray-500 ml-2">{formatDate(payment.paymentDate)}</span>
-                          </div>
-                          <span className="font-medium">{formatCurrency(payment.paymentAmount)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center text-sm font-bold pt-2">
-                        <span>Total Payments:</span>
-                        <span>{formatCurrency(totalPayments)}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {order.shipping && order.shipping > 0 && (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">Shipping:</span>
-                      </div>
-                      <span className="font-medium">{formatCurrency(order.shipping)}</span>
-                    </div>
-                  )}
-
-                  {order.discountCode && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Discount Code:</span>
-                      <Badge variant="outline">{order.discountCode}</Badge>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
               {/* Order Notes */}
               {order.notes && (

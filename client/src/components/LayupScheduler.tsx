@@ -1242,7 +1242,7 @@ export default function LayupScheduler() {
               margin-bottom: 2px;
             }
             .order-card { 
-              margin: 1px 0; 
+              margin: 0 0 1px 0; 
               padding: 2px 3px; 
               border-radius: 3px; 
               font-size: 9px;
@@ -1362,7 +1362,7 @@ export default function LayupScheduler() {
                 min-height: 30px !important; 
               }
               .order-card { 
-                margin: 0.5px 0 !important; 
+                margin: 0 0 0.5px 0 !important; 
                 padding: 1px 1px !important; 
                 font-size: 6px !important;
               }

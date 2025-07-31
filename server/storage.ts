@@ -168,6 +168,7 @@ export interface IStorage {
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<OrderDraft[]>;
+  getOrderById(orderId: string): Promise<OrderDraft | undefined>;
   
   // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
@@ -1008,6 +1009,11 @@ export class DatabaseStorage implements IStorage {
     // For now, return from orderDrafts table as it has the order data
     // In the future, this could be changed to use the main orders table
     return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+  }
+
+  async getOrderById(orderId: string): Promise<OrderDraft | undefined> {
+    const [order] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+    return order || undefined;
   }
 
   // Payments CRUD

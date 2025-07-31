@@ -739,6 +739,8 @@ function LayupScheduler() {
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
+
+
   // Debug molds data
   console.log('[MOLD] LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();

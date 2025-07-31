@@ -1154,41 +1154,41 @@ export default function LayupScheduler() {
               font-family: Arial, sans-serif; 
               margin: 0; 
               padding: 2px;
-              font-size: 12px;
+              font-size: 10px;
               line-height: 1.1;
             }
             .header { 
               text-align: center; 
-              margin-bottom: 3px; 
+              margin-bottom: 2px; 
               border-bottom: 1px solid #333; 
-              padding-bottom: 2px; 
+              padding-bottom: 1px; 
             }
             .header h1 { 
               margin: 0; 
-              font-size: 18px; 
+              font-size: 14px; 
             }
             .header h2 { 
               margin: 0; 
-              font-size: 14px; 
+              font-size: 11px; 
               color: #666;
             }
             .header p { 
               margin: 0; 
-              font-size: 10px; 
+              font-size: 8px; 
               color: #888;
             }
             .stats { 
               display: flex; 
               justify-content: space-between; 
-              margin-bottom: 3px; 
-              gap: 2px;
+              margin-bottom: 2px; 
+              gap: 1px;
             }
             .stat { 
               background: #f5f5f5; 
-              padding: 2px 6px; 
-              border-radius: 2px; 
+              padding: 1px 4px; 
+              border-radius: 1px; 
               text-align: center;
-              font-size: 10px;
+              font-size: 8px;
               font-weight: bold;
             }
             .schedule-grid { 
@@ -1208,15 +1208,15 @@ export default function LayupScheduler() {
               color: #666;
             }
             .date-section {
-              margin-bottom: 8px;
+              margin-bottom: 3px;
               border: 1px solid #ddd;
               background: #f9f9f9;
             }
             .date-title {
               background: #e0e0e0;
-              padding: 4px 8px;
+              padding: 2px 4px;
               font-weight: bold;
-              font-size: 12px;
+              font-size: 9px;
               border-bottom: 1px solid #ddd;
             }
             .date-title.friday {
@@ -1224,23 +1224,23 @@ export default function LayupScheduler() {
               color: #856404;
             }
             .molds-for-date {
-              padding: 2px;
+              padding: 1px;
             }
             .mold-section {
-              margin-bottom: 4px;
-              border-left: 3px solid #ccc;
-              padding-left: 4px;
+              margin-bottom: 2px;
+              border-left: 2px solid #ccc;
+              padding-left: 2px;
             }
             .mold-title {
               font-weight: bold;
-              font-size: 10px;
+              font-size: 8px;
               color: #333;
-              margin-bottom: 2px;
+              margin-bottom: 1px;
             }
             .orders-for-mold {
               display: flex;
               flex-wrap: wrap;
-              gap: 2px;
+              gap: 1px;
             }
             .order-count {
               font-size: 10px;
@@ -1328,64 +1328,65 @@ export default function LayupScheduler() {
             @media print { 
               body { 
                 margin: 0 !important; 
-                padding: 2px !important; 
-                font-size: 11px !important;
+                padding: 1px !important; 
+                font-size: 9px !important;
               }
               .header { 
-                margin-bottom: 3px !important; 
-                padding-bottom: 2px !important; 
+                margin-bottom: 1px !important; 
+                padding-bottom: 1px !important; 
               }
               .header h1 { 
-                font-size: 16px !important; 
+                font-size: 11px !important; 
               }
               .header h2 { 
-                font-size: 12px !important; 
-              }
-              .header p { 
                 font-size: 9px !important; 
               }
+              .header p { 
+                font-size: 7px !important; 
+              }
               .stats { 
-                margin-bottom: 3px !important; 
+                margin-bottom: 1px !important; 
               }
               .stat { 
-                padding: 1px 4px !important; 
-                font-size: 9px !important;
+                padding: 1px 3px !important; 
+                font-size: 7px !important;
               }
               .compact-schedule { 
                 break-inside: avoid; 
                 margin: 0 !important;
               }
               .date-section {
-                margin-bottom: 6px !important;
+                margin-bottom: 2px !important;
                 break-inside: avoid;
               }
               .date-title { 
-                padding: 3px 6px !important; 
-                font-size: 10px !important;
+                padding: 2px 4px !important; 
+                font-size: 8px !important;
               }
               .mold-title { 
-                font-size: 9px !important;
-                margin-bottom: 1px !important;
+                font-size: 7px !important;
+                margin-bottom: 0px !important;
               }
               .orders-for-mold {
-                gap: 1px !important;
+                gap: 0.5px !important;
               }
               .order-card { 
                 margin: 0.5px 0 !important; 
-                padding: 1px 2px !important; 
-                font-size: 8px !important;
+                padding: 1px 1px !important; 
+                font-size: 6px !important;
               }
               .order-id {
-                font-size: 9px !important;
+                font-size: 7px !important;
               }
               .order-details {
-                font-size: 7px !important;
+                font-size: 6px !important;
               }
               .mold-info {
-                font-size: 7px !important;
+                font-size: 6px !important;
               }
               .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
-                font-size: 6px !important;
+                font-size: 5px !important;
+                padding: 0.5px 1px !important;
               }
             }
           </style>

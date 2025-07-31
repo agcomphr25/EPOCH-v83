@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,40 @@ export default function Navigation() {
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+
+  // Timeout refs for hover delays
+  const [hoverTimeouts, setHoverTimeouts] = useState<{[key: string]: NodeJS.Timeout}>({});
+
+  // Helper function to handle mouse enter with delay
+  const handleMouseEnter = useCallback((dropdownName: string, setExpanded: (value: boolean) => void) => {
+    // Clear any existing timeout for this dropdown
+    if (hoverTimeouts[dropdownName]) {
+      clearTimeout(hoverTimeouts[dropdownName]);
+    }
+    setExpanded(true);
+  }, [hoverTimeouts]);
+
+  // Helper function to handle mouse leave with delay
+  const handleMouseLeave = useCallback((dropdownName: string, setExpanded: (value: boolean) => void) => {
+    // Set a small delay before closing
+    const timeout = setTimeout(() => {
+      setExpanded(false);
+    }, 150); // 150ms delay
+    
+    setHoverTimeouts(prev => ({
+      ...prev,
+      [dropdownName]: timeout
+    }));
+  }, []);
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(hoverTimeouts).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+    };
+  }, [hoverTimeouts]);
 
   const navItems = [
     {
@@ -408,8 +442,8 @@ export default function Navigation() {
             {/* Forms & Reports Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setFormsReportsExpanded(true)}
-              onMouseLeave={() => setFormsReportsExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('formsReports', setFormsReportsExpanded)}
+              onMouseLeave={() => handleMouseLeave('formsReports', setFormsReportsExpanded)}
             >
               <Button
                 variant={isFormsReportsActive ? "default" : "ghost"}
@@ -428,7 +462,7 @@ export default function Navigation() {
               </Button>
               
               {formsReportsExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {formsReportsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -455,8 +489,8 @@ export default function Navigation() {
             {/* Inventory Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setInventoryExpanded(true)}
-              onMouseLeave={() => setInventoryExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('inventory', setInventoryExpanded)}
+              onMouseLeave={() => handleMouseLeave('inventory', setInventoryExpanded)}
             >
               <Button
                 variant={isInventoryActive ? "default" : "ghost"}
@@ -475,7 +509,7 @@ export default function Navigation() {
               </Button>
               
               {inventoryExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {inventoryItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -502,8 +536,8 @@ export default function Navigation() {
             {/* QC & Maintenance Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setQcMaintenanceExpanded(true)}
-              onMouseLeave={() => setQcMaintenanceExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('qcMaintenance', setQcMaintenanceExpanded)}
+              onMouseLeave={() => handleMouseLeave('qcMaintenance', setQcMaintenanceExpanded)}
             >
               <Button
                 variant={isQcMaintenanceActive ? "default" : "ghost"}
@@ -522,7 +556,7 @@ export default function Navigation() {
               </Button>
               
               {qcMaintenanceExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {qcMaintenanceItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -549,8 +583,8 @@ export default function Navigation() {
             {/* Employees Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setEmployeesExpanded(true)}
-              onMouseLeave={() => setEmployeesExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('employees', setEmployeesExpanded)}
+              onMouseLeave={() => handleMouseLeave('employees', setEmployeesExpanded)}
             >
               <Button
                 variant={isEmployeesActive ? "default" : "ghost"}
@@ -569,7 +603,7 @@ export default function Navigation() {
               </Button>
               
               {employeesExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {employeesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -596,8 +630,8 @@ export default function Navigation() {
             {/* Finance Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setFinanceExpanded(true)}
-              onMouseLeave={() => setFinanceExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('finance', setFinanceExpanded)}
+              onMouseLeave={() => handleMouseLeave('finance', setFinanceExpanded)}
             >
               <Button
                 variant={isFinanceActive ? "default" : "ghost"}
@@ -616,7 +650,7 @@ export default function Navigation() {
               </Button>
               
               {financeExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {financeItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -643,8 +677,8 @@ export default function Navigation() {
             {/* Test Dashboards Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setTestDashboardsExpanded(true)}
-              onMouseLeave={() => setTestDashboardsExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('testDashboards', setTestDashboardsExpanded)}
+              onMouseLeave={() => handleMouseLeave('testDashboards', setTestDashboardsExpanded)}
             >
               <Button
                 variant={isTestDashboardsActive ? "default" : "ghost"}
@@ -663,7 +697,7 @@ export default function Navigation() {
               </Button>
               
               {testDashboardsExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {testDashboardsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -690,8 +724,8 @@ export default function Navigation() {
             {/* Purchase Orders Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setPurchaseOrdersExpanded(true)}
-              onMouseLeave={() => setPurchaseOrdersExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('purchaseOrders', setPurchaseOrdersExpanded)}
+              onMouseLeave={() => handleMouseLeave('purchaseOrders', setPurchaseOrdersExpanded)}
             >
               <Button
                 variant={isPurchaseOrdersActive ? "default" : "ghost"}
@@ -710,7 +744,7 @@ export default function Navigation() {
               </Button>
               
               {purchaseOrdersExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {purchaseOrdersItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -737,8 +771,8 @@ export default function Navigation() {
             {/* Production Scheduling Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setProductionSchedulingExpanded(true)}
-              onMouseLeave={() => setProductionSchedulingExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('productionScheduling', setProductionSchedulingExpanded)}
+              onMouseLeave={() => handleMouseLeave('productionScheduling', setProductionSchedulingExpanded)}
             >
               <Button
                 variant={isProductionSchedulingActive ? "default" : "ghost"}
@@ -757,7 +791,7 @@ export default function Navigation() {
               </Button>
               
               {productionSchedulingExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {productionSchedulingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -784,8 +818,8 @@ export default function Navigation() {
             {/* Department Queue Management Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setDepartmentQueueExpanded(true)}
-              onMouseLeave={() => setDepartmentQueueExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('departmentQueue', setDepartmentQueueExpanded)}
+              onMouseLeave={() => handleMouseLeave('departmentQueue', setDepartmentQueueExpanded)}
             >
               <Button
                 variant={isDepartmentQueueActive ? "default" : "ghost"}
@@ -804,7 +838,7 @@ export default function Navigation() {
               </Button>
               
               {departmentQueueExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
                   {departmentQueueItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
@@ -831,8 +865,8 @@ export default function Navigation() {
             {/* Verified Modules Dropdown */}
             <div 
               className="relative"
-              onMouseEnter={() => setVerifiedModulesExpanded(true)}
-              onMouseLeave={() => setVerifiedModulesExpanded(false)}
+              onMouseEnter={() => handleMouseEnter('verifiedModules', setVerifiedModulesExpanded)}
+              onMouseLeave={() => handleMouseLeave('verifiedModules', setVerifiedModulesExpanded)}
             >
               <Button
                 variant={isVerifiedModulesActive ? "default" : "ghost"}
@@ -851,7 +885,7 @@ export default function Navigation() {
               </Button>
               
               {verifiedModulesExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {verifiedModulesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;

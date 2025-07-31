@@ -410,15 +410,15 @@ export default function Navigation() {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center py-4 gap-4">
           <div className="flex items-center">
             <Factory className="h-6 w-6 text-primary mr-3" />
             <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
           </div>
           
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center space-x-4">
+          <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
@@ -912,7 +912,7 @@ export default function Navigation() {
 
           </nav>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
@@ -922,8 +922,8 @@ export default function Navigation() {
         </div>
       </div>
       
-      {/* Mobile Navigation */}
-      <div className="md:hidden border-t border-gray-200">
+      {/* Additional Mobile Navigation - Only show dropdowns on smaller screens */}
+      <div className="lg:hidden border-t border-gray-200">
         <div className="px-4 py-2">
           <nav className="flex flex-wrap gap-2">
             {navItems.map((item) => {

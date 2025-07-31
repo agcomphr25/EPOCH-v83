@@ -61,12 +61,14 @@ interface FeatureSubCategory {
 export default function FeatureManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<FeatureCategory | null>(null);
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ type: string; id: string } | null>(null);
 
   // Form states
   const [featureForm, setFeatureForm] = useState<Partial<Feature>>({
@@ -347,7 +349,7 @@ export default function FeatureManager() {
       sortOrder: featureForm.sortOrder || 0,
       price: featureForm.price || 0
     };
-    
+
     if (isEditing && selectedFeature) {
       updateFeatureMutation.mutate({ id: selectedFeature.id, data: formData });
     } else {
@@ -426,6 +428,42 @@ export default function FeatureManager() {
     return acc;
   }, {});
 
+  const handleSecureFeatureDelete = (feature: Feature) => {
+    setItemToDelete({ type: 'feature', id: feature.id });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleSecureCategoryDelete = (category: FeatureCategory) => {
+    setItemToDelete({ type: 'category', id: category.id });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleSecureSubCategoryDelete = (subCategory: FeatureSubCategory) => {
+    setItemToDelete({ type: 'subCategory', id: subCategory.id });
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+
+    switch (itemToDelete.type) {
+      case 'feature':
+        deleteFeatureMutation.mutate(itemToDelete.id);
+        break;
+      case 'category':
+        deleteCategoryMutation.mutate(itemToDelete.id);
+        break;
+      case 'subCategory':
+        deleteSubCategoryMutation.mutate(itemToDelete.id);
+        break;
+      default:
+        break;
+    }
+
+    setIsDeleteDialogOpen(false);
+    setItemToDelete(null);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8 flex justify-between items-center">
@@ -495,7 +533,7 @@ export default function FeatureManager() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => deleteCategoryMutation.mutate(category.id)}
+                        onClick={() => handleSecureCategoryDelete(category)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -562,7 +600,7 @@ export default function FeatureManager() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => deleteFeatureMutation.mutate(feature.id)}
+                              onClick={() => handleSecureFeatureDelete(feature)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -856,7 +894,7 @@ export default function FeatureManager() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteSubCategoryMutation.mutate(subCategory.id)}
+                            onClick={() => handleSecureSubCategoryDelete(subCategory)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -914,7 +952,8 @@ export default function FeatureManager() {
                 <Input
                   type="number"
                   step="0.01"
-                  value={subCategoryForm.price || 0}
+                  value```python
+={subCategoryForm.price || 0}
                   onChange={(e) => setSubCategoryForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                   placeholder="0.00"
                 />
@@ -990,7 +1029,7 @@ export default function FeatureManager() {
                     Add Option
                   </Button>
                 </div>
-                
+
                 {featureForm.options && featureForm.options.length > 0 && (
                   <div className="space-y-2">
                     {featureForm.options.map((option, index) => (
@@ -1067,6 +1106,24 @@ export default function FeatureManager() {
                 Create
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <p className="mb-4">Are you sure you want to delete this item? This action cannot be undone.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

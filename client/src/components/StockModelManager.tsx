@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Plus, Edit, Trash2, Package, DollarSign, ArrowUpDown } from 'lucide-react';
+import SecureVerificationModal from './SecureVerificationModal';
 
 interface StockModel {
   id: string;
@@ -37,10 +38,12 @@ interface StockModelFormData {
 export default function StockModelManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [modelIdToDelete, setModelIdToDelete] = useState<string | null>(null);
+
+
   const [editingModel, setEditingModel] = useState<StockModel | null>(null);
   const [modelForm, setModelForm] = useState<StockModelFormData>({
     name: '',
@@ -177,10 +180,23 @@ export default function StockModelManager() {
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this stock model?')) {
-      deleteMutation.mutate(id);
-    }
+    setModelIdToDelete(id);
+    setIsVerificationModalOpen(true);
   };
+
+  const confirmDelete = () => {
+    if (modelIdToDelete) {
+      deleteMutation.mutate(modelIdToDelete);
+      setModelIdToDelete(null);
+    }
+    setIsVerificationModalOpen(false);
+  };
+
+  const cancelDelete = () => {
+    setModelIdToDelete(null);
+    setIsVerificationModalOpen(false);
+  };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,7 +281,7 @@ export default function StockModelManager() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="price">Price ($)</Label>
@@ -290,7 +306,7 @@ export default function StockModelManager() {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
@@ -300,7 +316,7 @@ export default function StockModelManager() {
                   placeholder="Optional description..."
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="isActive"
@@ -309,7 +325,7 @@ export default function StockModelManager() {
                 />
                 <Label htmlFor="isActive">Active</Label>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
@@ -352,7 +368,7 @@ export default function StockModelManager() {
                 {stockModel.description && (
                   <p className="text-sm text-gray-700">{stockModel.description}</p>
                 )}
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <ArrowUpDown className="h-4 w-4" />
@@ -382,7 +398,7 @@ export default function StockModelManager() {
             </CardContent>
           </Card>
         ))}
-        
+
         {stockModels.length === 0 && (
           <Card>
             <CardContent className="text-center py-8">
@@ -426,7 +442,7 @@ export default function StockModelManager() {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-price">Price ($)</Label>
@@ -451,7 +467,7 @@ export default function StockModelManager() {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
@@ -461,7 +477,7 @@ export default function StockModelManager() {
                   placeholder="Optional description..."
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="edit-isActive"
@@ -470,7 +486,7 @@ export default function StockModelManager() {
                 />
                 <Label htmlFor="edit-isActive">Active</Label>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
@@ -483,6 +499,13 @@ export default function StockModelManager() {
           </DialogContent>
         </Dialog>
       )}
+
+      <SecureVerificationModal
+        isOpen={isVerificationModalOpen}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        description="Are you sure you want to delete this stock model?"
+      />
     </div>
   );
 }

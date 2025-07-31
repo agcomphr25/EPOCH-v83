@@ -37,7 +37,7 @@ export default function Navigation() {
     const timeout = setTimeout(() => {
       setExpanded(false);
     }, 150); // 150ms delay
-    
+
     setHoverTimeouts(prev => ({
       ...prev,
       [dropdownName]: timeout
@@ -312,9 +312,15 @@ export default function Navigation() {
   const productionSchedulingItems = [
     {
       path: '/layup-scheduler',
-      label: 'Layup Scheduler',
+      label: 'P1 Layup Scheduler',
       icon: Calendar,
       description: 'Schedule and manage layup production orders with drag-and-drop interface'
+    },
+    {
+      path: '/p2-layup-scheduler',
+      label: 'P2 Layup Scheduler',
+      icon: Calendar,
+      description: 'Schedule and manage P2 layup production orders'
     },
     {
       path: '/production-tracking',
@@ -416,13 +422,13 @@ export default function Navigation() {
             <Factory className="h-6 w-6 text-primary mr-3" />
             <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
           </div>
-          
+
           {/* Navigation Links */}
           <nav className="flex flex-wrap items-center gap-2 lg:gap-4">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
-              
+
               return (
                 <Link key={item.path} href={item.path}>
                   <Button
@@ -438,7 +444,7 @@ export default function Navigation() {
                 </Link>
               );
             })}
-            
+
             {/* Forms & Reports Dropdown */}
             <div 
               className="relative"
@@ -460,13 +466,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {formsReportsExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {formsReportsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -485,7 +491,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
-            
+
             {/* Inventory Dropdown */}
             <div 
               className="relative"
@@ -507,13 +513,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {inventoryExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {inventoryItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -554,13 +560,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {qcMaintenanceExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {qcMaintenanceItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -601,13 +607,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {employeesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {employeesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -648,13 +654,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {financeExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {financeItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -695,13 +701,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {testDashboardsExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {testDashboardsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -742,13 +748,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {purchaseOrdersExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {purchaseOrdersItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -789,13 +795,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {productionSchedulingExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {productionSchedulingItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -836,13 +842,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {departmentQueueExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
                   {departmentQueueItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -861,7 +867,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
-            
+
             {/* Verified Modules Dropdown */}
             <div 
               className="relative"
@@ -883,13 +889,13 @@ export default function Navigation() {
                   <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
-              
+
               {verifiedModulesExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {verifiedModulesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -908,7 +914,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
-            
+
 
           </nav>
 
@@ -921,7 +927,7 @@ export default function Navigation() {
           </div>
         </div>
       </div>
-      
+
       {/* Additional Mobile Navigation - Only show dropdowns on smaller screens */}
       <div className="lg:hidden border-t border-gray-200">
         <div className="px-4 py-2">
@@ -929,7 +935,7 @@ export default function Navigation() {
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
-              
+
               return (
                 <Link key={item.path} href={item.path}>
                   <Button
@@ -946,7 +952,7 @@ export default function Navigation() {
                 </Link>
               );
             })}
-            
+
             {/* Forms & Reports in Mobile */}
             <div className="relative">
               <Button
@@ -966,13 +972,13 @@ export default function Navigation() {
                   <ChevronRight className="h-3 w-3" />
                 )}
               </Button>
-              
+
               {formsReportsExpanded && (
                 <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
                   {formsReportsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -991,7 +997,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
-            
+
             {/* Verified Modules in Mobile */}
             <div className="relative">
               <Button
@@ -1011,13 +1017,13 @@ export default function Navigation() {
                   <ChevronRight className="h-3 w-3" />
                 )}
               </Button>
-              
+
               {verifiedModulesExpanded && (
                 <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
                   {verifiedModulesItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
-                    
+
                     return (
                       <Link key={item.path} href={item.path}>
                         <button
@@ -1036,7 +1042,7 @@ export default function Navigation() {
                 </div>
               )}
             </div>
-            
+
 
           </nav>
         </div>

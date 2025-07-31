@@ -25,27 +25,21 @@ export interface UnifiedLayupOrder {
 }
 
 export function useUnifiedLayupOrders() {
-  // Get P1 orders (regular orders + P1 purchase order items)
+  // Get P1 orders only (regular orders + P1 purchase order items)
+  // P2 orders are now handled separately in P2LayupScheduler
   const { data: p1Orders = [], isLoading: p1Loading } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
     select: (data: UnifiedLayupOrder[]) => data || [],
     refetchInterval: 30000,
   });
 
-  // Get P2 production orders
-  const { data: p2Orders = [], isLoading: p2Loading } = useQuery({
-    queryKey: ['/api/p2-layup-queue'],
-    select: (data: UnifiedLayupOrder[]) => data || [],
-    refetchInterval: 15000, // More frequent refresh for production orders
-  });
-
-  // Combine all orders and sort by priority
-  const combinedOrders = [...p1Orders, ...p2Orders].sort((a, b) => {
+  // Only P1 orders now - P2 orders excluded from unified scheduler
+  const combinedOrders = [...p1Orders].sort((a, b) => {
     // Lower priority score = higher priority
     return a.priorityScore - b.priorityScore;
   });
 
-  const loading = p1Loading || p2Loading;
+  const loading = p1Loading;
 
   const reloadOrders = () => {
     // This will be handled by React Query's refetch functionality

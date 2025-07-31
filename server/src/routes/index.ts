@@ -571,6 +571,59 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Layup Schedule endpoints - separate schedule for P2 production orders
+  app.get('/api/p2-layup-schedule', async (req, res) => {
+    try {
+      console.log('🔧 P2 LAYUP SCHEDULE API CALLED');
+      const { storage } = await import('../../storage');
+      
+      const scheduleEntries = await storage.getAllP2LayupSchedule();
+      console.log('🔧 Found P2 layup schedule entries:', scheduleEntries.length);
+      
+      res.json(scheduleEntries);
+    } catch (error) {
+      console.error("P2 layup schedule error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 layup schedule" });
+    }
+  });
+
+  app.post('/api/p2-layup-schedule', async (req, res) => {
+    try {
+      console.log('🔧 P2 LAYUP SCHEDULE CREATE API CALLED');
+      const { storage } = await import('../../storage');
+      
+      const scheduleData = req.body;
+      const result = await storage.createP2LayupScheduleEntry(
+        scheduleData.orderId,
+        new Date(scheduleData.scheduledDate),
+        scheduleData.moldId,
+        scheduleData.overriddenBy || 'system'
+      );
+      
+      console.log('🔧 P2 Schedule entry created:', result);
+      res.json(result);
+    } catch (error) {
+      console.error("P2 layup schedule create error:", error);
+      res.status(500).json({ error: "Failed to create P2 layup schedule entry" });
+    }
+  });
+
+  app.delete('/api/p2-layup-schedule/by-order/:orderId', async (req, res) => {
+    try {
+      console.log('🔧 P2 LAYUP SCHEDULE DELETE API CALLED');
+      const { storage } = await import('../../storage');
+      
+      const { orderId } = req.params;
+      await storage.deleteP2LayupScheduleByOrderId(orderId);
+      
+      console.log('🔧 P2 Schedule entries deleted for order:', orderId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("P2 layup schedule delete error:", error);
+      res.status(500).json({ error: "Failed to delete P2 layup schedule entries" });
+    }
+  });
+
   // Legacy unified layup queue endpoint (kept for backward compatibility)
   app.get('/api/layup-queue', async (req, res) => {
     try {

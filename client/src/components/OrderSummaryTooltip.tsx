@@ -233,35 +233,7 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
                 </div>
               )}
 
-              {/* Special Conditions */}
-              {(order.agrOrderDetails || order.isReplacement || order.customerPO) && (
-                <div>
-                  <div className="text-sm font-medium mb-2">Special Conditions:</div>
-                  <div className="text-sm ml-4 space-y-1">
-                    {order.agrOrderDetails && (
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-3 w-3 text-orange-500" />
-                        <span className="text-orange-700">AGR Details: {order.agrOrderDetails}</span>
-                      </div>
-                    )}
-                    {order.isReplacement && (
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-3 w-3 text-blue-500" />
-                        <span className="text-blue-700">
-                          Replacement Order
-                          {order.replacedOrderId && ` (for ${order.replacedOrderId})`}
-                        </span>
-                      </div>
-                    )}
-                    {order.customerPO && (
-                      <div>
-                        <span className="font-medium">Customer PO:</span>
-                        <span className="ml-2 text-gray-600">{order.customerPO}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+
             </>
           )}
         </div>

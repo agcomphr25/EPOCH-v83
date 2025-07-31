@@ -96,7 +96,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
   };
 
   const sizing = getCardSizing(totalOrdersInCell || 1);
-  
+
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
     if (modelId.startsWith('cf_')) return 'CF';
@@ -105,10 +105,10 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
     if (modelId.includes('fiberglass')) return 'FG';
     return null;
   };
-  
+
   const modelId = order.stockModelId || order.modelId;
   const materialType = getMaterialType(modelId || '');
-  
+
   // Determine card styling based on source and material
   const getCardStyling = () => {
     if (order.source === 'production_order') {
@@ -128,7 +128,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       };
     }
   };
-  
+
   const cardStyling = getCardStyling();
 
   return (
@@ -147,9 +147,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         {/* Show stock model display name with material type */}
         {(() => {
           if (!getModelDisplayName || !modelId) return null;
-          
+
           const displayName = getModelDisplayName(modelId);
-          
+
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               {materialType && <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">{materialType}</span>}
@@ -157,24 +157,24 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             </div>
           );
         })()}
-        
+
         {/* Show Action Length (Action Inlet) Display */}
         {(() => {
           const modelId = order.stockModelId || order.modelId;
           const isAPR = modelId && modelId.toLowerCase().includes('apr');
-          
+
           // For APR orders, show both action type AND action length
           if (isAPR) {
             const getAPRActionDisplay = (orderFeatures: any) => {
               if (!orderFeatures) return null;
-              
+
               // Check for action_inlet field first (more specific)
               let actionType = orderFeatures.action_inlet;
               if (!actionType) {
                 // Fallback to action field
                 actionType = orderFeatures.action;
               }
-              
+
               // Get action length for APR orders
               let actionLength = orderFeatures.action_length;
               if (!actionLength || actionLength === 'none') {
@@ -183,21 +183,21 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 else if (actionType && actionType.includes('long')) actionLength = 'LA';
                 else actionLength = 'SA'; // Default for APR
               }
-              
+
               // Convert action length to abbreviation
               const lengthMap: {[key: string]: string} = {
                 'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
                 'long': 'LA', 'medium': 'MA', 'short': 'SA',
                 'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
               };
-              
+
               const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-              
+
               if (!actionType || actionType === 'none') {
                 // Show just action length if no action type
                 return actionLengthAbbr;
               }
-              
+
               // Convert common action types to readable format
               const actionMap: {[key: string]: string} = {
                 'anti_ten_hunter_def': 'Anti-X Hunter',
@@ -206,33 +206,33 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 'tikka': 'Tikka',
                 'savage': 'Savage'
               };
-              
+
               const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
-              
+
               // Combine action length and action type for APR orders
               return `${actionLengthAbbr} ${actionDisplay}`;
             };
-            
+
             const aprActionDisplay = getAPRActionDisplay(order.features);
-            
+
             return aprActionDisplay ? (
               <div className="text-xs opacity-80 mt-0.5 font-medium">
                 {aprActionDisplay}
               </div>
             ) : null;
           }
-          
+
           // For non-APR orders, show action length
           const getActionInletDisplayNonAPR = (orderFeatures: any) => {
             if (!orderFeatures) return null;
-            
+
             // Look for action_length field first
             let actionLengthValue = orderFeatures.action_length;
-            
+
             // If action_length is empty or 'none', try to derive from action_inlet
             if ((!actionLengthValue || actionLengthValue === 'none') && orderFeatures.action_inlet) {
               const actionInlet = orderFeatures.action_inlet;
-              
+
               // Map common action inlets to action lengths based on actual data patterns
               const inletToLengthMap: {[key: string]: string} = {
                 'anti_ten_hunter_def': 'SA', // Short action
@@ -252,24 +252,24 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 'bergara_b14': 'SA',
                 'carbon_six_medium': 'MA'
               };
-              
+
               actionLengthValue = inletToLengthMap[actionInlet] || 'SA'; // Default to SA if not found
             }
-            
+
             if (!actionLengthValue || actionLengthValue === 'none') return null;
-            
+
             // Simple abbreviation mapping without depending on features API
             const displayMap: {[key: string]: string} = {
               'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
               'long': 'LA', 'medium': 'MA', 'short': 'SA',
               'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
             };
-            
+
             return displayMap[actionLengthValue] || actionLengthValue;
           };
-          
+
           const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(order.features);
-          
+
           return actionInletDisplayNonAPR ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               {actionInletDisplayNonAPR}
@@ -285,13 +285,13 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               // Get action length prefix
               const getActionPrefix = (orderFeatures: any) => {
                 if (!orderFeatures || !features) return '';
-                
+
                 const actionLengthValue = orderFeatures.action_length;
                 if (!actionLengthValue || actionLengthValue === 'none') return '';
-                
+
                 // Find the action-length feature definition in Feature Manager
                 const actionLengthFeature = features.find((f: any) => f.id === 'action-length');
-                
+
                 if (!actionLengthFeature || !actionLengthFeature.options) {
                   // Fallback to abbreviations if Feature Manager data not available
                   const displayMap: {[key: string]: string} = {
@@ -300,7 +300,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   };
                   return displayMap[actionLengthValue] || actionLengthValue;
                 }
-                
+
                 // Use Feature Manager option label and convert to abbreviation
                 const option = actionLengthFeature.options.find((opt: any) => opt.value === actionLengthValue);
                 if (option && option.label) {
@@ -310,14 +310,14 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                   if (label.toLowerCase().includes('short')) return 'SA';
                   return label.substring(0, 2).toUpperCase(); // First 2 chars as fallback
                 }
-                
+
                 return actionLengthValue;
               };
 
               const actionPrefix = getActionPrefix(order.features);
               const moldName = moldInfo.moldId;
               const instanceText = moldInfo.instanceNumber ? ` #${moldInfo.instanceNumber}` : '';
-              
+
               return actionPrefix ? `${actionPrefix} ${moldName}${instanceText}` : `${moldName}${instanceText}`;
             })()}
           </div>
@@ -327,10 +327,10 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         {(() => {
           const getLOPDisplay = (orderFeatures: any) => {
             if (!orderFeatures || !features) return null;
-            
+
             // Look for length_of_pull field (NOT action_length)
             const lopValue = orderFeatures.length_of_pull;
-            
+
             // Don't show if empty, none, standard, std, or any variation indicating no extra length
             if (!lopValue || 
                 lopValue === 'none' || 
@@ -349,10 +349,10 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 lopValue.toLowerCase().includes('no extra')) {
               return null;
             }
-            
+
             // Find the length_of_pull feature definition in Feature Manager
             const lopFeature = features.find((f: any) => f.id === 'length_of_pull');
-            
+
             if (lopFeature && lopFeature.options) {
               // Use Feature Manager option label
               const option = lopFeature.options.find((opt: any) => opt.value === lopValue);
@@ -360,13 +360,13 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
                 return option.label;
               }
             }
-            
+
             // Return raw value as fallback only if it indicates extra length
             return lopValue;
           };
-          
+
           const lopDisplay = getLOPDisplay(order.features);
-          
+
           return lopDisplay ? (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
               LOP: {lopDisplay}
@@ -379,9 +379,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           // Use the processed orders that have been run through LOP scheduler
           const lopOrder = processedOrders?.find(o => o.orderId === order.orderId) || identifyLOPOrders([order])[0];
           const lopStatus = getLOPStatus(lopOrder);
-          
+
           if (lopStatus.status === 'none') return null;
-          
+
           return (
             <div className="text-xs mt-1">
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -398,7 +398,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             </div>
           );
         })()}
-        
+
         {/* Show Heavy Fill if selected */}
         {(() => {
           const getHeavyFillDisplay = (orderFeatures: any) => {
@@ -407,33 +407,33 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
               orderFeatures,
               otherOptions: orderFeatures?.other_options
             });
-            
+
             if (!orderFeatures) return null;
-            
+
             // Check if heavy_fill is in the other_options array
             const otherOptions = orderFeatures.other_options;
             if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
               return 'Heavy Fill';
             }
-            
+
             // Fallback: check direct field for backward compatibility
             const heavyFillValue = orderFeatures.heavy_fill || 
                                    orderFeatures.heavyFill || 
                                    orderFeatures.heavy_fill_option ||
                                    orderFeatures['heavy-fill'];
-            
+
             if (heavyFillValue === 'true' || 
                 heavyFillValue === true || 
                 heavyFillValue === 'yes' ||
                 heavyFillValue === 'heavy_fill') {
               return 'Heavy Fill';
             }
-            
+
             return null;
           };
-          
+
           const heavyFillDisplay = getHeavyFillDisplay(order.features);
-          
+
           return heavyFillDisplay ? (
             <div className="text-xs mt-0.5">
               <span className="bg-orange-200 dark:bg-orange-700 px-1 rounded text-xs font-bold">
@@ -442,9 +442,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
             </div>
           ) : null;
         })()}
-        
 
-        
+
+
         {/* Show Due Date for Queue Cards (when not in calendar) */}
         {!moldInfo && order.dueDate && (
           <div className="text-xs opacity-70 mt-0.5 font-medium">
@@ -486,7 +486,7 @@ function DroppableCell({
   };
 
   const cellHeight = getCellHeight(orders.length);
-  
+
   const {
     setNodeRef,
     isOver,
@@ -558,14 +558,14 @@ export default function LayupScheduler() {
   const [editingMoldId, setEditingMoldId] = useState<string | null>(null);
   const [editingMoldStockModels, setEditingMoldStockModels] = useState<string[]>([]);
   const [editingMoldName, setEditingMoldName] = useState<string>('');
-  
+
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
   const queryClient = useQueryClient();
-  
+
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
-  
+
   // Debug molds data
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
@@ -586,7 +586,7 @@ export default function LayupScheduler() {
           date: entry.scheduledDate
         };
       });
-      
+
       console.log('📅 Loading existing schedule assignments:', Object.keys(assignments).length, 'assignments');
       setOrderAssignments(assignments);
     }
@@ -601,7 +601,7 @@ export default function LayupScheduler() {
       // First, clear existing schedule entries for these orders
       const orderIds = Object.keys(assignments);
       console.log('💾 Saving schedule for', orderIds.length, 'orders');
-      
+
       // Delete existing entries for these orders
       const deletePromises = orderIds.map(orderId => 
         apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
@@ -611,9 +611,9 @@ export default function LayupScheduler() {
           console.log('Note: No existing schedule found for order', orderId);
         })
       );
-      
+
       await Promise.all(deletePromises);
-      
+
       // Convert assignments to schedule entries
       const scheduleEntries = Object.entries(assignments).map(([orderId, assignment]) => ({
         orderId,
@@ -659,19 +659,19 @@ export default function LayupScheduler() {
       setIsSaving(false);
     }
   };
-  
+
 
   const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
-  
+
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
   const processedOrders = useMemo(() => {
     if (orders.length === 0) return [];
-    
+
     const lopOrders = identifyLOPOrders(orders as any[]);
     const scheduledOrders = scheduleLOPAdjustments(lopOrders);
-    
+
     const lopOrdersNeedingAdjustment = lopOrders.filter(o => o.needsLOPAdjustment);
-    
+
     console.log('🔧 LOP Scheduler auto-run:', {
       totalOrders: orders.length,
       lopOrdersNeedingAdjustment: lopOrdersNeedingAdjustment.length,
@@ -683,10 +683,10 @@ export default function LayupScheduler() {
         scheduledDate: o.scheduledLOPAdjustmentDate?.toDateString()
       }))
     });
-    
+
     return scheduledOrders;
   }, [orders]);
-  
+
   // Debug production orders specifically
   useEffect(() => {
     const productionOrders = orders.filter(order => order.source === 'production_order');
@@ -701,14 +701,14 @@ export default function LayupScheduler() {
         customer: o.customer
       })));
     }
-    
+
     // Log all order sources
     const sourceCounts = orders.reduce((acc, order) => {
       acc[order.source] = (acc[order.source] || 0) + 1;
       return acc;
     }, {} as {[key: string]: number});
     console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
-    
+
     // Log when auto-schedule should run
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
@@ -727,11 +727,11 @@ export default function LayupScheduler() {
       console.log('❌ Cannot generate schedule: missing data');
       return;
     }
-    
+
     // Re-enabled auto-scheduling to place production orders in calendar
 
     console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
-    
+
     // Calculate dynamic scheduling window based on order due dates
     const calculateSchedulingWindow = () => {
       // Find the latest due date in orders
@@ -739,15 +739,15 @@ export default function LayupScheduler() {
         const dueDate = o.dueDate || o.orderDate;
         return new Date(dueDate).getTime();
       }));
-      
+
       const currentTime = currentDate.getTime();
       const weeksNeeded = Math.ceil((latestDueDate - currentTime) / (7 * 24 * 60 * 60 * 1000));
-      
+
       // Min 2 weeks, max 8 weeks for performance
       const schedulingWeeks = Math.max(2, Math.min(weeksNeeded, 8));
-      
+
       console.log(`📅 Dynamic scheduling window: ${schedulingWeeks} weeks (based on due dates extending to ${new Date(latestDueDate).toDateString()})`);
-      
+
       return schedulingWeeks;
     };
 
@@ -755,25 +755,25 @@ export default function LayupScheduler() {
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
-      
+
       // Find Monday of current week
       while (current.getDay() !== 1) {
         current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
       }
-      
+
       // Add Monday through Thursday (primary work days)
       for (let i = 0; i < 4; i++) {
         workDays.push(new Date(current));
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
       }
-      
+
       return workDays;
     };
 
     // Generate all work days for the dynamic window
     const schedulingWeeks = calculateSchedulingWindow();
     const allWorkDays: Date[] = [];
-    
+
     for (let week = 0; week < schedulingWeeks; week++) {
       const weekStartDate = new Date(currentDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
       const weekDays = getWorkDaysInWeek(weekStartDate);
@@ -783,6 +783,7 @@ export default function LayupScheduler() {
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      ```text
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
@@ -790,17 +791,17 @@ export default function LayupScheduler() {
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
       let modelId = order.stockModelId || order.modelId;
-      
+
       // For production orders, try to use the part name as the stock model
       if (order.source === 'production_order' && order.product) {
         modelId = order.product;
       }
-      
+
       if (!modelId) {
         console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
       }
-      
+
       // Extra debugging for production orders
       if (order.source === 'production_order') {
         console.log('🏭 DETAILED PRODUCTION ORDER COMPATIBILITY CHECK:', {
@@ -813,7 +814,7 @@ export default function LayupScheduler() {
           allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels }))
         });
       }
-      
+
       const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
         if (!mold.stockModels || mold.stockModels.length === 0) {
@@ -829,7 +830,7 @@ export default function LayupScheduler() {
         }
         return isCompatible;
       });
-      
+
       console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
       return compatibleMolds;
     };
@@ -840,7 +841,7 @@ export default function LayupScheduler() {
 
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
     console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
-    
+
     // Debug mold configurations
     molds.filter(m => m.enabled).forEach(mold => {
       console.log(`🔧 Mold ${mold.moldId}: ${mold.stockModels?.length || 0} stock models configured`);
@@ -857,7 +858,7 @@ export default function LayupScheduler() {
     // Track assignments per day and per mold
     const dailyAssignments: { [dateKey: string]: number } = {};
     const moldNextDate: { [moldId: string]: number } = {};
-    
+
     // Initialize tracking
     allWorkDays.forEach(date => {
       const dateKey = date.toISOString().split('T')[0];
@@ -870,7 +871,7 @@ export default function LayupScheduler() {
 
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
-      
+
       // Special logging for production orders
       if (order.source === 'production_order') {
         console.log(`🏭 PROCESSING PRODUCTION ORDER ${order.orderId}:`, {
@@ -883,7 +884,7 @@ export default function LayupScheduler() {
           moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).length
         });
       }
-      
+
       if (compatibleMolds.length === 0) {
         console.log('⚠️ No compatible molds for order:', order.orderId, 'Source:', order.source);
         if (order.source === 'production_order') {
@@ -907,7 +908,7 @@ export default function LayupScheduler() {
 
       for (const mold of compatibleMolds) {
         const nextDateIndex = moldNextDate[mold.moldId] || 0;
-        
+
         // Must fill sequentially - use the EXACT next date for this mold
         if (nextDateIndex < allWorkDays.length && nextDateIndex < bestDateIndex) {
           const targetDate = allWorkDays[nextDateIndex];
@@ -937,7 +938,7 @@ export default function LayupScheduler() {
         cellAssignments.add(cellKey);
         dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
-        
+
         assigned = true;
         const logPrefix = order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
         console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
@@ -955,11 +956,11 @@ export default function LayupScheduler() {
     Object.entries(moldNextDate).forEach(([moldId, dateIndex]) => {
       console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
     });
-    
+
     console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
       `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
     ).slice(0, 8));
-    
+
     setOrderAssignments(newAssignments);
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
@@ -996,33 +997,33 @@ export default function LayupScheduler() {
     // Helper function to get action length display
     const getActionLengthDisplay = (order: any) => {
       if (!order.features) return null;
-      
+
       const modelId = order.stockModelId || order.modelId;
       const isAPR = modelId && modelId.toLowerCase().includes('apr');
-      
+
       if (isAPR) {
         // For APR orders, show both action type AND action length
         let actionType = order.features.action_inlet || order.features.action;
         let actionLength = order.features.action_length;
-        
+
         if (!actionLength || actionLength === 'none') {
           if (actionType && actionType.includes('short')) actionLength = 'SA';
           else if (actionType && actionType.includes('long')) actionLength = 'LA';
           else actionLength = 'SA';
         }
-        
+
         const lengthMap: {[key: string]: string} = {
           'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
           'long': 'LA', 'medium': 'MA', 'short': 'SA',
           'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
         };
-        
+
         const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-        
+
         if (!actionType || actionType === 'none') {
           return actionLengthAbbr;
         }
-        
+
         const actionMap: {[key: string]: string} = {
           'anti_ten_hunter_def': 'Anti-X Hunter',
           'apr': 'APR',
@@ -1030,13 +1031,13 @@ export default function LayupScheduler() {
           'tikka': 'Tikka',
           'savage': 'Savage'
         };
-        
+
         const actionDisplay = actionMap[actionType] || actionType.replace(/_/g, ' ').toUpperCase();
         return `${actionLengthAbbr} ${actionDisplay}`;
       } else {
         // For non-APR orders, show action length
         let actionLengthValue = order.features.action_length;
-        
+
         if ((!actionLengthValue || actionLengthValue === 'none') && order.features.action_inlet) {
           const inletToLengthMap: {[key: string]: string} = {
             'anti_ten_hunter_def': 'SA',
@@ -1048,15 +1049,15 @@ export default function LayupScheduler() {
           };
           actionLengthValue = inletToLengthMap[order.features.action_inlet] || 'SA';
         }
-        
+
         if (!actionLengthValue || actionLengthValue === 'none') return null;
-        
+
         const displayMap: {[key: string]: string} = {
           'Long': 'LA', 'Medium': 'MA', 'Short': 'SA',
           'long': 'LA', 'medium': 'MA', 'short': 'SA',
           'LA': 'LA', 'MA': 'MA', 'SA': 'SA'
         };
-        
+
         return displayMap[actionLengthValue] || actionLengthValue;
       }
     };
@@ -1064,9 +1065,9 @@ export default function LayupScheduler() {
     // Helper function to get LOP display
     const getLOPDisplay = (order: any) => {
       if (!order.features) return null;
-      
+
       const lopValue = order.features.length_of_pull;
-      
+
       if (!lopValue || 
           lopValue === 'none' || 
           lopValue === 'standard' || 
@@ -1076,19 +1077,19 @@ export default function LayupScheduler() {
           lopValue.toLowerCase().includes('no extra')) {
         return null;
       }
-      
+
       return lopValue;
     };
 
     // Helper function to check for heavy fill
     const getHeavyFillDisplay = (order: any) => {
       if (!order.features) return false;
-      
+
       const otherOptions = order.features.other_options;
       if (Array.isArray(otherOptions) && otherOptions.includes('heavy_fill')) {
         return true;
       }
-      
+
       const heavyFillValue = order.features.heavy_fill || order.features.heavyFill;
       return heavyFillValue === 'true' || heavyFillValue === true || heavyFillValue === 'yes';
     };
@@ -1102,37 +1103,37 @@ export default function LayupScheduler() {
         return mold.stockModels.includes(modelId);
       });
     };
-    
+
     const compatibleMoldIds = new Set<string>();
     orders.forEach(order => {
       const compatible = getCompatibleMolds(order);
       compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
     });
-    
+
     const relevantMolds = molds.filter(m => {
       if (!m.enabled) return false;
       const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
       const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
       return hasAssignments || isCompatibleWithQueue;
     });
-    
+
     // Calculate order counts for sorting
     const moldOrderCounts = relevantMolds.map(mold => {
       const totalOrdersForMold = dates.reduce((count, date) => {
         const dateString = date.toISOString();
         const cellDateOnly = dateString.split('T')[0];
-        
+
         const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
           const assignmentDateOnly = assignment.date.split('T')[0];
           return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
         }).length;
-        
+
         return count + ordersForThisMoldDate;
       }, 0);
-      
+
       return { mold, orderCount: totalOrdersForMold };
     });
-    
+
     // Sort molds by order count (descending)
     const sortedMolds = moldOrderCounts.sort((a, b) => {
       if (b.orderCount !== a.orderCount) {
@@ -1140,7 +1141,7 @@ export default function LayupScheduler() {
       }
       return a.mold.moldId.localeCompare(b.mold.moldId);
     });
-    
+
     const activeMolds = sortedMolds.map(({ mold }) => mold);
 
     // Generate print content with exact card styling
@@ -1152,42 +1153,43 @@ export default function LayupScheduler() {
           <style>
             body { 
               font-family: Arial, sans-serif; 
-              margin: 15px; 
+              margin: 0; 
+              padding: 5px;
               font-size: 12px;
-              line-height: 1.3;
+              line-height: 1.1;
             }
             .header { 
               text-align: center; 
-              margin-bottom: 20px; 
-              border-bottom: 2px solid #333; 
-              padding-bottom: 15px; 
+              margin-bottom: 8px; 
+              border-bottom: 1px solid #333; 
+              padding-bottom: 4px; 
             }
             .header h1 { 
-              margin: 0 0 5px 0; 
-              font-size: 18px; 
+              margin: 0; 
+              font-size: 16px; 
             }
             .header h2 { 
-              margin: 0 0 5px 0; 
-              font-size: 14px; 
+              margin: 0; 
+              font-size: 12px; 
               color: #666;
             }
             .header p { 
               margin: 0; 
-              font-size: 10px; 
+              font-size: 9px; 
               color: #888;
             }
             .stats { 
               display: flex; 
               justify-content: space-between; 
-              margin-bottom: 15px; 
-              gap: 10px;
+              margin-bottom: 6px; 
+              gap: 6px;
             }
             .stat { 
               background: #f5f5f5; 
-              padding: 8px 12px; 
-              border-radius: 4px; 
+              padding: 4px 8px; 
+              border-radius: 3px; 
               text-align: center;
-              font-size: 11px;
+              font-size: 10px;
               font-weight: bold;
             }
             .schedule-grid { 
@@ -1197,7 +1199,7 @@ export default function LayupScheduler() {
                 const datesWithOrders = dates.filter(date => {
                   const dateString = date.toISOString();
                   const cellDateOnly = dateString.split('T')[0];
-                  
+
                   return Object.values(orderAssignments).some(assignment => {
                     const assignmentDateOnly = assignment.date.split('T')[0];
                     return assignmentDateOnly === cellDateOnly;
@@ -1322,8 +1324,21 @@ export default function LayupScheduler() {
               opacity: 0.8;
             }
             @media print { 
-              body { margin: 10px; }
-              .schedule-grid { break-inside: avoid; }
+              body { 
+                margin: 0 !important; 
+                padding: 3px !important; 
+              }
+              .header { 
+                margin-bottom: 4px !important; 
+                padding-bottom: 2px !important; 
+              }
+              .stats { 
+                margin-bottom: 4px !important; 
+              }
+              .schedule-grid { 
+                break-inside: avoid; 
+                margin-top: 0 !important;
+              }
             }
           </style>
         </head>
@@ -1333,7 +1348,7 @@ export default function LayupScheduler() {
             <h2>${dateRange}</h2>
             <p>Generated on ${format(new Date(), 'MMMM d, yyyy h:mm a')}</p>
           </div>
-          
+
           <div class="stats">
             <div class="stat">Total Orders: ${orders.length}</div>
             <div class="stat">Production Orders: ${orders.filter(o => o.source === 'production_order').length}</div>
@@ -1348,15 +1363,15 @@ export default function LayupScheduler() {
               const datesWithOrders = dates.filter(date => {
                 const dateString = date.toISOString();
                 const cellDateOnly = dateString.split('T')[0];
-                
+
                 return Object.values(orderAssignments).some(assignment => {
                   const assignmentDateOnly = assignment.date.split('T')[0];
                   return assignmentDateOnly === cellDateOnly;
                 });
               });
-              
+
               if (datesWithOrders.length === 0) return '<div class="date-header">No Orders Scheduled</div>';
-              
+
               return `
                 <div class="date-header">Mold</div>
                 ${datesWithOrders.map(date => {
@@ -1371,14 +1386,14 @@ export default function LayupScheduler() {
                 }).join('')}
               `;
             })()}
-            
+
             <!-- Schedule Rows -->
             ${activeMolds.map(mold => {
               // First, collect all non-empty cells for this mold
               const moldCells = dates.map(date => {
                 const dateString = date.toISOString();
                 const cellDateOnly = dateString.split('T')[0];
-                
+
                 const cellOrders = Object.entries(orderAssignments)
                   .filter(([orderId, assignment]) => {
                     const assignmentDateOnly = assignment.date.split('T')[0];
@@ -1389,10 +1404,10 @@ export default function LayupScheduler() {
 
                 return { date, cellOrders, isEmpty: cellOrders.length === 0 };
               }).filter(cell => !cell.isEmpty); // Only keep non-empty cells
-              
+
               // Skip molds with no orders
               if (moldCells.length === 0) return '';
-              
+
               return `
                 <div class="mold-header">
                   ${mold.moldId}
@@ -1402,7 +1417,7 @@ export default function LayupScheduler() {
                 const dateString = date.toISOString();
                 const cellDateOnly = dateString.split('T')[0];
                 const isFriday = date.getDay() === 5;
-                
+
                 // Use the cellOrders already provided by moldCells.map
                 const filteredCellOrders = cellOrders;
 
@@ -1423,11 +1438,11 @@ export default function LayupScheduler() {
                       const actionLength = getActionLengthDisplay(order);
                       const lopDisplay = getLOPDisplay(order);
                       const hasHeavyFill = getHeavyFillDisplay(order);
-                      
+
                       let cardClass = 'regular';
                       if (isProduction) cardClass = 'production';
                       else if (materialType === 'FG') cardClass = 'fg';
-                      
+
                       return `
                         <div class="order-card ${cardClass}">
                           <div class="order-id">
@@ -1467,12 +1482,12 @@ export default function LayupScheduler() {
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
-    
+
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     if (model?.displayName) {
       return model.displayName;
     }
-    
+
     // If no display name found, try to create a readable version from the ID
     if (modelId.includes('_')) {
       // Convert technical IDs like "cf_adj_chalk_branch" to "CF Adj Chalk Branch"
@@ -1481,7 +1496,7 @@ export default function LayupScheduler() {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
     }
-    
+
     return model?.name || modelId;
   };
 
@@ -1489,7 +1504,7 @@ export default function LayupScheduler() {
   console.log('🎯 LayupScheduler - Orders data:', orders);
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
-  
+
   // Debug production orders specifically
   const productionOrders = orders.filter(order => order.source === 'production_order');
   console.log('🏭 LayupScheduler - Production orders:', productionOrders.length);
@@ -1497,7 +1512,7 @@ export default function LayupScheduler() {
     console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
     console.log('🏭 LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
     console.log('🏭 LayupScheduler - Production order modelId:', productionOrders[0].modelId);
-    
+
     // Check if production orders are being assigned
     const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
     console.log('🏭 LayupScheduler - Assigned production orders:', assignedProductionOrders.length);
@@ -1507,20 +1522,20 @@ export default function LayupScheduler() {
       console.log('✅ Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
     }
   }
-  
+
   // Force auto-schedule trigger when production orders are loaded
   if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
     console.log('🏭 Triggering auto-schedule for production orders...');
   }
-  
+
   // Debug Mesa Universal molds
   const mesaMolds = molds?.filter(m => m.moldId.includes('Mesa'));
   console.log('🏔️ LayupScheduler - Mesa molds:', mesaMolds?.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
-  
+
   console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
   console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
-  
+
   // Debug unassigned orders - especially production orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
   const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order');
@@ -1532,12 +1547,12 @@ export default function LayupScheduler() {
   useEffect(() => {
     const productionOrders = orders.filter(o => o.source === 'production_order');
     const unassignedProductionOrders = productionOrders.filter(o => !orderAssignments[o.orderId]);
-    
+
     const shouldRunAutoSchedule = orders.length > 0 && molds.length > 0 && employees.length > 0 && (
       Object.keys(orderAssignments).length === 0 || // Initial run
       unassignedProductionOrders.length > 0 // New production orders need assignment
     );
-    
+
     if (shouldRunAutoSchedule) {
       console.log("🚀 Auto-running schedule generation");
       console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
@@ -1545,7 +1560,7 @@ export default function LayupScheduler() {
       console.log("🏭 Unassigned production orders:", unassignedProductionOrders.length);
       setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
     }
-  }, [orders.length, molds.length, employees.length, orderAssignments, generateAutoSchedule]);
+  }, [orders.length,molds.length, employees.length, orderAssignments, generateAutoSchedule]);
 
 
 
@@ -1561,7 +1576,7 @@ export default function LayupScheduler() {
   // Generate schedule
   const schedule = useMemo(() => {
     if (!orders.length || !molds.length || !employees.length) return [];
-    
+
     const orderData = orders.map(order => ({
       orderId: order.orderId,
       orderDate: new Date(order.orderDate),
@@ -1596,29 +1611,29 @@ export default function LayupScheduler() {
   React.useEffect(() => {
     if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
-      
+
       // Debug production orders in schedule
       const productionScheduleItems = schedule.filter(item => {
         const order = orders.find(o => o.orderId === item.orderId);
         return order?.source === 'production_order';
       });
       console.log('🏭 Production orders in schedule:', productionScheduleItems.length);
-      
+
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      
+
       schedule.forEach(item => {
         const order = orders.find(o => o.orderId === item.orderId);
         const isProduction = order?.source === 'production_order';
         if (isProduction) {
           console.log(`🏭 PRODUCTION ORDER ASSIGNMENT: ${item.orderId} → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
         }
-        
+
         autoAssignments[item.orderId] = {
           moldId: item.moldId,
           date: item.scheduledDate.toISOString()
         };
       });
-      
+
       setOrderAssignments(autoAssignments);
       setHasUnsavedScheduleChanges(true);
       console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
@@ -1652,19 +1667,19 @@ export default function LayupScheduler() {
   // For week-based organization, group dates into work week sections (Mon-Fri only)
   const weekGroups = useMemo(() => {
     if (viewType !== 'month') return null;
-    
+
     const weeks: Date[][] = [];
     let currentWeek: Date[] = [];
-    
+
     dates.forEach((date, index) => {
       // Only include work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
       const dayOfWeek = date.getDay();
       const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-      
+
       if (isWorkDay) {
         currentWeek.push(date);
       }
-      
+
       // Complete the week on Friday (5) or at the end
       if (dayOfWeek === 5 || index === dates.length - 1) {
         if (currentWeek.length > 0) {
@@ -1673,7 +1688,7 @@ export default function LayupScheduler() {
         }
       }
     });
-    
+
     return weeks;
   }, [dates, viewType]);
 
@@ -1685,10 +1700,10 @@ export default function LayupScheduler() {
 
     const orderId = active.id as string;
     const dropTargetId = over.id as string;
-    
+
     // Parse the drop target ID (format: moldId|dateISO)
     const [moldId, dateIso] = dropTargetId.split('|');
-    
+
     if (!moldId || !dateIso) {
       console.warn('Invalid drop target:', dropTargetId);
       return;
@@ -1701,7 +1716,7 @@ export default function LayupScheduler() {
       ...prev,
       [orderId]: { moldId, date: dateIso }
     }));
-    
+
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);
   };
@@ -1712,7 +1727,7 @@ export default function LayupScheduler() {
 
   const handleAddMold = async () => {
     if (!newMold.moldName.trim()) return;
-    
+
     if (isBulkMode && bulkMoldCount > 1) {
       // Create multiple molds with different instance numbers
       for (let i = 1; i <= bulkMoldCount; i++) {
@@ -1738,7 +1753,7 @@ export default function LayupScheduler() {
         enabled: true
       });
     }
-    
+
     setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
     setBulkMoldCount(1);
     setIsBulkMode(false);
@@ -1746,7 +1761,7 @@ export default function LayupScheduler() {
 
   const handleAddEmployee = async () => {
     if (!newEmployee.employeeId.trim()) return;
-    
+
     await saveEmployee({
       employeeId: newEmployee.employeeId,
       rate: newEmployee.rate,
@@ -1761,7 +1776,7 @@ export default function LayupScheduler() {
 
   const handleEmployeeChange = (employeeId: string, field: 'rate' | 'hours', value: number) => {
     console.log(`📝 Employee change: ${employeeId} ${field} = ${value}`);
-    
+
     setEmployeeChanges(prev => {
       const newChanges = {
         ...prev,
@@ -1781,12 +1796,12 @@ export default function LayupScheduler() {
     try {
       console.log('💾 EMPLOYEE SAVE DEBUG - Starting save process');
       console.log('Employee changes to save:', employeeChanges);
-      
+
       // Save all changes
       const savePromises = Object.entries(employeeChanges).map(([employeeId, changes]) => {
         const employee = employees.find(emp => emp.employeeId === employeeId);
         console.log(`Saving employee ${employeeId}:`, { employee, changes });
-        
+
         if (employee) {
           const updatedEmployee = {
             ...employee,
@@ -1800,17 +1815,17 @@ export default function LayupScheduler() {
 
       console.log(`Executing ${savePromises.length} save operations`);
       await Promise.all(savePromises);
-      
+
       console.log('✅ All employee changes saved successfully');
-      
+
       // Clear unsaved changes
       setEmployeeChanges({});
       setHasUnsavedChanges(false);
-      
+
       // Refresh the employee list
       console.log('🔄 Refreshing employee list to verify changes');
       await refetchEmployees();
-      
+
       console.log('💾 EMPLOYEE SAVE DEBUG - Complete');
     } catch (error) {
       console.error('❌ Failed to save employee changes:', error);
@@ -1936,7 +1951,7 @@ export default function LayupScheduler() {
                             Create multiple molds at once
                           </label>
                         </div>
-                        
+
                         {isBulkMode && (
                           <div>
                             <label className="text-sm font-medium mb-1 block">Number of Molds</label>
@@ -2029,7 +2044,7 @@ export default function LayupScheduler() {
                           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             Mold ID: {mold.moldId}
                           </div>
-                          
+
                           {/* Edit Controls */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
@@ -2081,11 +2096,11 @@ export default function LayupScheduler() {
                                 </Button>
                               )}
                             </div>
-                            
+
                             {/* Stock Models Display */}
                             <div>
                               <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Stock Models:</span>
-                              
+
                               {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
                                 {stockModels.map((model: any) => (
@@ -2165,7 +2180,7 @@ export default function LayupScheduler() {
                       </div>
                     ))
                   )}
-                  
+
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                     <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
                       <strong>How to Add Molds:</strong>
@@ -2262,7 +2277,7 @@ export default function LayupScheduler() {
                         const changes = employeeChanges[emp.employeeId];
                         const currentRate = changes?.rate ?? emp.rate;
                         const currentHours = changes?.hours ?? emp.hours;
-                        
+
                         return (
                           <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                             <div className="flex items-center justify-between mb-3">
@@ -2327,7 +2342,7 @@ export default function LayupScheduler() {
                           </div>
                         );
                       })}
-                      
+
                       {/* Save Button */}
                       {hasUnsavedChanges && (
                         <div className="flex justify-center pt-4 border-t">
@@ -2341,7 +2356,7 @@ export default function LayupScheduler() {
                       )}
                     </div>
                   )}
-                  
+
                   {employees.length > 0 && (
                     <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <p className="text-sm text-green-700 dark:text-green-300">
@@ -2379,7 +2394,7 @@ export default function LayupScheduler() {
               Month
             </Button>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {hasUnsavedScheduleChanges && (
               <Button
@@ -2402,7 +2417,7 @@ export default function LayupScheduler() {
                 )}
               </Button>
             )}
-            
+
             <Button
               variant="outline"
               size="sm"
@@ -2412,7 +2427,7 @@ export default function LayupScheduler() {
               <Printer className="w-4 h-4 mr-2" />
               Print Schedule
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
@@ -2449,7 +2464,7 @@ export default function LayupScheduler() {
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
-            
+
             {/* Quick Next Week Button */}
             {viewType === 'week' && (
               <Button
@@ -2523,7 +2538,7 @@ export default function LayupScheduler() {
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
-                
+
                 // Get molds that either have orders OR are compatible with existing orders in queue
                 const getCompatibleMolds = (order: any) => {
                   const modelId = order.stockModelId || order.modelId;
@@ -2533,44 +2548,44 @@ export default function LayupScheduler() {
                     return mold.stockModels.includes(modelId);
                   });
                 };
-                
+
                 // Find molds that are compatible with any order in the current queue
                 const compatibleMoldIds = new Set<string>();
                 orders.forEach(order => {
                   const compatible = getCompatibleMolds(order);
                   compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
                 });
-                
+
                 // Get molds that either have assignments OR are compatible with queue orders
                 const relevantMolds = molds.filter(m => {
                   if (!m.enabled) return false;
-                  
+
                   // Include if mold has orders assigned
                   const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
                   if (hasAssignments) return true;
-                  
+
                   // Include if mold is compatible with orders in queue (genuinely available)
                   const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
                   return isCompatibleWithQueue;
                 });
-                
+
                 // Calculate order counts for relevant molds
                 const moldOrderCounts = relevantMolds.map(mold => {
                   const totalOrdersForMold = dates.reduce((count, date) => {
                     const dateString = date.toISOString();
                     const cellDateOnly = dateString.split('T')[0];
-                    
+
                     const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
                       const assignmentDateOnly = assignment.date.split('T')[0];
                       return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
                     }).length;
-                    
+
                     return count + ordersForThisMoldDate;
                   }, 0);
-                  
+
                   return { mold, orderCount: totalOrdersForMold };
                 });
-                
+
                 // Sort molds by order count (descending) - molds with most orders at top, available molds at bottom
                 const sortedMolds = moldOrderCounts.sort((a, b) => {
                   if (b.orderCount !== a.orderCount) {
@@ -2579,20 +2594,20 @@ export default function LayupScheduler() {
                   // Secondary sort: alphabetical by mold ID for consistent ordering
                   return a.mold.moldId.localeCompare(b.mold.moldId);
                 });
-                
+
                 console.log(`  • Relevant molds (with orders or compatible): ${relevantMolds.length}/${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Mold order counts:`, sortedMolds.map(({ mold, orderCount }) => 
                   `${mold.moldId}: ${orderCount} orders`
                 ));
-                
+
                 // Use only relevant molds
                 const activeMolds = sortedMolds.map(({ mold }) => mold);
-                
+
                 return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>
                   {dates.map(date => {
                     const dateString = date.toISOString();
-                    
+
                     // Get orders assigned to this mold/date combination
                     const cellOrders = Object.entries(orderAssignments)
                       .filter(([orderId, assignment]) => {
@@ -2637,7 +2652,7 @@ export default function LayupScheduler() {
               </div>
             )}
           </div>
-          
+
           <DragOverlay>
             {activeId ? (
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">

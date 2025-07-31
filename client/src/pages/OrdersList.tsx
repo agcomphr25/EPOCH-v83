@@ -513,7 +513,6 @@ export default function OrdersList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Current Department</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Model</TableHead>
@@ -544,11 +543,6 @@ export default function OrdersList() {
                           </Badge>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(order.status)}>
-                        {order.status}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">

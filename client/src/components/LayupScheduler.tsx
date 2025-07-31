@@ -734,6 +734,9 @@ function LayupScheduler() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Initialize sensors at the top level to avoid hooks violation
+  const sensors = useSensors(useSensor(PointerSensor));
+
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
   // Debug molds data
@@ -1403,14 +1406,6 @@ function LayupScheduler() {
 
 
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
   // Generate schedule
   const schedule = useMemo(() => {
     if (!orders.length || !molds.length || !employees.length) return [];
@@ -1904,7 +1899,7 @@ function LayupScheduler() {
           {/* Calendar Grid */}
           {(viewType === 'week' || viewType === 'day') ? (
             <DndContext
-              sensors={useSensors(useSensor(PointerSensor))}
+              sensors={sensors}
               onDragStart={(event) => setActiveId(String(event.active.id))}
               onDragEnd={(event) => {
                 const { active, over } = event;

@@ -49,18 +49,9 @@ export function generateLayupSchedule(
   moldSettings: MoldSettings[],
   employeeSettings: EmployeeSettings[]
 ): ScheduleResult[] {
-  console.log(`🚀 Starting schedule generation with:`, {
-    orders: orders.length,
-    moldSettings: moldSettings.length,
-    employeeSettings: employeeSettings.length
-  });
-
   // 1. Compute capacities with 10-hour work days
   const enabledMolds = moldSettings.filter(m => m.enabled);
   const totalDailyMoldCapacity = enabledMolds.reduce((sum, m) => sum + m.multiplier, 0);
-  
-  console.log(`🔧 Enabled molds: ${enabledMolds.length}, Total daily capacity: ${totalDailyMoldCapacity}`);
-  console.log(`🔧 Sample molds:`, enabledMolds.slice(0, 3).map(m => ({ moldId: m.moldId, stockModels: m.stockModels, multiplier: m.multiplier })));
 
   const employeeDailyCapacities = employeeSettings.reduce((map, emp) => {
     // Use actual employee hours (stored in system) for capacity calculation
@@ -201,12 +192,6 @@ export function generateLayupSchedule(
           }
           return isCompatible;
         }
-        // FALLBACK: If no stockModels defined, assume all molds can work with all models
-        // This ensures the scheduler works even without perfect mold-model compatibility data
-        if (!m.stockModels || !Array.isArray(m.stockModels) || m.stockModels.length === 0) {
-          console.log(`🔄 FALLBACK: Mold ${m.moldId} has no stockModels, assuming compatible with ${orderStockModel}`);
-          return true;
-        }
         return false;
       });
       
@@ -339,22 +324,6 @@ export function generateLayupSchedule(
       console.warn(`Could not optimally schedule order ${order.orderId}, forcing placement`);
       // Force schedule logic could go here if needed
     }
-  }
-
-  console.log(`🎯 FINAL SCHEDULE RESULT:`, {
-    totalOrdersToSchedule: orders.length,
-    ordersSuccessfullyScheduled: result.length,
-    unscheduledOrders: orders.length - result.length
-  });
-  
-  if (result.length > 0) {
-    console.log(`✅ Sample scheduled assignments:`, result.slice(0, 5).map(r => ({
-      orderId: r.orderId,
-      moldId: r.moldId,
-      date: r.scheduledDate.toDateString()
-    })));
-  } else {
-    console.error(`❌ NO ORDERS WERE SCHEDULED! This means the algorithm didn't find any compatible mold-order combinations.`);
   }
 
   return result;

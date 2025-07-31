@@ -156,14 +156,16 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
 
   const getFeatureDisplayName = (featureType: string, featureValue: string) => {
     if (!features || !Array.isArray(features)) {
-      return featureValue;
+      // If no features data, provide basic formatting for common values
+      return formatBasicValue(featureValue);
     }
     
     // Find the feature by id matching the featureType
     const feature = features.find((f: any) => f.id === featureType);
     
     if (!feature || !feature.options) {
-      return featureValue;
+      // If no feature definition found, provide basic formatting
+      return formatBasicValue(featureValue);
     }
     
     // Parse the options if it's a string
@@ -172,14 +174,29 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
       try {
         options = JSON.parse(options);
       } catch (e) {
-        return featureValue;
+        return formatBasicValue(featureValue);
       }
     }
     
     // Find the option by value
     const option = options.find((opt: any) => opt.value === featureValue);
     
-    return option?.label || option?.displayName || featureValue;
+    return option?.label || option?.displayName || formatBasicValue(featureValue);
+  };
+
+  const formatBasicValue = (value: string) => {
+    // Handle common formatting cases
+    if (value === 'right' || value === 'left') {
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+    if (value === 'no_lop_change') {
+      return 'No LOP Change';
+    }
+    if (value === 'grip_only') {
+      return 'Grip Only';
+    }
+    // For other values, capitalize first letter and replace underscores
+    return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ');
   };
 
   const renderFeatures = (orderFeatures: any) => {

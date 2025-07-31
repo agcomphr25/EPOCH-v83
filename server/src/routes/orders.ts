@@ -303,6 +303,55 @@ router.post('/production-orders/generate/:purchaseOrderId', async (req: Request,
   }
 });
 
+// Payment Management Routes
+// Get all payments for an order
+router.get('/:orderId/payments', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    const payments = await storage.getPaymentsByOrderId(orderId);
+    res.json(payments);
+  } catch (error) {
+    console.error('Get payments error:', error);
+    res.status(500).json({ error: "Failed to fetch payments" });
+  }
+});
 
+// Add a new payment to an order
+router.post('/:orderId/payments', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
+    const newPayment = await storage.createPayment(paymentData);
+    res.status(201).json(newPayment);
+  } catch (error) {
+    console.error('Create payment error:', error);
+    res.status(400).json({ error: "Failed to create payment", details: (error as any).message });
+  }
+});
+
+// Update a payment
+router.put('/payments/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const paymentData = insertPaymentSchema.parse(req.body);
+    const updatedPayment = await storage.updatePayment(paymentId, paymentData);
+    res.json(updatedPayment);
+  } catch (error) {
+    console.error('Update payment error:', error);
+    res.status(400).json({ error: "Failed to update payment", details: (error as any).message });
+  }
+});
+
+// Delete a payment
+router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    await storage.deletePayment(paymentId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete payment error:', error);
+    res.status(500).json({ error: "Failed to delete payment" });
+  }
+});
 
 export default router;

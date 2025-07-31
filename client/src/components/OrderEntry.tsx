@@ -18,6 +18,7 @@ import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown }
 import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
+import PaymentManager from '@/components/PaymentManager';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
 import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
@@ -87,14 +88,8 @@ export default function OrderEntry() {
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
 
-  // Payment state
-  const [isPaid, setIsPaid] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentType, setPaymentType] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date());
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentTimestamp, setPaymentTimestamp] = useState<Date | null>(null);
-  const [showTooltip, setShowTooltip] = useState(false);
+  // Payment state - simplified for multiple payments
+  const [orderPayments, setOrderPayments] = useState<any[]>([]);
 
   // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
@@ -491,14 +486,7 @@ export default function OrderEntry() {
           loadDiscountDetailsForEdit();
         }
 
-        // Load payment data if available
-        setIsPaid(order.isPaid || false);
-        setPaymentType(order.paymentType || '');
-        setPaymentAmount(order.paymentAmount ? order.paymentAmount.toString() : '');
-        setPaymentDate(order.paymentDate ? new Date(order.paymentDate) : new Date());
-        setPaymentTimestamp(order.paymentTimestamp ? new Date(order.paymentTimestamp) : null);
-        setShowPaymentModal(false);
-        setShowTooltip(false);
+        // Payment data will be loaded by PaymentManager component
 
         console.log('All order fields loaded:', {
           orderId: order.orderId,
@@ -738,12 +726,7 @@ export default function OrderEntry() {
         customDiscountValue,
         showCustomDiscount,
         priceOverride,
-        // Payment information
-        isPaid,
-        paymentType: paymentType || null,
-        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
-        paymentDate: paymentDate ? paymentDate.toISOString() : null,
-        paymentTimestamp: paymentTimestamp ? paymentTimestamp.toISOString() : null
+        // Payment fields removed - now handled by PaymentManager
       };
 
       // Determine if we're creating or updating
@@ -777,9 +760,7 @@ export default function OrderEntry() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
       // Reset form
-      console.log('Before resetForm - paymentAmount:', paymentAmount, 'isPaid:', isPaid);
       resetForm();
-      console.log('After resetForm - paymentAmount should be empty');
 
     } catch (error: any) {
       console.error('Submit error:', error);
@@ -818,14 +799,8 @@ export default function OrderEntry() {
     setDiscountDetails(null);
     setIsEditMode(false);
     setEditingOrderId(null);
-    // Reset payment state
-    setIsPaid(false);
-    setShowPaymentModal(false);
-    setPaymentType('');
-    setPaymentDate(new Date());
-    setPaymentAmount('');
-    setPaymentTimestamp(null);
-    setShowTooltip(false);
+    // Reset payment state - payments now handled by PaymentManager
+    setOrderPayments([]);
     generateOrderId();
   };
 
@@ -2049,87 +2024,11 @@ export default function OrderEntry() {
                   <span className="font-bold text-blue-600">{formatCurrency(totalPrice + shipping)}</span>
                 </div>
 
-                {/* Payment Amount - Only show if payment exists */}
-                {isPaid && paymentAmount && paymentAmount.trim() !== '' && (
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">Payment Amount:</span>
-                    <span className="font-bold text-green-600">-{formatCurrency(parseFloat(paymentAmount))}</span>
-                  </div>
-                )}
 
-                {/* Balance Due/Credit - Only show if payment exists */}
-                {isPaid && paymentAmount && paymentAmount.trim() !== '' && (() => {
-                  const remainingBalance = (totalPrice + shipping) - parseFloat(paymentAmount || '0');
-                  const isCredit = remainingBalance < 0;
-                  const balanceAmount = Math.abs(remainingBalance);
 
-                  return (
-                    <div className="flex justify-between items-center text-lg border-t pt-2">
-                      <span className="font-bold">
-                        {isCredit ? 'Credit Balance:' : 'Balance Due:'}
-                      </span>
-                      <span className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(balanceAmount)}
-                      </span>
-                    </div>
-                  );
-                })()}
 
-                {/* Paid Checkbox */}
-                <div className="flex items-center gap-2 pt-2">
-                  <Checkbox 
-                    id="paid-checkbox"
-                    checked={isPaid}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setShowPaymentModal(true);
-                      } else {
-                        setIsPaid(false);
-                        setPaymentType('');
-                        setPaymentAmount('');
-                        setPaymentTimestamp(null);
-                      }
-                    }}
-                  />
-                  <div className="relative">
-                    <span 
-                      className={`font-medium cursor-pointer ${
-                        isPaid && paymentType && paymentAmount && paymentTimestamp 
-                          ? 'text-green-600 hover:text-green-700' 
-                          : ''
-                      }`}
-                      onMouseEnter={() => {
-                        if (isPaid && paymentType && paymentAmount && paymentTimestamp) {
-                          setShowTooltip(true);
-                        }
-                      }}
-                      onMouseLeave={() => setShowTooltip(false)}
-                      onClick={() => {
-                        if (isPaid && paymentType && paymentAmount && paymentTimestamp) {
-                          setShowPaymentModal(true);
-                        }
-                      }}
-                      title={isPaid && paymentType && paymentAmount ? "Click to edit payment" : ""}
-                    >
-                      Paid
-                    </span>
 
-                    {/* Custom Tooltip */}
-                    {showTooltip && isPaid && paymentType && paymentAmount && paymentTimestamp && (
-                      <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg z-50">
-                        <div className="space-y-1">
-                          <div className="font-semibold">Payment Details:</div>
-                          <div>Type: {paymentType.replace('_', ' ').toUpperCase()}</div>
-                          <div>Date: {paymentDate.toLocaleDateString()}</div>
-                          <div>Amount: {formatCurrency(parseFloat(paymentAmount))}</div>
-                          <div>Recorded: {paymentTimestamp.toLocaleString()}</div>
-                        </div>
-                        {/* Tooltip Arrow */}
-                        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900"></div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {/* Payment management now handled by PaymentManager component */}
               </div>
 
               {/* Action Buttons */}
@@ -2157,94 +2056,18 @@ export default function OrderEntry() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Right Column - PaymentManager */}
+        <div className="space-y-6">
+          {orderId && orderId !== 'Loading...' && (
+            <PaymentManager
+              orderId={orderId}
+              totalAmount={totalPrice + shipping}
+              onPaymentsChange={setOrderPayments}
+            />
+          )}
+        </div>
       </div>
-
-      {/* Payment Modal */}
-      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Payment Details</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Payment Type */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-type">Payment Type</Label>
-              <Select value={paymentType} onValueChange={setPaymentType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select payment type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="credit_card">Credit Card</SelectItem>
-                  <SelectItem value="agr">AGR</SelectItem>
-                  <SelectItem value="check">Check</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="ach">ACH</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Payment Date */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-date">Payment Date</Label>
-              <Input
-                type="date"
-                value={paymentDate.toISOString().split('T')[0]}
-                onChange={(e) => setPaymentDate(new Date(e.target.value))}
-              />
-            </div>
-
-            {/* Payment Amount */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-amount">Payment Amount</Label>
-              <Input
-                type="number"
-                placeholder="0.00"
-                step="0.01"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Modal Buttons */}
-          <div className="flex gap-2 justify-end">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowPaymentModal(false);
-                setPaymentType('');
-                setPaymentAmount('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => {
-                if (paymentType && paymentAmount) {
-                  setIsPaid(true);
-                  // Only update timestamp if this is a new payment (no existing timestamp)
-                  if (!paymentTimestamp) {
-                    setPaymentTimestamp(new Date());
-                  }
-                  setShowPaymentModal(false);
-                  toast({
-                    title: paymentTimestamp ? "Payment Updated" : "Payment Saved",
-                    description: `Payment of ${formatCurrency(parseFloat(paymentAmount))} via ${paymentType.replace('_', ' ').toUpperCase()} ${paymentTimestamp ? 'updated' : 'recorded'}.`,
-                  });
-                } else {
-                  toast({
-                    title: "Missing Information",
-                    description: "Please select a payment type and enter an amount.",
-                    variant: "destructive",
-                  });
-                }
-              }}
-            >
-              {paymentTimestamp ? "Update Payment" : "Save Payment"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

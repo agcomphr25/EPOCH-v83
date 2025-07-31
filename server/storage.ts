@@ -1,5 +1,5 @@
 import { 
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, forms, formSubmissions,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -74,6 +74,8 @@ import {
   type Document, type InsertDocument,
   type DocumentTag, type InsertDocumentTag,
   type DocumentCollection, type InsertDocumentCollection,
+  // Payment types
+  type Payment, type InsertPayment,
 
 } from "./schema";
 import { db } from "./db";
@@ -171,6 +173,12 @@ export interface IStorage {
   generateNextOrderId(): Promise<string>;
   markOrderIdAsUsed(orderId: string): Promise<void>;
   cleanupExpiredReservations(): Promise<number>;
+
+  // Payments CRUD
+  getPaymentsByOrderId(orderId: string): Promise<Payment[]>;
+  createPayment(data: InsertPayment): Promise<Payment>;
+  updatePayment(id: number, data: Partial<InsertPayment>): Promise<Payment>;
+  deletePayment(id: number): Promise<void>;
 
   // Forms CRUD
   getAllForms(): Promise<Form[]>;
@@ -1000,6 +1008,30 @@ export class DatabaseStorage implements IStorage {
     // For now, return from orderDrafts table as it has the order data
     // In the future, this could be changed to use the main orders table
     return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+  }
+
+  // Payments CRUD
+  async getPaymentsByOrderId(orderId: string): Promise<Payment[]> {
+    return await db.select().from(payments)
+      .where(eq(payments.orderId, orderId))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    const [payment] = await db.insert(payments).values(data).returning();
+    return payment;
+  }
+
+  async updatePayment(id: number, data: Partial<InsertPayment>): Promise<Payment> {
+    const [payment] = await db.update(payments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    return payment;
+  }
+
+  async deletePayment(id: number): Promise<void> {
+    await db.delete(payments).where(eq(payments.id, id));
   }
 
   // Forms CRUD

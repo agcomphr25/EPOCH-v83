@@ -92,26 +92,32 @@ export default function OrderSummaryTooltip({ children, orderId }: OrderSummaryT
   });
 
   // Helper function to get feature display value
-  const getFeatureDisplayValue = (featureId: string, value: string): string => {
+  const getFeatureDisplayValue = (featureId: string, value: any): string => {
+    if (!value) return '';
+    
+    const stringValue = String(value);
     const feature = features.find(f => f.id === featureId);
     if (feature && feature.options) {
-      const option = feature.options.find(opt => opt.value === value);
+      const option = feature.options.find(opt => opt.value === stringValue);
       if (option) return option.label;
     }
     return formatBasicValue(value);
   };
 
   // Helper function for basic value formatting (for non-database features)
-  const formatBasicValue = (value: string): string => {
-    if (!value) return value;
+  const formatBasicValue = (value: any): string => {
+    if (!value) return '';
+    
+    // Convert to string if not already
+    const stringValue = String(value);
     
     // Handle common cases
-    if (value === 'right' || value === 'left') {
-      return value.charAt(0).toUpperCase() + value.slice(1);
+    if (stringValue === 'right' || stringValue === 'left') {
+      return stringValue.charAt(0).toUpperCase() + stringValue.slice(1);
     }
     
     // Convert underscores to spaces and capitalize
-    return value
+    return stringValue
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());
   };

@@ -158,6 +158,12 @@ export default function Navigation() {
       description: 'P2 specialized forms and documentation'
     },
     {
+      path: '/waste-management-form',
+      label: 'Waste Management Form',
+      icon: FileText,
+      description: 'Waste Management Discovery Form for client assessment'
+    },
+    {
       path: '/task-tracker',
       label: 'Task Tracker',
       icon: CheckSquare,

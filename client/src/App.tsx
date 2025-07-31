@@ -55,14 +55,10 @@ import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import P2Forms from "./pages/P2Forms";
-import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
-import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
-import RFQRiskAssessment from "./pages/RFQRiskAssessment";
-import ManufacturersCertificate from "./pages/ManufacturersCertificate";
-import PackingSlip from "./pages/PackingSlip";
-import TaskTracker from "./pages/TaskTracker";
-import KickbackTracking from "./components/KickbackTracking";
+import P2Forms from '@/pages/P2Forms';
+import WasteManagementForm from '@/pages/WasteManagementForm';
+import TaskTracker from '@/pages/TaskTracker';
+import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
@@ -211,13 +207,7 @@ function App() {
 
                   {/* P2 Forms Routes */}
                   <Route path="/p2-forms" component={P2Forms} />
-                  <Route path="/purchase-review-checklist" component={PurchaseReviewChecklist} />
-                  <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
-                  <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
-                  <Route path="/manufacturers-certificate" component={ManufacturersCertificate} />
-                  <Route path="/packing-slip" component={PackingSlip} />
-
-                  {/* Task and Document Management */}
+                  <Route path="/waste-management-form" component={WasteManagementForm} />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />

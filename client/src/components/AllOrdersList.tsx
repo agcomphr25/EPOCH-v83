@@ -19,9 +19,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2, Edit } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Package2, Edit, Eye } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
+import OrderDetailsModal from './OrderDetailsModal';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -31,6 +32,8 @@ const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -140,6 +143,16 @@ export default function AllOrdersList() {
     return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
   };
 
+  const handleViewOrderDetails = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setIsOrderDetailsOpen(true);
+  };
+
+  const handleCloseOrderDetails = () => {
+    setIsOrderDetailsOpen(false);
+    setSelectedOrderId(null);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -194,8 +207,18 @@ export default function AllOrdersList() {
                 
                 return (
                   <TableRow key={order.orderId}>
-                    <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
-                      {getDisplayOrderId(order)}
+                    <TableCell className="font-medium">
+                      <Button
+                        variant="ghost"
+                        className="p-0 h-auto font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                        onClick={() => handleViewOrderDetails(order.orderId)}
+                        title="Click to view full order details"
+                      >
+                        <div className="flex items-center gap-1">
+                          <Eye className="h-3 w-3" />
+                          {getDisplayOrderId(order)}
+                        </div>
+                      </Button>
                     </TableCell>
                     <TableCell>
                       {order.orderDate ? (() => {
@@ -321,6 +344,12 @@ export default function AllOrdersList() {
           onClose={() => setScrapModalOrder(null)}
         />
       )}
+
+      <OrderDetailsModal
+        orderId={selectedOrderId}
+        isOpen={isOrderDetailsOpen}
+        onClose={handleCloseOrderDetails}
+      />
     </>
   );
 }

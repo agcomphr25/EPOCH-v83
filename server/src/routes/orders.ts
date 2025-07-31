@@ -10,7 +10,8 @@ import {
   insertProductionOrderSchema,
   insertP2PurchaseOrderSchema,
   insertP2PurchaseOrderItemSchema,
-  insertP2ProductionOrderSchema
+  insertP2ProductionOrderSchema,
+  insertPaymentSchema
 } from '@shared/schema';
 
 const router = Router();

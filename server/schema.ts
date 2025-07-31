@@ -212,7 +212,17 @@ export const orderDrafts = pgTable("order_drafts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-
+// Payments table for multiple payments per order
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").references(() => orderDrafts.orderId).notNull(),
+  paymentType: text("payment_type").notNull(), // credit_card, agr, check, cash, ach
+  paymentAmount: real("payment_amount").notNull(),
+  paymentDate: timestamp("payment_date").notNull(),
+  notes: text("notes"), // Optional notes for the payment
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
@@ -659,6 +669,18 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   paymentAmount: z.number().min(0).optional().nullable(),
   paymentDate: z.coerce.date().optional().nullable(),
   paymentTimestamp: z.coerce.date().optional().nullable(),
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach']),
+  paymentAmount: z.number().min(0.01, "Payment amount must be greater than 0"),
+  paymentDate: z.coerce.date(),
+  notes: z.string().optional().nullable(),
 });
 
 export const insertFormSchema = createInsertSchema(forms).omit({
@@ -1997,3 +2019,6 @@ export type InsertDocumentTag = z.infer<typeof insertDocumentTagSchema>;
 export type DocumentTag = typeof documentTags.$inferSelect;
 export type InsertDocumentCollection = z.infer<typeof insertDocumentCollectionSchema>;
 export type DocumentCollection = typeof documentCollections.$inferSelect;
+
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;

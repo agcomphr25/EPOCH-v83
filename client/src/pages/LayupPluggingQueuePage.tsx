@@ -313,22 +313,28 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
   }, []);
 
-  // Display all available orders instead of only scheduled ones - this shows the full layup queue
+  // Display orders exactly as scheduled in the layup scheduler
   const currentWeekOrdersByDate = useMemo(() => {
-    if (processedOrders.length === 0) {
-      console.log('🔍 No orders available for display. Orders length:', processedOrders.length);
-      // If no processed orders, show all available orders
-      if (availableOrders.length > 0) {
-        console.log('🔍 Using available orders instead:', availableOrders.length);
+    if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
+      console.log('🔍 No schedule data available - showing unscheduled orders. Schedule length:', (currentSchedule as any[]).length);
+      
+      // If no schedule data, show available orders in today's column as fallback
+      if (processedOrders.length > 0) {
         const grouped: {[key: string]: any[]} = {};
         currentWeekDates.forEach(date => {
           const dateStr = date.toISOString().split('T')[0];
           grouped[dateStr] = [];
         });
-        // Put all orders in today's bucket for now
+        
+        // Put unscheduled orders in today's bucket
         const todayStr = new Date().toISOString().split('T')[0];
         if (grouped[todayStr]) {
-          grouped[todayStr] = availableOrders.slice(0, 50); // Limit to first 50 for performance
+          grouped[todayStr] = processedOrders.slice(0, 50).map((order: any) => ({
+            ...order,
+            scheduledDate: todayStr,
+            source: order.source || 'p1_layup_queue',
+            isUnscheduled: true
+          }));
         }
         return grouped;
       }
@@ -338,26 +344,75 @@ export default function LayupPluggingQueuePage() {
     try {
       const weekDateStrings = currentWeekDates.map(date => date.toISOString().split('T')[0]);
       console.log('🔍 Week date strings for filtering:', weekDateStrings);
-      console.log('🔍 Showing all processed orders:', processedOrders.length);
+      console.log('🔍 Total schedule entries to process:', currentSchedule.length);
       
-      // Show all processed orders distributed across the week
-      const weekOrders = processedOrders.slice(0, 50).map((order: any, index: number) => {
-        // Assign orders to different days of the week in a round-robin fashion
-        const dayIndex = index % currentWeekDates.length;
-        const assignedDate = currentWeekDates[dayIndex];
-        
-        console.log('🔍 Processing order for display:', {
-          orderId: order.orderId,
-          assignedToDay: dayIndex,
-          assignedDate: assignedDate.toISOString().split('T')[0]
-        });
+      // Process all schedule entries for current week - use actual scheduled dates
+      const weekOrders = currentSchedule.map((scheduleItem: any) => {
+        if (!scheduleItem?.scheduledDate || !scheduleItem?.orderId) {
+          console.log('🔍 Invalid schedule item:', scheduleItem);
+          return null;
+        }
 
-        // Return the order with assigned date for display purposes
-        return {
-          ...order,
-          scheduledDate: assignedDate.toISOString(),
-          source: order.source || 'p1_layup_queue'
-        };
+        try {
+          const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
+          const isInWeek = weekDateStrings.includes(scheduledDate);
+          
+          if (!isInWeek) {
+            return null; // Not in current week
+          }
+
+          console.log('🔍 Processing schedule item for current week:', {
+            orderId: scheduleItem.orderId,
+            scheduledDate: scheduledDate,
+            originalDate: scheduleItem.scheduledDate
+          });
+
+          // Find matching order from processed orders (includes LOP processing)
+          const matchingOrder = processedOrders.find((o: any) => o.orderId === scheduleItem.orderId);
+          
+          if (matchingOrder) {
+            // Use the full processed order data with exact schedule date
+            const mergedOrder = { 
+              ...matchingOrder, 
+              scheduledDate: scheduleItem.scheduledDate,
+              source: matchingOrder.source || 'main_orders'
+            };
+            console.log('🔍 Found matching processed order:', {
+              orderId: mergedOrder.orderId,
+              hasFeatures: !!mergedOrder.features,
+              stockModelId: mergedOrder.stockModelId,
+              source: mergedOrder.source,
+              hasLOPProcessing: !!mergedOrder.needsLOPAdjustment
+            });
+            return mergedOrder;
+          } else {
+            // Fallback to original available orders
+            const fallbackOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
+            if (fallbackOrder) {
+              return { 
+                ...fallbackOrder, 
+                scheduledDate: scheduleItem.scheduledDate,
+                source: fallbackOrder.source || 'main_orders'
+              };
+            }
+            
+            // Create a minimal order from schedule data if no match found
+            console.log('🔍 No matching order found, creating minimal order for:', scheduleItem.orderId);
+            return {
+              orderId: scheduleItem.orderId,
+              scheduledDate: scheduleItem.scheduledDate,
+              customer: 'Unknown Customer',
+              stockModelId: 'unknown',
+              modelId: 'unknown',
+              features: {},
+              source: 'scheduled_order',
+              dueDate: null
+            };
+          }
+        } catch (dateError) {
+          console.warn('🔍 Date parsing error for schedule item:', scheduleItem, dateError);
+          return null;
+        }
       }).filter((order: any) => order !== null);
 
       console.log('🔍 Processed week orders:', weekOrders.length);

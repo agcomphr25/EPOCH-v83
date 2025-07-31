@@ -194,59 +194,6 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Order Header Information */}
-              <div className="bg-gray-50 p-4 rounded-lg border">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Order {order.orderId}</h3>
-                  <div className="flex gap-2">
-                    <Badge variant={order.isPaid ? 'default' : 'secondary'}>
-                      {order.isPaid ? 'PAID' : 'UNPAID'}
-                    </Badge>
-                    <Badge variant={isScrapped ? 'destructive' : 'default'}>
-                      {order.status || 'ACTIVE'}
-                    </Badge>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Order Date:</span>
-                    <div className="font-medium">{formatDate(order.orderDate)}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Due Date:</span>
-                    <div className="font-medium">{formatDate(order.dueDate)}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Customer:</span>
-                    <div className="font-medium">{order.customerId}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Department:</span>
-                    <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
-                      {order.currentDepartment}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Special Order Numbers */}
-                {(order.fbOrderNumber || order.customerPO) && (
-                  <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    {order.fbOrderNumber && (
-                      <div>
-                        <span className="text-gray-600">FB Order Number:</span>
-                        <div className="font-medium">{order.fbOrderNumber}</div>
-                      </div>
-                    )}
-                    {order.customerPO && (
-                      <div>
-                        <span className="text-gray-600">Customer PO:</span>
-                        <div className="font-medium">{order.customerPO}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
 
               {/* Product Information */}
               <Card>

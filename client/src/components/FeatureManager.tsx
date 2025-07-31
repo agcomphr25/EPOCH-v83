@@ -952,8 +952,7 @@ export default function FeatureManager() {
                 <Input
                   type="number"
                   step="0.01"
-                  value```python
-={subCategoryForm.price || 0}
+                  value={subCategoryForm.price || 0}
                   onChange={(e) => setSubCategoryForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                   placeholder="0.00"
                 />

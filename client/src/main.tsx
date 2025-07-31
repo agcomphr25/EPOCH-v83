@@ -20,7 +20,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 (window as any).useContext = React.useContext;
 
 // Enhanced error tracking for deployment debugging
-let globalErrors = [];
+let globalErrors: Array<{timestamp: string, message: string, type: string}> = [];
 const originalConsoleError = console.error;
 console.error = function(...args) {
   globalErrors.push({

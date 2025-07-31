@@ -783,7 +783,8 @@ export default function LayupScheduler() {
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
-      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+      const bDueDate =```python
+new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
 
@@ -880,7 +881,7 @@ export default function LayupScheduler() {
           compatibleMolds: compatibleMolds.length,
           compatibleMoldIds: compatibleMolds.map(m => m.moldId),
           allEnabledMolds: molds.filter(m => m.enabled).length,
-          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).length
+          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId)
         });
       }
 
@@ -1160,7 +1161,6 @@ export default function LayupScheduler() {
             .header { 
               text-align: center; 
               margin-bottom: 2px; 
-              border-bottom: 1px solid #333; 
               padding-bottom: 1px; 
             }
             .header h1 { 
@@ -1320,64 +1320,98 @@ export default function LayupScheduler() {
               opacity: 0.8;
             }
             @media print { 
+              * {
+                margin: 0 !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+              }
+              @page {
+                margin: 0 !important;
+                padding: 0 !important;
+              }
               body { 
                 margin: 0 !important; 
-                padding: 1px !important; 
-                font-size: 9px !important;
+                padding: 0 !important; 
+                font-size: 8px !important;
+                line-height: 1 !important;
               }
               .header { 
-                margin-bottom: 1px !important; 
-                padding-bottom: 1px !important; 
+                margin: 0 !important; 
+                padding: 0 0 1px 0 !important; 
               }
               .header h1 { 
-                font-size: 11px !important; 
+                font-size: 10px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .header h2 { 
-                font-size: 9px !important; 
+                font-size: 8px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .header p { 
-                font-size: 7px !important; 
+                font-size: 6px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .stats { 
-                margin-bottom: 1px !important; 
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .stat { 
-                padding: 1px 3px !important; 
-                font-size: 7px !important;
+                padding: 0.5px 2px !important; 
+                font-size: 6px !important;
+                margin: 0 !important;
               }
               .schedule-table { 
                 break-inside: avoid; 
                 margin: 0 !important;
+                padding: 0 !important;
               }
               .schedule-table th { 
-                padding: 1px !important; 
-                font-size: 7px !important;
+                padding: 0.5px !important; 
+                font-size: 6px !important;
+                margin: 0 !important;
               }
               .schedule-table .mold-header { 
-                padding: 1px !important; 
-                font-size: 7px !important;
+                padding: 0.5px !important; 
+                font-size: 6px !important;
+                margin: 0 !important;
               }
               .schedule-table .cell { 
-                padding: 0.5px !important; 
-                min-height: 30px !important; 
+                padding: 0 !important; 
+                min-height: 25px !important; 
+                margin: 0 !important;
               }
               .order-card { 
-                margin: 0 0 0.5px 0 !important; 
-                padding: 1px 1px !important; 
-                font-size: 6px !important;
+                margin: 0 !important; 
+                padding: 0.5px !important; 
+                font-size: 5px !important;
               }
               .order-id {
-                font-size: 7px !important;
+                font-size: 6px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .order-details {
-                font-size: 6px !important;
+                font-size: 5px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .mold-info {
-                font-size: 6px !important;
+                font-size: 5px !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
+                font-size: 4px !important;
+                padding: 0.25px 0.5px !important;
+                margin: 0 !important;
+              }
+              .order-count {
+                margin: 0 !important;
+                padding: 0 !important;
                 font-size: 5px !important;
-                padding: 0.5px 1px !important;
               }
             }
           </style>
@@ -1436,7 +1470,7 @@ export default function LayupScheduler() {
                 return datesWithOrders.some(date => {
                   const dateString = date.toISOString();
                   const cellDateOnly = dateString.split('T')[0];
-                  
+
                   return Object.entries(orderAssignments).some(([orderId, assignment]) => {
                     const assignmentDateOnly = assignment.date.split('T')[0];
                     return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
@@ -1564,11 +1598,6 @@ export default function LayupScheduler() {
     } else {
       console.log('✅ Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
     }
-  }
-
-  // Force auto-schedule trigger when production orders are loaded
-  if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
-    console.log('🏭 Triggering auto-schedule for production orders...');
   }
 
   // Debug Mesa Universal molds
@@ -1884,698 +1913,441 @@ export default function LayupScheduler() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    
       {/* Sticky Header Container */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+      
         {/* Navigation Header */}
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
+        
+          
+            
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
-            </div>
-            <div className="flex items-center space-x-4 text-sm">
-              <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg">
-                <span className="text-orange-700 dark:text-orange-300 font-medium">
+              
+            
+            
+              
+                {orders.length} Total Orders
+              
+              
+                
                   {orders.filter(o => o.source === 'production_order').length} Production Orders
-                </span>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
-                <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
-              </div>
-              <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
-                <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>
-              </div>
-            </div>
-          </div>
-        </div>
+                
+              
+              
+                {molds.filter(m => m.enabled).length} Active Molds
+              
+              
+                {employees.length} Employees
+              
+            
+          
+        
 
         {/* Control Bar */}
-        <div className="px-6 pb-4">
-          <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="flex space-x-2">
+        
+          
+            
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Mold Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Mold Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {/* Add New Mold Form */}
-                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <Plus className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Add New Mold</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Mold Name</label>
-                        <Input
-                          placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
-                          value={newMold.moldName}
-                          onChange={(e) => setNewMold(prev => ({...prev, moldName: e.target.value}))}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for this mold</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Associated Stock Models</label>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
-                          {stockModels.map((model: any) => (
-                            <div key={model.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`stock-${model.id}`}
-                                checked={newMold.stockModels.includes(model.id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setNewMold(prev => ({
-                                      ...prev,
-                                      stockModels: [...prev.stockModels, model.id]
-                                    }));
-                                  } else {
-                                    setNewMold(prev => ({
-                                      ...prev,
-                                      stockModels: prev.stockModels.filter(id => id !== model.id)
-                                    }));
-                                  }
-                                }}
-                              />
-                              <label 
-                                htmlFor={`stock-${model.id}`}
-                                className="text-sm cursor-pointer"
-                              >
-                                {model.displayName || model.name || model.id}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Select all stock models that can be produced with this mold</p>
-                      </div>
-                      {/* Bulk Creation Option */}
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="bulk-mode"
-                            checked={isBulkMode}
-                            onCheckedChange={(checked) => setIsBulkMode(!!checked)}
-                          />
-                          <label 
-                            htmlFor="bulk-mode" 
-                            className="text-sm font-medium cursor-pointer"
-                          >
-                            Create multiple molds at once
-                          </label>
-                        </div>
-
-                        {isBulkMode && (
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Number of Molds</label>
-                            <Input
-                              type="number"
-                              placeholder="14"
-                              value={bulkMoldCount}
-                              min={1}
-                              max={50}
-                              onChange={(e) => setBulkMoldCount(+e.target.value)}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {!isBulkMode && (
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Instance Number</label>
-                            <Input
-                              type="number"
-                              placeholder="1"
-                              value={newMold.instanceNumber}
-                              min={1}
-                              onChange={(e) => setNewMold(prev => ({...prev, instanceNumber: +e.target.value}))}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">For single molds with custom instance numbers</p>
-                          </div>
-                        )}
-                        <div className={isBulkMode ? 'col-span-2' : ''}>
-                          <label className="text-sm font-medium mb-1 block">Daily Capacity</label>
-                          <Input
-                            type="number"
-                            placeholder="2"
-                            value={newMold.multiplier}
-                            min={1}
-                            onChange={(e) => setNewMold(prev => ({...prev, multiplier: +e.target.value}))}
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Units each mold can produce per day</p>
-                        </div>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={handleAddMold} 
-                      className="mt-3" 
-                      size="sm"
-                      disabled={!newMold.moldName.trim()}
-                    >
-                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
-                    </Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Existing Molds */}
-                  {molds.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No molds configured yet. Use the form above to add your first mold.
-                    </div>
-                  ) : (
-                    molds.map(mold => (
-                      <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                        <Checkbox
-                          checked={mold.enabled ?? true}
-                          onCheckedChange={(checked) => 
-                            saveMold({ ...mold, enabled: !!checked })
-                          }
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            {editingMoldId === mold.moldId ? (
-                              <Input
-                                value={editingMoldName}
-                                onChange={(e) => setEditingMoldName(e.target.value)}
-                                className="font-medium text-base h-6 px-2"
-                                placeholder="Mold Name"
-                              />
-                            ) : (
-                              <div className="font-medium text-base">
-                                {mold.modelName} #{mold.instanceNumber}
-                              </div>
-                            )}
-                            <Badge variant={mold.isActive ? "default" : "secondary"}>
-                              {mold.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            Mold ID: {mold.moldId}
-                          </div>
-
-                          {/* Edit Controls */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Configuration:</span>
-                              {editingMoldId === mold.moldId ? (
-                                <div className="space-x-1">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      saveMold({ 
-                                        ...mold, 
-                                        modelName: editingMoldName.trim() || mold.modelName,
-                                        stockModels: editingMoldStockModels 
-                                      });
-                                      setEditingMoldId(null);
-                                      setEditingMoldStockModels([]);
-                                      setEditingMoldName('');
-                                    }}
-                                    className="h-6 px-2 text-xs"
-                                  >
-                                    Save
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      setEditingMoldId(null);
-                                      setEditingMoldStockModels([]);
-                                      setEditingMoldName('');
-                                    }}
-                                    className="h-6 px-2 text-xs"
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setEditingMoldId(mold.moldId);
-                                    setEditingMoldStockModels(mold.stockModels || []);
-                                    setEditingMoldName(mold.modelName || '');
-                                  }}
-                                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
-                                >
-                                  Edit
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Stock Models Display */}
-                            <div>
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Stock Models:</span>
-
-                              {editingMoldId === mold.moldId ? (
-                              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
-                                {stockModels.map((model: any) => (
-                                  <div key={model.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`edit-stock-${mold.moldId}-${model.id}`}
-                                      checked={editingMoldStockModels.includes(model.id)}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setEditingMoldStockModels(prev => [...prev, model.id]);
-                                        } else {
-                                          setEditingMoldStockModels(prev => prev.filter(id => id !== model.id));
-                                        }
-                                      }}
-                                    />
-                                    <label 
-                                      htmlFor={`edit-stock-${mold.moldId}-${model.id}`}
-                                      className="text-xs cursor-pointer"
-                                    >
-                                      {model.displayName || model.name || model.id}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {mold.stockModels && mold.stockModels.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {mold.stockModels.map((stockModelId: string) => {
-                                      const stockModel = stockModels.find((sm: any) => sm.id === stockModelId);
-                                      return (
-                                        <span key={stockModelId} className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md text-xs">
-                                          {stockModel?.displayName || stockModel?.name || stockModelId}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                ) : (
-                                  <span className="italic">No stock models assigned</span>
-                                )}
-                              </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="text-sm font-medium">Daily Capacity:</label>
-                          <Input
-                            type="number"
-                            value={mold.multiplier}
-                            min={1}
-                            onChange={(e) =>
-                              saveMold({ ...mold, multiplier: +e.target.value })
-                            }
-                            className="w-24"
-                          />
-                          <span className="text-sm text-gray-600">units/day</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleMoldStatus(mold.moldId, !mold.isActive)}
-                            className={mold.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
-                          >
-                            {mold.isActive ? "Mark Inactive" : "Reactivate"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteMold(mold.moldId)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-                      <strong>How to Add Molds:</strong>
-                    </p>
-                    <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
-                      <li><strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")</li>
-                      <li><strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on</li>
-                      <li><strong>Daily Capacity:</strong> How many units this specific mold can produce in one day</li>
-                    </ul>
-                    {molds.length > 0 && (
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
-                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
-                        Adjust daily capacity to reflect each mold's production capability.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Users className="w-4 h-4 mr-2" />
-                  Employee Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Employee Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {/* Add New Employee Form */}
-                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <Plus className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Add New Employee</span>
-                    </div>
-                    <div className="mb-3">
-                      <Input
-                        placeholder="Employee ID (e.g., EMP004)"
-                        value={newEmployee.employeeId}
-                        onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Rate:</label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          placeholder="1.5"
-                          value={newEmployee.rate}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">units/hr</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Hours:</label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          placeholder="8"
-                          value={newEmployee.hours}
-                          min={1}
-                          max={12}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">hrs/day</span>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={handleAddEmployee} 
-                      className="mt-3" 
-                      size="sm"
-                      disabled={!newEmployee.employeeId.trim()}
-                    >
-                      Add Employee
-                    </Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Existing Employees */}
-                  {employees.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No employees configured yet. Use the form above to add your first employee.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {employees.map(emp => {
-                        const changes = employeeChanges[emp.employeeId];
-                        const currentRate = changes?.rate ?? emp.rate;
-                        const currentHours = changes?.hours ?? emp.hours;
-
-                        return (
-                          <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                            <div className="flex items-center justify-between mb-3">
-                              <div>
-                                <div className="font-medium text-base">{emp.name}</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                  Employee ID: {emp.employeeId} | Department: {emp.department}
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Badge variant={emp.isActive ? "default" : "secondary"}>
-                                  {emp.isActive ? "Active" : "Inactive"}
-                                </Badge>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toggleEmployeeStatus(emp.employeeId, !emp.isActive)}
-                                  className={emp.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
-                                >
-                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => deleteEmployee(emp.employeeId)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
+            
+              
+                
+                  
+                    Mold Settings
+                  
+                
+                
+                  
+                    
+                      
+                        Mold Configuration
+                      
+                    
+                    
+                      
+                        
+                          
+                            
+                              
+                                
+                                  Add New Mold
+                                
+                              
+                              
+                                
+                                  
+                                    Mold Name
+                                  
+                                  
+                                    
+                                      e.g., Alpine Hunter, Tactical Hunter, etc.
+                                    
+                                    
+                                      Enter a descriptive name for this mold
+                                    
+                                  
+                                  
+                                    Associated Stock Models
+                                  
+                                  
+                                    
+                                      
+                                        
+                                          
+                                            
+                                              
+                                            
+                                            
+                                          
+                                        
+                                      
+                                      Select all stock models that can be produced with this mold
+                                    
+                                  
+                                
+                                
+                                  
+                                    
+                                      
+                                        
+                                          Create multiple molds at once
+                                        
+                                      
+                                      
+                                        
+                                          
+                                            Number of Molds
+                                          
+                                          
+                                            
+                                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
+                                            
+                                          
+                                        
+                                      
+                                    
+                                  
+                                
+                                
+                                  
+                                    
+                                      
+                                        Instance Number
+                                      
+                                      
+                                        
+                                          For single molds with custom instance numbers
+                                        
+                                      
+                                    
+                                    
+                                      
+                                        Daily Capacity
+                                      
+                                      
+                                        
+                                          Units each mold can produce per day
+                                        
+                                      
+                                    
+                                  
+                                
+                                {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
+                              
+                            
+                          
+                          
+                            No molds configured yet. Use the form above to add your first mold.
+                          
+                          
+                            
+                              
+                                
+                                
+                                  
+                                    {mold.modelName} #{mold.instanceNumber}
+                                  
+                                  
+                                    
+                                      Active
+                                    
+                                  
+                                
+                                
+                                  Mold ID: {mold.moldId}
+                                
+                                
+                                  
+                                    Configuration:
+                                  
+                                  
+                                    
+                                      
+                                        Save
+                                      
+                                      
+                                        Cancel
+                                      
+                                    
+                                  
+                                
+                                
+                                  Stock Models:
+                                
+                                  
+                                    
+                                      
+                                        
+                                          
+                                            
+                                              
+                                            
+                                            
+                                          
+                                        
+                                      
+                                    
+                                  
+                                  
+                                    No stock models assigned
+                                  
+                                
+                              
+                              
+                                Daily Capacity:
+                                units/day
+                              
+                              
+                                
+                                  {mold.isActive ? "Mark Inactive" : "Reactivate"}
+                                
+                                
                                   Delete
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Production Rate:</label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  value={currentRate}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'rate', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">units/hr</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Daily Hours:</label>
-                                <Input
-                                  type="number"
-                                  step="0.5"
-                                  value={currentHours}
-                                  min={1}
-                                  max={12}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'hours', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">hrs/day</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                                
+                              
+                            
+                          
+                        
+                      
+                      
+                        
+                          
+                            
+                              
+                                <strong>How to Add Molds:</strong>
+                              
+                              
+                                
+                                  
+                                    <strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")
+                                  
+                                  
+                                    <strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on
+                                  
+                                  
+                                    <strong>Daily Capacity:</strong> How many units this specific mold can produce in one day
+                                  
+                                
+                                
+                                  
+                                    <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
+                                    Adjust daily capacity to reflect each mold's production capability.
+                                  
+                                
+                              
+                            
+                          
+                        
+                      
+                    
+                  
+                
+              
+            
 
-                      {/* Save Button */}
-                      {hasUnsavedChanges && (
-                        <div className="flex justify-center pt-4 border-t">
-                          <Button 
-                            onClick={handleSaveEmployeeChanges}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                          >
+            
+              
+                
+                  
+                    Employee Settings
+                  
+                
+                
+                  
+                    
+                      
+                        Employee Configuration
+                      
+                    
+                    
+                      
+                        
+                          
+                            
+                              
+                                
+                                  Add New Employee
+                                
+                              
+                              
+                                
+                                  
+                                
+                              
+                              
+                                Production Rate:
+                                units/hr
+                              
+                              
+                                Daily Hours:
+                                hrs/day
+                              
+                            
+                            Add Employee
+                          
+                        
+                      
+                      
+                        
+                          No employees configured yet. Use the form above to add your first employee.
+                        
+                        
+                          
+                            
+                              
+                                
+                                  {emp.name}
+                                
+                                
+                                  Employee ID: {emp.employeeId} | Department: {emp.department}
+                                
+                              
+                              
+                                
+                                  {emp.isActive ? "Active" : "Inactive"}
+                                
+                                
+                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
+                                
+                                
+                                  Delete
+                                
+                              
+                            
+                            
+                              Production Rate:
+                              units/hr
+                            
+                            
+                              Daily Hours:
+                              hrs/day
+                            
+                          
+                          
                             Save Changes
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          
+                        
+                      
+                      
+                        
+                          
+                            
+                              <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
+                              The system will automatically distribute work based on these settings.
+                            
+                          
+                        
+                      
+                    
+                  
+                
+              
+            
 
-                  {employees.length > 0 && (
-                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
-                        The system will automatically distribute work based on these settings.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            
+              
+                Day
+              
+              
+                Week
+              
+              
+                Month
+              
+            
+          
 
-            <Button
-              variant={viewType === 'day' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('day')}
-            >
-              <Calendar1 className="w-4 h-4 mr-1" />
-              Day
-            </Button>
-            <Button
-              variant={viewType === 'week' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('week')}
-            >
-              <Calendar className="w-4 h-4 mr-1" />
-              Week
-            </Button>
-            <Button
-              variant={viewType === 'month' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('month')}
-            >
-              <Grid3X3 className="w-4 h-4 mr-1" />
-              Month
-            </Button>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            {hasUnsavedScheduleChanges && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleSaveSchedule}
-                disabled={isSaving}
-                className="mr-2 bg-green-600 hover:bg-green-700 text-white"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+          
+            
+              {isSaving ? (
+                
+                  
+                    
                     Saving...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 mr-2" />
+                  
+                
+              ) : (
+                
+                  
                     Save Schedule
-                  </>
-                )}
-              </Button>
-            )}
+                  
+                
+              )}
+            
+            
+              
+                Print Schedule
+              
+            
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="mr-4"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Print Schedule
-            </Button>
+            
+              
+            
+              
+                
+                  {viewType === 'week' 
+                    ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
+                    : format(currentDate, 'MMMM yyyy')
+                  }
+                
+              
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (viewType === 'week') {
-                  // Jump to previous work week (skip weekends)
-                  const prevWeekStart = startOfWeek(addDays(currentDate, -7), { weekStartsOn: 1 });
-                  setCurrentDate(prevWeekStart);
-                } else {
-                  setCurrentDate(prev => addDays(prev, -1));
-                }
-              }}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="px-3 text-sm font-medium">
-              {viewType === 'week' 
-                ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
-                : format(currentDate, 'MMMM yyyy')
-              }
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (viewType === 'week') {
-                  // Jump to next work week (skip weekends)
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
-                } else {
-                  setCurrentDate(prev => addDays(prev, 1));
-                }
-              }}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-
-            {/* Quick Next Week Button */}
-            {viewType === 'week' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-                  setCurrentDate(nextWeekStart);
-                }}
-                className="ml-2 text-xs"
-              >
+              {/* Quick Next Week Button */}
+              {viewType === 'week' && (
                 Next Week
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
+              )}
+            
+          
+        
+      
 
-        {/* Sticky Date Headers */}
         {(viewType === 'week' || viewType === 'day') && (
-          <div className="sticky top-[calc(theme(spacing.20)+theme(spacing.32))] z-[9] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-2">
-            <div
-              className="grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-            >
-              {dates.map(date => {
-                const isFriday = date.getDay() === 5;
-                return (
-                  <div
-                    key={date.toISOString()}
-                    className={`p-3 border text-center font-semibold text-sm ${
-                      isFriday 
-                        ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
-                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-                    }`}
-                  >
-                    {format(date, 'MM/dd')}
-                    <div className={`text-xs mt-1 ${
-                      isFriday 
-                        ? 'text-amber-600 dark:text-amber-400' 
-                        : 'text-gray-500'
-                    }`}>
-                      {format(date, 'EEE')}
-                      {isFriday && <div className="text-[10px] font-medium">Backup</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          
+            
+              
+                {dates.map(date => {
+                  const isFriday = date.getDay() === 5;
+                  return (
+                    
+                      {format(date, 'MM/dd')}
+                      
+                        {format(date, 'EEE')}
+                        {isFriday && Backup}
+                      
+                    
+                  );
+                })}
+              
+            
+          
         )}
-      </div>
+      
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-auto">
-        <DndContext 
-          sensors={sensors} 
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="px-6 pb-6">
+      
+        
+          
             {/* Week-based Calendar Layout */}
             {viewType === 'week' || viewType === 'day' ? (
-              <div
-                className="grid gap-1"
-                style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-              >
-
+              
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
                 console.log(`📊 DEBUG: Calendar Display Summary`);
@@ -2593,7 +2365,7 @@ export default function LayupScheduler() {
                 };
 
                 // Find molds that are compatible with any order in the current queue
-                const compatibleMoldIds = new Set<string>();
+                const compatibleMoldIds = new Set();
                 orders.forEach(order => {
                   const compatible = getCompatibleMolds(order);
                   compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
@@ -2647,7 +2419,7 @@ export default function LayupScheduler() {
                 const activeMolds = sortedMolds.map(({ mold }) => mold);
 
                 return activeMolds.map(mold => (
-                <React.Fragment key={mold.moldId}>
+                
                   {dates.map(date => {
                     const dateString = date.toISOString();
 
@@ -2662,49 +2434,41 @@ export default function LayupScheduler() {
                         const order = orders.find(o => o.orderId === orderId);
                         return order;
                       })
-                      .filter(order => order !== undefined) as any[];
+                      .filter(order => order !== undefined);
 
                     const dropId = `${mold.moldId}|${dateString}`;
 
                     return (
-                      <DroppableCell
-                        key={dropId}
-                        moldId={mold.moldId}
-                        date={date}
-                        orders={cellOrders}
-                        onDrop={(orderId, moldId, date) => {
+                      
+                        
                           // Handle drop (this is handled by DndContext now)
-                        }}
-                        moldInfo={{
+                        
+                        
                           moldId: mold.moldId,
                           instanceNumber: mold.instanceNumber
-                        }}
-                        getModelDisplayName={getModelDisplayName}
-                        features={features}
-                        processedOrders={processedOrders}
-                      />
+                        
+                        
+                      
                     );
                   })}
-                </React.Fragment>
+                
                 ));
               })()}
-              </div>
+              
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              
                 Month view not yet implemented
-              </div>
+              
             )}
-          </div>
+          
 
-          <DragOverlay>
-            {activeId ? (
-              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-                {activeId}
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      </div>
-    </div>
+          
+            
+              {activeId}
+            
+          
+        
+      
+    
   );
 }

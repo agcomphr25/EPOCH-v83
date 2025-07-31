@@ -37,6 +37,8 @@ import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, User
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // Draggable Order Item Component for P2 orders
 function DraggableP2OrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) {
@@ -229,6 +231,27 @@ export default function P2LayupScheduler() {
   // Track P2 order assignments (orderId -> { moldId, date })
   const [p2OrderAssignments, setP2OrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
+  // P2 Mold and Employee Management State
+  const [showP2MoldSettings, setShowP2MoldSettings] = useState(false);
+  const [showP2EmployeeSettings, setShowP2EmployeeSettings] = useState(false);
+  const [editingP2Mold, setEditingP2Mold] = useState<any>(null);
+  const [editingP2Employee, setEditingP2Employee] = useState<any>(null);
+  const [newP2Mold, setNewP2Mold] = useState({
+    moldId: '',
+    modelName: '',
+    instanceNumber: 1,
+    enabled: true,
+    multiplier: 1,
+    stockModels: []
+  });
+  const [newP2Employee, setNewP2Employee] = useState({
+    employeeId: '',
+    rate: 1.5,
+    hours: 8,
+    department: 'P2-Layup',
+    isActive: true
+  });
+
   const queryClient = useQueryClient();
   
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
@@ -318,6 +341,67 @@ export default function P2LayupScheduler() {
       await saveP2ScheduleMutation.mutateAsync(p2OrderAssignments);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // P2 Mold Management Handlers
+  const handleSaveP2Mold = async (moldData: any) => {
+    try {
+      if (editingP2Mold) {
+        await saveMold({ ...moldData, id: editingP2Mold.id });
+      } else {
+        await saveMold(moldData);
+      }
+      setShowP2MoldSettings(false);
+      setEditingP2Mold(null);
+      setNewP2Mold({
+        moldId: '',
+        modelName: '',
+        instanceNumber: 1,
+        enabled: true,
+        multiplier: 1,
+        stockModels: []
+      });
+    } catch (error) {
+      console.error('Failed to save P2 mold:', error);
+    }
+  };
+
+  const handleDeleteP2Mold = async (moldId: string) => {
+    try {
+      await deleteMold(moldId);
+    } catch (error) {
+      console.error('Failed to delete P2 mold:', error);
+    }
+  };
+
+  // P2 Employee Management Handlers
+  const handleSaveP2Employee = async (employeeData: any) => {
+    try {
+      if (editingP2Employee) {
+        await saveEmployee(editingP2Employee.employeeId, employeeData);
+      } else {
+        await saveEmployee(employeeData.employeeId, employeeData);
+      }
+      setShowP2EmployeeSettings(false);
+      setEditingP2Employee(null);
+      setNewP2Employee({
+        employeeId: '',
+        rate: 1.5,
+        hours: 8,
+        department: 'P2-Layup',
+        isActive: true
+      });
+    } catch (error) {
+      console.error('Failed to save P2 employee:', error);
+    }
+  };
+
+  const handleDeleteP2Employee = async (employeeId: string) => {
+    try {
+      await deleteEmployee(employeeId);
+    } catch (error) {
+      console.error('Failed to delete P2 employee:', error);
     }
   };
 
@@ -708,6 +792,26 @@ export default function P2LayupScheduler() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
               
+              <Separator orientation="vertical" className="h-6" />
+              
+              <Dialog open={showP2MoldSettings} onOpenChange={setShowP2MoldSettings}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="w-4 h-4 mr-1" />
+                    P2 Molds
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
+              
+              <Dialog open={showP2EmployeeSettings} onOpenChange={setShowP2EmployeeSettings}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Users className="w-4 h-4 mr-1" />
+                    P2 Employees
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
+              
               {viewType === 'week' && (
                 <Button
                   variant="outline"
@@ -890,6 +994,236 @@ export default function P2LayupScheduler() {
           </DragOverlay>
         </DndContext>
       </div>
+      
+      {/* P2 Mold Settings Dialog */}
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>P2 Mold Settings</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Add New P2 Mold Form */}
+          <div className="border p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+            <h3 className="font-semibold mb-3">Add New P2 Mold</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Mold ID</Label>
+                <Input
+                  value={newP2Mold.moldId}
+                  onChange={(e) => setNewP2Mold(prev => ({ ...prev, moldId: e.target.value }))}
+                  placeholder="P2-APR-1"
+                />
+              </div>
+              <div>
+                <Label>Model Name</Label>
+                <Input
+                  value={newP2Mold.modelName}
+                  onChange={(e) => setNewP2Mold(prev => ({ ...prev, modelName: e.target.value }))}
+                  placeholder="P2 Model"
+                />
+              </div>
+              <div>
+                <Label>Instance Number</Label>
+                <Input
+                  type="number"
+                  value={newP2Mold.instanceNumber}
+                  onChange={(e) => setNewP2Mold(prev => ({ ...prev, instanceNumber: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+              <div>
+                <Label>Daily Capacity</Label>
+                <Input
+                  type="number"
+                  value={newP2Mold.multiplier}
+                  onChange={(e) => setNewP2Mold(prev => ({ ...prev, multiplier: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center space-x-2">
+              <Checkbox
+                checked={newP2Mold.enabled}
+                onCheckedChange={(checked) => setNewP2Mold(prev => ({ ...prev, enabled: checked }))}
+              />
+              <Label>Enabled</Label>
+            </div>
+            <Button
+              onClick={() => handleSaveP2Mold(newP2Mold)}
+              disabled={!newP2Mold.moldId || !newP2Mold.modelName}
+              className="mt-4 bg-orange-600 hover:bg-orange-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add P2 Mold
+            </Button>
+          </div>
+
+          {/* Existing P2 Molds List */}
+          <div>
+            <h3 className="font-semibold mb-3">Existing P2 Molds</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {molds.filter(m => m.moldId.includes('P2') || m.modelName.includes('P2')).map(mold => (
+                <div key={mold.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <Badge variant={mold.enabled ? "default" : "secondary"}>
+                      {mold.moldId}
+                    </Badge>
+                    <span className="text-sm">{mold.modelName}</span>
+                    <span className="text-xs text-gray-500">
+                      Instance: {mold.instanceNumber} | Capacity: {mold.multiplier}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleMoldStatus(mold.moldId)}
+                    >
+                      {mold.enabled ? 'Disable' : 'Enable'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingP2Mold(mold);
+                        setNewP2Mold({
+                          moldId: mold.moldId,
+                          modelName: mold.modelName,
+                          instanceNumber: mold.instanceNumber,
+                          enabled: mold.enabled,
+                          multiplier: mold.multiplier,
+                          stockModels: mold.stockModels || []
+                        });
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteP2Mold(mold.moldId)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+
+      {/* P2 Employee Settings Dialog */}
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>P2 Employee Settings</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Add New P2 Employee Form */}
+          <div className="border p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+            <h3 className="font-semibold mb-3">Add New P2 Employee</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Employee ID/Name</Label>
+                <Input
+                  value={newP2Employee.employeeId}
+                  onChange={(e) => setNewP2Employee(prev => ({ ...prev, employeeId: e.target.value }))}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div>
+                <Label>Department</Label>
+                <Input
+                  value={newP2Employee.department}
+                  onChange={(e) => setNewP2Employee(prev => ({ ...prev, department: e.target.value }))}
+                  placeholder="P2-Layup"
+                />
+              </div>
+              <div>
+                <Label>Rate (orders/hour)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={newP2Employee.rate}
+                  onChange={(e) => setNewP2Employee(prev => ({ ...prev, rate: parseFloat(e.target.value) || 1.5 }))}
+                />
+              </div>
+              <div>
+                <Label>Hours/Day</Label>
+                <Input
+                  type="number"
+                  value={newP2Employee.hours}
+                  onChange={(e) => setNewP2Employee(prev => ({ ...prev, hours: parseFloat(e.target.value) || 8 }))}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center space-x-2">
+              <Checkbox
+                checked={newP2Employee.isActive}
+                onCheckedChange={(checked) => setNewP2Employee(prev => ({ ...prev, isActive: checked }))}
+              />
+              <Label>Active</Label>
+            </div>
+            <Button
+              onClick={() => handleSaveP2Employee(newP2Employee)}
+              disabled={!newP2Employee.employeeId}
+              className="mt-4 bg-orange-600 hover:bg-orange-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add P2 Employee
+            </Button>
+          </div>
+
+          {/* Existing P2 Employees List */}
+          <div>
+            <h3 className="font-semibold mb-3">Existing P2 Employees</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {employees.filter(emp => emp.department?.includes('P2') || emp.employeeId.includes('P2')).map(employee => (
+                <div key={employee.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <Badge variant={employee.isActive ? "default" : "secondary"}>
+                      {employee.employeeId}
+                    </Badge>
+                    <span className="text-sm">{employee.department}</span>
+                    <span className="text-xs text-gray-500">
+                      Rate: {employee.rate}/hr | Hours: {employee.hours}/day
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleEmployeeStatus(employee.employeeId)}
+                    >
+                      {employee.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingP2Employee(employee);
+                        setNewP2Employee({
+                          employeeId: employee.employeeId,
+                          rate: employee.rate,
+                          hours: employee.hours,
+                          department: employee.department,
+                          isActive: employee.isActive
+                        });
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteP2Employee(employee.employeeId)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
     </div>
   );
 }

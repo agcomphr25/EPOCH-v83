@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,12 +44,12 @@ export default function PurchaseOrderItemsQueue() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch all purchase orders first
       const posResponse = await fetch('/api/pos');
       if (!posResponse.ok) throw new Error('Failed to fetch purchase orders');
       const pos = await posResponse.json();
-      
+
       // Create a lookup map for purchase orders
       const posMap = pos.reduce((acc: Record<number, PurchaseOrder>, po: PurchaseOrder) => {
         acc[po.id] = po;

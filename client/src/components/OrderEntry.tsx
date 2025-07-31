@@ -628,6 +628,12 @@ export default function OrderEntry() {
           discountDetailsMap[value] = discount;
         });
 
+      // Add Custom discount option
+      discounts.push({
+        value: 'custom',
+        label: 'Custom Discount'
+      });
+
       console.log('💳 Discount options processed:', discounts.length, 'total discounts');
       console.log('💳 Discount options:', discounts);
       setDiscountOptions(discounts);
@@ -1910,29 +1916,36 @@ export default function OrderEntry() {
                 <div className="font-medium text-base mb-2">Discount Code</div>
                 <Select value={discountCode} onValueChange={(value) => {
                   setDiscountCode(value);
-                  // Load discount details when selection changes
-                  if (value && value !== 'none') {
-                    const loadDiscountDetails = async () => {
-                      try {
-                        if (value.startsWith('persistent_')) {
-                          const discountId = value.replace('persistent_', '');
-                          const persistentDiscounts = await apiRequest('/api/persistent-discounts');
-                          const discount = persistentDiscounts.find((d: any) => d.id.toString() === discountId);
-                          setDiscountDetails(discount || null);
-                        } else if (value.startsWith('short_term_')) {
-                          const saleId = value.replace('short_term_', '');
-                          const shortTermSales = await apiRequest('/api/short-term-sales');
-                          const sale = shortTermSales.find((s: any) => s.id.toString() === saleId);
-                          setDiscountDetails(sale ? { ...sale, appliesTo: sale.appliesTo || 'total_order' } : null);
-                        }
-                      } catch (error) {
-                        console.error('Failed to load discount details:', error);
-                        setDiscountDetails(null);
-                      }
-                    };
-                    loadDiscountDetails();
-                  } else {
+                  // Handle custom discount selection
+                  if (value === 'custom') {
+                    setShowCustomDiscount(true);
                     setDiscountDetails(null);
+                  } else {
+                    setShowCustomDiscount(false);
+                    // Load discount details when selection changes
+                    if (value && value !== 'none') {
+                      const loadDiscountDetails = async () => {
+                        try {
+                          if (value.startsWith('persistent_')) {
+                            const discountId = value.replace('persistent_', '');
+                            const persistentDiscounts = await apiRequest('/api/persistent-discounts');
+                            const discount = persistentDiscounts.find((d: any) => d.id.toString() === discountId);
+                            setDiscountDetails(discount || null);
+                          } else if (value.startsWith('short_term_')) {
+                            const saleId = value.replace('short_term_', '');
+                            const shortTermSales = await apiRequest('/api/short-term-sales');
+                            const sale = shortTermSales.find((s: any) => s.id.toString() === saleId);
+                            setDiscountDetails(sale ? { ...sale, appliesTo: sale.appliesTo || 'total_order' } : null);
+                          }
+                        } catch (error) {
+                          console.error('Failed to load discount details:', error);
+                          setDiscountDetails(null);
+                        }
+                      };
+                      loadDiscountDetails();
+                    } else {
+                      setDiscountDetails(null);
+                    }
                   }
                 }}>
                   <SelectTrigger>

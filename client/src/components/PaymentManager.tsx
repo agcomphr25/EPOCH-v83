@@ -26,9 +26,10 @@ interface PaymentManagerProps {
   orderId: string;
   totalAmount: number;
   onPaymentsChange?: (payments: Payment[]) => void;
+  isInline?: boolean;
 }
 
-export default function PaymentManager({ orderId, totalAmount, onPaymentsChange }: PaymentManagerProps) {
+export default function PaymentManager({ orderId, totalAmount, onPaymentsChange, isInline = false }: PaymentManagerProps) {
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -201,6 +202,174 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange 
     return <div>Loading payments...</div>;
   }
 
+  // Inline content for Order Summary integration
+  const inlineContent = (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-3">
+        <CreditCard className="h-5 w-5" />
+        <h3 className="font-semibold">Payment Management</h3>
+      </div>
+
+      {/* Payment Summary */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="font-medium">Order Total:</span>
+          <span className="font-bold">{formatCurrency(totalAmount)}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="font-medium">Total Paid:</span>
+          <span className="font-bold text-green-600">{formatCurrency(totalPaid)}</span>
+        </div>
+        <div className="flex justify-between items-center border-t pt-2">
+          <span className="font-bold">
+            {isCredit ? 'Credit Balance:' : 'Balance Due:'}
+          </span>
+          <span className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(Math.abs(balanceDue))}
+          </span>
+        </div>
+      </div>
+
+      {/* Payment List */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="font-medium">Payments ({payments.length})</span>
+          <Button onClick={handleAddPayment} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Payment
+          </Button>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="text-center py-2 text-gray-500 text-sm">
+            No payments recorded yet
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-32 overflow-y-auto">
+            {payments.map((payment: Payment) => (
+              <div key={payment.id} className="border rounded p-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{formatCurrency(payment.paymentAmount)}</span>
+                    <span className="text-xs text-gray-600">
+                      {payment.paymentType.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" onClick={() => handleEditPayment(payment)}>
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleDeletePayment(payment.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {new Date(payment.paymentDate).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isInline) {
+    return (
+      <>
+        {inlineContent}
+        {/* Payment Modal */}
+        <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {editingPayment ? 'Edit Payment' : 'Add Payment'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Payment Type */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-type">Payment Type</Label>
+                <Select value={paymentType} onValueChange={setPaymentType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="agr">AGR</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="ach">ACH</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Payment Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-amount">Payment Amount</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+              </div>
+
+              {/* Payment Date */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-date">Payment Date</Label>
+                <Input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Payment notes..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {/* Modal Buttons */}
+            <div className="flex gap-2 justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSubmit}
+                disabled={createPaymentMutation.isPending || updatePaymentMutation.isPending}
+              >
+                {createPaymentMutation.isPending || updatePaymentMutation.isPending
+                  ? "Saving..." 
+                  : editingPayment 
+                    ? "Update Payment" 
+                    : "Add Payment"
+                }
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  // Standard card layout
   return (
     <Card>
       <CardHeader>
@@ -210,80 +379,8 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange 
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Payment Summary */}
-        <div className="border rounded-lg p-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="font-medium">Order Total:</span>
-            <span className="font-bold">{formatCurrency(totalAmount)}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium">Total Paid:</span>
-            <span className="font-bold text-green-600">{formatCurrency(totalPaid)}</span>
-          </div>
-          <div className="flex justify-between items-center border-t pt-2">
-            <span className="font-bold">
-              {isCredit ? 'Credit Balance:' : 'Balance Due:'}
-            </span>
-            <span className={`font-bold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(Math.abs(balanceDue))}
-            </span>
-          </div>
-        </div>
-
-        {/* Payment List */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h4 className="font-medium">Payments ({payments.length})</h4>
-            <Button onClick={handleAddPayment} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Payment
-            </Button>
-          </div>
-
-          {payments.length === 0 ? (
-            <div className="text-center py-4 text-gray-500">
-              No payments recorded yet
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {payments.map((payment: Payment) => (
-                <div key={payment.id} className="border rounded-lg p-3 flex justify-between items-center">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4">
-                      <span className="font-medium">{formatCurrency(payment.paymentAmount)}</span>
-                      <span className="text-sm text-gray-600">
-                        {payment.paymentType.replace('_', ' ').toUpperCase()}
-                      </span>
-                      <span className="text-sm text-gray-600">
-                        {new Date(payment.paymentDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                    {payment.notes && (
-                      <div className="text-sm text-gray-500 mt-1">{payment.notes}</div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditPayment(payment)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeletePayment(payment.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
+        {inlineContent}
+        
         {/* Payment Modal */}
         <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
           <DialogContent className="sm:max-w-md">

@@ -2028,8 +2028,19 @@ export default function OrderEntry() {
 
 
 
-                {/* Payment management now handled by PaymentManager component */}
               </div>
+
+              {/* Payment Management Section */}
+              {orderId && orderId !== 'Loading...' && (
+                <div className="border-t pt-4">
+                  <PaymentManager
+                    orderId={orderId}
+                    totalAmount={totalPrice + shipping}
+                    onPaymentsChange={setOrderPayments}
+                    isInline={true}
+                  />
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="space-y-2 pt-4">
@@ -2057,16 +2068,7 @@ export default function OrderEntry() {
           </Card>
         </div>
 
-        {/* Right Column - PaymentManager */}
-        <div className="space-y-6">
-          {orderId && orderId !== 'Loading...' && (
-            <PaymentManager
-              orderId={orderId}
-              totalAmount={totalPrice + shipping}
-              onPaymentsChange={setOrderPayments}
-            />
-          )}
-        </div>
+
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 import {
   DndContext,
   DragEndEvent,
@@ -544,7 +545,7 @@ function DroppableCell({
   );
 }
 
-export default function LayupScheduler() {
+function LayupScheduler() {
   console.log("LayupScheduler component rendering...");
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -563,6 +564,7 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
@@ -1538,532 +1540,75 @@ export default function LayupScheduler() {
         </div>
 
         {/* Control Bar */}
-        
-          
-            
-
-            
-              
-                
-                  
+        <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              {/* Placeholder for mold settings dialog */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="w-4 h-4 mr-2" />
                     Mold Settings
-                  
-                
-                
-                  
-                    
-                      
-                        Mold Configuration
-                      
-                    
-                    
-                      
-                        
-                          
-                            
-                              
-                                
-                                  Add New Mold
-                                
-                              
-                              
-                                
-                                  
-                                    Mold Name
-                                  
-                                  
-                                    
-                                      e.g., Alpine Hunter, Tactical Hunter, etc.
-                                    
-                                    
-                                      Enter a descriptive name for this mold
-                                    
-                                  
-                                  
-                                    Associated Stock Models
-                                  
-                                  
-                                    
-                                      
-                                        
-                                          
-                                            
-                                              
-                                            
-                                            
-                                          
-                                        
-                                      
-                                      Select all stock models that can be produced with this mold
-                                    
-                                  
-                                
-                                
-                                  
-                                    
-                                      
-                                        
-                                          Create multiple molds at once
-                                        
-                                      
-                                      
-                                        
-                                          
-                                            Number of Molds
-                                          
-                                          
-                                            
-                                              Creates {bulkMoldCount} molds: {newMold.moldName}-1, {newMold.moldName}-2, ..., {newMold.moldName}-{bulkMoldCount}
-                                            
-                                          
-                                        
-                                      
-                                    
-                                  
-                                
-                                
-                                  
-                                    
-                                      
-                                        Instance Number
-                                      
-                                      
-                                        
-                                          For single molds with custom instance numbers
-                                        
-                                      
-                                    
-                                    
-                                      
-                                        Daily Capacity
-                                      
-                                      
-                                        
-                                          Units each mold can produce per day
-                                        
-                                      
-                                    
-                                  
-                                
-                                {isBulkMode ? "Add " + bulkMoldCount + " Molds" : 'Add Mold'}
-                              
-                            
-                          
-                          
-                            No molds configured yet. Use the form above to add your first mold.
-                          
-                          
-                            
-                              
-                                
-                                
-                                  
-                                    {mold.modelName} #{mold.instanceNumber}
-                                  
-                                  
-                                    
-                                      Active
-                                    
-                                  
-                                
-                                
-                                  Mold ID: {mold.moldId}
-                                
-                                
-                                  
-                                    Configuration:
-                                  
-                                  
-                                    
-                                      
-                                        Save
-                                      
-                                      
-                                        Cancel
-                                      
-                                    
-                                  
-                                
-                                
-                                  Stock Models:
-                                
-                                  
-                                    
-                                      
-                                        
-                                          
-                                            
-                                              
-                                            
-                                            
-                                          
-                                        
-                                      
-                                    
-                                  
-                                  
-                                    No stock models assigned
-                                  
-                                
-                              
-                              
-                                Daily Capacity:
-                                units/day
-                              
-                              
-                                
-                                  {mold.isActive ? "Mark Inactive" : "Reactivate"}
-                                
-                                
-                                  Delete
-                                
-                              
-                            
-                          
-                        
-                      
-                      
-                        
-                          
-                            
-                              
-                                <strong>How to Add Molds:</strong>
-                              
-                              
-                                
-                                  
-                                    <strong>Model Name:</strong> Enter your mold model (e.g., "M001", "CF_Tactical", "Hunter_Stock")
-                                  
-                                  
-                                    <strong>Instance Number:</strong> Use "1" for your first mold of this model. If you get a second identical mold, use "2", and so on
-                                  
-                                  
-                                    <strong>Daily Capacity:</strong> How many units this specific mold can produce in one day
-                                  
-                                
-                                
-                                  
-                                    <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
-                                    Adjust daily capacity to reflect each mold's production capability.
-                                  
-                                
-                              
-                            
-                          
-                        
-                      
-                    
-                  
-                
-              
-            
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>
+                      <Settings className="w-5 h-5 inline mr-2" />
+                      Mold Configuration
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="p-4 border rounded-lg">
+                      <h3 className="font-medium mb-2">Add New Mold</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium">Mold Name</label>
+                          <Input 
+                            placeholder="e.g., Alpine Hunter, Tactical Hunter, etc."
+                            className="mt-1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter a descriptive name for this mold
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Associated Stock Models</label>
+                          <div className="mt-2 space-y-2">
+                            {/* Placeholder for stock model selection */}
+                            <div className="flex items-center space-x-2">
+                              <Checkbox id="model1" />
+                              <label htmlFor="model1" className="text-sm">Model 1</label>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Select all stock models that can be produced with this mold
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            
-              
-                
-                  
-                    Employee Settings
-                  
-                
-                
-                  
-                    
-                      
-                        Employee Configuration
-                      
-                    
-                    
-                      
-                        
-                          
-                            
-                              
-                                
-                                  Add New Employee
-                                
-                              
-                              
-                                
-                                  
-                                
-                              
-                              
-                                Production Rate:
-                                units/hr
-                              
-                              
-                                Daily Hours:
-                                hrs/day
-                              
-                            
-                            Add Employee
-                          
-                        
-                      
-                      
-                        
-                          No employees configured yet. Use the form above to add your first employee.
-                        
-                        
-                          
-                            
-                              
-                                
-                                  {emp.name}
-                                
-                                
-                                  Employee ID: {emp.employeeId} | Department: {emp.department}
-                                
-                              
-                              
-                                
-                                  {emp.isActive ? "Active" : "Inactive"}
-                                
-                                
-                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
-                                
-                                
-                                  Delete
-                                
-                              
-                            
-                            
-                              Production Rate:
-                              units/hr
-                            
-                            
-                              Daily Hours:
-                              hrs/day
-                            
-                          
-                          
-                            Save Changes
-                          
-                        
-                      
-                      
-                        
-                          
-                            
-                              <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
-                              The system will automatically distribute work based on these settings.
-                            
-                          
-                        
-                      
-                    
-                  
-                
-              
-            
-
-            
-              
-                Day
-              
-              
-                Week
-              
-              
-                Month
-              
-            
-          
-
-          
-            
-              {isSaving ? (
-                
-                  
-                    
-                    Saving...
-                  
-                
-              ) : (
-                
-                  
-                    Save Schedule
-                  
-                
-              )}
-            
-            
-              
-                Print Schedule
-              
-            
-
-            
-              
-            
-              
-                
-                  {viewType === 'week' 
-                    ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d') + " - " + format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')
-                    : format(currentDate, 'MMMM yyyy')
-                  }
-                
-              
-
-              {/* Quick Next Week Button */}
-              {viewType === 'week' && (
-                Next Week
-              )}
-            
-          
-        
-      
-
-        {(viewType === 'week' || viewType === 'day') && (
-          
-            
-              
-                {dates.map(date => {
-                  const isFriday = date.getDay() === 5;
-                  return (
-                    
-                      {format(date, 'MM/dd')}
-                      
-                        {format(date, 'EEE')}
-                        {isFriday && Backup}
-                      
-                    
-                  );
-                })}
-              
-            
-          
-        )}
-      
-
-      {/* Scrollable Content Area */}
-      
-        
-          
-            {/* Week-based Calendar Layout */}
-            {viewType === 'week' || viewType === 'day' ? (
-              
-              {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
-              {(() => {
-                console.log("[DEBUG] Calendar Display Summary");
-                console.log("  • Total enabled molds: " + molds.filter(m => m.enabled).length);
-                console.log("  • Total order assignments: " + Object.keys(orderAssignments).length);
-
-                // Get molds that either have orders OR are compatible with existing orders in queue
-                const getCompatibleMolds = (order: any) => {
-                  const modelId = order.stockModelId || order.modelId;
-                  return molds.filter(mold => {
-                    if (!mold.enabled) return false;
-                    if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
-                    return mold.stockModels.includes(modelId);
-                  });
-                };
-
-                // Find molds that are compatible with any order in the current queue
-                const compatibleMoldIds = new Set();
-                orders.forEach(order => {
-                  const compatible = getCompatibleMolds(order);
-                  compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
-                });
-
-                // Get molds that either have assignments OR are compatible with queue orders
-                const relevantMolds = molds.filter(m => {
-                  if (!m.enabled) return false;
-
-                  // Include if mold has orders assigned
-                  const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
-                  if (hasAssignments) return true;
-
-                  // Include if mold is compatible with orders in queue (genuinely available)
-                  const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
-                  return isCompatibleWithQueue;
-                });
-
-                // Calculate order counts for relevant molds
-                const moldOrderCounts = relevantMolds.map(mold => {
-                  const totalOrdersForMold = dates.reduce((count, date) => {
-                    const dateString = date.toISOString();
-                    const cellDateOnly = dateString.split('T')[0];
-
-                    const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-                      const assignmentDateOnly = assignment.date.split('T')[0];
-                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                    }).length;
-
-                    return count + ordersForThisMoldDate;
-                  }, 0);
-
-                  return { mold, orderCount: totalOrdersForMold };
-                });
-
-                // Sort molds by order count (descending) - molds with most orders at top, available molds at bottom
-                const sortedMolds = moldOrderCounts.sort((a, b) => {
-                  if (b.orderCount !== a.orderCount) {
-                    return b.orderCount - a.orderCount; // Primary sort: more orders first
-                  }
-                  // Secondary sort: alphabetical by mold ID for consistent ordering
-                  return a.mold.moldId.localeCompare(b.mold.moldId);
-                });
-
-                console.log("  • Relevant molds (with orders or compatible): " + relevantMolds.length + "/" + molds.filter(m => m.enabled).length);
-                console.log("  • Mold order counts:", sortedMolds.map(({ mold, orderCount }) => 
-                  mold.moldId + ": " + orderCount + " orders"
-                ));
-
-                // Use only relevant molds
-                const activeMolds = sortedMolds.map(({ mold }) => mold);
-
-                return activeMolds.map(mold => (
-                
-                  {dates.map(date => {
-                    const dateString = date.toISOString();
-
-                    // Get orders assigned to this mold/date combination
-                    const cellOrders = Object.entries(orderAssignments)
-                      .filter(([orderId, assignment]) => {
-                        const assignmentDateOnly = assignment.date.split('T')[0];
-                        const cellDateOnly = dateString.split('T')[0];
-                        return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                      })
-                      .map(([orderId]) => {
-                        const order = orders.find(o => o.orderId === orderId);
-                        return order;
-                      })
-                      .filter(order => order !== undefined);
-
-                    const dropId = mold.moldId + "|" + dateString;
-
-                    return (
-                      
-                        
-                          // Handle drop (this is handled by DndContext now)
-                        
-                        
-                          moldId: mold.moldId,
-                          instanceNumber: mold.instanceNumber
-                        
-                        
-                      
-                    );
-                  })}
-                
-                ));
-              })()}
-              
-            ) : (
-              
-                Month view not yet implemented
-              
-            )}
-          
-
-          
-            
-              {activeId}
-            
-          
-        
-      
-    
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full p-4">
+          {/* Placeholder content */}
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-8 text-center">
+            <h2 className="text-xl font-semibold mb-4">Layup Scheduler</h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Scheduler interface is being restored. Please wait...
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
+
+export default LayupScheduler;

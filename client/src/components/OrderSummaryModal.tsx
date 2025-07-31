@@ -83,6 +83,12 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
     enabled: isOpen,
   });
 
+  const { data: features = [] } = useQuery({
+    queryKey: ['/api/features'],
+    queryFn: () => apiRequest('/api/features'),
+    enabled: isOpen,
+  });
+
   const handleMouseEnter = () => {
     const timeout = setTimeout(() => {
       setIsOpen(true);
@@ -148,15 +154,27 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
     }).format(amount);
   };
 
-  const renderFeatures = (features: any) => {
-    if (!features || typeof features !== 'object') return null;
+  const getFeatureDisplayName = (featureType: string, featureId: string) => {
+    if (!features || !Array.isArray(features)) return featureId;
     
-    return Object.entries(features).map(([key, value]) => (
+    const feature = features.find((f: any) => f.type === featureType);
+    if (!feature || !feature.options) return featureId;
+    
+    const option = feature.options.find((opt: any) => opt.id === featureId);
+    return option?.displayName || option?.name || featureId;
+  };
+
+  const renderFeatures = (orderFeatures: any) => {
+    if (!orderFeatures || typeof orderFeatures !== 'object') return null;
+    
+    return Object.entries(orderFeatures).map(([key, value]) => (
       <div key={key} className="flex justify-between text-sm py-1">
         <span className="font-medium capitalize text-gray-700">
           {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}:
         </span>
-        <span className="text-gray-900 ml-4">{String(value)}</span>
+        <span className="text-gray-900 ml-4">
+          {getFeatureDisplayName(key, String(value))}
+        </span>
       </div>
     ));
   };

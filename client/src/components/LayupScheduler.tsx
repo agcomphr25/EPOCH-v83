@@ -545,6 +545,174 @@ function DroppableCell({
   );
 }
 
+
+
+// Calendar Header Component
+function CalendarHeader({ viewType, currentDate, molds }: { 
+  viewType: string; 
+  currentDate: Date; 
+  molds: any[];
+}) {
+  const dates = useMemo(() => {
+    if (viewType === 'day') {
+      return [currentDate];
+    } else if (viewType === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
+      return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)); // Mon-Fri only
+    }
+    return [];
+  }, [viewType, currentDate]);
+
+  const enabledMolds = molds.filter(m => m.enabled);
+
+  return (
+    <div className="scheduler-header grid" style={{ 
+      gridTemplateColumns: `200px repeat(${dates.length}, 1fr)`,
+      gap: '1px',
+      backgroundColor: '#e5e7eb'
+    }}>
+      {/* Header corner cell */}
+      <div className="bg-gray-100 dark:bg-gray-800 p-3 font-semibold">
+        <div className="text-sm">Molds ({enabledMolds.length})</div>
+      </div>
+      
+      {/* Date headers */}
+      {dates.map(date => {
+        const isFriday = date.getDay() === 5;
+        return (
+          <div key={date.toISOString()} className="bg-gray-100 dark:bg-gray-800 p-3 text-center">
+            <div className="font-semibold">{format(date, 'MM/dd')}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {format(date, 'EEE')}
+              {isFriday && <span className="ml-1 text-blue-600 font-medium">(Backup)</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Calendar Body Component
+function CalendarBody({ orders, molds, viewType, currentDate, orderAssignments }: {
+  orders: any[];
+  molds: any[];
+  viewType: string;
+  currentDate: Date;
+  orderAssignments: {[orderId: string]: { moldId: string, date: string }};
+}) {
+  const dates = useMemo(() => {
+    if (viewType === 'day') {
+      return [currentDate];
+    } else if (viewType === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+      return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+    }
+    return [];
+  }, [viewType, currentDate]);
+
+  const enabledMolds = molds.filter(m => m.enabled);
+
+  // Get molds that have orders or are compatible with available orders
+  const relevantMolds = useMemo(() => {
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.stockModelId || order.modelId;
+      return molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) return true;
+        return mold.stockModels.includes(modelId);
+      });
+    };
+
+    const compatibleMoldIds = new Set();
+    orders.forEach(order => {
+      const compatible = getCompatibleMolds(order);
+      compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
+    });
+
+    return enabledMolds.filter(m => {
+      const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+      const isCompatible = compatibleMoldIds.has(m.moldId);
+      return hasAssignments || isCompatible;
+    }).slice(0, 10); // Limit to 10 molds for display
+  }, [molds, orders, orderAssignments]);
+
+  return (
+    <div className="scheduler-body">
+      {relevantMolds.map(mold => (
+        <div key={mold.moldId} className="grid" style={{ 
+          gridTemplateColumns: `200px repeat(${dates.length}, 1fr)`,
+          gap: '1px',
+          backgroundColor: '#e5e7eb',
+          marginBottom: '1px'
+        }}>
+          {/* Mold label */}
+          <div className="bg-white dark:bg-gray-900 p-3 border-r">
+            <div className="font-medium text-sm">{mold.modelName} #{mold.instanceNumber}</div>
+            <div className="text-xs text-gray-500">ID: {mold.moldId}</div>
+            {mold.dailyCapacity && (
+              <div className="text-xs text-blue-600">{mold.dailyCapacity} units/day</div>
+            )}
+          </div>
+
+          {/* Date cells for this mold */}
+          {dates.map(date => {
+            const dateString = date.toISOString();
+            const cellDateOnly = dateString.split('T')[0];
+
+            // Get orders assigned to this mold/date
+            const cellOrders = Object.entries(orderAssignments)
+              .filter(([orderId, assignment]) => {
+                const assignmentDateOnly = assignment.date.split('T')[0];
+                return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+              })
+              .map(([orderId]) => orders.find(o => o.orderId === orderId))
+              .filter(Boolean);
+
+            const dropId = `${mold.moldId}|${dateString}`;
+
+            return (
+              <DroppableCell
+                key={dropId}
+                moldId={mold.moldId}
+                date={date}
+                orders={cellOrders}
+                onDrop={() => {}} // Handler will be managed by DndContext
+                moldInfo={{ moldId: mold.moldId, instanceNumber: mold.instanceNumber }}
+              />
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Unassigned Orders Queue */}
+      <div className="mt-6 p-4 border-t-2 border-gray-300">
+        <h3 className="font-semibold mb-3">Unassigned Orders ({getUnassignedOrders(orders, orderAssignments).length})</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+          {getUnassignedOrders(orders, orderAssignments).slice(0, 20).map(order => (
+            <DraggableOrderItem
+              key={order.orderId}
+              order={order}
+              priority={order.priorityScore || 0}
+              totalOrdersInCell={1}
+            />
+          ))}
+        </div>
+        {getUnassignedOrders(orders, orderAssignments).length > 20 && (
+          <div className="text-sm text-gray-500 mt-2">
+            ...and {getUnassignedOrders(orders, orderAssignments).length - 20} more orders
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper function to get unassigned orders
+function getUnassignedOrders(orders: any[], orderAssignments: {[orderId: string]: any}): any[] {
+  return orders.filter(order => !orderAssignments[order.orderId]);
+}
+
 function LayupScheduler() {
   console.log("LayupScheduler component rendering...");
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
@@ -1595,16 +1763,205 @@ function LayupScheduler() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full p-4">
-          {/* Placeholder content */}
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-8 text-center">
-            <h2 className="text-xl font-semibold mb-4">Layup Scheduler</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Scheduler interface is being restored. Please wait...
-            </p>
+      {/* View Controls and Save Button */}
+      <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            {/* View Type Toggle */}
+            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <Button
+                variant={viewType === 'day' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewType('day')}
+                className="px-3 py-1.5"
+              >
+                <Calendar1 className="w-4 h-4 mr-1" />
+                Day
+              </Button>
+              <Button
+                variant={viewType === 'week' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewType('week')}
+                className="px-3 py-1.5"
+              >
+                <Calendar className="w-4 h-4 mr-1" />
+                Week
+              </Button>
+              <Button
+                variant={viewType === 'month' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewType('month')}
+                className="px-3 py-1.5"
+              >
+                <Grid3X3 className="w-4 h-4 mr-1" />
+                Month
+              </Button>
+            </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            {/* Save Schedule Button */}
+            <Button
+              onClick={handleSaveSchedule}
+              disabled={isSaving || Object.keys(orderAssignments).length === 0}
+              variant="default"
+              size="sm"
+            >
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Save Schedule
+                </>
+              )}
+            </Button>
+
+            {/* Print Schedule Button */}
+            <Button
+              onClick={() => toast({ title: "Print feature coming soon" })}
+              variant="outline"
+              size="sm"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Schedule
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Date Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex justify-between items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const newDate = new Date(currentDate);
+              if (viewType === 'week') {
+                newDate.setDate(newDate.getDate() - 7);
+              } else if (viewType === 'day') {
+                newDate.setDate(newDate.getDate() - 1);
+              } else {
+                newDate.setMonth(newDate.getMonth() - 1);
+              }
+              setCurrentDate(newDate);
+            }}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold">
+              {viewType === 'week' 
+                ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d') + " - " + format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')
+                : format(currentDate, 'MMMM yyyy')
+              }
+            </h2>
+
+            {/* Quick Next Week Button */}
+            {viewType === 'week' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const nextWeek = new Date(currentDate);
+                  nextWeek.setDate(nextWeek.getDate() + 7);
+                  setCurrentDate(nextWeek);
+                }}
+              >
+                Next Week
+              </Button>
+            )}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const newDate = new Date(currentDate);
+              if (viewType === 'week') {
+                newDate.setDate(newDate.getDate() + 7);
+              } else if (viewType === 'day') {
+                newDate.setDate(newDate.getDate() + 1);
+              } else {
+                newDate.setMonth(newDate.getMonth() + 1);
+              }
+              setCurrentDate(newDate);
+            }}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Scrollable Calendar Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="p-4">
+          {/* Calendar Grid */}
+          {(viewType === 'week' || viewType === 'day') ? (
+            <DndContext
+              sensors={useSensors(useSensor(PointerSensor))}
+              onDragStart={(event) => setActiveId(String(event.active.id))}
+              onDragEnd={(event) => {
+                const { active, over } = event;
+                
+                if (over && over.id !== active.id) {
+                  const draggedOrderId = String(active.id);
+                  const dropTarget = String(over.id);
+                  
+                  if (dropTarget.includes('|')) {
+                    const [moldId, dateString] = dropTarget.split('|');
+                    
+                    setOrderAssignments(prev => ({
+                      ...prev,
+                      [draggedOrderId]: { moldId, date: dateString }
+                    }));
+                    
+                    console.log('[DRAG] Order', draggedOrderId, 'assigned to mold', moldId, 'on', new Date(dateString).toLocaleDateString());
+                  }
+                }
+                
+                setActiveId(null);
+              }}
+            >
+              <div className="scheduler-grid">
+                {/* Calendar Header */}
+                <CalendarHeader 
+                  viewType={viewType}
+                  currentDate={currentDate}
+                  molds={molds}
+                />
+
+                {/* Calendar Body */}
+                <CalendarBody 
+                  orders={processedOrders}
+                  molds={molds}
+                  viewType={viewType}
+                  currentDate={currentDate}
+                  orderAssignments={orderAssignments}
+                />
+
+                {/* Drag Overlay */}
+                <DragOverlay>
+                  {activeId ? (
+                    <DraggableOrderItem
+                      order={processedOrders.find(o => o.orderId === activeId) || { orderId: activeId }}
+                      priority={0}
+                      totalOrdersInCell={1}
+                    />
+                  ) : null}
+                </DragOverlay>
+              </div>
+            </DndContext>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              Month view not yet implemented
+            </div>
+          )}
         </div>
       </div>
     </div>

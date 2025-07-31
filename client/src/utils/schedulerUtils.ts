@@ -133,12 +133,12 @@ export function generateLayupSchedule(
   for (const order of sortedOrders) {
     let scheduled = false;
     
-    // Start scheduling date logic: production orders should start ASAP to meet due dates
+    // Start scheduling date logic: production orders and P1 purchase orders should start ASAP to meet due dates
     let attemptDate = new Date();
-    if (order.source === 'production_order' && order.dueDate) {
-      // For production orders, start from current date to meet due date
+    if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.dueDate) {
+      // For production orders and P1 purchase orders, start from current date to meet due date
       attemptDate = new Date();
-      console.log(`🏭 Production order ${order.orderId} due ${order.dueDate} - starting schedule from today`);
+      console.log(`🏭 Production/P1 order ${order.orderId} due ${order.dueDate} - starting schedule from today`);
     } else {
       // Regular orders can start from order date
       attemptDate = new Date(order.orderDate);
@@ -175,9 +175,9 @@ export function generateLayupSchedule(
       // Check if this day has capacity - find compatible molds based on stock model
       const orderStockModel = order.stockModelId || order.modelId;
       
-      // Debug production orders specifically
-      if (order.source === 'production_order') {
-        console.log(`🏭 PRODUCTION ORDER SCHEDULING: ${order.orderId}`);
+      // Debug production orders and P1 purchase orders specifically
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
+        console.log(`🏭 PRODUCTION/P1 ORDER SCHEDULING: ${order.orderId} (source: ${order.source})`);
         console.log(`🏭 Order stock model: ${orderStockModel} (stockModelId: ${order.stockModelId}, modelId: ${order.modelId})`);
         console.log(`🏭 Available molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
       }
@@ -195,14 +195,14 @@ export function generateLayupSchedule(
         return false;
       });
       
-      // Enhanced debug logging for production orders
-      if (order.source === 'production_order') {
-        console.log(`🏭 PRODUCTION ORDER DEBUG: ${order.orderId}`);
+      // Enhanced debug logging for production orders and P1 purchase orders
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
+        console.log(`🏭 PRODUCTION/P1 ORDER DEBUG: ${order.orderId} (source: ${order.source})`);
         console.log(`🏭 Stock Model: ${orderStockModel}`);
         console.log(`🏭 All enabled molds:`, enabledMolds.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
         console.log(`🏭 Compatible molds found: ${compatibleMolds.length}`, compatibleMolds.map(m => m.moldId));
         if (compatibleMolds.length === 0) {
-          console.error(`🏭 ❌ NO COMPATIBLE MOLDS for production order ${order.orderId} with stock model ${orderStockModel}`);
+          console.error(`🏭 ❌ NO COMPATIBLE MOLDS for production/P1 order ${order.orderId} with stock model ${orderStockModel}`);
         }
       }
       

@@ -791,8 +791,8 @@ export default function LayupScheduler() {
     const getCompatibleMolds = (order: any) => {
       let modelId = order.stockModelId || order.modelId;
 
-      // For production orders, try to use the part name as the stock model
-      if (order.source === 'production_order' && order.product) {
+      // For production orders and P1 purchase orders, try to use the part name as the stock model
+      if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.product) {
         modelId = order.product;
       }
 
@@ -801,13 +801,14 @@ export default function LayupScheduler() {
         return [];
       }
 
-      // Extra debugging for production orders
-      if (order.source === 'production_order') {
-        console.log('🏭 DETAILED PRODUCTION ORDER COMPATIBILITY CHECK:', {
+      // Extra debugging for production orders and P1 purchase orders
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
+        console.log('🏭 DETAILED PRODUCTION/P1 ORDER COMPATIBILITY CHECK:', {
           orderId: order.orderId,
           product: order.product,
           modelId,
           stockModelId: order.stockModelId,
+          source: order.source,
           availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
           moldsWithModelId: molds.filter(m => m.enabled && m.stockModels?.includes(modelId)).map(m => m.moldId),
           allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels }))
@@ -821,10 +822,10 @@ export default function LayupScheduler() {
           return true; // No restrictions
         }
         const isCompatible = mold.stockModels.includes(modelId);
-        if (order.source === 'production_order') {
+        if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
           console.log(`🏭 MOLD CHECK: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (${mold.stockModels?.join(', ')}) = ${isCompatible ? '✅ COMPATIBLE' : '❌ NOT COMPATIBLE'}`);
         }
-        if (!isCompatible && order.source !== 'production_order') {
+        if (!isCompatible && order.source !== 'production_order' && order.source !== 'p1_purchase_order') {
           console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
         }
         return isCompatible;
@@ -871,8 +872,8 @@ export default function LayupScheduler() {
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
 
-      // Special logging for production orders
-      if (order.source === 'production_order') {
+      // Special logging for production orders and P1 purchase orders
+      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
         console.log(`🏭 PROCESSING PRODUCTION ORDER ${order.orderId}:`, {
           stockModelId: order.stockModelId,
           modelId: order.modelId,
@@ -1562,27 +1563,27 @@ export default function LayupScheduler() {
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
 
-  // Debug production orders specifically
-  const productionOrders = orders.filter(order => order.source === 'production_order');
-  console.log('🏭 LayupScheduler - Production orders:', productionOrders.length);
+  // Debug production orders and P1 purchase orders specifically
+  const productionOrders = orders.filter(order => order.source === 'production_order' || order.source === 'p1_purchase_order');
+  console.log('🏭 LayupScheduler - Production/P1 orders:', productionOrders.length);
   if (productionOrders.length > 0) {
-    console.log('🏭 LayupScheduler - Sample production order:', productionOrders[0]);
-    console.log('🏭 LayupScheduler - Production order stockModelId:', productionOrders[0].stockModelId);
-    console.log('🏭 LayupScheduler - Production order modelId:', productionOrders[0].modelId);
+    console.log('🏭 LayupScheduler - Sample production/P1 order:', productionOrders[0]);
+    console.log('🏭 LayupScheduler - Production/P1 order stockModelId:', productionOrders[0].stockModelId);
+    console.log('🏭 LayupScheduler - Production/P1 order modelId:', productionOrders[0].modelId);
 
-    // Check if production orders are being assigned
+    // Check if production/P1 orders are being assigned
     const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
-    console.log('🏭 LayupScheduler - Assigned production orders:', assignedProductionOrders.length);
+    console.log('🏭 LayupScheduler - Assigned production/P1 orders:', assignedProductionOrders.length);
     if (assignedProductionOrders.length === 0) {
-      console.log('❌ NO PRODUCTION ORDERS ASSIGNED! This is why they are not visible');
+      console.log('❌ NO PRODUCTION/P1 ORDERS ASSIGNED! This is why they are not visible');
     } else {
-      console.log('✅ Production orders assigned:', assignedProductionOrders.map(o => o.orderId));
+      console.log('✅ Production/P1 orders assigned:', assignedProductionOrders.map(o => o.orderId));
     }
   }
 
-  // Force auto-schedule trigger when production orders are loaded
+  // Force auto-schedule trigger when production/P1 orders are loaded
   if (productionOrders.length > 0 && molds?.length > 0 && employees?.length > 0) {
-    console.log('🏭 Triggering auto-schedule for production orders...');
+    console.log('🏭 Triggering auto-schedule for production/P1 orders...');
   }
 
   // Debug Mesa Universal molds
@@ -1593,16 +1594,16 @@ export default function LayupScheduler() {
   console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
 
-  // Debug unassigned orders - especially production orders
+  // Debug unassigned orders - especially production and P1 purchase orders
   const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
-  const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order');
+  const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
-  console.log('🏭 Unassigned PRODUCTION orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
+  console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
-  // Auto-generate schedule when data is loaded OR when production orders are present
+  // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
-    const productionOrders = orders.filter(o => o.source === 'production_order');
+    const productionOrders = orders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
     const unassignedProductionOrders = productionOrders.filter(o => !orderAssignments[o.orderId]);
 
     const shouldRunAutoSchedule = orders.length > 0 && molds.length > 0 && employees.length > 0 && (
@@ -1652,6 +1653,7 @@ export default function LayupScheduler() {
       instanceNumber: mold.instanceNumber,
       enabled: mold.enabled ?? true,
       multiplier: mold.multiplier,
+      stockModels: mold.stockModels, // Include stock model compatibility for P1 purchase orders
     }));
 
     const employeeData = employees.map(emp => ({
@@ -1669,20 +1671,20 @@ export default function LayupScheduler() {
     if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
 
-      // Debug production orders in schedule
+      // Debug production orders and P1 purchase orders in schedule
       const productionScheduleItems = schedule.filter(item => {
         const order = orders.find(o => o.orderId === item.orderId);
-        return order?.source === 'production_order';
+        return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
       });
-      console.log('🏭 Production orders in schedule:', productionScheduleItems.length);
+      console.log('🏭 Production/P1 orders in schedule:', productionScheduleItems.length);
 
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
 
       schedule.forEach(item => {
         const order = orders.find(o => o.orderId === item.orderId);
-        const isProduction = order?.source === 'production_order';
+        const isProduction = order?.source === 'production_order' || order?.source === 'p1_purchase_order';
         if (isProduction) {
-          console.log(`🏭 PRODUCTION ORDER ASSIGNMENT: ${item.orderId} → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
+          console.log(`🏭 PRODUCTION/P1 ORDER ASSIGNMENT: ${item.orderId} (${order?.source}) → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
         }
 
         autoAssignments[item.orderId] = {
@@ -1694,9 +1696,9 @@ export default function LayupScheduler() {
       setOrderAssignments(autoAssignments);
       setHasUnsavedScheduleChanges(true);
       console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
-      console.log('✅ Production orders assigned:', Object.keys(autoAssignments).filter(orderId => {
+      console.log('✅ Production/P1 orders assigned:', Object.keys(autoAssignments).filter(orderId => {
         const order = orders.find(o => o.orderId === orderId);
-        return order?.source === 'production_order';
+        return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
       }).length);
     } else {
       console.log('❌ Not applying auto-schedule:', {

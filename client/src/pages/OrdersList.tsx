@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
-import OrderSummaryModal from '@/components/OrderSummaryModal';
+import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useForm } from 'react-hook-form';
@@ -530,11 +530,11 @@ export default function OrdersList() {
                   >
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">
-                        <OrderSummaryModal orderId={order.orderId}>
+                        <OrderSummaryTooltip orderId={order.orderId}>
                           <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
                             {getDisplayOrderId(order)}
                           </span>
-                        </OrderSummaryModal>
+                        </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (
                           <Badge 
                             className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0"

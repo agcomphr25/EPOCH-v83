@@ -1153,47 +1153,47 @@ export default function LayupScheduler() {
             body { 
               font-family: Arial, sans-serif; 
               margin: 0; 
-              padding: 4px;
-              font-size: 11px;
-              line-height: 1.1;
+              padding: 2px;
+              font-size: 10px;
+              line-height: 1.0;
             }
             .header { 
               text-align: center; 
-              margin-bottom: 6px; 
+              margin-bottom: 3px; 
               border-bottom: 1px solid #333; 
-              padding-bottom: 4px; 
+              padding-bottom: 2px; 
             }
             .header h1 { 
               margin: 0; 
-              font-size: 16px; 
+              font-size: 14px; 
             }
             .header h2 { 
               margin: 0; 
-              font-size: 12px; 
+              font-size: 10px; 
               color: #666;
             }
             .header p { 
               margin: 0; 
-              font-size: 8px; 
+              font-size: 7px; 
               color: #888;
             }
             .stats { 
               display: flex; 
               justify-content: space-between; 
-              margin-bottom: 6px; 
-              gap: 4px;
+              margin-bottom: 3px; 
+              gap: 2px;
             }
             .stat { 
               background: #f5f5f5; 
-              padding: 2px 6px; 
+              padding: 1px 4px; 
               border-radius: 2px; 
               text-align: center;
-              font-size: 9px;
+              font-size: 8px;
               font-weight: bold;
             }
             .schedule-grid { 
               display: grid; 
-              grid-template-columns: 120px repeat(${(() => {
+              grid-template-columns: 100px repeat(${(() => {
                 // Count dates with orders
                 const datesWithOrders = dates.filter(date => {
                   const dateString = date.toISOString();
@@ -1212,10 +1212,10 @@ export default function LayupScheduler() {
             }
             .date-header { 
               background: #f5f5f5; 
-              padding: 8px 4px; 
+              padding: 4px 2px; 
               text-align: center; 
               font-weight: bold; 
-              font-size: 11px;
+              font-size: 9px;
               border-right: 1px solid #ccc;
             }
             .date-header.friday {
@@ -1224,34 +1224,34 @@ export default function LayupScheduler() {
             }
             .mold-header { 
               background: #e5e5e5; 
-              padding: 8px 6px; 
+              padding: 4px 3px; 
               font-weight: bold; 
-              font-size: 10px;
+              font-size: 9px;
               text-align: center;
               border-right: 1px solid #ccc;
             }
             .cell { 
               background: white;
-              padding: 3px; 
-              min-height: 80px; 
+              padding: 1px; 
+              min-height: 60px; 
               border-right: 1px solid #ccc;
             }
             .cell.friday {
               background: #fffbf0;
             }
             .order-count {
-              font-size: 9px;
+              font-size: 8px;
               color: #666;
-              margin-bottom: 2px;
+              margin-bottom: 1px;
             }
             .order-card { 
-              margin: 1px 0; 
-              padding: 2px 4px; 
-              border-radius: 3px; 
-              font-size: 8px;
+              margin: 0.5px 0; 
+              padding: 1px 2px; 
+              border-radius: 2px; 
+              font-size: 7px;
               border: 1px solid;
               text-align: center;
-              line-height: 1.2;
+              line-height: 1.1;
             }
             .order-card.production { 
               background: #fff5e6; 
@@ -1270,83 +1270,114 @@ export default function LayupScheduler() {
             }
             .order-id {
               font-weight: bold;
-              font-size: 9px;
+              font-size: 8px;
             }
             .order-details {
-              font-size: 7px;
-              margin-top: 1px;
+              font-size: 6px;
+              margin-top: 0.5px;
               opacity: 0.9;
             }
             .material-badge {
               display: inline-block;
               background: rgba(255,255,255,0.3);
-              padding: 1px 3px;
-              border-radius: 2px;
+              padding: 0.5px 2px;
+              border-radius: 1px;
               font-weight: bold;
-              font-size: 6px;
-              margin-right: 2px;
+              font-size: 5px;
+              margin-right: 1px;
             }
             .po-badge {
               display: inline-block;
               background: #ffc069;
               color: #d46b08;
-              padding: 1px 3px;
-              border-radius: 2px;
+              padding: 0.5px 2px;
+              border-radius: 1px;
               font-weight: bold;
-              font-size: 6px;
-              margin-left: 2px;
+              font-size: 5px;
+              margin-left: 1px;
             }
             .heavy-fill-badge {
               display: inline-block;
               background: #ff7875;
               color: white;
-              padding: 1px 3px;
-              border-radius: 2px;
+              padding: 0.5px 2px;
+              border-radius: 1px;
               font-weight: bold;
-              font-size: 6px;
-              margin-top: 1px;
+              font-size: 5px;
+              margin-top: 0.5px;
             }
             .lop-badge {
               display: inline-block;
               background: #ffec3d;
               color: #874d00;
-              padding: 1px 3px;
-              border-radius: 2px;
+              padding: 0.5px 2px;
+              border-radius: 1px;
               font-weight: bold;
-              font-size: 6px;
-              margin-top: 1px;
+              font-size: 5px;
+              margin-top: 0.5px;
             }
             .mold-info {
-              font-size: 7px;
-              margin-top: 1px;
+              font-size: 6px;
+              margin-top: 0.5px;
               font-weight: bold;
               opacity: 0.8;
             }
             @media print { 
               body { 
                 margin: 0 !important; 
-                padding: 2px !important; 
+                padding: 1px !important; 
+                font-size: 9px !important;
               }
               .header { 
-                margin-bottom: 3px !important; 
-                padding-bottom: 2px !important; 
+                margin-bottom: 2px !important; 
+                padding-bottom: 1px !important; 
+              }
+              .header h1 { 
+                font-size: 12px !important; 
+              }
+              .header h2 { 
+                font-size: 9px !important; 
+              }
+              .header p { 
+                font-size: 6px !important; 
               }
               .stats { 
-                margin-bottom: 3px !important; 
+                margin-bottom: 2px !important; 
+              }
+              .stat { 
+                padding: 0.5px 2px !important; 
+                font-size: 7px !important;
               }
               .schedule-grid { 
                 break-inside: avoid; 
                 margin: 0 !important;
+                gap: 0.5px !important;
               }
               .date-header { 
-                padding: 2px 1px !important; 
+                padding: 1px 1px !important; 
+                font-size: 8px !important;
               }
               .mold-header { 
-                padding: 2px 2px !important; 
+                padding: 1px 1px !important; 
+                font-size: 8px !important;
               }
               .cell { 
-                padding: 1px !important; 
-                min-height: 50px !important; 
+                padding: 0.5px !important; 
+                min-height: 40px !important; 
+              }
+              .order-card { 
+                margin: 0.25px 0 !important; 
+                padding: 0.5px 1px !important; 
+                font-size: 6px !important;
+              }
+              .order-id {
+                font-size: 7px !important;
+              }
+              .order-details {
+                font-size: 5px !important;
+              }
+              .mold-info {
+                font-size: 5px !important;
               }
             }
           </style>

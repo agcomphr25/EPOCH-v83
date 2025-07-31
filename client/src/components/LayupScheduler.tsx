@@ -1153,34 +1153,41 @@ export default function LayupScheduler() {
             body { 
               font-family: Arial, sans-serif; 
               margin: 0; 
-              padding: 2px;
+              padding: 0;
               font-size: 10px;
               line-height: 1.1;
             }
             .header { 
               text-align: center; 
+              margin: 0;
               margin-bottom: 2px; 
               border-bottom: 1px solid #333; 
+              padding: 0;
               padding-bottom: 1px; 
             }
             .header h1 { 
               margin: 0; 
+              padding: 0;
               font-size: 14px; 
             }
             .header h2 { 
               margin: 0; 
+              padding: 0;
               font-size: 11px; 
               color: #666;
             }
             .header p { 
               margin: 0; 
+              padding: 0;
               font-size: 8px; 
               color: #888;
             }
             .stats { 
               display: flex; 
               justify-content: space-between; 
+              margin: 0;
               margin-bottom: 2px; 
+              padding: 0;
               gap: 1px;
             }
             .stat { 
@@ -1322,12 +1329,14 @@ export default function LayupScheduler() {
             @media print { 
               body { 
                 margin: 0 !important; 
-                padding: 1px !important; 
+                padding: 0 !important; 
                 font-size: 9px !important;
               }
               .header { 
-                margin-bottom: 1px !important; 
-                padding-bottom: 1px !important; 
+                margin: 0 !important;
+                margin-bottom: 2px !important; 
+                padding: 0 !important;
+                padding-bottom: 2px !important; 
               }
               .header h1 { 
                 font-size: 11px !important; 

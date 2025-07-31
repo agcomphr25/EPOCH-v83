@@ -195,75 +195,58 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
           ) : (
             <div className="space-y-6">
               {/* Order Header Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Hash className="h-5 w-5" />
-                      Order {order.orderId}
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge variant={order.isPaid ? 'default' : 'secondary'}>
-                        <CreditCard className="h-3 w-3 mr-1" />
-                        {order.isPaid ? 'PAID' : 'UNPAID'}
-                      </Badge>
-                      <Badge variant={isScrapped ? 'destructive' : 'default'}>
-                        {order.status || 'ACTIVE'}
-                      </Badge>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">Order Date:</span>
-                      <span className="font-medium">{formatDate(order.orderDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">Due Date:</span>
-                      <span className="font-medium">{formatDate(order.dueDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">Customer:</span>
-                      <span className="font-medium">{order.customerId}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">Department:</span>
-                      <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
-                        {order.currentDepartment}
-                      </Badge>
-                    </div>
+              <div className="bg-gray-50 p-4 rounded-lg border">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Order {order.orderId}</h3>
+                  <div className="flex gap-2">
+                    <Badge variant={order.isPaid ? 'default' : 'secondary'}>
+                      {order.isPaid ? 'PAID' : 'UNPAID'}
+                    </Badge>
+                    <Badge variant={isScrapped ? 'destructive' : 'default'}>
+                      {order.status || 'ACTIVE'}
+                    </Badge>
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Order Date:</span>
+                    <div className="font-medium">{formatDate(order.orderDate)}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Due Date:</span>
+                    <div className="font-medium">{formatDate(order.dueDate)}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Customer:</span>
+                    <div className="font-medium">{order.customerId}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Department:</span>
+                    <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
+                      {order.currentDepartment}
+                    </Badge>
+                  </div>
+                </div>
 
-                  {/* Special Order Numbers */}
-                  {(order.fbOrderNumber || order.customerPO || order.agrOrderDetails) && (
-                    <div className="mt-4 pt-4 border-t space-y-2">
-                      {order.fbOrderNumber && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600">FB Order Number:</span>
-                          <span className="font-medium">{order.fbOrderNumber}</span>
-                        </div>
-                      )}
-                      {order.customerPO && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600">Customer PO:</span>
-                          <span className="font-medium">{order.customerPO}</span>
-                        </div>
-                      )}
-                      {order.agrOrderDetails && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600">AGR Order Details:</span>
-                          <span className="font-medium">{order.agrOrderDetails}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                {/* Special Order Numbers */}
+                {(order.fbOrderNumber || order.customerPO) && (
+                  <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    {order.fbOrderNumber && (
+                      <div>
+                        <span className="text-gray-600">FB Order Number:</span>
+                        <div className="font-medium">{order.fbOrderNumber}</div>
+                      </div>
+                    )}
+                    {order.customerPO && (
+                      <div>
+                        <span className="text-gray-600">Customer PO:</span>
+                        <div className="font-medium">{order.customerPO}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Product Information */}
               <Card>
@@ -428,22 +411,7 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
                 </Card>
               )}
 
-              {/* Record Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Record Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Created:</span>
-                    <span>{formatDateTime(order.createdAt)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Last Updated:</span>
-                    <span>{formatDateTime(order.updatedAt)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+
             </div>
           )}
         </DialogContent>

@@ -1192,51 +1192,48 @@ export default function LayupScheduler() {
               font-weight: bold;
             }
             .schedule-grid { 
-              display: grid; 
-              grid-template-columns: 100px repeat(${(() => {
-                // Count dates with orders
-                const datesWithOrders = dates.filter(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
-
-                  return Object.values(orderAssignments).some(assignment => {
-                    const assignmentDateOnly = assignment.date.split('T')[0];
-                    return assignmentDateOnly === cellDateOnly;
-                  });
-                });
-                return Math.max(1, datesWithOrders.length);
-              })()}, 1fr); 
-              gap: 1px; 
+              width: 100%;
+              border-collapse: collapse;
               border: 1px solid #333; 
-              background: #333;
+              background: white;
             }
-            .date-header { 
+            .schedule-table { 
+              width: 100%;
+              border-collapse: collapse;
+              border: 1px solid #333; 
+            }
+            .schedule-table th,
+            .schedule-table td { 
+              border: 1px solid #ccc;
+              padding: 2px;
+              vertical-align: top;
+              text-align: center;
+            }
+            .schedule-table th { 
               background: #f5f5f5; 
-              padding: 6px 4px; 
-              text-align: center; 
               font-weight: bold; 
               font-size: 11px;
-              border-right: 1px solid #ccc;
+              padding: 6px 4px;
             }
-            .date-header.friday {
+            .schedule-table th.friday {
               background: #fff3cd;
               color: #856404;
             }
-            .mold-header { 
+            .schedule-table .mold-header { 
               background: #e5e5e5; 
-              padding: 6px 4px; 
               font-weight: bold; 
               font-size: 11px;
               text-align: center;
-              border-right: 1px solid #ccc;
+              padding: 6px 4px;
+              width: 100px;
             }
-            .cell { 
+            .schedule-table .cell { 
               background: white;
               padding: 2px; 
               min-height: 70px; 
-              border-right: 1px solid #ccc;
+              width: auto;
             }
-            .cell.friday {
+            .schedule-table .cell.friday {
               background: #fffbf0;
             }
             .order-count {
@@ -1348,20 +1345,19 @@ export default function LayupScheduler() {
                 padding: 1px 4px !important; 
                 font-size: 9px !important;
               }
-              .schedule-grid { 
+              .schedule-table { 
                 break-inside: avoid; 
                 margin: 0 !important;
-                gap: 1px !important;
               }
-              .date-header { 
+              .schedule-table th { 
                 padding: 4px 3px !important; 
                 font-size: 10px !important;
               }
-              .mold-header { 
+              .schedule-table .mold-header { 
                 padding: 4px 3px !important; 
                 font-size: 10px !important;
               }
-              .cell { 
+              .schedule-table .cell { 
                 padding: 1px !important; 
                 min-height: 60px !important; 
               }
@@ -1399,8 +1395,7 @@ export default function LayupScheduler() {
             <div class="stat">Employees: ${employees.length}</div>
           </div>
 
-          <div class="schedule-grid">
-            <!-- Date Headers - Only show dates with orders -->
+          <table class="schedule-table">
             ${(() => {
               // Find all dates that have at least one order assigned
               const datesWithOrders = dates.filter(date => {
@@ -1413,104 +1408,108 @@ export default function LayupScheduler() {
                 });
               });
 
-              if (datesWithOrders.length === 0) return '<div class="date-header">No Orders Scheduled</div>';
+              if (datesWithOrders.length === 0) {
+                return '<tr><th colspan="2">No Orders Scheduled</th></tr>';
+              }
 
-              return `
-                <div class="date-header">Mold</div>
-                ${datesWithOrders.map(date => {
-                  const isFriday = date.getDay() === 5;
-                  return `
-                    <div class="date-header ${isFriday ? 'friday' : ''}">
-                      ${format(date, 'MM/dd')}<br>
-                      <small>${format(date, 'EEE')}</small>
-                      ${isFriday ? '<br><small style="font-size: 8px;">Backup</small>' : ''}
-                    </div>
-                  `;
-                }).join('')}
+              // Create header row
+              const headerRow = `
+                <tr>
+                  <th class="mold-header">Mold</th>
+                  ${datesWithOrders.map(date => {
+                    const isFriday = date.getDay() === 5;
+                    return `
+                      <th class="${isFriday ? 'friday' : ''}">
+                        ${format(date, 'MM/dd')}<br>
+                        <small>${format(date, 'EEE')}</small>
+                        ${isFriday ? '<br><small style="font-size: 8px;">Backup</small>' : ''}
+                      </th>
+                    `;
+                  }).join('')}
+                </tr>
               `;
-            })()}
 
-            <!-- Schedule Rows -->
-            ${activeMolds.map(mold => {
-              // First, collect all non-empty cells for this mold
-              const moldCells = dates.map(date => {
-                const dateString = date.toISOString();
-                const cellDateOnly = dateString.split('T')[0];
-
-                const cellOrders = Object.entries(orderAssignments)
-                  .filter(([orderId, assignment]) => {
+              // Create mold rows - only for molds that have orders
+              const moldRows = activeMolds.filter(mold => {
+                // Check if this mold has any orders
+                return datesWithOrders.some(date => {
+                  const dateString = date.toISOString();
+                  const cellDateOnly = dateString.split('T')[0];
+                  
+                  return Object.entries(orderAssignments).some(([orderId, assignment]) => {
                     const assignmentDateOnly = assignment.date.split('T')[0];
                     return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                  })
-                  .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                  .filter(order => order !== undefined);
-
-                return { date, cellOrders, isEmpty: cellOrders.length === 0 };
-              }).filter(cell => !cell.isEmpty); // Only keep non-empty cells
-
-              // Skip molds with no orders
-              if (moldCells.length === 0) return '';
-
-              return `
-                <div class="mold-header">
-                  ${mold.moldId}
-                  <br><small>#${mold.instanceNumber}</small>
-                </div>
-                ${moldCells.map(({ date, cellOrders }) => {
-                const dateString = date.toISOString();
-                const cellDateOnly = dateString.split('T')[0];
-                const isFriday = date.getDay() === 5;
-
-                // Use the cellOrders already provided by moldCells.map
-                const filteredCellOrders = cellOrders;
-
-                // Skip empty cells in print output
-                if (filteredCellOrders.length === 0) {
-                  return '';
-                }
-
+                  });
+                });
+              }).map(mold => {
                 return `
-                  <div class="cell ${isFriday ? 'friday' : ''}">
-                    <div class="order-count">${filteredCellOrders.length} order(s)</div>
-                    ${filteredCellOrders.map(order => {
-                      const modelId = order.stockModelId || order.modelId;
-                      const materialType = getMaterialType(modelId || '');
-                      const isProduction = order.source === 'production_order';
-                      const displayId = getDisplayOrderId(order) || 'No ID';
-                      const modelName = getModelDisplayName(modelId || '');
-                      const actionLength = getActionLengthDisplay(order);
-                      const lopDisplay = getLOPDisplay(order);
-                      const hasHeavyFill = getHeavyFillDisplay(order);
+                  <tr>
+                    <td class="mold-header">
+                      ${mold.moldId}<br><small>#${mold.instanceNumber}</small>
+                    </td>
+                    ${datesWithOrders.map(date => {
+                      const dateString = date.toISOString();
+                      const cellDateOnly = dateString.split('T')[0];
+                      const isFriday = date.getDay() === 5;
 
-                      let cardClass = 'regular';
-                      if (isProduction) cardClass = 'production';
-                      else if (materialType === 'FG') cardClass = 'fg';
+                      const cellOrders = Object.entries(orderAssignments)
+                        .filter(([orderId, assignment]) => {
+                          const assignmentDateOnly = assignment.date.split('T')[0];
+                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                        })
+                        .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                        .filter(order => order !== undefined);
+
+                      if (cellOrders.length === 0) {
+                        return '<td class="cell"></td>';
+                      }
 
                       return `
-                        <div class="order-card ${cardClass}">
-                          <div class="order-id">
-                            ${displayId}
-                            ${isProduction ? '<span class="po-badge">PO</span>' : ''}
-                          </div>
-                          <div class="order-details">
-                            ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
-                            ${modelName}
-                          </div>
-                          ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
-                          <div class="mold-info">
-                            ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
-                          </div>
-                          ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
-                          ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
-                        </div>
+                        <td class="cell ${isFriday ? 'friday' : ''}">
+                          <div class="order-count">${cellOrders.length} order(s)</div>
+                          ${cellOrders.map(order => {
+                            const modelId = order.stockModelId || order.modelId;
+                            const materialType = getMaterialType(modelId || '');
+                            const isProduction = order.source === 'production_order';
+                            const displayId = getDisplayOrderId(order) || 'No ID';
+                            const modelName = getModelDisplayName(modelId || '');
+                            const actionLength = getActionLengthDisplay(order);
+                            const lopDisplay = getLOPDisplay(order);
+                            const hasHeavyFill = getHeavyFillDisplay(order);
+
+                            let cardClass = 'regular';
+                            if (isProduction) cardClass = 'production';
+                            else if (materialType === 'FG') cardClass = 'fg';
+
+                            return `
+                              <div class="order-card ${cardClass}">
+                                <div class="order-id">
+                                  ${displayId}
+                                  ${isProduction ? '<span class="po-badge">PO</span>' : ''}
+                                </div>
+                                <div class="order-details">
+                                  ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
+                                  ${modelName}
+                                </div>
+                                ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
+                                <div class="mold-info">
+                                  ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
+                                </div>
+                                ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
+                                ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
+                              </div>
+                            `;
+                          }).join('')}
+                        </td>
                       `;
                     }).join('')}
-                  </div>
+                  </tr>
                 `;
-              }).join('')}
-            `;
-            }).filter(row => row !== '').join('')}
-          </div>
+              }).join('');
+
+              return headerRow + moldRows;
+            })()}
+          </table>
         </body>
       </html>
     `;

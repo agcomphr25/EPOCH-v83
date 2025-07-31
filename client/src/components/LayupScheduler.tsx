@@ -1482,7 +1482,42 @@ function LayupScheduler() {
         existingAssignments: Object.keys(orderAssignments).length
       });
     }
-  }, [schedule, orderAssignments]);
+  }, [schedule, orderAssignments, orders]);
+
+  // Force trigger auto-scheduling when data is ready
+  React.useEffect(() => {
+    const hasDataReady = orders.length > 0 && molds.length > 0 && employees.length > 0;
+    const hasNoAssignments = Object.keys(orderAssignments).length === 0;
+    
+    if (hasDataReady && hasNoAssignments) {
+      console.log('[FORCE] Force triggering auto-schedule with:', {
+        orders: orders.length,
+        molds: molds.length, 
+        employees: employees.length,
+        schedule: schedule.length
+      });
+      
+      // Trigger re-render to force schedule generation
+      const timer = setTimeout(() => {
+        if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
+          console.log('[FORCE] Forcing schedule application');
+          
+          const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+          schedule.forEach(item => {
+            autoAssignments[item.orderId] = {
+              moldId: item.moldId,
+              date: item.scheduledDate.toISOString()
+            };
+          });
+          
+          setOrderAssignments(autoAssignments);
+          setHasUnsavedScheduleChanges(true);
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [orders.length, molds.length, employees.length, schedule.length, orderAssignments]);
 
   // Build date columns
   // Generate date ranges based on view type - Mon-Thu primary with Fri as backup
@@ -1797,6 +1832,33 @@ function LayupScheduler() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Generate Auto-Schedule Button */}
+            <Button
+              onClick={() => {
+                console.log('[MANUAL] Manual auto-schedule trigger');
+                if (schedule.length > 0) {
+                  const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+                  schedule.forEach(item => {
+                    autoAssignments[item.orderId] = {
+                      moldId: item.moldId,
+                      date: item.scheduledDate.toISOString()
+                    };
+                  });
+                  setOrderAssignments(autoAssignments);
+                  setHasUnsavedScheduleChanges(true);
+                  toast({ title: `Auto-scheduled ${Object.keys(autoAssignments).length} orders` });
+                } else {
+                  toast({ title: "No schedule generated. Check data availability." });
+                }
+              }}
+              disabled={orders.length === 0 || molds.length === 0 || employees.length === 0}
+              variant="outline"
+              size="sm"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Auto-Schedule
+            </Button>
+
             {/* Save Schedule Button */}
             <Button
               onClick={handleSaveSchedule}

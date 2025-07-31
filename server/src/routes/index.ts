@@ -780,6 +780,76 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Generate Production Orders from Purchase Order Items
+  app.post('/api/pos/:id/generate-production-orders', async (req, res) => {
+    try {
+      console.log('🏭 Generate Production Orders endpoint called for PO:', req.params.id);
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.id);
+
+      // Get the purchase order details
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      // Get all items for this purchase order
+      const poItems = await storage.getPurchaseOrderItems(poId);
+      const stockModelItems = poItems.filter(item => item.itemId && item.itemId.trim());
+
+      console.log(`🏭 Found ${stockModelItems.length} stock model items to convert to production orders`);
+
+      const createdOrders = [];
+
+      for (const item of stockModelItems) {
+        // Create individual production orders for each quantity
+        for (let i = 0; i < item.quantity; i++) {
+          const productionOrderData = {
+            orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
+            partName: item.itemId,
+            quantity: 1, // Individual units for scheduling
+            department: 'Layup', // Start at Layup department
+            status: 'PENDING',
+            dueDate: purchaseOrder.expectedDelivery || purchaseOrder.poDate,
+            poId: poId,
+            poItemId: item.id,
+            specifications: {
+              ...item.specifications,
+              sourcePoNumber: purchaseOrder.poNumber,
+              customerName: purchaseOrder.customerName,
+              expectedDelivery: purchaseOrder.expectedDelivery
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          const createdOrder = await storage.createP2ProductionOrder(productionOrderData);
+          createdOrders.push(createdOrder);
+
+          console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);
+        }
+      }
+
+      console.log(`🏭 Successfully created ${createdOrders.length} production orders from PO ${purchaseOrder.poNumber}`);
+
+      res.json({
+        success: true,
+        message: `Generated ${createdOrders.length} production orders`,
+        createdOrders: createdOrders.length,
+        orders: createdOrders.map(order => ({
+          orderId: order.orderId,
+          partName: order.partName,
+          dueDate: order.dueDate,
+          status: order.status
+        }))
+      });
+
+    } catch (error) {
+      console.error('🏭 Generate production orders error:', error);
+      res.status(500).json({ error: "Failed to generate production orders" });
+    }
+  });
+
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

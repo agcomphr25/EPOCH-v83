@@ -789,7 +789,13 @@ export default function LayupScheduler() {
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
-      const modelId = order.stockModelId || order.modelId;
+      let modelId = order.stockModelId || order.modelId;
+      
+      // For production orders, try to use the part name as the stock model
+      if (order.source === 'production_order' && order.product) {
+        modelId = order.product;
+      }
+      
       if (!modelId) {
         console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
@@ -803,9 +809,8 @@ export default function LayupScheduler() {
           modelId,
           stockModelId: order.stockModelId,
           availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
-          moldsWithMesaUniversal: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).map(m => m.moldId),
-          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })),
-          compatibilityTest: molds.filter(m => m.enabled && m.stockModels?.includes('mesa_universal')).length > 0 ? 'SHOULD BE COMPATIBLE' : 'NO COMPATIBLE MOLDS'
+          moldsWithModelId: molds.filter(m => m.enabled && m.stockModels?.includes(modelId)).map(m => m.moldId),
+          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels }))
         });
       }
       
@@ -1447,7 +1452,12 @@ export default function LayupScheduler() {
             </div>
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
+              </div>
+              <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg">
+                <span className="text-orange-700 dark:text-orange-300 font-medium">
+                  {orders.filter(o => o.source === 'production_order').length} Production Orders
+                </span>
               </div>
               <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
                 <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>

@@ -86,9 +86,9 @@ export default function POManager() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     console.log('Form submitted with formData:', formData);
-    
+
     // Validate required fields
     if (!formData.poNumber || !formData.customerId || !formData.customerName || !formData.poDate || !formData.expectedDelivery) {
       console.log('Validation failed - missing fields:', {
@@ -270,7 +270,7 @@ export default function POManager() {
                       />
                     </div>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="customerName">Customer Name</Label>
                     <Input 
@@ -281,7 +281,7 @@ export default function POManager() {
                       required 
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="poDate">PO Date</Label>
@@ -306,7 +306,7 @@ export default function POManager() {
                       />
                     </div>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="status">Status</Label>
                     <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value as 'OPEN' | 'CLOSED' | 'CANCELED'})}>
@@ -320,7 +320,7 @@ export default function POManager() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="notes">Notes</Label>
                     <Textarea 
@@ -331,7 +331,7 @@ export default function POManager() {
                       rows={3}
                     />
                   </div>
-                  
+
                   <div className="flex justify-end space-x-2">
                     <Button type="button" variant="outline" onClick={handleDialogClose}>
                       Cancel

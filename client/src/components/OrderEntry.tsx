@@ -790,6 +790,7 @@ export default function OrderEntry() {
   const resetForm = () => {
     setCustomer(null);
     setModelId('');
+    setModelOpen(false);
     setFeatures({});
     setOrderDate(new Date());
     setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
@@ -808,6 +809,9 @@ export default function OrderEntry() {
     setIsCustomOrder(false);
     setNotes('');
     setErrors({});
+    setDiscountDetails(null);
+    setIsEditMode(false);
+    setEditingOrderId(null);
     // Reset payment state
     setIsPaid(false);
     setShowPaymentModal(false);

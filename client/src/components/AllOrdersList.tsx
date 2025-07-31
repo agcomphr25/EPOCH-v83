@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowRight, AlertTriangle, Package2, Edit } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
-import OrderHoverCard from './OrderHoverCard';
+import OrderSummaryModal from './OrderSummaryModal';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -196,11 +196,11 @@ export default function AllOrdersList() {
                 return (
                   <TableRow key={order.orderId}>
                     <TableCell className="font-medium">
-                      <OrderHoverCard orderId={order.orderId}>
-                        <span className="cursor-pointer hover:text-blue-600 transition-colors">
+                      <OrderSummaryModal orderId={order.orderId}>
+                        <span className="font-medium">
                           {getDisplayOrderId(order)}
                         </span>
-                      </OrderHoverCard>
+                      </OrderSummaryModal>
                     </TableCell>
                     <TableCell>
                       {order.orderDate ? (() => {

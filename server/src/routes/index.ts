@@ -661,6 +661,125 @@ export function registerRoutes(app: Express): Server {
 
   // Note: Order ID generation routes now handled by modular orders routes
 
+  // Purchase Orders routes (POs)
+  app.get('/api/pos', async (req, res) => {
+    try {
+      console.log('🔧 Purchase Orders (POs) endpoint called');
+      const { storage } = await import('../../storage');
+      const purchaseOrders = await storage.getAllPurchaseOrders();
+      console.log('🔧 Found purchase orders:', purchaseOrders.length);
+      res.json(purchaseOrders);
+    } catch (error) {
+      console.error('🔧 Purchase orders fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch purchase orders" });
+    }
+  });
+
+  app.post('/api/pos', async (req, res) => {
+    try {
+      console.log('🔧 Create Purchase Order endpoint called');
+      const { insertPurchaseOrderSchema } = await import('@shared/schema');
+      const { storage } = await import('../../storage');
+      const purchaseOrderData = insertPurchaseOrderSchema.parse(req.body);
+      const newPurchaseOrder = await storage.createPurchaseOrder(purchaseOrderData);
+      console.log('🔧 Created purchase order:', newPurchaseOrder.id);
+      res.status(201).json(newPurchaseOrder);
+    } catch (error) {
+      console.error('🔧 Create purchase order error:', error);
+      res.status(500).json({ error: "Failed to create purchase order" });
+    }
+  });
+
+  app.put('/api/pos/:id', async (req, res) => {
+    try {
+      console.log('🔧 Update Purchase Order endpoint called');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const updateData = req.body;
+      const updatedPurchaseOrder = await storage.updatePurchaseOrder(parseInt(id), updateData);
+      console.log('🔧 Updated purchase order:', updatedPurchaseOrder.id);
+      res.json(updatedPurchaseOrder);
+    } catch (error) {
+      console.error('🔧 Update purchase order error:', error);
+      res.status(500).json({ error: "Failed to update purchase order" });
+    }
+  });
+
+  app.delete('/api/pos/:id', async (req, res) => {
+    try {
+      console.log('🔧 Delete Purchase Order endpoint called');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      await storage.deletePurchaseOrder(parseInt(id));
+      console.log('🔧 Deleted purchase order:', id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('🔧 Delete purchase order error:', error);
+      res.status(500).json({ error: "Failed to delete purchase order" });
+    }
+  });
+
+  // Purchase Order Items routes
+  app.get('/api/pos/:id/items', async (req, res) => {
+    try {
+      console.log('🔧 Get Purchase Order Items endpoint called');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const items = await storage.getPurchaseOrderItems(parseInt(id));
+      console.log('🔧 Found PO items:', items.length);
+      res.json(items);
+    } catch (error) {
+      console.error('🔧 Get PO items error:', error);
+      res.status(500).json({ error: "Failed to fetch purchase order items" });
+    }
+  });
+
+  app.post('/api/pos/:id/items', async (req, res) => {
+    try {
+      console.log('🔧 Create Purchase Order Item endpoint called');
+      const { insertPurchaseOrderItemSchema } = await import('@shared/schema');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const itemData = { ...req.body, poId: parseInt(id) };
+      const validatedData = insertPurchaseOrderItemSchema.parse(itemData);
+      const newItem = await storage.createPurchaseOrderItem(validatedData);
+      console.log('🔧 Created PO item:', newItem.id);
+      res.status(201).json(newItem);
+    } catch (error) {
+      console.error('🔧 Create PO item error:', error);
+      res.status(500).json({ error: "Failed to create purchase order item" });
+    }
+  });
+
+  app.put('/api/pos/:poId/items/:itemId', async (req, res) => {
+    try {
+      console.log('🔧 Update Purchase Order Item endpoint called');
+      const { storage } = await import('../../storage');
+      const { itemId } = req.params;
+      const updateData = req.body;
+      const updatedItem = await storage.updatePurchaseOrderItem(parseInt(itemId), updateData);
+      console.log('🔧 Updated PO item:', updatedItem.id);
+      res.json(updatedItem);
+    } catch (error) {
+      console.error('🔧 Update PO item error:', error);
+      res.status(500).json({ error: "Failed to update purchase order item" });
+    }
+  });
+
+  app.delete('/api/pos/:poId/items/:itemId', async (req, res) => {
+    try {
+      console.log('🔧 Delete Purchase Order Item endpoint called');
+      const { storage } = await import('../../storage');
+      const { itemId } = req.params;
+      await storage.deletePurchaseOrderItem(parseInt(itemId));
+      console.log('🔧 Deleted PO item:', itemId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('🔧 Delete PO item error:', error);
+      res.status(500).json({ error: "Failed to delete purchase order item" });
+    }
+  });
+
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

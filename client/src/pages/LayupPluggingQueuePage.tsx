@@ -257,7 +257,7 @@ export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const queryClient = useQueryClient();
   
-  // Use the same data source as LayupScheduler
+  // Use the same data source as LayupScheduler (now excludes P1 orders)
   const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
   
   // Apply LOP processing exactly like LayupScheduler

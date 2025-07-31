@@ -111,12 +111,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
   
   // Determine card styling based on source and material
   const getCardStyling = () => {
-    if (order.source === 'p1_purchase_order') {
-      return {
-        bg: 'bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/70 border-2 border-green-300 dark:border-green-600',
-        text: 'text-green-800 dark:text-green-200'
-      };
-    } else if (order.source === 'production_order') {
+    if (order.source === 'production_order') {
       return {
         bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
         text: 'text-orange-800 dark:text-orange-200'
@@ -147,7 +142,6 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
           {getDisplayOrderId(order) || 'No ID'}
-          {order.source === 'p1_purchase_order' && <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded">P1</span>}
           {order.source === 'production_order' && <span className="text-xs ml-1 bg-orange-200 dark:bg-orange-700 px-1 rounded">PO</span>}
         </div>
         {/* Show stock model display name with material type */}

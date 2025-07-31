@@ -376,7 +376,7 @@ export default function FeatureManager() {
   const addOption = () => {
     setFeatureForm(prev => ({
       ...prev,
-      options: [...(prev.options || []), { value: '', label: '', price: 0 }]
+      options: [{ value: '', label: '', price: 0 }, ...(prev.options || [])]
     }));
   };
 

@@ -112,6 +112,10 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
+      // Invalidate kickback queries so KickbackTracking component refreshes
+      queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/kickbacks/analytics'] });
+      
       showToast({ title: 'Success', description: 'Kickback reported successfully' });
       kickbackForm.reset();
       setIsKickbackDialogOpen(false);

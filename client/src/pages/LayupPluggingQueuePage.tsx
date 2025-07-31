@@ -643,46 +643,53 @@ export default function LayupPluggingQueuePage() {
         </Card>
       </div>
 
-      {/* Multi-select Actions */}
+      {/* Multi-select Actions - Sticky at bottom when items selected */}
       {selectedOrders.length > 0 && (
-        <Card className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <span className="font-medium text-blue-800 dark:text-blue-200">
-                  {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrders([])}
-                  disabled={moveToDepartmentMutation.isPending}
-                >
-                  Clear Selection
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleMoveToNextDepartment}
-                  disabled={moveToDepartmentMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
-                >
-                  {moveToDepartmentMutation.isPending ? 'Moving...' : 'Move to Barcode Department'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <span className="font-medium text-blue-800 dark:text-blue-200">
+                      {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected for progression
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedOrders([])}
+                      disabled={moveToDepartmentMutation.isPending}
+                    >
+                      Clear Selection
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleMoveToNextDepartment}
+                      disabled={moveToDepartmentMutation.isPending}
+                      className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+                    >
+                      {moveToDepartmentMutation.isPending ? 'Moving...' : 'Progress to Barcode Department →'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
+
+      {/* Spacer for sticky bottom bar */}
+      {selectedOrders.length > 0 && <div className="h-24"></div>}
       
       {/* Current Week Layup Queue - Day by Day View */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-2">
             <span>Layup/Plugging Queue - Generated from Scheduler</span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {currentWeekOrders.length > 0 && (
                 <div className="flex items-center gap-2 mr-4">
                   <Button
@@ -691,7 +698,7 @@ export default function LayupPluggingQueuePage() {
                     onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
                     disabled={selectedOrders.length === currentWeekOrders.length}
                   >
-                    Select All
+                    Select All ({currentWeekOrders.length})
                   </Button>
                   <Button
                     variant="outline"
@@ -699,13 +706,18 @@ export default function LayupPluggingQueuePage() {
                     onClick={() => setSelectedOrders([])}
                     disabled={selectedOrders.length === 0}
                   >
-                    Select None
+                    Clear ({selectedOrders.length})
                   </Button>
                 </div>
               )}
-              <Badge variant="outline">
-                {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
+              <Badge variant="outline" className="text-sm">
+                Week: {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
               </Badge>
+              {selectedOrders.length > 0 && (
+                <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                  {selectedOrders.length} Selected
+                </Badge>
+              )}
             </div>
           </CardTitle>
         </CardHeader>
@@ -752,9 +764,29 @@ export default function LayupPluggingQueuePage() {
                         {dayName}, {dateDisplay}
                         {isCurrentDay && <span className="ml-2 text-sm font-normal">(Today)</span>}
                       </h3>
-                      <Badge variant={dayOrders.length > 0 ? 'default' : 'secondary'}>
-                        {dayOrders.length} orders
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {dayOrders.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => {
+                              const dayOrderIds = dayOrders.map(o => o.orderId);
+                              const allSelected = dayOrderIds.every(id => selectedOrders.includes(id));
+                              if (allSelected) {
+                                setSelectedOrders(prev => prev.filter(id => !dayOrderIds.includes(id)));
+                              } else {
+                                setSelectedOrders(prev => [...new Set([...prev, ...dayOrderIds])]);
+                              }
+                            }}
+                            className="text-xs h-6"
+                          >
+                            {dayOrders.every(o => selectedOrders.includes(o.orderId)) ? 'Deselect Day' : 'Select Day'}
+                          </Button>
+                        )}
+                        <Badge variant={dayOrders.length > 0 ? 'default' : 'secondary'}>
+                          {dayOrders.length} orders
+                        </Badge>
+                      </div>
                     </div>
                     
                     {dayOrders.length === 0 ? (
@@ -767,21 +799,23 @@ export default function LayupPluggingQueuePage() {
                           const isSelected = selectedOrders.includes(order.orderId);
                           
                           return (
-                            <Card key={order.orderId} className={`relative border-l-4 transition-all ${
+                            <Card key={order.orderId} className={`relative border-l-4 transition-all cursor-pointer ${
                               order.source === 'p1_purchase_order' ? 'border-l-green-500' :
                               order.source === 'production_order' ? 'border-l-orange-500' :
                               'border-l-blue-500'
-                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                            } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                            onClick={() => handleOrderSelect(order.orderId, !isSelected)}>
                               {/* Checkbox in top-right corner */}
-                              <div className="absolute top-3 right-3 z-10">
+                              <div className="absolute top-2 right-2 z-10">
                                 <Checkbox
                                   checked={isSelected}
                                   onCheckedChange={(checked) => handleOrderSelect(order.orderId, !!checked)}
                                   className="bg-white dark:bg-gray-800 border-2 shadow-sm"
+                                  onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
                               
-                              <CardContent className="p-0">
+                              <CardContent className="p-0 pr-8">
                                 <QueueOrderItem
                                   order={order}
                                   getModelDisplayName={getModelDisplayName}

@@ -385,11 +385,11 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
           return (
             <div className="text-xs mt-1">
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                lopStatus.status === 'immediate' 
-                  ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                  : lopStatus.status === 'scheduled'
+                lopStatus.status === 'scheduled'
                   ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
-                  : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+                  : lopStatus.status === 'deferred'
+                  ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
+                  : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
               }`}>
                 {lopStatus.status === 'scheduled' && '📅 '}
                 {lopStatus.status === 'deferred' && '⏰ '}
@@ -1403,68 +1403,23 @@ export default function LayupScheduler() {
                 const cellDateOnly = dateString.split('T')[0];
                 const isFriday = date.getDay() === 5;
                 
-                const cellOrders = Object.entries(orderAssignments)
-                  .filter(([orderId, assignment]) => {
-                    const assignmentDateOnly = assignment.date.split('T')[0];
-                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                  })
-                  .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                  .filter(order => order !== undefined);
+                // Use the cellOrders already provided by moldCells.map
+                const filteredCellOrders = cellOrders;
 
                 // Skip empty cells in print output
-                if (cellOrders.length === 0) {
+                if (filteredCellOrders.length === 0) {
                   return '';
                 }
 
                 return `
                   <div class="cell ${isFriday ? 'friday' : ''}">
-                    <div class="order-count">${cellOrders.length} order(s)</div>
-                    ${cellOrders.map(order => {
+                    <div class="order-count">${filteredCellOrders.length} order(s)</div>
+                    ${filteredCellOrders.map(order => {
                       const modelId = order.stockModelId || order.modelId;
-                      const materialType = getMaterialType(modelId);
+                      const materialType = getMaterialType(modelId || '');
                       const isProduction = order.source === 'production_order';
                       const displayId = getDisplayOrderId(order) || 'No ID';
-                      const modelName = getModelDisplayName(modelId);
-                      const actionLength = getActionLengthDisplay(order);
-                      const lopDisplay = getLOPDisplay(order);
-                      const hasHeavyFill = getHeavyFillDisplay(order);
-                      
-                      let cardClass = 'regular';
-                      if (isProduction) cardClass = 'production';
-                      else if (materialType === 'FG') cardClass = 'fg';
-                      
-                      return `
-                        <div class="order-card ${cardClass}">
-                          <div class="order-id">
-                            ${displayId}
-                            ${isProduction ? '<span class="po-badge">PO</span>' : ''}
-                          </div>
-                          <div class="order-details">
-                            ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
-                            ${modelName}
-                          </div>
-                          ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
-                          <div class="mold-info">
-                            ${actionLength ? `${actionLength} ` : ''}${mold.moldId}${mold.instanceNumber ? ` #${mold.instanceNumber}` : ''}
-                          </div>
-                          ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
-                          ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                `;
-              const isFriday = date.getDay() === 5;
-                
-                return `
-                  <div class="cell ${isFriday ? 'friday' : ''}">
-                    <div class="order-count">${cellOrders.length} order(s)</div>
-                    ${cellOrders.map(order => {
-                      const modelId = order.stockModelId || order.modelId;
-                      const materialType = getMaterialType(modelId);
-                      const isProduction = order.source === 'production_order';
-                      const displayId = getDisplayOrderId(order) || 'No ID';
-                      const modelName = getModelDisplayName(modelId);
+                      const modelName = getModelDisplayName(modelId || '');
                       const actionLength = getActionLengthDisplay(order);
                       const lopDisplay = getLOPDisplay(order);
                       const hasHeavyFill = getHeavyFillDisplay(order);

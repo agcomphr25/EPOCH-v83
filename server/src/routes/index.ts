@@ -87,7 +87,7 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       res.status(500).json({ 
         status: 'error', 
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       });
     }
@@ -577,7 +577,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 P2 LAYUP SCHEDULE API CALLED');
       const { storage } = await import('../../storage');
       
-      const scheduleEntries = await storage.getAllP2LayupSchedule();
+      const scheduleEntries = await storage.getAllLayupSchedule();
       console.log('🔧 Found P2 layup schedule entries:', scheduleEntries.length);
       
       res.json(scheduleEntries);
@@ -593,12 +593,7 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       
       const scheduleData = req.body;
-      const result = await storage.createP2LayupScheduleEntry(
-        scheduleData.orderId,
-        new Date(scheduleData.scheduledDate),
-        scheduleData.moldId,
-        scheduleData.overriddenBy || 'system'
-      );
+      const result = await storage.createLayupSchedule(scheduleData);
       
       console.log('🔧 P2 Schedule entry created:', result);
       res.json(result);
@@ -614,7 +609,7 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       
       const { orderId } = req.params;
-      await storage.deleteP2LayupScheduleByOrderId(orderId);
+      await storage.deleteLayupScheduleByOrder(orderId);
       
       console.log('🔧 P2 Schedule entries deleted for order:', orderId);
       res.json({ success: true });
@@ -861,13 +856,18 @@ export function registerRoutes(app: Express): Server {
             orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
             partName: item.itemId,
             quantity: 1, // Individual units for scheduling
-            department: 'Layup', // Start at Layup department
-            status: 'PENDING',
+            department: 'Layup' as const, // Start at Layup department
+            status: 'PENDING' as const,
+            priority: 3, // Default priority
             dueDate: purchaseOrder.expectedDelivery || purchaseOrder.poDate,
-            poId: poId,
-            poItemId: item.id,
+            p2PoId: poId,
+            p2PoItemId: item.id,
+            sku: item.itemId,
+            stockModelId: item.itemId,
+            bomDefinitionId: 0,
+            bomItemId: 0,
             specifications: {
-              ...item.specifications,
+              ...(item.specifications || {}),
               sourcePoNumber: purchaseOrder.poNumber,
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery
@@ -934,11 +934,11 @@ export function registerRoutes(app: Express): Server {
 
       // Update orders in the main orders table
       for (const orderId of orderIds) {
-        await storage.query(`
-          UPDATE orders 
-          SET department = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE order_id = ?
-        `, [department, status || 'IN_PROGRESS', orderId]);
+        // Using updateOrderDraft method instead of direct query
+        await storage.updateOrderDraft(orderId, {
+          currentDepartment: department,
+          status: status || 'IN_PROGRESS'
+        });
       }
 
       console.log(`✅ Updated ${orderIds.length} orders to department: ${department}`);

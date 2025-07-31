@@ -245,7 +245,7 @@ export default function OrderEntry() {
     if (!discountCode || discountCode === 'none') return 0;
 
     // Handle custom discount
-    if (showCustomDiscount) {
+    if (discountCode === 'custom' || showCustomDiscount) {
       if (customDiscountType === 'percent') {
         return (subtotal * customDiscountValue) / 100;
       } else {
@@ -1964,6 +1964,48 @@ export default function OrderEntry() {
                 {discountDetails && (
                   <div className="text-xs text-muted-foreground mt-1">
                     Applies to: {discountDetails.appliesTo === 'stock_model' ? 'Stock Model Only' : 'Total Order'}
+                  </div>
+                )}
+                
+                {/* Custom Discount Fields */}
+                {showCustomDiscount && (
+                  <div className="mt-3 p-3 border rounded-lg bg-gray-50 space-y-3">
+                    <div className="text-sm font-medium">Custom Discount Amount</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="custom-discount-type">Type</Label>
+                        <Select value={customDiscountType} onValueChange={(value: 'percent' | 'amount') => setCustomDiscountType(value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">Percentage (%)</SelectItem>
+                            <SelectItem value="amount">Fixed Amount ($)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="custom-discount-value">
+                          {customDiscountType === 'percent' ? 'Percentage' : 'Amount ($)'}
+                        </Label>
+                        <Input
+                          id="custom-discount-value"
+                          type="number"
+                          step={customDiscountType === 'percent' ? '1' : '0.01'}
+                          min="0"
+                          max={customDiscountType === 'percent' ? '100' : undefined}
+                          placeholder={customDiscountType === 'percent' ? 'e.g., 10' : 'e.g., 123.45'}
+                          value={customDiscountValue || ''}
+                          onChange={(e) => setCustomDiscountValue(parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {customDiscountType === 'percent' 
+                        ? `${customDiscountValue}% off the subtotal`
+                        : `$${customDiscountValue.toFixed(2)} off the subtotal`
+                      }
+                    </div>
                   </div>
                 )}
               </div>

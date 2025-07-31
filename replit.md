@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (July 2025)
 
+**July 31, 2025 - Unresolved Kickback Badge System Implementation (COMPLETED)**
+- ✅ **Visual Kickback Indicators**: Added red "KICKBACK" badges to All Orders interface showing orders with unresolved issues
+- ✅ **Real-Time Badge Updates**: Badges automatically appear/disappear as kickback status changes (auto-refresh every 60 seconds)
+- ✅ **Smart Status Detection**: Badges only show for kickbacks with status "OPEN" or "IN_PROGRESS", hidden for "RESOLVED" or "CLOSED"
+- ✅ **Professional Styling**: Red badge with proper contrast and tooltip explaining "This order has unresolved kickbacks"
+- ✅ **Performance Optimization**: Efficient kickback lookup function integrated with existing order display logic
+- ✅ **User Experience Enhancement**: Clear visual indication helps production teams quickly identify orders requiring attention
+
 **July 30, 2025 - Kickback Tracking Integration into All Orders Interface (COMPLETED)**
 - ✅ **Preview Button Replacement**: Successfully replaced "Preview" button (Eye icon) in All Orders with "Report Kickback" button using TrendingDown icon
 - ✅ **Integrated Kickback Modal**: Added comprehensive kickback creation modal with complete form validation directly to OrdersList component
@@ -20,6 +28,8 @@ Preferred communication style: Simple, everyday language.
 - ✅ **Professional UX**: Loading states, success/error toasts, and proper form reset after submission
 - ✅ **Route Fix**: Added missing /agtest-dashboard, /admintest-dashboard, and /stacitest-dashboard routes to App.tsx
 - ✅ **System Verification**: Confirmed kickback creation working correctly with test data via API endpoints
+- ✅ **Enhanced Kickback Display**: Fixed kickback tracking interface with auto-refresh, manual refresh button, and proper JSX structure
+- ✅ **Cache Invalidation Fix**: Resolved issue where new kickbacks weren't appearing by adding proper query invalidation
 
 **July 30, 2025 - Customer Management Consolidation and UX Enhancement (COMPLETED)**
 - ✅ **Preview Button Elimination**: Removed confusing Preview (Eye icon) button from customer table that led to complex tabbed dialog

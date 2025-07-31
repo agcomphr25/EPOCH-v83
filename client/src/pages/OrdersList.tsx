@@ -213,6 +213,12 @@ export default function OrdersList() {
       queryKey: ['/api/stock-models'],
     });
 
+    // Fetch kickbacks to check for unresolved issues
+    const { data: kickbacks } = useQuery({
+      queryKey: ['/api/kickbacks'],
+      refetchInterval: 60000, // Auto-refresh every 60 seconds
+    });
+
     console.log('Orders data:', orders);
     console.log('Customers data:', customers);
     console.log('Loading state:', isLoading);
@@ -269,6 +275,16 @@ export default function OrdersList() {
     if (!modelId) return '';
     const stockModel = stockModels?.find(sm => sm.id === modelId);
     return stockModel ? stockModel.displayName : '';
+  };
+
+  // Check if an order has unresolved kickbacks
+  const hasUnresolvedKickback = (orderId: string) => {
+    if (!kickbacks) return false;
+    return kickbacks.some((kickback: any) => 
+      kickback.orderId === orderId && 
+      kickback.status !== 'RESOLVED' && 
+      kickback.status !== 'CLOSED'
+    );
   };
 
   const getActionLengthAbbreviation = (features: any) => {
@@ -513,11 +529,21 @@ export default function OrdersList() {
                     className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
                   >
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
-                      <OrderPricingTooltip orderId={order.orderId}>
-                        <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                          {getDisplayOrderId(order)}
-                        </span>
-                      </OrderPricingTooltip>
+                      <div className="flex items-center gap-2">
+                        <OrderPricingTooltip orderId={order.orderId}>
+                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
+                            {getDisplayOrderId(order)}
+                          </span>
+                        </OrderPricingTooltip>
+                        {hasUnresolvedKickback(order.orderId) && (
+                          <Badge 
+                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0"
+                            title="This order has unresolved kickbacks"
+                          >
+                            KICKBACK
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(order.status)}>

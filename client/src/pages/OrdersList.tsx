@@ -90,6 +90,9 @@ export default function OrdersList() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('orderDate');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { toast: showToast } = useToast();
 
   // Initialize kickback form
@@ -236,34 +239,90 @@ export default function OrdersList() {
     return customer?.phone || '';
   };
 
-  // Filter orders based on search term
+  // Get unique departments for filter options
+  const availableDepartments = useMemo(() => {
+    if (!orders) return [];
+    const departments = orders
+      .map(order => order.currentDepartment || 'Not Set')
+      .filter((dept, index, arr) => arr.indexOf(dept) === index)
+      .sort();
+    return departments;
+  }, [orders]);
+
+  // Filter and sort orders based on search term, department filter, and sort options
   const filteredOrders = useMemo(() => {
-    if (!orders || !searchTerm.trim()) {
-      return orders || [];
+    if (!orders) return [];
+    
+    let filtered = [...orders];
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((order) => {
+        // Search by Order ID
+        if (order.orderId && order.orderId.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        // Search by Customer Name
+        const customerName = getCustomerName(order.customerId);
+        if (customerName && customerName.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        // Search by Customer Phone
+        const customerPhone = getCustomerPhone(order.customerId);
+        if (customerPhone && customerPhone.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        return false;
+      });
     }
     
-    const term = searchTerm.toLowerCase().trim();
-    return orders.filter((order) => {
-      // Search by Order ID
-      if (order.orderId && order.orderId.toLowerCase().includes(term)) {
-        return true;
+    // Apply department filter
+    if (departmentFilter !== 'all') {
+      filtered = filtered.filter(order => {
+        const dept = order.currentDepartment || 'Not Set';
+        return dept === departmentFilter;
+      });
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortBy) {
+        case 'department':
+          aValue = a.currentDepartment || 'Not Set';
+          bValue = b.currentDepartment || 'Not Set';
+          break;
+        case 'orderId':
+          aValue = a.orderId;
+          bValue = b.orderId;
+          break;
+        case 'customer':
+          aValue = getCustomerName(a.customerId);
+          bValue = getCustomerName(b.customerId);
+          break;
+        case 'dueDate':
+          aValue = new Date(a.dueDate);
+          bValue = new Date(b.dueDate);
+          break;
+        case 'orderDate':
+        default:
+          aValue = new Date(a.orderDate);
+          bValue = new Date(b.orderDate);
+          break;
       }
       
-      // Search by Customer Name
-      const customerName = getCustomerName(order.customerId);
-      if (customerName && customerName.toLowerCase().includes(term)) {
-        return true;
-      }
-      
-      // Search by Customer Phone
-      const customerPhone = getCustomerPhone(order.customerId);
-      if (customerPhone && customerPhone.toLowerCase().includes(term)) {
-        return true;
-      }
-      
-      return false;
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [orders, customers, searchTerm]);
+    
+    return filtered;
+  }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
 
   const getModelDisplayName = (modelId: string) => {
     if (!stockModels) return modelId;
@@ -441,28 +500,104 @@ export default function OrdersList() {
           </div>
         </div>
         
-        {/* Search Input */}
-        <div className="flex items-center gap-2 max-w-md">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Search by Order ID, Customer Name, or Phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+        {/* Search and Filter Controls */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Search by Order ID, Customer Name, or Phone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {searchTerm && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSearchTerm('')}
+                className="px-3"
+              >
+                Clear
+              </Button>
+            )}
           </div>
-          {searchTerm && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchTerm('')}
-              className="px-3"
-            >
-              Clear
-            </Button>
-          )}
+          
+          {/* Filter and Sort Controls */}
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Department Filter */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="department-filter" className="text-sm font-medium whitespace-nowrap">
+                Department:
+              </Label>
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="w-40" id="department-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {availableDepartments.map(dept => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Sort By */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="sort-by" className="text-sm font-medium whitespace-nowrap">
+                Sort by:
+              </Label>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-40" id="sort-by">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="orderDate">Order Date</SelectItem>
+                  <SelectItem value="dueDate">Due Date</SelectItem>
+                  <SelectItem value="orderId">Order ID</SelectItem>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="department">Department</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Sort Order */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="sort-order" className="text-sm font-medium whitespace-nowrap">
+                Order:
+              </Label>
+              <Select value={sortOrder} onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}>
+                <SelectTrigger className="w-32" id="sort-order">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">Newest First</SelectItem>
+                  <SelectItem value="asc">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Clear Filters Button */}
+            {(departmentFilter !== 'all' || sortBy !== 'orderDate' || sortOrder !== 'desc') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDepartmentFilter('all');
+                  setSortBy('orderDate');
+                  setSortOrder('desc');
+                }}
+                className="px-3"
+              >
+                Reset Filters
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

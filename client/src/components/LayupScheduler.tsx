@@ -783,7 +783,6 @@ export default function LayupScheduler() {
     // Sort orders by due date priority
     const sortedOrders = [...orders].sort((a, b) => {
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
-      ```text
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });

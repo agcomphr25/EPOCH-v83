@@ -154,49 +154,59 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
     }).format(amount);
   };
 
-  const getFeatureDisplayName = (featureType: string, featureId: string) => {
+  const getFeatureDisplayName = (featureType: string, featureValue: string) => {
     if (!features || !Array.isArray(features)) {
-      console.log('No features data available:', features);
-      return featureId;
+      return featureValue;
     }
     
-    console.log('Looking for feature type:', featureType, 'with ID:', featureId);
-    console.log('Available features:', features.map((f: any) => ({ id: f.id, type: f.type, name: f.name })));
-    
-    // Try to find by exact type match first
-    let feature = features.find((f: any) => f.type === featureType);
-    
-    // If not found, try to find by id or name matching the featureType
-    if (!feature) {
-      feature = features.find((f: any) => f.id === featureType || f.name === featureType);
-    }
-    
-    console.log('Found feature:', feature);
+    // Find the feature by id matching the featureType
+    const feature = features.find((f: any) => f.id === featureType);
     
     if (!feature || !feature.options) {
-      console.log('No feature found or no options available');
-      return featureId;
+      return featureValue;
     }
     
-    const option = feature.options.find((opt: any) => opt.id === featureId);
-    console.log('Found option:', option);
+    // Parse the options if it's a string
+    let options = feature.options;
+    if (typeof options === 'string') {
+      try {
+        options = JSON.parse(options);
+      } catch (e) {
+        return featureValue;
+      }
+    }
     
-    return option?.displayName || option?.name || featureId;
+    // Find the option by value
+    const option = options.find((opt: any) => opt.value === featureValue);
+    
+    return option?.label || option?.displayName || featureValue;
   };
 
   const renderFeatures = (orderFeatures: any) => {
     if (!orderFeatures || typeof orderFeatures !== 'object') return null;
     
-    return Object.entries(orderFeatures).map(([key, value]) => (
-      <div key={key} className="flex justify-between text-sm py-1">
-        <span className="font-medium capitalize text-gray-700">
-          {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}:
-        </span>
-        <span className="text-gray-900 ml-4">
-          {getFeatureDisplayName(key, String(value))}
-        </span>
-      </div>
-    ));
+    return Object.entries(orderFeatures).map(([key, value]) => {
+      let displayValue;
+      
+      if (Array.isArray(value)) {
+        // Handle array values (like other_options, rail_accessory)
+        displayValue = value.map(v => getFeatureDisplayName(key, String(v))).join(', ');
+      } else {
+        // Handle single values
+        displayValue = getFeatureDisplayName(key, String(value));
+      }
+      
+      return (
+        <div key={key} className="flex justify-between text-sm py-1">
+          <span className="font-medium capitalize text-gray-700">
+            {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}:
+          </span>
+          <span className="text-gray-900 ml-4">
+            {displayValue}
+          </span>
+        </div>
+      );
+    });
   };
 
   const totalPayments = payments.reduce((sum: number, payment: any) => sum + (payment.paymentAmount || 0), 0);

@@ -843,6 +843,12 @@ export default function LayupScheduler() {
     // Log when auto-schedule should run
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
+      
+      // Auto-trigger scheduling if no assignments exist yet
+      const hasAssignments = Object.keys(orderAssignments).length > 0;
+      if (!hasAssignments && orders.length > 0) {
+        console.log('🎯 Auto-triggering initial schedule generation will be available after component initialization');
+      }
     } else {
       console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
         orders: orders.length,
@@ -850,7 +856,7 @@ export default function LayupScheduler() {
         employees: employees.length
       });
     }
-  }, [orders, molds, employees]);
+  }, [orders, molds, employees, orderAssignments]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
@@ -911,12 +917,33 @@ export default function LayupScheduler() {
       allWorkDays.push(...weekDays);
     }
 
-    // Sort orders by due date priority
+    // Sort orders with Mesa Universal priority first, then by due date
     const sortedOrders = [...orders].sort((a, b) => {
+      // Priority 1: Mesa Universal orders get highest priority
+      const aMesaUniversal = (a.stockModelId === 'mesa_universal' || a.product === 'Mesa - Universal');
+      const bMesaUniversal = (b.stockModelId === 'mesa_universal' || b.product === 'Mesa - Universal');
+      
+      if (aMesaUniversal && !bMesaUniversal) return -1; // Mesa Universal first
+      if (!aMesaUniversal && bMesaUniversal) return 1;  // Mesa Universal first
+      
+      // Priority 2: Sort by priority score (lower = higher priority)
+      const aPriority = a.priorityScore || 99;
+      const bPriority = b.priorityScore || 99;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      // Priority 3: Sort by due date (earliest first)
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
+    
+    // Count Mesa Universal orders for logging
+    const mesaUniversalOrders = sortedOrders.filter(o => 
+      o.stockModelId === 'mesa_universal' || o.product === 'Mesa - Universal'
+    );
+    console.log(`🏔️ Found ${mesaUniversalOrders.length} Mesa Universal orders (8/day limit will be enforced)`);
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
@@ -969,8 +996,11 @@ export default function LayupScheduler() {
     // Track cell assignments to ensure ONE ORDER PER CELL
     const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
+    
+    // Track Mesa Universal orders per day (8 maximum)
+    const mesaUniversalDailyCount: Record<string, number> = {};
 
-    console.log('🎯 Starting single-card-per-cell assignment algorithm');
+    console.log('🎯 Starting single-card-per-cell assignment algorithm with Mesa Universal constraints');
     console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
 
     // Debug mold configurations
@@ -1058,6 +1088,26 @@ export default function LayupScheduler() {
         const targetDate = allWorkDays[bestDateIndex];
         const dateKey = targetDate.toISOString().split('T')[0];
         const cellKey = `${bestMold.moldId}-${dateKey}`;
+        
+        // Check Mesa Universal daily limit (8 per day maximum)
+        const isMesaUniversal = (order.stockModelId === 'mesa_universal' || order.product === 'Mesa - Universal');
+        const currentMesaCount = mesaUniversalDailyCount[dateKey] || 0;
+        
+        if (isMesaUniversal && currentMesaCount >= 8) {
+          console.log(`⏸️ Mesa Universal limit reached for ${dateKey}: ${currentMesaCount}/8 - skipping to next day`);
+          // Find next day with Mesa Universal capacity
+          let nextDayIndex = bestDateIndex + 1;
+          while (nextDayIndex < allWorkDays.length) {
+            const nextDate = allWorkDays[nextDayIndex];
+            const nextDateKey = nextDate.toISOString().split('T')[0];
+            const nextDayMesaCount = mesaUniversalDailyCount[nextDateKey] || 0;
+            if (nextDayMesaCount < 8) break;
+            nextDayIndex++;
+          }
+          // Don't assign this order - it will be retried in next loop iteration
+          assigned = false;
+          return;
+        }
 
         // Assign order to this cell
         newAssignments[order.orderId] = {
@@ -1069,10 +1119,17 @@ export default function LayupScheduler() {
         cellAssignments.add(cellKey);
         dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
+        
+        // Track Mesa Universal orders
+        if (isMesaUniversal) {
+          mesaUniversalDailyCount[dateKey] = (mesaUniversalDailyCount[dateKey] || 0) + 1;
+        }
 
         assigned = true;
-        const logPrefix = order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
-        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
+        const logPrefix = isMesaUniversal ? '🏔️ MESA UNIVERSAL ASSIGNED:' : 
+                         order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
+        const mesaStatus = isMesaUniversal ? ` (Mesa: ${mesaUniversalDailyCount[dateKey]}/8)` : '';
+        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)${mesaStatus}`);
       }
 
       if (!assigned) {
@@ -1091,10 +1148,30 @@ export default function LayupScheduler() {
     console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
       `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
     ).slice(0, 8));
+    
+    // Show Mesa Universal daily distribution
+    console.log('🏔️ Mesa Universal daily distribution:');
+    Object.entries(mesaUniversalDailyCount).forEach(([date, count]) => {
+      console.log(`  ${format(new Date(date), 'MM/dd')}: ${count}/8 Mesa Universal orders`);
+    });
 
     setOrderAssignments(newAssignments);
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
+
+  // Auto-trigger initial scheduling when conditions are met
+  useEffect(() => {
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+      const hasAssignments = Object.keys(orderAssignments).length > 0;
+      if (!hasAssignments) {
+        console.log('🎯 Auto-triggering initial schedule generation...');
+        // Delay to allow state to settle
+        setTimeout(() => {
+          generateAutoSchedule();
+        }, 1000);
+      }
+    }
+  }, [orders, molds, employees, orderAssignments, generateAutoSchedule]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -2056,6 +2133,9 @@ export default function LayupScheduler() {
               <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
                 <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>
               </div>
+              <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg">
+                <span className="text-orange-700 dark:text-orange-300 font-medium">Mesa Universal: 8/day limit</span>
+              </div>
             </div>
           </div>
         </div>
@@ -2636,6 +2716,16 @@ export default function LayupScheduler() {
                   Push to Queue
                 </>
               )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateAutoSchedule}
+              className="mr-4 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Auto Schedule (Mesa Constraints)
             </Button>
 
             <Button

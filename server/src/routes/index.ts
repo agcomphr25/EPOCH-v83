@@ -458,26 +458,31 @@ export function registerRoutes(app: Express): Server {
         const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
 
+        // Determine if this is a Mesa Universal order based on the order ID pattern
+        const isMesaUniversal = po.orderId?.startsWith('PUR00199') || po.itemId === 'mesa_universal';
+        const adjustedPriorityScore = isMesaUniversal ? 20 : priorityScore; // Mesa Universal gets highest priority
+        
         return {
           id: `p1-prod-${po.id}`,
           orderId: po.orderId,
           orderDate: po.orderDate,
           customer: po.customerName,
-          product: po.itemName,
+          product: isMesaUniversal ? 'Mesa - Universal' : po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
           department: 'Layup',
           currentDepartment: 'Layup',
-          priorityScore: priorityScore,
+          priorityScore: adjustedPriorityScore,
           dueDate: po.dueDate,
-          source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin
+          source: isMesaUniversal ? 'production_order' : 'p1_purchase_order', // Mark Mesa Universal as production_order
           poId: po.poId,
           poItemId: po.poItemId,
           productionOrderId: po.id,
-          stockModelId: po.itemId, // Use item ID as stock model for mold matching
+          stockModelId: isMesaUniversal ? 'mesa_universal' : po.itemId, // Use mesa_universal for Mesa orders
           specifications: po.specifications,
           createdAt: po.createdAt,
-          updatedAt: po.updatedAt
+          updatedAt: po.updatedAt,
+          isMesaUniversal: isMesaUniversal // Add flag for easy identification
         };
       });
 
@@ -508,8 +513,12 @@ export function registerRoutes(app: Express): Server {
         ...p1LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
+      // Count Mesa Universal orders
+      const mesaUniversalCount = p1LayupOrders.filter(order => order.isMesaUniversal).length;
+      const regularP1Count = p1LayupOrders.length - mesaUniversalCount;
+      
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
-      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
+      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, Mesa Universal: ${mesaUniversalCount}, Other P1: ${regularP1Count}`);
 
       res.json(combinedOrders);
     } catch (error) {

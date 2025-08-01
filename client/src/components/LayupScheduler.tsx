@@ -708,6 +708,66 @@ export default function LayupScheduler() {
     await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
   };
 
+  // Python scheduler integration
+  const pythonSchedulerMutation = useMutation({
+    mutationFn: async () => {
+      const schedulerData = {
+        orders: processedOrders.slice(0, 100), // Limit for testing
+        molds: molds,
+        employees: employees
+      };
+      
+      return apiRequest('/api/python-scheduler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: schedulerData
+      });
+    },
+    onSuccess: (result) => {
+      console.log('🐍 Python scheduler result:', result);
+      toast({
+        title: "Python Scheduler Complete",
+        description: `Scheduled ${result.schedule?.length || 0} orders with Mesa Universal constraints`,
+      });
+      
+      // Apply the Python scheduler results to our local state
+      if (result.schedule && Array.isArray(result.schedule)) {
+        const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+        
+        result.schedule.forEach((slot: any) => {
+          newAssignments[slot.order_id] = {
+            moldId: slot.mold_id,
+            date: slot.scheduled_date
+          };
+        });
+        
+        setOrderAssignments(newAssignments);
+        setHasUnsavedScheduleChanges(true);
+      }
+    },
+    onError: (error) => {
+      console.error('❌ Python scheduler failed:', error);
+      toast({
+        title: "Scheduler Error",
+        description: "Failed to run Python scheduler with Mesa Universal constraints",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleRunPythonScheduler = async () => {
+    if (processedOrders.length === 0) {
+      toast({
+        title: "No Orders",
+        description: "No orders available for scheduling",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await pythonSchedulerMutation.mutateAsync();
+  };
+
   // Helper function to get current week's orders
   const getOrdersForCurrentWeek = () => {
     const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
@@ -1717,7 +1777,7 @@ export default function LayupScheduler() {
       instanceNumber: mold.instanceNumber,
       enabled: mold.enabled ?? true,
       multiplier: mold.multiplier,
-      stockModels: mold.stockModels, // Include stock model compatibility for P1 purchase orders
+      stockModels: mold.stockModels || [], // Include stock model compatibility for P1 purchase orders
     }));
 
     const employeeData = employees.map(emp => ({
@@ -2567,6 +2627,26 @@ export default function LayupScheduler() {
                 <>
                   <ArrowRight className="w-4 h-4 mr-2" />
                   Push to Queue
+                </>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRunPythonScheduler}
+              disabled={pythonSchedulerMutation.isPending}
+              className="mr-4"
+            >
+              {pythonSchedulerMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Python Scheduler
                 </>
               )}
             </Button>

@@ -614,6 +614,96 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Python scheduler integration endpoint
+  app.post('/api/python-scheduler', async (req, res) => {
+    try {
+      console.log('🐍 Running Python scheduler with Mesa Universal constraints...');
+      const { spawn } = require('child_process');
+      const path = require('path');
+      
+      const { orders = [], molds = [], employees = [] } = req.body;
+      
+      if (orders.length === 0) {
+        return res.status(400).json({ error: 'Orders array is required' });
+      }
+
+      // Prepare data for Python scheduler
+      const schedulerInput = {
+        orders: orders.map((order: any) => ({
+          order_id: order.orderId,
+          order_type: order.source === 'production_order' ? 'mesa_universal' : 'regular',
+          features: order.features || {},
+          quantity: order.quantity || 1,
+          priority: order.priorityScore || 50,
+          deadline: order.dueDate || order.orderDate,
+          stock_model_id: order.stockModelId
+        })),
+        molds: molds.map((mold: any) => ({
+          mold_id: mold.moldId,
+          capacity: mold.multiplier || 1,
+          compatible_types: mold.stockModels || [],
+          stock_models: mold.stockModels || []
+        })),
+        employees: employees.map((emp: any) => ({
+          employee_id: emp.employeeId,
+          skills: ['mesa_universal', 'regular', 'P1'], // All employees can handle all types
+          prod_rate: emp.rate || 1,
+          hours_per_day: emp.hours || 10
+        }))
+      };
+
+      const pythonScript = path.join(process.cwd(), 'scripts', 'scheduler.py');
+      const pythonProcess = spawn('python', [pythonScript, '--json-input', '--json-output'], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      pythonProcess.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data: Buffer) => {
+        errorOutput += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          console.error('Python scheduler error:', errorOutput);
+          return res.status(500).json({ error: 'Python scheduler failed', details: errorOutput });
+        }
+
+        try {
+          // Extract JSON from output (filter out console.log messages)
+          const lines = output.trim().split('\n');
+          const jsonLine = lines.find(line => line.startsWith('{'));
+          
+          if (!jsonLine) {
+            console.log('Python scheduler output:', output);
+            return res.json({ schedule: [], summary: {}, raw_output: output });
+          }
+
+          const result = JSON.parse(jsonLine);
+          console.log(`🐍 Python scheduler completed: ${result.schedule?.length || 0} orders scheduled`);
+          
+          res.json(result);
+        } catch (parseError) {
+          console.error('Failed to parse Python scheduler output:', parseError);
+          res.status(500).json({ error: 'Failed to parse scheduler output', raw_output: output });
+        }
+      });
+
+      // Send input data to Python process
+      pythonProcess.stdin.write(JSON.stringify(schedulerInput));
+      pythonProcess.stdin.end();
+
+    } catch (error) {
+      console.error('Python scheduler integration error:', error);
+      res.status(500).json({ error: 'Failed to run Python scheduler' });
+    }
+  });
+
   // Push scheduled orders to layup/plugging queue workflow
   app.post('/api/push-to-layup-plugging', async (req, res) => {
     try {

@@ -13,6 +13,7 @@ import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
+import { useQueueSync } from '@/hooks/useQueueSync';
 
 // Queue Order Item Component - simplified version of DraggableOrderItem for display only
 function QueueOrderItem({ order, getModelDisplayName, processedOrders }: { 
@@ -259,6 +260,7 @@ export default function LayupPluggingQueuePage() {
   
   // Use the same data source as LayupScheduler (now excludes P1 orders)
   const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  const { triggerQueueRefresh } = useQueueSync(); // Enable real-time queue sync
   
   // Apply LOP processing exactly like LayupScheduler
   const processedOrders = useMemo(() => {

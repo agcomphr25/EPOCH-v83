@@ -1,5 +1,6 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
+import { queueSyncEmitter, QUEUE_EVENTS, DEFAULT_QUEUE_FILTERS, validateQueueFilters, emitQueueUpdate, MesaUniversalCapacityTracker } from './queue-sync.js';
 import authRoutes from './auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
@@ -496,6 +497,7 @@ export function registerRoutes(app: Express): Server {
         product: order.modelId || 'Unknown',
         quantity: 1,
         status: order.status,
+        orderType: 'regular',
         department: 'Layup',
         currentDepartment: 'Layup',
         priorityScore: 50, // Regular orders have lower priority
@@ -521,7 +523,17 @@ export function registerRoutes(app: Express): Server {
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
       console.log(`🏭 Regular orders: ${regularLayupOrders.length}, Mesa Universal: ${mesaUniversalCount}, Other P1: ${regularP1Count}`);
 
-      res.json(combinedOrders);
+      // Apply filters and emit sync event for real-time queue updates
+      const filteredOrders = validateQueueFilters(combinedOrders, DEFAULT_QUEUE_FILTERS);
+      
+      emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
+        type: 'p1_layup_queue',
+        count: filteredOrders.length,
+        mesaUniversalCount,
+        timestamp: new Date().toISOString()
+      });
+
+      res.json(filteredOrders);
     } catch (error) {
       console.error("P1 layup queue error:", error);
       res.status(500).json({ error: "Failed to fetch P1 layup queue" });
@@ -590,6 +602,73 @@ export function registerRoutes(app: Express): Server {
       console.error("P2 layup schedule error:", error);
       res.status(500).json({ error: "Failed to fetch P2 layup schedule" });
     }
+  });
+
+  // Queue webhook/mirror endpoint - pushes schedule changes directly to queue
+  app.post('/api/queue-sync-webhook', async (req, res) => {
+    try {
+      const { eventType, data } = req.body;
+      console.log(`🔄 Queue sync webhook called: ${eventType}`);
+      
+      // Mirror schedule changes to queue in real-time
+      if (eventType === QUEUE_EVENTS.SCHEDULE_UPDATED) {
+        // Track Mesa Universal capacity when orders are scheduled
+        if (data.mesaUniversalScheduled) {
+          const capacityTracker = MesaUniversalCapacityTracker.getInstance();
+          data.mesaUniversalScheduled.forEach((scheduled: any) => {
+            capacityTracker.addScheduled(scheduled.date);
+          });
+        }
+        
+        // Emit to all connected clients for real-time updates
+        emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
+          ...data,
+          mirrored: true,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      res.json({ success: true, processed: eventType });
+    } catch (error) {
+      console.error("Queue sync webhook error:", error);
+      res.status(500).json({ error: "Failed to process queue sync" });
+    }
+  });
+
+  // Server-Sent Events endpoint for real-time queue updates
+  app.get('/api/queue-sync-events', (req, res) => {
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    // Send initial connection message
+    res.write('data: {"type":"connected","timestamp":"' + new Date().toISOString() + '"}\n\n');
+
+    // Set up event listeners for queue sync
+    const handleQueueUpdate = (data: any) => {
+      res.write(`data: ${JSON.stringify({ type: 'queue_update', data })}\n\n`);
+    };
+
+    const handleScheduleUpdate = (data: any) => {
+      res.write(`data: ${JSON.stringify({ type: 'schedule_update', data })}\n\n`);
+    };
+
+    // Register event listeners
+    queueSyncEmitter.on(QUEUE_EVENTS.SCHEDULE_UPDATED, handleScheduleUpdate);
+    queueSyncEmitter.on(QUEUE_EVENTS.ORDER_STATUS_CHANGED, handleQueueUpdate);
+    queueSyncEmitter.on(QUEUE_EVENTS.MESA_UNIVERSAL_SCHEDULED, handleQueueUpdate);
+
+    // Clean up when client disconnects
+    req.on('close', () => {
+      queueSyncEmitter.removeListener(QUEUE_EVENTS.SCHEDULE_UPDATED, handleScheduleUpdate);
+      queueSyncEmitter.removeListener(QUEUE_EVENTS.ORDER_STATUS_CHANGED, handleQueueUpdate);
+      queueSyncEmitter.removeListener(QUEUE_EVENTS.MESA_UNIVERSAL_SCHEDULED, handleQueueUpdate);
+    });
   });
 
   app.post('/api/p2-layup-schedule', async (req, res) => {

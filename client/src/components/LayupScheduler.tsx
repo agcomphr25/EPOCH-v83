@@ -5,6 +5,7 @@ import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
+import { useScheduleNotifier } from '@/hooks/useQueueSync';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -565,6 +566,7 @@ export default function LayupScheduler() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { notifyScheduleUpdate } = useScheduleNotifier(); // Enable queue synchronization
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 

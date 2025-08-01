@@ -2219,7 +2219,7 @@ export default function LayupScheduler() {
 
                               {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
-                                {stockModels.map((model: any) => (
+                                {stockModels.slice(0, 50).map((model: any) => (
                                   <div key={model.id} className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`edit-stock-${mold.moldId}-${model.id}`}
@@ -2240,6 +2240,11 @@ export default function LayupScheduler() {
                                     </label>
                                   </div>
                                 ))}
+                                {stockModels.length > 50 && (
+                                  <div className="text-xs text-gray-500 italic">
+                                    Showing first 50 models. Use search to find specific models.
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <div className="text-xs text-gray-500 dark:text-gray-400">

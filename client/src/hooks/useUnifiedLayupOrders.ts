@@ -31,11 +31,15 @@ export function useUnifiedLayupOrders() {
     queryKey: ['/api/p1-layup-queue'],
     select: (data: UnifiedLayupOrder[]) => {
       console.log('🔄 useUnifiedLayupOrders: Raw data received:', data?.length || 0, 'orders');
+      console.log('🔄 useUnifiedLayupOrders: Full data array:', data);
       if (data && data.length > 0) {
         const p1PurchaseOrders = data.filter(o => o.source === 'p1_purchase_order');
         const mainOrders = data.filter(o => o.source === 'main_orders');
+        const productionOrders = data.filter(o => o.source === 'production_order');
         console.log('🔄 useUnifiedLayupOrders: P1 Purchase orders:', p1PurchaseOrders.length);
         console.log('🔄 useUnifiedLayupOrders: Main orders:', mainOrders.length);
+        console.log('🔄 useUnifiedLayupOrders: Production orders:', productionOrders.length);
+        
         if (p1PurchaseOrders.length > 0) {
           console.log('🔄 useUnifiedLayupOrders: Sample P1 PO:', {
             orderId: p1PurchaseOrders[0].orderId,
@@ -43,12 +47,29 @@ export function useUnifiedLayupOrders() {
             stockModelId: p1PurchaseOrders[0].stockModelId,
             source: p1PurchaseOrders[0].source
           });
+          console.log('🔄 useUnifiedLayupOrders: First 3 P1 POs:', p1PurchaseOrders.slice(0, 3).map(o => ({
+            orderId: o.orderId,
+            source: o.source,
+            product: o.product
+          })));
+        } else {
+          console.warn('❌ useUnifiedLayupOrders: NO P1 PURCHASE ORDERS FOUND IN DATA!');
         }
+        
+        // Check for orders that might have Mesa product
+        const mesaOrders = data.filter(o => o.product && o.product.includes('Mesa'));
+        console.log('🔄 useUnifiedLayupOrders: Mesa orders found:', mesaOrders.length);
+        if (mesaOrders.length > 0) {
+          console.log('🔄 useUnifiedLayupOrders: Sample Mesa order:', mesaOrders[0]);
+        }
+      } else {
+        console.warn('❌ useUnifiedLayupOrders: NO DATA RECEIVED FROM API!');
       }
       return data || [];
     },
-    refetchInterval: 30000,
-    staleTime: 10000, // Consider data fresh for 10 seconds
+    refetchInterval: 10000, // Even more frequent updates
+    staleTime: 1000, // Very short cache time
+    gcTime: 5000 // Garbage collect after 5 seconds
   });
 
   // Only P1 orders now - P2 orders excluded from unified scheduler

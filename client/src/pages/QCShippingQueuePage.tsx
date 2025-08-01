@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrendingUp, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -13,9 +14,15 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
+  // Get features for order customization display
+  const { data: features = [] } = useQuery({
+    queryKey: ['/api/features'],
+  });
+
   // Get orders in QC/Shipping department
   const qcShippingOrders = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    const orders = allOrders as any[];
+    return orders.filter((order: any) => 
       order.currentDepartment === 'QC' || 
       order.currentDepartment === 'Shipping' ||
       (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
@@ -25,7 +32,8 @@ export default function QCShippingQueuePage() {
 
   // Count orders in previous department (Paint)
   const paintCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    const orders = allOrders as any[];
+    return orders.filter((order: any) => 
       order.currentDepartment === 'Paint' || 
       (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     ).length;
@@ -33,7 +41,8 @@ export default function QCShippingQueuePage() {
 
   // Count completed orders (shipped)
   const completedCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    const orders = allOrders as any[];
+    return orders.filter((order: any) => 
       order.status === 'COMPLETED' || 
       order.status === 'SHIPPED'
     ).length;
@@ -46,15 +55,42 @@ export default function QCShippingQueuePage() {
 
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
-    const model = stockModels.find((m: any) => m.id === modelId);
+    const models = stockModels as any[];
+    const model = models.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  // Helper function to get feature display name
+  const getFeatureDisplayName = (featureId: string, optionValue: string) => {
+    const featureList = features as any[];
+    const feature = featureList.find((f: any) => f.id === featureId);
+    if (!feature) return optionValue;
+    
+    const option = feature.options?.find((opt: any) => opt.value === optionValue);
+    return option?.label || optionValue;
+  };
+
+  // Helper function to format order features for tooltip
+  const formatOrderFeatures = (order: any) => {
+    if (!order.features) return 'No customizations';
+    
+    const featureEntries = Object.entries(order.features);
+    if (featureEntries.length === 0) return 'No customizations';
+    
+    return featureEntries.map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `${key.replace(/_/g, ' ')}: ${value.map(v => getFeatureDisplayName(key, v)).join(', ')}`;
+      } else {
+        return `${key.replace(/_/g, ' ')}: ${getFeatureDisplayName(key, value as string)}`;
+      }
+    }).join('\n');
   };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <TrendingUp className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">QC/Shipping Department Queue</h1>
+        <h1 className="text-3xl font-bold">Shipping QC Department Queue</h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -103,7 +139,7 @@ export default function QCShippingQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>QC/Shipping Department Queue</span>
+            <span>Shipping QC Department Queue</span>
             <Badge variant="outline" className="ml-2">
               {qcShippingOrders.length} Orders
             </Badge>
@@ -112,63 +148,89 @@ export default function QCShippingQueuePage() {
         <CardContent>
           {qcShippingOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No orders in QC/Shipping queue
+              No orders in Shipping QC queue
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {qcShippingOrders.map((order: any) => {
-                const modelId = order.stockModelId || order.modelId;
-                const materialType = modelId?.startsWith('cf_') ? 'CF' : 
-                                   modelId?.startsWith('fg_') ? 'FG' : null;
+            <TooltipProvider>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {qcShippingOrders.map((order: any) => {
+                  const modelId = order.stockModelId || order.modelId;
+                  const materialType = modelId?.startsWith('cf_') ? 'CF' : 
+                                     modelId?.startsWith('fg_') ? 'FG' : null;
+                  const featuresText = formatOrderFeatures(order);
 
-                return (
-                  <Card key={order.orderId} className="border-l-4 border-l-green-500">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div className="font-semibold text-lg">
-                          {getDisplayOrderId(order)}
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {order.status}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {materialType && (
-                            <Badge variant="secondary" className="text-xs">
-                              {materialType}
-                            </Badge>
+                  return (
+                    <Tooltip key={order.orderId}>
+                      <TooltipTrigger asChild>
+                        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-200 cursor-pointer hover:border-blue-300">
+                          <CardHeader className="pb-2">
+                            <div className="flex justify-between items-start">
+                              <div className="font-semibold text-lg">
+                                {getDisplayOrderId(order)}
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {order.status}
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                {materialType && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {materialType}
+                                  </Badge>
+                                )}
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                  {getModelDisplayName(modelId)}
+                                </span>
+                              </div>
+
+                              {order.customer && (
+                                <div className="text-xs text-gray-500">
+                                  Customer: {order.customer}
+                                </div>
+                              )}
+
+                              {order.dueDate && (
+                                <div className="text-xs text-gray-500">
+                                  Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                                </div>
+                              )}
+
+                              {order.createdAt && (
+                                <div className="text-xs text-gray-500">
+                                  In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
+                                </div>
+                              )}
+
+                              <div className="text-xs text-blue-500 mt-2 italic">
+                                Hover for customizations
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-sm p-4 bg-white border shadow-lg">
+                        <div className="space-y-2">
+                          <div className="font-semibold text-blue-600 border-b pb-1">
+                            Order Customizations - {getDisplayOrderId(order)}
+                          </div>
+                          <div className="text-sm whitespace-pre-line text-gray-700">
+                            {featuresText}
+                          </div>
+                          {order.product && (
+                            <div className="text-xs text-gray-500 border-t pt-1 mt-2">
+                              Product: {order.product}
+                            </div>
                           )}
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {getModelDisplayName(modelId)}
-                          </span>
                         </div>
-
-                        {order.customer && (
-                          <div className="text-xs text-gray-500">
-                            Customer: {order.customer}
-                          </div>
-                        )}
-
-                        {order.dueDate && (
-                          <div className="text-xs text-gray-500">
-                            Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                          </div>
-                        )}
-
-                        {order.createdAt && (
-                          <div className="text-xs text-gray-500">
-                            In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>

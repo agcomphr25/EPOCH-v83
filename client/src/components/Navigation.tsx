@@ -369,9 +369,15 @@ export default function Navigation() {
     },
     {
       path: '/department-queue/qc-shipping',
-      label: 'QC/Shipping',
+      label: 'Shipping QC',
       icon: TrendingUp,
-      description: 'Quality control and shipping department queue'
+      description: 'Shipping quality control department queue'
+    },
+    {
+      path: '/department-queue/shipping',
+      label: 'Shipping',
+      icon: Package,
+      description: 'Shipping department queue'
     }
   ];
 

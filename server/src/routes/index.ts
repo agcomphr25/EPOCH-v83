@@ -428,9 +428,21 @@ export function registerRoutes(app: Express): Server {
   });
 
   // P1 Layup Queue endpoint - combines regular orders and P1 purchase orders
+  // P1 layup queue cache
+  let p1QueueCache: any = null;
+  let p1CacheTime = 0;
+  const P1_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting P1 layup queue processing...');
+      // Return cached data if available and fresh
+      const now = Date.now();
+      if (p1QueueCache && (now - p1CacheTime) < P1_CACHE_DURATION) {
+        console.log('⚡ Returning cached P1 queue data');
+        return res.json(p1QueueCache);
+      }
+
+      console.log('🏭 Processing fresh P1 layup queue...');
       const { storage } = await import('../../storage');
 
       // Get only finalized orders from draft table that are ready for production
@@ -537,6 +549,11 @@ export function registerRoutes(app: Express): Server {
 
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
       console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
+
+      // Cache the result
+      p1QueueCache = combinedOrders;
+      p1CacheTime = now;
+      console.log('⚡ Cached P1 queue data for performance');
 
       res.json(combinedOrders);
     } catch (error) {

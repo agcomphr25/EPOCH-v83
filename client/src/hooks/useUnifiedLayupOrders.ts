@@ -30,20 +30,19 @@ export function useUnifiedLayupOrders() {
   const { data: p1Orders = [], isLoading: p1Loading } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
     select: (data: UnifiedLayupOrder[]) => {
-      // Reduced logging to improve performance
+      // Performance optimization: Limit processing to first 200 orders for immediate responsiveness
       if (data && data.length > 0) {
-        console.log('📊 useUnifiedLayupOrders: Loaded', data.length, 'orders');
-        const sourceCounts = data.reduce((acc, o) => {
-          acc[o.source] = (acc[o.source] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        console.log('📊 Order sources:', sourceCounts);
+        const limitedData = data.slice(0, 200); // Process only first 200 orders
+        console.log('⚡ Performance mode: Processing', limitedData.length, 'of', data.length, 'total orders');
+        return limitedData;
       }
-      return data || [];
+      return [];
     },
-    refetchInterval: 300000, // 5 minutes instead of 10 seconds
-    staleTime: 600000, // 10 minute cache instead of 1 second
-    gcTime: 900000 // 15 minute garbage collection
+    refetchInterval: false, // Disable automatic refetching completely
+    staleTime: 1800000, // 30 minute cache (1.8M ms)
+    gcTime: 3600000, // 1 hour garbage collection
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Don't refetch on component mount if data exists
   });
 
   // Only P1 orders now - P2 orders excluded from unified scheduler

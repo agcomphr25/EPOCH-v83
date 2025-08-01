@@ -702,14 +702,10 @@ export default function LayupScheduler() {
     return scheduledOrders;
   }, [orders]);
 
-  // Performance: Reduced logging 
+  // Performance: Minimal logging only when orders change
   useEffect(() => {
     if (orders.length > 0) {
-      const sourceCounts = orders.reduce((acc, order) => {
-        acc[order.source] = (acc[order.source] || 0) + 1;
-        return acc;
-      }, {} as {[key: string]: number});
-      console.log('📊 LayupScheduler loaded:', sourceCounts);
+      console.log('📊 LayupScheduler:', orders.length, 'orders loaded');
     }
   }, [orders.length]);
 

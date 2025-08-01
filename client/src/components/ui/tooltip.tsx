@@ -18,18 +18,28 @@ interface TooltipProps {
 const Tooltip = ({ children }: TooltipProps) => {
   const [isVisible, setIsVisible] = useState(false)
   
+  const handleMouseEnter = () => {
+    setIsVisible(true)
+  }
+  
+  const handleMouseLeave = () => {
+    setIsVisible(false)
+  }
+  
   return (
     <div 
-      className="relative inline-block"
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
+      className="relative inline-block w-full"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {React.Children.map(children, (child) => {
         if (React.isValidElement(child)) {
           if (child.type === TooltipContent) {
             return React.cloneElement(child, { 
               ...child.props, 
-              isVisible 
+              isVisible,
+              onMouseEnter: handleMouseEnter,
+              onMouseLeave: handleMouseLeave
             } as any)
           }
         }
@@ -72,17 +82,19 @@ interface TooltipContentProps extends React.HTMLAttributes<HTMLDivElement> {
 const TooltipContent = React.forwardRef<
   HTMLDivElement,
   TooltipContentProps
->(({ children, className, isVisible = false, ...props }, ref) => {
+>(({ children, className, isVisible = false, onMouseEnter, onMouseLeave, ...props }, ref) => {
   if (!isVisible) return null
   
   return (
     <div
       ref={ref}
       className={cn(
-        "absolute z-50 min-w-[300px] max-w-md overflow-hidden rounded-md border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 shadow-lg animate-in fade-in-0 zoom-in-95",
-        "left-full ml-2 top-0",
+        "absolute z-[60] min-w-[320px] max-w-lg overflow-visible rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 p-4 text-sm text-gray-900 dark:text-gray-100 shadow-xl",
+        "left-full ml-3 top-0 pointer-events-none",
         className
       )}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       {...props}
     >
       {children}

@@ -199,7 +199,7 @@ export default function QCShippingQueuePage() {
                   return (
                     <Tooltip key={order.orderId}>
                       <TooltipTrigger asChild>
-                        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-200 cursor-pointer hover:border-blue-300">
+                        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-150 cursor-pointer hover:border-blue-300 relative">
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                               <div className="font-semibold text-lg">
@@ -248,12 +248,12 @@ export default function QCShippingQueuePage() {
                           </CardContent>
                         </Card>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-md p-4 bg-white dark:bg-gray-800 border shadow-lg z-50">
+                      <TooltipContent>
                         <div className="space-y-2">
-                          <div className="font-semibold text-blue-600 dark:text-blue-400 border-b pb-1">
+                          <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
                             Order Details
                           </div>
-                          <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono">
+                          <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
                             {orderDetails}
                           </div>
                         </div>

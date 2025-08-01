@@ -17,9 +17,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2, Edit } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Package2, Edit, Search, X } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
@@ -32,6 +33,7 @@ const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
 
   const { data: orders, isLoading } = useQuery<Order[]>({
@@ -105,8 +107,27 @@ export default function AllOrdersList() {
   });
 
   const filteredOrders = orders?.filter(order => {
-    if (selectedDepartment === 'all') return true;
-    return order.currentDepartment === selectedDepartment;
+    // Department filter
+    const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+    
+    // Search filter - search in multiple fields
+    if (!searchTerm.trim()) {
+      return departmentMatch;
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    const searchFields = [
+      order.orderId?.toLowerCase(),
+      order.fbOrderNumber?.toLowerCase(),
+      order.customer?.toLowerCase(),
+      order.customerId?.toLowerCase(),
+      order.product?.toLowerCase(),
+      order.modelId?.toLowerCase()
+    ].filter(Boolean);
+    
+    const searchMatch = searchFields.some(field => field?.includes(searchLower));
+    
+    return departmentMatch && searchMatch;
   }) || [];
 
   const handleProgressOrder = (orderId: string, nextDepartment: string) => {
@@ -160,17 +181,41 @@ export default function AllOrdersList() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             All Orders ({filteredOrders.length})
-            <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by department" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {departments.map(dept => (
-                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-4">
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search Order ID, FB Order #, Customer..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 w-80"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1 h-6 w-6 p-0"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Department Filter */}
+              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -439,27 +439,49 @@ export default function OrderEntry() {
     }
   }, [initialDataLoaded]);
 
-  // Clear Medium action length when switching to Ferrata/Armor models
+  // Clear Medium action length when switching to Ferrata/Armor models and LOP for CAT/Visigoth models
   useEffect(() => {
-    if (modelId && features.action_length === 'medium') {
+    if (modelId) {
       const selectedModel = modelOptions.find(m => m.id === modelId);
       const modelName = selectedModel?.displayName || selectedModel?.name || '';
-      const shouldExcludeMedium = modelName.toLowerCase().includes('ferrata') || 
-                                  modelName.toLowerCase().includes('armor');
       
-      if (shouldExcludeMedium) {
-        setFeatures(prev => ({ 
-          ...prev, 
-          action_length: undefined // Clear the medium selection
-        }));
-        toast({
-          title: "Action Length Updated",
-          description: "Medium action length is not available for this model. Please select Short or Long.",
-          variant: "default",
-        });
+      // Handle Medium action length exclusion for Ferrata/Armor models
+      if (features.action_length === 'medium') {
+        const shouldExcludeMedium = modelName.toLowerCase().includes('ferrata') || 
+                                    modelName.toLowerCase().includes('armor');
+        
+        if (shouldExcludeMedium) {
+          setFeatures(prev => ({ 
+            ...prev, 
+            action_length: undefined // Clear the medium selection
+          }));
+          toast({
+            title: "Action Length Updated",
+            description: "Medium action length is not available for this model. Please select Short or Long.",
+            variant: "default",
+          });
+        }
+      }
+      
+      // Handle LOP exclusion for CAT/Visigoth models
+      if (features.length_of_pull) {
+        const shouldExcludeLOP = modelName.toLowerCase().includes('cat') || 
+                                 modelName.toLowerCase().includes('visigoth');
+        
+        if (shouldExcludeLOP) {
+          setFeatures(prev => ({ 
+            ...prev, 
+            length_of_pull: undefined // Clear the LOP selection
+          }));
+          toast({
+            title: "LOP Option Removed",
+            description: "Length of Pull options are not available for this model.",
+            variant: "default",
+          });
+        }
       }
     }
-  }, [modelId, modelOptions, features.action_length, toast]);
+  }, [modelId, modelOptions, features.action_length, features.length_of_pull, toast]);
 
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
@@ -1284,43 +1306,59 @@ export default function OrderEntry() {
                     </Select>
                   </div>
 
-                  {/* LOP Length Of Pull */}
-                  <div>
-                    <Label>LOP Length Of Pull</Label>
-                    <Select 
-                      value={features.length_of_pull || undefined} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, length_of_pull: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          // Try multiple possible IDs for the LOP feature
-                          const lopFeature = featureDefs.find(f => 
-                            f.id === 'length_of_pull' || 
-                            f.name === 'length_of_pull' || 
-                            f.id?.toLowerCase().includes('lop') ||
-                            f.name?.toLowerCase().includes('lop') ||
-                            f.displayName?.toLowerCase().includes('length of pull') ||
-                            f.displayName?.toLowerCase().includes('lop')
-                          );
+                  {/* LOP Length Of Pull - Hidden for CAT and Visigoth models */}
+                  {(() => {
+                    // Check if selected model contains "CAT" or "Visigoth"
+                    // If so, hide LOP field entirely
+                    const selectedModel = modelOptions.find(m => m.id === modelId);
+                    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                    const hideLOP = modelName.toLowerCase().includes('cat') || 
+                                    modelName.toLowerCase().includes('visigoth');
+                    
+                    // Don't render LOP field for CAT/Visigoth models
+                    if (hideLOP) {
+                      return null;
+                    }
+                    
+                    return (
+                      <div>
+                        <Label>LOP Length Of Pull</Label>
+                        <Select 
+                          value={features.length_of_pull || undefined} 
+                          onValueChange={(value) => setFeatures(prev => ({ ...prev, length_of_pull: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              // Try multiple possible IDs for the LOP feature
+                              const lopFeature = featureDefs.find(f => 
+                                f.id === 'length_of_pull' || 
+                                f.name === 'length_of_pull' || 
+                                f.id?.toLowerCase().includes('lop') ||
+                                f.name?.toLowerCase().includes('lop') ||
+                                f.displayName?.toLowerCase().includes('length of pull') ||
+                                f.displayName?.toLowerCase().includes('lop')
+                              );
 
-                          if (!lopFeature || !lopFeature.options) {
-                            return null;
-                          }
+                              if (!lopFeature || !lopFeature.options) {
+                                return null;
+                              }
 
-                          return lopFeature.options
-                            .filter(option => option.value && option.value.trim() !== '')
-                            .map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                              return lopFeature.options
+                                .filter(option => option.value && option.value.trim() !== '')
+                                .map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })()}
 
                   {/* Texture */}
                   <div>

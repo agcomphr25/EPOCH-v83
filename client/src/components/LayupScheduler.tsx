@@ -689,7 +689,7 @@ export default function LayupScheduler() {
 
   // Debug production orders specifically
   useEffect(() => {
-    const productionOrders = orders.filter(order => order.source === 'production_order');
+    const productionOrders = orders.filter(order => order.source === 'production_order' || order.source === 'p1_purchase_order');
     console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
     console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
     if (productionOrders.length > 0) {

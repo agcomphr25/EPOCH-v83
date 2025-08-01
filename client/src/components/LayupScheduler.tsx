@@ -2024,6 +2024,11 @@ export default function LayupScheduler() {
                   {orders.filter(o => o.source === 'production_order').length} Production Orders
                 </span>
               </div>
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2 rounded-lg">
+                <span className="text-cyan-700 dark:text-cyan-300 font-medium">
+                  {orders.filter(o => o.source === 'p1_purchase_order').length} P1 Purchase Orders
+                </span>
+              </div>
               <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
                 <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
               </div>

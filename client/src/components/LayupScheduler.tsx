@@ -687,11 +687,30 @@ export default function LayupScheduler() {
     return scheduledOrders;
   }, [orders]);
 
-  // Debug production orders specifically
+  // Debug production orders and P1 purchase orders specifically
   useEffect(() => {
     const productionOrders = orders.filter(order => order.source === 'production_order');
+    const p1PurchaseOrders = orders.filter(order => order.source === 'p1_purchase_order');
+    const mainOrders = orders.filter(order => order.source === 'main_orders');
+    
     console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
     console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
+    console.log('🏭 LayupScheduler: P1 Purchase orders found:', p1PurchaseOrders.length);
+    console.log('🏭 LayupScheduler: Main orders found:', mainOrders.length);
+    
+    if (p1PurchaseOrders.length > 0) {
+      console.log('🏭 LayupScheduler: Sample P1 purchase order:', p1PurchaseOrders[0]);
+      console.log('🏭 LayupScheduler: First 5 P1 purchase orders:', p1PurchaseOrders.slice(0, 5).map(o => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId,
+        product: o.product,
+        customer: o.customer,
+        unitNumber: o.unitNumber,
+        totalUnits: o.totalUnits
+      })));
+    }
+    
     if (productionOrders.length > 0) {
       console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
       console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({

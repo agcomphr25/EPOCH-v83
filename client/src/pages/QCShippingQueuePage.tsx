@@ -211,7 +211,7 @@ export default function QCShippingQueuePage() {
                           </CardContent>
                         </Card>
                       </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-sm p-4 bg-white border shadow-lg">
+                      <TooltipContent className="max-w-sm p-4 bg-white border shadow-lg">
                         <div className="space-y-2">
                           <div className="font-semibold text-blue-600 border-b pb-1">
                             Order Customizations - {getDisplayOrderId(order)}

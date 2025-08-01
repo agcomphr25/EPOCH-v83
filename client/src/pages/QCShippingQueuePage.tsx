@@ -78,12 +78,49 @@ export default function QCShippingQueuePage() {
     if (featureEntries.length === 0) return 'No customizations';
     
     return featureEntries.map(([key, value]) => {
+      const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       if (Array.isArray(value)) {
-        return `${key.replace(/_/g, ' ')}: ${value.map(v => getFeatureDisplayName(key, v)).join(', ')}`;
+        const displayValues = value.map(v => getFeatureDisplayName(key, v)).join(', ');
+        return `• ${displayKey}: ${displayValues}`;
       } else {
-        return `${key.replace(/_/g, ' ')}: ${getFeatureDisplayName(key, value as string)}`;
+        const displayValue = getFeatureDisplayName(key, value as string);
+        return `• ${displayKey}: ${displayValue}`;
       }
     }).join('\n');
+  };
+
+  // Helper function to format complete order details for tooltip
+  const formatOrderDetails = (order: any) => {
+    const details = [];
+    
+    // Basic order info
+    details.push(`Order: ${getDisplayOrderId(order)}`);
+    details.push(`Customer: ${order.customer || 'Unknown'}`);
+    details.push(`Model: ${getModelDisplayName(order.stockModelId || order.modelId)}`);
+    
+    if (order.product) {
+      details.push(`Product: ${order.product}`);
+    }
+    
+    if (order.orderDate) {
+      details.push(`Order Date: ${format(new Date(order.orderDate), 'MMM dd, yyyy')}`);
+    }
+    
+    if (order.dueDate) {
+      details.push(`Due Date: ${format(new Date(order.dueDate), 'MMM dd, yyyy')}`);
+    }
+    
+    details.push(`Status: ${order.status || 'Unknown'}`);
+    
+    // Add separator
+    details.push('');
+    details.push('CUSTOMIZATIONS:');
+    
+    // Add features
+    const featuresText = formatOrderFeatures(order);
+    details.push(featuresText);
+    
+    return details.join('\n');
   };
 
   return (
@@ -157,7 +194,7 @@ export default function QCShippingQueuePage() {
                   const modelId = order.stockModelId || order.modelId;
                   const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                                      modelId?.startsWith('fg_') ? 'FG' : null;
-                  const featuresText = formatOrderFeatures(order);
+                  const orderDetails = formatOrderDetails(order);
 
                   return (
                     <Tooltip key={order.orderId}>
@@ -205,25 +242,20 @@ export default function QCShippingQueuePage() {
                               )}
 
                               <div className="text-xs text-blue-500 mt-2 italic">
-                                Hover for customizations
+                                Hover for order details
                               </div>
                             </div>
                           </CardContent>
                         </Card>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-sm p-4 bg-white border shadow-lg">
+                      <TooltipContent className="max-w-md p-4 bg-white dark:bg-gray-800 border shadow-lg z-50">
                         <div className="space-y-2">
-                          <div className="font-semibold text-blue-600 border-b pb-1">
-                            Order Customizations - {getDisplayOrderId(order)}
+                          <div className="font-semibold text-blue-600 dark:text-blue-400 border-b pb-1">
+                            Order Details
                           </div>
-                          <div className="text-sm whitespace-pre-line text-gray-700">
-                            {featuresText}
+                          <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono">
+                            {orderDetails}
                           </div>
-                          {order.product && (
-                            <div className="text-xs text-gray-500 border-t pt-1 mt-2">
-                              Product: {order.product}
-                            </div>
-                          )}
                         </div>
                       </TooltipContent>
                     </Tooltip>

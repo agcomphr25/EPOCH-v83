@@ -19,39 +19,24 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
-  // Timeout refs for hover delays
-  const [hoverTimeouts, setHoverTimeouts] = useState<{[key: string]: NodeJS.Timeout}>({});
-
-  // Helper function to handle mouse enter with delay
-  const handleMouseEnter = useCallback((dropdownName: string, setExpanded: (value: boolean) => void) => {
-    // Clear any existing timeout for this dropdown
-    if (hoverTimeouts[dropdownName]) {
-      clearTimeout(hoverTimeouts[dropdownName]);
+  // Helper function to toggle dropdown
+  const toggleDropdown = useCallback((dropdownName: string, isExpanded: boolean, setExpanded: (value: boolean) => void) => {
+    setExpanded(!isExpanded);
+    
+    // Close other dropdowns when opening a new one
+    if (!isExpanded) {
+      if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
+      if (dropdownName !== 'inventory') setInventoryExpanded(false);
+      if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
+      if (dropdownName !== 'employees') setEmployeesExpanded(false);
+      if (dropdownName !== 'finance') setFinanceExpanded(false);
+      if (dropdownName !== 'testDashboards') setTestDashboardsExpanded(false);
+      if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
+      if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
+      if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
+      if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
-    setExpanded(true);
-  }, [hoverTimeouts]);
-
-  // Helper function to handle mouse leave with delay
-  const handleMouseLeave = useCallback((dropdownName: string, setExpanded: (value: boolean) => void) => {
-    // Set a small delay before closing
-    const timeout = setTimeout(() => {
-      setExpanded(false);
-    }, 150); // 150ms delay
-
-    setHoverTimeouts(prev => ({
-      ...prev,
-      [dropdownName]: timeout
-    }));
   }, []);
-
-  // Clean up timeouts on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(hoverTimeouts).forEach(timeout => {
-        if (timeout) clearTimeout(timeout);
-      });
-    };
-  }, [hoverTimeouts]);
 
   const navItems = [
     {
@@ -458,17 +443,14 @@ export default function Navigation() {
             })}
 
             {/* Forms & Reports Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('formsReports', setFormsReportsExpanded)}
-              onMouseLeave={() => handleMouseLeave('formsReports', setFormsReportsExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isFormsReportsActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isFormsReportsActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
               >
                 <FormInput className="h-4 w-4" />
                 Forms & Reports
@@ -505,17 +487,14 @@ export default function Navigation() {
             </div>
 
             {/* Inventory Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('inventory', setInventoryExpanded)}
-              onMouseLeave={() => handleMouseLeave('inventory', setInventoryExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isInventoryActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isInventoryActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
               >
                 <Package className="h-4 w-4" />
                 Inventory
@@ -552,17 +531,14 @@ export default function Navigation() {
             </div>
 
             {/* QC & Maintenance Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('qcMaintenance', setQcMaintenanceExpanded)}
-              onMouseLeave={() => handleMouseLeave('qcMaintenance', setQcMaintenanceExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isQcMaintenanceActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isQcMaintenanceActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('qcMaintenance', qcMaintenanceExpanded, setQcMaintenanceExpanded)}
               >
                 <Shield className="h-4 w-4" />
                 QC & Maintenance
@@ -599,17 +575,14 @@ export default function Navigation() {
             </div>
 
             {/* Employees Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('employees', setEmployeesExpanded)}
-              onMouseLeave={() => handleMouseLeave('employees', setEmployeesExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isEmployeesActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isEmployeesActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('employees', employeesExpanded, setEmployeesExpanded)}
               >
                 <Users className="h-4 w-4" />
                 Employees
@@ -646,17 +619,14 @@ export default function Navigation() {
             </div>
 
             {/* Finance Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('finance', setFinanceExpanded)}
-              onMouseLeave={() => handleMouseLeave('finance', setFinanceExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isFinanceActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isFinanceActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('finance', financeExpanded, setFinanceExpanded)}
               >
                 <DollarSign className="h-4 w-4" />
                 Finance
@@ -693,17 +663,14 @@ export default function Navigation() {
             </div>
 
             {/* Test Dashboards Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('testDashboards', setTestDashboardsExpanded)}
-              onMouseLeave={() => handleMouseLeave('testDashboards', setTestDashboardsExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isTestDashboardsActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isTestDashboardsActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('testDashboards', testDashboardsExpanded, setTestDashboardsExpanded)}
               >
                 <TestTube className="h-4 w-4" />
                 Test Dashboards
@@ -740,17 +707,14 @@ export default function Navigation() {
             </div>
 
             {/* Purchase Orders Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('purchaseOrders', setPurchaseOrdersExpanded)}
-              onMouseLeave={() => handleMouseLeave('purchaseOrders', setPurchaseOrdersExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isPurchaseOrdersActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isPurchaseOrdersActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('purchaseOrders', purchaseOrdersExpanded, setPurchaseOrdersExpanded)}
               >
                 <ClipboardList className="h-4 w-4" />
                 Purchase Orders
@@ -787,17 +751,14 @@ export default function Navigation() {
             </div>
 
             {/* Production Scheduling Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('productionScheduling', setProductionSchedulingExpanded)}
-              onMouseLeave={() => handleMouseLeave('productionScheduling', setProductionSchedulingExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isProductionSchedulingActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isProductionSchedulingActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('productionScheduling', productionSchedulingExpanded, setProductionSchedulingExpanded)}
               >
                 <Calendar className="h-4 w-4" />
                 Production Scheduling
@@ -834,17 +795,14 @@ export default function Navigation() {
             </div>
 
             {/* Department Queue Management Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('departmentQueue', setDepartmentQueueExpanded)}
-              onMouseLeave={() => handleMouseLeave('departmentQueue', setDepartmentQueueExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isDepartmentQueueActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isDepartmentQueueActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
                 Department Queue Management
@@ -881,17 +839,14 @@ export default function Navigation() {
             </div>
 
             {/* Verified Modules Dropdown */}
-            <div 
-              className="relative"
-              onMouseEnter={() => handleMouseEnter('verifiedModules', setVerifiedModulesExpanded)}
-              onMouseLeave={() => handleMouseLeave('verifiedModules', setVerifiedModulesExpanded)}
-            >
+            <div className="relative">
               <Button
                 variant={isVerifiedModulesActive ? "default" : "ghost"}
                 className={cn(
                   "flex items-center gap-2 text-sm",
                   isVerifiedModulesActive && "bg-primary text-white"
                 )}
+                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
               >
                 <Settings className="h-4 w-4" />
                 Verified Modules
@@ -974,7 +929,7 @@ export default function Navigation() {
                   "flex items-center gap-2 text-xs",
                   isFormsReportsActive && "bg-primary text-white"
                 )}
-                onClick={() => setFormsReportsExpanded(!formsReportsExpanded)}
+                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
               >
                 <FormInput className="h-3 w-3" />
                 Forms & Reports
@@ -1019,7 +974,7 @@ export default function Navigation() {
                   "flex items-center gap-2 text-xs",
                   isVerifiedModulesActive && "bg-primary text-white"
                 )}
-                onClick={() => setVerifiedModulesExpanded(!verifiedModulesExpanded)}
+                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
               >
                 <Settings className="h-3 w-3" />
                 Verified Modules

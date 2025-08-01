@@ -254,7 +254,7 @@ export default function WasteManagementForm() {
     const minEntries = 5;
     
     // Ensure proper ID sequence and minimum 5 entries
-    const processedEntries = loadedEntries.map((entry, index) => ({
+    const processedEntries = loadedEntries.map((entry: ChemicalEntry, index: number) => ({
       ...entry,
       id: (index + 1).toString()
     }));

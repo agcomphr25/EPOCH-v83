@@ -6,6 +6,16 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+**August 1, 2025**: Enhanced Waste Management Form in P2 Forms section:
+- Replaced complex form with simplified, user-friendly version matching PDF structure exactly
+- Implemented smart dropdown functionality for chemical names with persistent storage
+- Added container size dropdown with predefined options (5 gal, 1 gal, Pint, etc.) and custom entry capability  
+- Changed SDS field from text input to simple Yes/No checkbox
+- Added comprehensive "Saved Drafts" functionality allowing users to save, load, and manage form drafts
+- All custom chemicals and container sizes persist across sessions using localStorage
+- Fixed draft loading issues to prevent duplicate/unremovable entries
+
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
 

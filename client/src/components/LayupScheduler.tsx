@@ -1914,13 +1914,13 @@ export default function LayupScheduler() {
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
                 <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
               </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg">
-                <span className="text-orange-700 dark:text-orange-300 font-medium">
-                  {orders.filter(o => o.source === 'production_order').length} Production Orders
+              <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
+                <span className="text-green-700 dark:text-green-300 font-medium">
+                  {orders.filter(o => o.source === 'p1_purchase_order').length} P1 Purchase Orders
                 </span>
               </div>
-              <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
-                <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2 rounded-lg">
+                <span className="text-cyan-700 dark:text-cyan-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
               </div>
               <div className="bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg">
                 <span className="text-purple-700 dark:text-purple-300 font-medium">{employees.length} Employees</span>

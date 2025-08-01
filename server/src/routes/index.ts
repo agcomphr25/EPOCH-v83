@@ -427,7 +427,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P1 Layup Queue endpoint - combines regular orders and P1 purchase orders
+  // P1 Layup Queue endpoint - combines regular orders and P1 production orders
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
       console.log('🏭 Starting P1 layup queue processing...');
@@ -447,44 +447,43 @@ export function registerRoutes(app: Express): Server {
         modelId: layupOrders[0]?.modelId
       });
 
-      // Get P1 Purchase Orders with stock model items
-      const pos = await storage.getAllPurchaseOrders();
-      const activePos = pos.filter(po => po.status === 'OPEN');
+      // Get P1 Production Orders (generated from purchase orders)
+      const productionOrders = await storage.getAllProductionOrders();
+      console.log(`🏭 Total production orders from DB: ${productionOrders.length}`);
+      console.log(`🏭 Sample production order:`, productionOrders[0]);
+      
+      const pendingProductionOrders = productionOrders.filter(po => po.productionStatus === 'PENDING');
+      console.log(`🏭 Pending production orders: ${pendingProductionOrders.length}`);
 
-      const p1LayupOrders = [];
-      for (const po of activePos) {
-        const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
+      const p1LayupOrders = pendingProductionOrders.map(po => {
+        // Calculate priority score based on due date urgency
+        const dueDate = new Date(po.dueDate || po.orderDate);
+        const today = new Date();
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
 
-        for (const item of stockModelItems) {
-          // Calculate priority score based on due date urgency
-          const dueDate = new Date(po.expectedDelivery || po.poDate);
-          const today = new Date();
-          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
-
-          p1LayupOrders.push({
-            id: `p1-${po.id}-${item.id}`,
-            orderId: `P1-${po.poNumber}-${item.id}`,
-            orderDate: po.poDate,
-            customer: po.customerName,
-            product: item.itemId,
-            quantity: item.quantity,
-            status: 'PENDING',
-            department: 'Layup',
-            currentDepartment: 'Layup',
-            priorityScore: priorityScore,
-            dueDate: po.expectedDelivery,
-            source: 'p1_purchase_order' as const,
-            poId: po.id,
-            poItemId: item.id,
-            stockModelId: item.itemId, // Use item ID as stock model
-            specifications: item.specifications,
-            createdAt: po.createdAt,
-            updatedAt: po.updatedAt
-          });
-        }
-      }
+        return {
+          id: `p1-prod-${po.id}`,
+          orderId: po.orderId,
+          orderDate: po.orderDate,
+          customer: po.customerName,
+          product: po.itemName,
+          quantity: 1, // Each production order is for 1 unit
+          status: po.productionStatus,
+          department: 'Layup',
+          currentDepartment: 'Layup',
+          priorityScore: priorityScore,
+          dueDate: po.dueDate,
+          source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin
+          poId: po.poId,
+          poItemId: po.poItemId,
+          productionOrderId: po.id,
+          stockModelId: po.itemId, // Use item ID as stock model for mold matching
+          specifications: po.specifications,
+          createdAt: po.createdAt,
+          updatedAt: po.updatedAt
+        };
+      });
 
       // Convert regular orders to unified format
       const regularLayupOrders = layupOrders.map(order => ({

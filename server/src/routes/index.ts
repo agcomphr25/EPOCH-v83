@@ -449,11 +449,7 @@ export function registerRoutes(app: Express): Server {
 
       // Get P1 Production Orders (generated from purchase orders)
       const productionOrders = await storage.getAllProductionOrders();
-      console.log(`🏭 Total production orders from DB: ${productionOrders.length}`);
-      console.log(`🏭 Sample production order:`, productionOrders[0]);
-      
       const pendingProductionOrders = productionOrders.filter(po => po.productionStatus === 'PENDING');
-      console.log(`🏭 Pending production orders: ${pendingProductionOrders.length}`);
 
       const p1LayupOrders = pendingProductionOrders.map(po => {
         // Calculate priority score based on due date urgency

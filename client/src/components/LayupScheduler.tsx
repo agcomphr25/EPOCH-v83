@@ -5,7 +5,6 @@ import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
-import { useScheduleNotifier } from '@/hooks/useQueueSync';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -566,7 +565,6 @@ export default function LayupScheduler() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { notifyScheduleUpdate } = useScheduleNotifier(); // Enable queue synchronization
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
@@ -642,15 +640,7 @@ export default function LayupScheduler() {
     onSuccess: () => {
       setHasUnsavedScheduleChanges(false);
       console.log('✅ Schedule saved successfully');
-      
-      // Trigger queue synchronization after saving schedule
-      notifyScheduleUpdate({
-        scheduleUpdated: true,
-        orderCount: Object.keys(orderAssignments).length,
-        mesaUniversalCount: orders.filter(o => o.source === 'production_order' && o.product === 'Mesa - Universal').length
-      });
-      
-      // Refresh both scheduler and queue data
+      // Optionally refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
     onError: (error) => {
@@ -1909,16 +1899,6 @@ export default function LayupScheduler() {
       ...prev,
       [orderId]: { moldId, date: dateIso }
     }));
-
-    // Trigger real-time queue sync when order is moved
-    notifyScheduleUpdate({
-      orderMoved: {
-        orderId,
-        moldId,
-        date: dateIso
-      },
-      mesaUniversalCount: orders.filter(o => o.source === 'production_order' && o.product === 'Mesa - Universal').length
-    });
 
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);

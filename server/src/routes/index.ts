@@ -1,6 +1,5 @@
 import { Express } from 'express';
 import { createServer, type Server } from "http";
-import { queueSyncEmitter, QUEUE_EVENTS, DEFAULT_QUEUE_FILTERS, validateQueueFilters, emitQueueUpdate, MesaUniversalCapacityTracker } from './queue-sync.js';
 import authRoutes from './auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
@@ -459,32 +458,26 @@ export function registerRoutes(app: Express): Server {
         const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
 
-        // Determine if this is a Mesa Universal order based on the order ID pattern
-        const isMesaUniversal = po.orderId?.startsWith('PUR00199') || po.itemId === 'mesa_universal';
-        const adjustedPriorityScore = isMesaUniversal ? 20 : priorityScore; // Mesa Universal gets highest priority
-        
         return {
           id: `p1-prod-${po.id}`,
           orderId: po.orderId,
           orderDate: po.orderDate,
           customer: po.customerName,
-          product: isMesaUniversal ? 'Mesa - Universal' : po.itemName,
+          product: po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
-          orderType: 'P1', // Add explicit orderType for P1 purchase orders
           department: 'Layup',
           currentDepartment: 'Layup',
-          priorityScore: adjustedPriorityScore,
+          priorityScore: priorityScore,
           dueDate: po.dueDate,
-          source: isMesaUniversal ? 'production_order' : 'p1_purchase_order', // Mark Mesa Universal as production_order
+          source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin
           poId: po.poId,
           poItemId: po.poItemId,
           productionOrderId: po.id,
-          stockModelId: isMesaUniversal ? 'mesa_universal' : po.itemId, // Use mesa_universal for Mesa orders
+          stockModelId: po.itemId, // Use item ID as stock model for mold matching
           specifications: po.specifications,
           createdAt: po.createdAt,
-          updatedAt: po.updatedAt,
-          isMesaUniversal: isMesaUniversal // Add flag for easy identification
+          updatedAt: po.updatedAt
         };
       });
 
@@ -497,7 +490,6 @@ export function registerRoutes(app: Express): Server {
         product: order.modelId || 'Unknown',
         quantity: 1,
         status: order.status,
-        orderType: 'regular',
         department: 'Layup',
         currentDepartment: 'Layup',
         priorityScore: 50, // Regular orders have lower priority
@@ -516,28 +508,10 @@ export function registerRoutes(app: Express): Server {
         ...p1LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
-      // Count Mesa Universal orders
-      const mesaUniversalCount = p1LayupOrders.filter(order => order.isMesaUniversal).length;
-      const regularP1Count = p1LayupOrders.length - mesaUniversalCount;
-      
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
-      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, Mesa Universal: ${mesaUniversalCount}, Other P1: ${regularP1Count}`);
+      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
 
-      // Apply filters but throttle sync events to prevent loops
-      const filteredOrders = validateQueueFilters(combinedOrders, DEFAULT_QUEUE_FILTERS);
-      
-      // Only emit sync event if this isn't from a sync event request
-      const isFromSync = req.headers['x-sync-request'] === 'true';
-      if (!isFromSync) {
-        emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
-          type: 'p1_layup_queue',
-          count: filteredOrders.length,
-          mesaUniversalCount,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      res.json(filteredOrders);
+      res.json(combinedOrders);
     } catch (error) {
       console.error("P1 layup queue error:", error);
       res.status(500).json({ error: "Failed to fetch P1 layup queue" });
@@ -606,73 +580,6 @@ export function registerRoutes(app: Express): Server {
       console.error("P2 layup schedule error:", error);
       res.status(500).json({ error: "Failed to fetch P2 layup schedule" });
     }
-  });
-
-  // Queue webhook/mirror endpoint - pushes schedule changes directly to queue
-  app.post('/api/queue-sync-webhook', async (req, res) => {
-    try {
-      const { eventType, data } = req.body;
-      console.log(`🔄 Queue sync webhook called: ${eventType}`);
-      
-      // Mirror schedule changes to queue in real-time
-      if (eventType === QUEUE_EVENTS.SCHEDULE_UPDATED) {
-        // Track Mesa Universal capacity when orders are scheduled
-        if (data.mesaUniversalScheduled) {
-          const capacityTracker = MesaUniversalCapacityTracker.getInstance();
-          data.mesaUniversalScheduled.forEach((scheduled: any) => {
-            capacityTracker.addScheduled(scheduled.date);
-          });
-        }
-        
-        // Emit to all connected clients for real-time updates
-        emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
-          ...data,
-          mirrored: true,
-          timestamp: new Date().toISOString()
-        });
-      }
-      
-      res.json({ success: true, processed: eventType });
-    } catch (error) {
-      console.error("Queue sync webhook error:", error);
-      res.status(500).json({ error: "Failed to process queue sync" });
-    }
-  });
-
-  // Server-Sent Events endpoint for real-time queue updates
-  app.get('/api/queue-sync-events', (req, res) => {
-    // Set up SSE headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control'
-    });
-
-    // Send initial connection message
-    res.write('data: {"type":"connected","timestamp":"' + new Date().toISOString() + '"}\n\n');
-
-    // Set up event listeners for queue sync
-    const handleQueueUpdate = (data: any) => {
-      res.write(`data: ${JSON.stringify({ type: 'queue_update', data })}\n\n`);
-    };
-
-    const handleScheduleUpdate = (data: any) => {
-      res.write(`data: ${JSON.stringify({ type: 'schedule_update', data })}\n\n`);
-    };
-
-    // Register event listeners
-    queueSyncEmitter.on(QUEUE_EVENTS.SCHEDULE_UPDATED, handleScheduleUpdate);
-    queueSyncEmitter.on(QUEUE_EVENTS.ORDER_STATUS_CHANGED, handleQueueUpdate);
-    queueSyncEmitter.on(QUEUE_EVENTS.MESA_UNIVERSAL_SCHEDULED, handleQueueUpdate);
-
-    // Clean up when client disconnects
-    req.on('close', () => {
-      queueSyncEmitter.removeListener(QUEUE_EVENTS.SCHEDULE_UPDATED, handleScheduleUpdate);
-      queueSyncEmitter.removeListener(QUEUE_EVENTS.ORDER_STATUS_CHANGED, handleQueueUpdate);
-      queueSyncEmitter.removeListener(QUEUE_EVENTS.MESA_UNIVERSAL_SCHEDULED, handleQueueUpdate);
-    });
   });
 
   app.post('/api/p2-layup-schedule', async (req, res) => {
@@ -762,7 +669,7 @@ export function registerRoutes(app: Express): Server {
         errorOutput += data.toString();
       });
 
-      pythonProcess.on('close', (code: number | null) => {
+      pythonProcess.on('close', (code) => {
         if (code !== 0) {
           console.error('Python scheduler error:', errorOutput);
           return res.status(500).json({ error: 'Python scheduler failed', details: errorOutput });
@@ -827,7 +734,7 @@ export function registerRoutes(app: Express): Server {
         const orderDrafts = await storage.getAllOrderDrafts();
         const regularOrder = orderDrafts.find(o => o.orderId === orderId);
         if (regularOrder && regularOrder.id) {
-          await storage.updateOrderDraft(String(regularOrder.id), {
+          await storage.updateOrderDraft(regularOrder.id, {
             currentDepartment: 'Barcode' // Move from Layup to next department
           });
           console.log(`✅ Regular order ${orderId} moved to Barcode department`);

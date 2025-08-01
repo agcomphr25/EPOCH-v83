@@ -1306,59 +1306,73 @@ export default function OrderEntry() {
                     </Select>
                   </div>
 
-                  {/* LOP Length Of Pull - Hidden for CAT and Visigoth models */}
-                  {(() => {
-                    // Check if selected model contains "CAT" or "Visigoth"
-                    // If so, hide LOP field entirely
-                    const selectedModel = modelOptions.find(m => m.id === modelId);
-                    const modelName = selectedModel?.displayName || selectedModel?.name || '';
-                    const hideLOP = modelName.toLowerCase().includes('cat') || 
-                                    modelName.toLowerCase().includes('visigoth');
-                    
-                    // Don't render LOP field for CAT/Visigoth models
-                    if (hideLOP) {
-                      return null;
-                    }
-                    
-                    return (
-                      <div>
-                        <Label>LOP Length Of Pull</Label>
+                  {/* LOP Length Of Pull - Show message for CAT and Visigoth models */}
+                  <div>
+                    <Label>LOP Length Of Pull</Label>
+                    {(() => {
+                      // Check if selected model contains "CAT" or "Visigoth"
+                      const selectedModel = modelOptions.find(m => m.id === modelId);
+                      const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                      const isRestrictedModel = modelName.toLowerCase().includes('cat') || 
+                                              modelName.toLowerCase().includes('visigoth');
+                      
+                      return (
                         <Select 
                           value={features.length_of_pull || undefined} 
                           onValueChange={(value) => setFeatures(prev => ({ ...prev, length_of_pull: value }))}
+                          disabled={isRestrictedModel}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select..." />
+                          <SelectTrigger className={isRestrictedModel ? "opacity-50 cursor-not-allowed" : ""}>
+                            <SelectValue placeholder={isRestrictedModel ? "Not Available" : "Select..."} />
                           </SelectTrigger>
                           <SelectContent>
-                            {(() => {
-                              // Try multiple possible IDs for the LOP feature
-                              const lopFeature = featureDefs.find(f => 
-                                f.id === 'length_of_pull' || 
-                                f.name === 'length_of_pull' || 
-                                f.id?.toLowerCase().includes('lop') ||
-                                f.name?.toLowerCase().includes('lop') ||
-                                f.displayName?.toLowerCase().includes('length of pull') ||
-                                f.displayName?.toLowerCase().includes('lop')
-                              );
+                        {(() => {
+                          // Check if selected model contains "CAT" or "Visigoth"
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                          const isRestrictedModel = modelName.toLowerCase().includes('cat') || 
+                                                  modelName.toLowerCase().includes('visigoth');
+                          
+                          // Show "not available" message for restricted models
+                          if (isRestrictedModel) {
+                            return (
+                              <div className="px-2 py-1.5 text-sm text-gray-500 italic">
+                                This Option not Available
+                              </div>
+                            );
+                          }
+                          
+                          // Show normal options for other models
+                          const lopFeature = featureDefs.find(f => 
+                            f.id === 'length_of_pull' || 
+                            f.name === 'length_of_pull' || 
+                            f.id?.toLowerCase().includes('lop') ||
+                            f.name?.toLowerCase().includes('lop') ||
+                            f.displayName?.toLowerCase().includes('length of pull') ||
+                            f.displayName?.toLowerCase().includes('lop')
+                          );
 
-                              if (!lopFeature || !lopFeature.options) {
-                                return null;
-                              }
+                          if (!lopFeature || !lopFeature.options) {
+                            return (
+                              <div className="px-2 py-1.5 text-sm text-gray-500 italic">
+                                No LOP options available
+                              </div>
+                            );
+                          }
 
-                              return lopFeature.options
-                                .filter(option => option.value && option.value.trim() !== '')
-                                .map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ));
-                            })()}
+                          return lopFeature.options
+                            .filter(option => option.value && option.value.trim() !== '')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ));
+                        })()}
                           </SelectContent>
                         </Select>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </div>
 
                   {/* Texture */}
                   <div>

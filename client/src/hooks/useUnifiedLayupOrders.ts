@@ -30,7 +30,7 @@ export function useUnifiedLayupOrders() {
   const { data: p1Orders = [], isLoading: p1Loading } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
     select: (data: UnifiedLayupOrder[]) => data || [],
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Reduce frequency to prevent sync loops
   });
 
   // Only P1 orders now - P2 orders excluded from unified scheduler

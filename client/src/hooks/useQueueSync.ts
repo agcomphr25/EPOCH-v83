@@ -30,10 +30,12 @@ export function useQueueSync() {
             
           case 'schedule_update':
             // Invalidate schedule and queue caches when schedule updates
-            queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/p2-layup-queue'] });
-            console.log('📅 Schedule updated, refreshed queue cache');
+            // Add header to prevent sync loops
+            queryClient.invalidateQueries({ 
+              queryKey: ['/api/layup-schedule'],
+              exact: false
+            });
+            console.log('📅 Schedule updated, refreshed cache');
             break;
             
           case 'queue_update':

@@ -523,15 +523,19 @@ export function registerRoutes(app: Express): Server {
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
       console.log(`🏭 Regular orders: ${regularLayupOrders.length}, Mesa Universal: ${mesaUniversalCount}, Other P1: ${regularP1Count}`);
 
-      // Apply filters and emit sync event for real-time queue updates
+      // Apply filters but throttle sync events to prevent loops
       const filteredOrders = validateQueueFilters(combinedOrders, DEFAULT_QUEUE_FILTERS);
       
-      emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
-        type: 'p1_layup_queue',
-        count: filteredOrders.length,
-        mesaUniversalCount,
-        timestamp: new Date().toISOString()
-      });
+      // Only emit sync event if this isn't from a sync event request
+      const isFromSync = req.headers['x-sync-request'] === 'true';
+      if (!isFromSync) {
+        emitQueueUpdate(QUEUE_EVENTS.SCHEDULE_UPDATED, {
+          type: 'p1_layup_queue',
+          count: filteredOrders.length,
+          mesaUniversalCount,
+          timestamp: new Date().toISOString()
+        });
+      }
 
       res.json(filteredOrders);
     } catch (error) {
@@ -758,7 +762,7 @@ export function registerRoutes(app: Express): Server {
         errorOutput += data.toString();
       });
 
-      pythonProcess.on('close', (code) => {
+      pythonProcess.on('close', (code: number | null) => {
         if (code !== 0) {
           console.error('Python scheduler error:', errorOutput);
           return res.status(500).json({ error: 'Python scheduler failed', details: errorOutput });
@@ -823,7 +827,7 @@ export function registerRoutes(app: Express): Server {
         const orderDrafts = await storage.getAllOrderDrafts();
         const regularOrder = orderDrafts.find(o => o.orderId === orderId);
         if (regularOrder && regularOrder.id) {
-          await storage.updateOrderDraft(regularOrder.id, {
+          await storage.updateOrderDraft(String(regularOrder.id), {
             currentDepartment: 'Barcode' // Move from Layup to next department
           });
           console.log(`✅ Regular order ${orderId} moved to Barcode department`);

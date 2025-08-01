@@ -2,17 +2,18 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// Using custom CSS hover tooltip instead of complex components
+import { OrderTooltip } from '@/components/OrderTooltip';
 import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function QCShippingQueuePage() {
   // State for selected orders
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -154,7 +155,7 @@ export default function QCShippingQueuePage() {
     
     try {
       // Update each selected order to move to shipping department
-      for (const orderId of selectedOrders) {
+      for (const orderId of Array.from(selectedOrders)) {
         await fetch(`/api/orders/${orderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -168,7 +169,8 @@ export default function QCShippingQueuePage() {
       
       // Clear selections and refresh data
       setSelectedOrders(new Set());
-      // The query will automatically refetch due to React Query
+      // Force refresh the orders data
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     } catch (error) {
       console.error('Error progressing orders to shipping:', error);
     }
@@ -253,81 +255,21 @@ export default function QCShippingQueuePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {qcShippingOrders.map((order: any) => {
-                const modelId = order.stockModelId || order.modelId;
-                const materialType = modelId?.startsWith('cf_') ? 'CF' : 
-                                   modelId?.startsWith('fg_') ? 'FG' : null;
-                const orderDetails = formatOrderDetails(order);
+
 
                 return (
-                  <div key={order.orderId} className="relative group">
-                    <Card className={`border-l-4 border-l-green-500 hover:shadow-lg transition-shadow duration-200 cursor-pointer ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                      <CardHeader className="pb-2">
-                        <div className="flex justify-between items-start">
-                          <div className="font-semibold text-lg">
-                            {getDisplayOrderId(order)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {order.status}
-                            </Badge>
-                            <Checkbox
-                              checked={selectedOrders.has(order.orderId)}
-                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
-                              className="ml-2"
-                            />
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            {materialType && (
-                              <Badge variant="secondary" className="text-xs">
-                                {materialType}
-                              </Badge>
-                            )}
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                              {getModelDisplayName(modelId)}
-                            </span>
-                          </div>
-
-                          {order.customer && (
-                            <div className="text-xs text-gray-500">
-                              Customer: {order.customer}
-                            </div>
-                          )}
-
-                          {order.dueDate && (
-                            <div className="text-xs text-gray-500">
-                              Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                            </div>
-                          )}
-
-                          {order.createdAt && (
-                            <div className="text-xs text-gray-500">
-                              In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
-                            </div>
-                          )}
-
-                          <div className="text-xs text-blue-500 mt-2 italic">
-                            Hover for order details
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    {/* Simple CSS-based tooltip */}
-                    <div className="absolute left-full ml-4 top-0 z-50 w-80 p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
-                      <div className="space-y-2">
-                        <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
-                          Order Details
-                        </div>
-                        <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
-                          {orderDetails}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <OrderTooltip 
+                    key={order.orderId} 
+                    order={order} 
+                    stockModels={stockModels} 
+                    className={`border-l-green-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  >
+                    <Checkbox
+                      checked={selectedOrders.has(order.orderId)}
+                      onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                      className="ml-2"
+                    />
+                  </OrderTooltip>
                 );
               })}
             </div>

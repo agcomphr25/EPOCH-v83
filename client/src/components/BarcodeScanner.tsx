@@ -8,6 +8,7 @@ import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings } from 
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
+import { formatOrderDetails } from '@/components/OrderTooltip';
 
 interface LineItem {
   type: string;
@@ -72,6 +73,11 @@ export function BarcodeScanner() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [location]);
+
+  // Get stock models for display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
 
   const { data: orderSummary, isLoading, error } = useQuery({
     queryKey: ['/api/barcode/scan', scannedBarcode],
@@ -172,13 +178,13 @@ export function BarcodeScanner() {
 
       {orderSummary && (
         <div className="space-y-6">
-          {/* Order Header */}
-          <Card>
+          {/* Enhanced Order Display using OrderTooltip style */}
+          <Card className="border-l-4 border-l-blue-500">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5" />
-                  Order {orderSummary.orderId}
+                  Scanned Order: {orderSummary.orderId}
                 </CardTitle>
                 <div className="flex gap-2">
                   <Badge variant="outline" className={getPaymentStatusColor(orderSummary.paymentStatus)}>
@@ -192,19 +198,13 @@ export function BarcodeScanner() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">Order Date:</span>
-                  <span className="font-medium">{formatDate(orderSummary.orderDate)}</span>
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
+                  Order Details
                 </div>
-                {orderSummary.customer && (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Customer:</span>
-                    <span className="font-medium">{orderSummary.customer.name}</span>
-                  </div>
-                )}
+                <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
+                  {formatOrderDetails(orderSummary, stockModels)}
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { OrderTooltip } from '@/components/OrderTooltip';
 import { Settings, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -15,7 +16,7 @@ export default function CNCQueuePage() {
 
   // Get orders in CNC department
   const cncOrders = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    return (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'CNC' || 
       (order.department === 'CNC' && order.status === 'IN_PROGRESS')
     );
@@ -23,7 +24,7 @@ export default function CNCQueuePage() {
 
   // Count orders in previous department (Barcode)
   const barcodeCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    return (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'Barcode' || 
       (order.department === 'Barcode' && order.status === 'IN_PROGRESS')
     ).length;
@@ -31,7 +32,7 @@ export default function CNCQueuePage() {
 
   // Count orders in next department (Finish QC)
   const finishQCCount = useMemo(() => {
-    return allOrders.filter((order: any) => 
+    return (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'Finish' || 
       order.currentDepartment === 'FinishQC' ||
       (order.department === 'Finish' && order.status === 'IN_PROGRESS')
@@ -43,11 +44,7 @@ export default function CNCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
-  const getModelDisplayName = (modelId: string) => {
-    if (!modelId) return 'Unknown Model';
-    const model = stockModels.find((m: any) => m.id === modelId);
-    return model?.displayName || model?.name || modelId;
-  };
+
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -115,58 +112,9 @@ export default function CNCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {cncOrders.map((order: any) => {
-                const modelId = order.stockModelId || order.modelId;
-                const materialType = modelId?.startsWith('cf_') ? 'CF' : 
-                                   modelId?.startsWith('fg_') ? 'FG' : null;
-
-                return (
-                  <Card key={order.orderId} className="border-l-4 border-l-yellow-500">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div className="font-semibold text-lg">
-                          {getDisplayOrderId(order)}
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {order.status}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {materialType && (
-                            <Badge variant="secondary" className="text-xs">
-                              {materialType}
-                            </Badge>
-                          )}
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {getModelDisplayName(modelId)}
-                          </span>
-                        </div>
-
-                        {order.customer && (
-                          <div className="text-xs text-gray-500">
-                            Customer: {order.customer}
-                          </div>
-                        )}
-
-                        {order.dueDate && (
-                          <div className="text-xs text-gray-500">
-                            Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                          </div>
-                        )}
-
-                        {order.createdAt && (
-                          <div className="text-xs text-gray-500">
-                            In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {cncOrders.map((order: any) => (
+                <OrderTooltip key={order.orderId} order={order} stockModels={stockModels} className="border-l-yellow-500" />
+              ))}
             </div>
           )}
         </CardContent>

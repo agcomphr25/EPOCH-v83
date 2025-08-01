@@ -202,6 +202,12 @@ export default function P2Forms() {
                 Regulatory compliance and audit documentation
               </p>
               <div className="space-y-2">
+                <Link href="/waste-management-form">
+                  <Button className="w-full justify-start" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Waste Management Form
+                  </Button>
+                </Link>
                 <Button className="w-full justify-start" variant="outline">
                   <FileText className="h-4 w-4 mr-2" />
                   Audit Trail Report

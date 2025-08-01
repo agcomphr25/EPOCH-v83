@@ -881,8 +881,23 @@ export default function LayupScheduler() {
     const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
+    // DEBUG: Check what orders we received, especially P1 purchase orders
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
     console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
+    
+    const p1PurchaseOrders = orders.filter(o => o.source === 'p1_purchase_order');
+    console.log(`🛍️ P1 PURCHASE ORDERS IN SCHEDULER: ${p1PurchaseOrders.length} orders`);
+    if (p1PurchaseOrders.length > 0) {
+      console.log('🛍️ Sample P1 purchase orders:', p1PurchaseOrders.slice(0, 3).map(o => ({
+        orderId: o.orderId,
+        product: o.product,
+        stockModelId: o.stockModelId,
+        source: o.source
+      })));
+    }
+    
+    const mainOrders = orders.filter(o => o.source === 'main_orders');
+    console.log(`📋 MAIN ORDERS IN SCHEDULER: ${mainOrders.length} orders`);
 
     // Debug mold configurations
     molds.filter(m => m.enabled).forEach(mold => {

@@ -439,6 +439,28 @@ export default function OrderEntry() {
     }
   }, [initialDataLoaded]);
 
+  // Clear Medium action length when switching to Ferrata/Armor models
+  useEffect(() => {
+    if (modelId && features.action_length === 'medium') {
+      const selectedModel = modelOptions.find(m => m.id === modelId);
+      const modelName = selectedModel?.displayName || selectedModel?.name || '';
+      const shouldExcludeMedium = modelName.toLowerCase().includes('ferrata') || 
+                                  modelName.toLowerCase().includes('armor');
+      
+      if (shouldExcludeMedium) {
+        setFeatures(prev => ({ 
+          ...prev, 
+          action_length: undefined // Clear the medium selection
+        }));
+        toast({
+          title: "Action Length Updated",
+          description: "Medium action length is not available for this model. Please select Short or Long.",
+          variant: "default",
+        });
+      }
+    }
+  }, [modelId, modelOptions, features.action_length, toast]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
@@ -1404,7 +1426,20 @@ export default function OrderEntry() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="short">Short</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
+                        {(() => {
+                          // Check if selected model contains "Ferrata" or "Armor"
+                          // If so, exclude Medium option
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                          const excludeMedium = modelName.toLowerCase().includes('ferrata') || 
+                                              modelName.toLowerCase().includes('armor');
+                          
+                          // Only show Medium if model doesn't contain Ferrata/Armor
+                          if (!excludeMedium) {
+                            return <SelectItem value="medium">Medium</SelectItem>;
+                          }
+                          return null;
+                        })()}
                         <SelectItem value="long">Long</SelectItem>
                       </SelectContent>
                     </Select>

@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Printer, Download, Save, Plus } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Printer, Download, Save, Plus, ChevronDown, ChevronRight, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface ChemicalEntry {
@@ -65,6 +66,8 @@ export default function WasteManagementForm() {
   const [showAddChemical, setShowAddChemical] = useState<{ [key: string]: boolean }>({});
   const [newContainerSizeInput, setNewContainerSizeInput] = useState<{ [key: string]: string }>({});
   const [showAddContainerSize, setShowAddContainerSize] = useState<{ [key: string]: boolean }>({});
+  const [savedDrafts, setSavedDrafts] = useState<any[]>([]);
+  const [showSavedDrafts, setShowSavedDrafts] = useState(false);
 
   // Load saved chemicals and container sizes from localStorage on component mount
   useEffect(() => {
@@ -93,7 +96,23 @@ export default function WasteManagementForm() {
         console.error('Error loading saved container sizes:', error);
       }
     }
+
+    // Load saved drafts
+    loadSavedDrafts();
   }, []);
+
+  const loadSavedDrafts = () => {
+    const saved = localStorage.getItem('wasteManagementDrafts');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setSavedDrafts(parsed);
+      } catch (error) {
+        console.error('Error loading saved drafts:', error);
+        setSavedDrafts([]);
+      }
+    }
+  };
 
   // Save chemicals to localStorage whenever the list changes
   const saveChemicalsToStorage = (chemicals: string[]) => {
@@ -209,14 +228,37 @@ export default function WasteManagementForm() {
   };
 
   const handleSave = () => {
-    const submissionData = {
-      ...formData,
-      chemicals: chemicalEntries,
-      savedAt: new Date().toISOString()
+    const draftData = {
+      formData,
+      chemicalEntries: chemicalEntries.filter(entry => 
+        entry.chemicalName || entry.quantity || entry.containerSize
+      ),
+      timestamp: new Date().toISOString(),
+      id: Date.now(),
+      title: `Draft - ${new Date().toLocaleString()}`
     };
     
-    localStorage.setItem('wasteManagementForm', JSON.stringify(submissionData));
-    toast.success('Form saved successfully!');
+    const existingDrafts = JSON.parse(localStorage.getItem('wasteManagementDrafts') || '[]');
+    existingDrafts.push(draftData);
+    localStorage.setItem('wasteManagementDrafts', JSON.stringify(existingDrafts));
+    
+    loadSavedDrafts(); // Refresh the drafts list
+    toast.success('Draft saved successfully');
+  };
+
+  const loadDraft = (draft: any) => {
+    setFormData(draft.formData);
+    setChemicalEntries(draft.chemicalEntries);
+    toast.success('Draft loaded successfully');
+  };
+
+  const deleteDraft = (draftId: number) => {
+    const existingDrafts = JSON.parse(localStorage.getItem('wasteManagementDrafts') || '[]');
+    const updatedDrafts = existingDrafts.filter((draft: any) => draft.id !== draftId);
+    localStorage.setItem('wasteManagementDrafts', JSON.stringify(updatedDrafts));
+    
+    loadSavedDrafts(); // Refresh the drafts list
+    toast.success('Draft deleted successfully');
   };
 
   return (
@@ -249,6 +291,76 @@ export default function WasteManagementForm() {
         </CardHeader>
         
         <CardContent className="space-y-6">
+          {/* Saved Drafts Section */}
+          {savedDrafts.length > 0 && (
+            <Collapsible 
+              open={showSavedDrafts} 
+              onOpenChange={setShowSavedDrafts}
+              className="print:hidden"
+            >
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    <span className="font-medium">Saved Drafts ({savedDrafts.length})</span>
+                  </div>
+                  {showSavedDrafts ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 mt-2">
+                <div className="border rounded-lg bg-gray-50 p-3">
+                  <div className="space-y-2">
+                    {savedDrafts.map((draft: any) => (
+                      <div 
+                        key={draft.id} 
+                        className="flex items-center justify-between bg-white p-3 rounded border"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{draft.title}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(draft.timestamp).toLocaleString()}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {draft.chemicalEntries?.length || 0} chemical entries
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-3">
+                          <Button
+                            onClick={() => loadDraft(draft)}
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Load
+                          </Button>
+                          <Button
+                            onClick={() => deleteDraft(draft.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* Basic Information Fields */}

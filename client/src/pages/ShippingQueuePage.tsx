@@ -47,7 +47,7 @@ export default function ShippingQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Package className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Shipping Department Queue</h1>
+        <h1 className="text-3xl font-bold">Shipping Department Manager</h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -95,7 +95,7 @@ export default function ShippingQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Shipping Department Queue</span>
+            <span>Shipping Department Manager</span>
             <Badge variant="outline" className="ml-2">
               {shippingOrders.length} Orders
             </Badge>

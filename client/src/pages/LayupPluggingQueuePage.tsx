@@ -613,7 +613,7 @@ export default function LayupPluggingQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Factory className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Layup/Plugging Department Queue</h1>
+        <h1 className="text-3xl font-bold">Layup/Plugging Department Manager</h1>
       </div>
       
       {/* Barcode Scanner at top */}
@@ -708,7 +708,7 @@ export default function LayupPluggingQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-            <span>Layup/Plugging Queue - Generated from Scheduler</span>
+            <span>Layup/Plugging Manager - Generated from Scheduler</span>
             <div className="flex items-center gap-2 flex-wrap">
               {currentWeekOrders.length > 0 && (
                 <div className="flex items-center gap-2 mr-4">

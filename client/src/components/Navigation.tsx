@@ -326,43 +326,43 @@ export default function Navigation() {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,
-      description: 'Layup and plugging department queue management'
+      description: 'Layup and plugging department manager'
     },
     {
       path: '/department-queue/barcode',
       label: 'Barcode',
       icon: Scan,
-      description: 'Barcode processing department queue'
+      description: 'Barcode processing department manager'
     },
     {
       path: '/department-queue/cnc',
       label: 'CNC',
       icon: Settings,
-      description: 'CNC machining department queue'
+      description: 'CNC machining department manager'
     },
     {
       path: '/department-queue/finish-qc',
       label: 'Finish QC',
       icon: Shield,
-      description: 'Finish quality control department queue'
+      description: 'Finish quality control department manager'
     },
     {
       path: '/department-queue/paint',
       label: 'Paint',
       icon: Package,
-      description: 'Paint department queue management'
+      description: 'Paint department manager'
     },
     {
       path: '/department-queue/qc-shipping',
       label: 'Shipping QC',
       icon: TrendingUp,
-      description: 'Shipping quality control department queue'
+      description: 'Shipping quality control department manager'
     },
     {
       path: '/department-queue/shipping',
       label: 'Shipping',
       icon: Package,
-      description: 'Shipping department queue'
+      description: 'Shipping department manager'
     }
   ];
 
@@ -794,7 +794,7 @@ export default function Navigation() {
               )}
             </div>
 
-            {/* Department Queue Management Dropdown */}
+            {/* Department Manager Dropdown */}
             <div className="relative">
               <Button
                 variant={isDepartmentQueueActive ? "default" : "ghost"}
@@ -805,7 +805,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Queue Management
+                Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (

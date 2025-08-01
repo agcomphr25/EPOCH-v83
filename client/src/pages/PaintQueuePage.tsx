@@ -52,7 +52,7 @@ export default function PaintQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Package className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Paint Department Queue</h1>
+        <h1 className="text-3xl font-bold">Paint Department Manager</h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -101,7 +101,7 @@ export default function PaintQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Paint Department Queue</span>
+            <span>Paint Department Manager</span>
             <Badge variant="outline" className="ml-2">
               {paintOrders.length} Orders
             </Badge>

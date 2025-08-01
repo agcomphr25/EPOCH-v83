@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
@@ -43,6 +44,7 @@ type Customer = {
   phone?: string;
   company?: string;
   customerType: string;
+  preferredCommunicationMethod?: string[]; // Array of "email" and/or "sms"
   notes?: string;
   isActive: boolean;
   createdAt: string;
@@ -70,6 +72,7 @@ type CustomerFormData = {
   phone: string;
   company: string;
   customerType: string;
+  preferredCommunicationMethod: string[]; // Array of "email" and/or "sms"
   notes: string;
   isActive: boolean;
   // Address fields
@@ -98,6 +101,7 @@ const initialFormData: CustomerFormData = {
   phone: '',
   company: '',
   customerType: 'standard',
+  preferredCommunicationMethod: [],
   notes: '',
   isActive: true,
   // Address defaults
@@ -208,7 +212,73 @@ const CustomerFormFields = ({
             </SelectContent>
           </Select>
         </div>
-        
+      </div>
+
+      {/* Preferred Communication Method Section */}
+      <div className="space-y-4">
+        <Label className="text-sm font-medium">Preferred Communication Method</Label>
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="comm-email"
+              checked={formData.preferredCommunicationMethod.includes('email')}
+              onCheckedChange={(checked) => {
+                const methods = formData.preferredCommunicationMethod;
+                if (checked) {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    preferredCommunicationMethod: [...methods, 'email'] 
+                  }));
+                } else {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    preferredCommunicationMethod: methods.filter(m => m !== 'email') 
+                  }));
+                }
+              }}
+            />
+            <div className="flex items-center space-x-2">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <Label htmlFor="comm-email" className="text-sm font-medium cursor-pointer">
+                Email
+              </Label>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="comm-sms"
+              checked={formData.preferredCommunicationMethod.includes('sms')}
+              onCheckedChange={(checked) => {
+                const methods = formData.preferredCommunicationMethod;
+                if (checked) {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    preferredCommunicationMethod: [...methods, 'sms'] 
+                  }));
+                } else {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
+                  }));
+                }
+              }}
+            />
+            <div className="flex items-center space-x-2">
+              <Phone className="h-4 w-4 text-green-600" />
+              <Label htmlFor="comm-sms" className="text-sm font-medium cursor-pointer">
+                SMS
+              </Label>
+            </div>
+          </div>
+          
+          {formData.preferredCommunicationMethod.length === 0 && (
+            <p className="text-sm text-gray-500 italic">No communication method selected</p>
+          )}
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 gap-4">
         <div className="space-y-2">
           <Label htmlFor="isActive" className="text-sm font-medium">Status</Label>
           <Select 
@@ -680,6 +750,7 @@ export default function CustomerManagement() {
           phone: data.phone,
           company: data.company,
           customerType: data.customerType,
+          preferredCommunicationMethod: data.preferredCommunicationMethod,
           notes: data.notes,
           isActive: data.isActive,
         },
@@ -886,6 +957,7 @@ export default function CustomerManagement() {
           phone: formData.phone,
           company: formData.company,
           customerType: formData.customerType,
+          preferredCommunicationMethod: formData.preferredCommunicationMethod,
           notes: formData.notes,
           isActive: formData.isActive
         },
@@ -955,6 +1027,7 @@ export default function CustomerManagement() {
       phone: customer.phone || '',
       company: customer.company || '',
       customerType: customer.customerType,
+      preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
       notes: customer.notes || '',
       isActive: customer.isActive,
       // Load existing address if available

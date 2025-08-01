@@ -594,6 +594,7 @@ export const customers = pgTable("customers", {
   phone: text("phone"),
   company: text("company"),
   customerType: text("customer_type").default("standard"),
+  preferredCommunicationMethod: json("preferred_communication_method"), // Array of strings: ["email", "sms"]
   notes: text("notes"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -657,6 +658,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   phone: z.string().optional(),
   company: z.string().optional(),
   customerType: z.string().default("standard"),
+  preferredCommunicationMethod: z.array(z.enum(["email", "sms"])).optional(),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });

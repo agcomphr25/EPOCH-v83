@@ -47,15 +47,22 @@ export default function useMoldSettings() {
           ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
         );
       } else {
-        // Create new mold
+        // Create new mold with better error handling
         const newMold = await apiRequest('/api/molds', {
           method: 'POST',
           body: updatedMold,
         });
         setMolds(ms => [...ms, newMold]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save mold:', error);
+      // Re-throw the error with better context for the UI
+      if (error?.response?.status === 409) {
+        const err = new Error(`Mold ${updatedMold.moldId} already exists`);
+        (err as any).response = { status: 409 };
+        throw err;
+      }
+      throw error;
     }
   };
 

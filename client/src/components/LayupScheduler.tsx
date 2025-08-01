@@ -556,6 +556,8 @@ export default function LayupScheduler() {
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
   const [bulkMoldCount, setBulkMoldCount] = useState(1);
   const [isBulkMode, setIsBulkMode] = useState(false);
+  const [isCreatingMold, setIsCreatingMold] = useState(false);
+  const [isSavingMold, setIsSavingMold] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -1842,37 +1844,77 @@ export default function LayupScheduler() {
   };
 
   const handleAddMold = async () => {
-    if (!newMold.moldName.trim()) return;
+    if (!newMold.moldName.trim() || isCreatingMold) return;
 
-    if (isBulkMode && bulkMoldCount > 1) {
-      // Create multiple molds with different instance numbers
-      for (let i = 1; i <= bulkMoldCount; i++) {
-        const moldId = `${newMold.moldName}-${i}`;
-        await saveMold({
-          moldId,
-          modelName: newMold.moldName,
-          stockModels: newMold.stockModels,
-          instanceNumber: i,
-          multiplier: newMold.multiplier,
-          enabled: true
-        });
+    setIsCreatingMold(true);
+    try {
+      if (isBulkMode && bulkMoldCount > 1) {
+        // Create multiple molds with sequential processing to prevent database conflicts
+        console.log(`Creating ${bulkMoldCount} ${newMold.moldName} molds...`);
+        
+        for (let i = 1; i <= bulkMoldCount; i++) {
+          const moldId = `${newMold.moldName}-${i}`;
+          
+          try {
+            await saveMold({
+              moldId,
+              modelName: newMold.moldName,
+              stockModels: newMold.stockModels,
+              instanceNumber: i,
+              multiplier: newMold.multiplier,
+              enabled: true
+            });
+            console.log(`✅ Created mold ${i}/${bulkMoldCount}: ${moldId}`);
+            
+            // Small delay to prevent database overload
+            if (i < bulkMoldCount) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          } catch (error: any) {
+            console.error(`❌ Failed to create mold ${moldId}:`, error);
+            if (error?.response?.status === 409) {
+              console.log(`⚠️ Mold ${moldId} already exists, skipping...`);
+            } else {
+              throw error;
+            }
+          }
+        }
+        console.log(`✅ Bulk creation completed for ${newMold.moldName} molds`);
+      } else {
+        // Create single mold
+        const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
+        
+        try {
+          await saveMold({
+            moldId,
+            modelName: newMold.moldName,
+            stockModels: newMold.stockModels,
+            instanceNumber: newMold.instanceNumber,
+            multiplier: newMold.multiplier,
+            enabled: true
+          });
+          console.log(`✅ Successfully created mold: ${moldId}`);
+        } catch (error: any) {
+          if (error?.response?.status === 409) {
+            console.log(`⚠️ Mold ${moldId} already exists`);
+            alert(`Mold ${moldId} already exists. Please choose a different name or instance number.`);
+            return;
+          } else {
+            throw error;
+          }
+        }
       }
-    } else {
-      // Create single mold
-      const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
-      await saveMold({
-        moldId,
-        modelName: newMold.moldName,
-        stockModels: newMold.stockModels,
-        instanceNumber: newMold.instanceNumber,
-        multiplier: newMold.multiplier,
-        enabled: true
-      });
-    }
 
-    setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
-    setBulkMoldCount(1);
-    setIsBulkMode(false);
+      // Reset form only on successful completion
+      setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
+      setBulkMoldCount(1);
+      setIsBulkMode(false);
+    } catch (error) {
+      console.error('Failed to create mold:', error);
+      alert('Failed to create mold. Please try again.');
+    } finally {
+      setIsCreatingMold(false);
+    }
   };
 
   const handleAddEmployee = async () => {
@@ -2117,9 +2159,13 @@ export default function LayupScheduler() {
                       onClick={handleAddMold} 
                       className="mt-3" 
                       size="sm"
-                      disabled={!newMold.moldName.trim()}
+                      disabled={!newMold.moldName.trim() || isCreatingMold}
                     >
-                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
+                      {isCreatingMold ? (
+                        isBulkMode ? `Creating ${bulkMoldCount} Molds...` : 'Creating Mold...'
+                      ) : (
+                        isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'
+                      )}
                     </Button>
                   </div>
 

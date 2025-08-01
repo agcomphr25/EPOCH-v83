@@ -75,18 +75,13 @@ export default function WasteManagementForm() {
     if (savedChemicals) {
       try {
         const parsed = JSON.parse(savedChemicals);
-        console.log('Loading saved chemicals from localStorage:', parsed);
         setAvailableChemicals(prev => {
           const combined = [...prev, ...parsed];
-          const unique = Array.from(new Set(combined));
-          console.log('Combined chemicals list:', unique);
-          return unique; // Remove duplicates
+          return Array.from(new Set(combined)); // Remove duplicates
         });
       } catch (error) {
         console.error('Error loading saved chemicals:', error);
       }
-    } else {
-      console.log('No saved chemicals found in localStorage');
     }
 
     const savedContainerSizes = localStorage.getItem('wasteManagementContainerSizes');
@@ -161,14 +156,6 @@ export default function WasteManagementForm() {
       // Clear the input and hide the add form
       setNewChemicalInput(prev => ({ ...prev, [entryId]: '' }));
       setShowAddChemical(prev => ({ ...prev, [entryId]: false }));
-      
-      console.log('Added new chemical:', newChemical);
-      console.log('Updated chemicals list:', updatedChemicals);
-      console.log('Saved to localStorage:', JSON.stringify(updatedChemicals.filter(chem => 
-        !['Acetone', 'Benzene', 'Chloroform', 'Ethanol', 'Formaldehyde', 
-          'Hydrochloric Acid', 'Methanol', 'Paint Thinner', 'Solvent', 
-          'Toluene', 'Xylene'].includes(chem)
-      )));
       
       toast.success(`Added "${newChemical}" to chemical database`);
     } else if (availableChemicals.includes(newChemical)) {

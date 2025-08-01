@@ -785,7 +785,12 @@ export default function LayupScheduler() {
   };
 
 
-  const { orders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+
+  // Filter out P1 PO orders - they go directly to Department Manager, not through scheduling
+  const orders = useMemo(() => {
+    return allOrders.filter(order => order.source === 'main_orders');
+  }, [allOrders]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
   const processedOrders = useMemo(() => {
@@ -809,16 +814,18 @@ export default function LayupScheduler() {
     });
 
     return scheduledOrders;
-  }, [orders]);
+  }, [orders, allOrders]);
 
-  // Debug production orders specifically
+  // Debug filtering results
   useEffect(() => {
-    const productionOrders = orders.filter(order => order.source === 'production_order' || order.source === 'p1_purchase_order');
-    console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
-    console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
-    if (productionOrders.length > 0) {
-      console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
-      console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
+    const regularOrders = orders.filter(order => order.source === 'main_orders');
+    const filteredOutP1Orders = allOrders.filter(order => order.source === 'p1_purchase_order');
+    console.log('🏭 LayupScheduler: Total orders from API:', allOrders.length);
+    console.log('🏭 LayupScheduler: Regular orders for scheduling:', regularOrders.length);
+    console.log('🏭 LayupScheduler: P1 PO orders filtered out:', filteredOutP1Orders.length);
+    if (regularOrders.length > 0) {
+      console.log('🏭 LayupScheduler: Sample regular order for scheduling:', regularOrders[0]);
+      console.log('🏭 LayupScheduler: First 5 regular orders:', regularOrders.slice(0, 5).map(o => ({
         orderId: o.orderId,
         source: o.source,
         stockModelId: o.stockModelId,
@@ -826,12 +833,12 @@ export default function LayupScheduler() {
       })));
     }
 
-    // Log all order sources
+    // Log all order sources from filtered orders
     const sourceCounts = orders.reduce((acc, order) => {
       acc[order.source] = (acc[order.source] || 0) + 1;
       return acc;
     }, {} as {[key: string]: number});
-    console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
+    console.log('🏭 LayupScheduler: Filtered orders by source:', sourceCounts);
 
     // Log when auto-schedule should run
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {

@@ -572,8 +572,17 @@ export default function LayupScheduler() {
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
+  // Lazy load stock models only when mold configuration is opened
+  const [moldDialogOpen, setMoldDialogOpen] = useState(false);
+  const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
+    queryKey: ['/api/stock-models'],
+    staleTime: 10 * 60 * 1000, // 10 minute cache
+    enabled: moldDialogOpen, // Only load when dialog is opened
+  });
+
   // Debug molds data
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
+  
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
   // Load existing schedule data from database
@@ -1024,10 +1033,7 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
-  // Fetch stock models to get display names
-  const { data: stockModels = [] } = useQuery({
-    queryKey: ['/api/stock-models'],
-  }) as { data: any[] };
+  // Stock models are fetched lazily when mold dialog opens (see above)
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
@@ -2033,7 +2039,7 @@ export default function LayupScheduler() {
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
 
-            <Dialog>
+            <Dialog open={moldDialogOpen} onOpenChange={setMoldDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Settings className="w-4 h-4 mr-2" />
@@ -2270,7 +2276,10 @@ export default function LayupScheduler() {
 
                               {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
-                                {stockModels.slice(0, 25).map((model: any) => (
+                                {stockModelsLoading ? (
+                                  <div className="text-xs text-gray-500">Loading stock models...</div>
+                                ) : (
+                                  stockModels.slice(0, 25).map((model: any) => (
                                   <div key={model.id} className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`edit-stock-${mold.moldId}-${model.id}`}
@@ -2290,10 +2299,10 @@ export default function LayupScheduler() {
                                       {model.displayName || model.name || model.id}
                                     </label>
                                   </div>
-                                ))}
-                                {stockModels.length > 50 && (
+                                )))}
+                                {!stockModelsLoading && stockModels.length > 25 && (
                                   <div className="text-xs text-gray-500 italic">
-                                    Showing first 50 models. Use search to find specific models.
+                                    Showing first 25 models for performance.
                                   </div>
                                 )}
                               </div>

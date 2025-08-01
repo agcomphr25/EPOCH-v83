@@ -30,46 +30,20 @@ export function useUnifiedLayupOrders() {
   const { data: p1Orders = [], isLoading: p1Loading } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
     select: (data: UnifiedLayupOrder[]) => {
-      console.log('🔄 useUnifiedLayupOrders: Raw data received:', data?.length || 0, 'orders');
-      console.log('🔄 useUnifiedLayupOrders: Full data array:', data);
+      // Reduced logging to improve performance
       if (data && data.length > 0) {
-        const p1PurchaseOrders = data.filter(o => o.source === 'p1_purchase_order');
-        const mainOrders = data.filter(o => o.source === 'main_orders');
-        const productionOrders = data.filter(o => o.source === 'production_order');
-        console.log('🔄 useUnifiedLayupOrders: P1 Purchase orders:', p1PurchaseOrders.length);
-        console.log('🔄 useUnifiedLayupOrders: Main orders:', mainOrders.length);
-        console.log('🔄 useUnifiedLayupOrders: Production orders:', productionOrders.length);
-        
-        if (p1PurchaseOrders.length > 0) {
-          console.log('🔄 useUnifiedLayupOrders: Sample P1 PO:', {
-            orderId: p1PurchaseOrders[0].orderId,
-            product: p1PurchaseOrders[0].product,
-            stockModelId: p1PurchaseOrders[0].stockModelId,
-            source: p1PurchaseOrders[0].source
-          });
-          console.log('🔄 useUnifiedLayupOrders: First 3 P1 POs:', p1PurchaseOrders.slice(0, 3).map(o => ({
-            orderId: o.orderId,
-            source: o.source,
-            product: o.product
-          })));
-        } else {
-          console.warn('❌ useUnifiedLayupOrders: NO P1 PURCHASE ORDERS FOUND IN DATA!');
-        }
-        
-        // Check for orders that might have Mesa product
-        const mesaOrders = data.filter(o => o.product && o.product.includes('Mesa'));
-        console.log('🔄 useUnifiedLayupOrders: Mesa orders found:', mesaOrders.length);
-        if (mesaOrders.length > 0) {
-          console.log('🔄 useUnifiedLayupOrders: Sample Mesa order:', mesaOrders[0]);
-        }
-      } else {
-        console.warn('❌ useUnifiedLayupOrders: NO DATA RECEIVED FROM API!');
+        console.log('📊 useUnifiedLayupOrders: Loaded', data.length, 'orders');
+        const sourceCounts = data.reduce((acc, o) => {
+          acc[o.source] = (acc[o.source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log('📊 Order sources:', sourceCounts);
       }
       return data || [];
     },
-    refetchInterval: 10000, // Even more frequent updates
-    staleTime: 1000, // Very short cache time
-    gcTime: 5000 // Garbage collect after 5 seconds
+    refetchInterval: 300000, // 5 minutes instead of 10 seconds
+    staleTime: 600000, // 10 minute cache instead of 1 second
+    gcTime: 900000 // 15 minute garbage collection
   });
 
   // Only P1 orders now - P2 orders excluded from unified scheduler

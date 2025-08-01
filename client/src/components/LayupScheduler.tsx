@@ -702,70 +702,16 @@ export default function LayupScheduler() {
     return scheduledOrders;
   }, [orders]);
 
-  // Debug production orders and P1 purchase orders specifically
+  // Performance: Reduced logging 
   useEffect(() => {
-    const productionOrders = orders.filter(order => order.source === 'production_order');
-    const p1PurchaseOrders = orders.filter(order => order.source === 'p1_purchase_order');
-    const mainOrders = orders.filter(order => order.source === 'main_orders');
-    
-    console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
-    console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
-    console.log('🏭 LayupScheduler: P1 Purchase orders found:', p1PurchaseOrders.length);
-    console.log('🏭 LayupScheduler: Main orders found:', mainOrders.length);
-    
-    if (p1PurchaseOrders.length > 0) {
-      console.log('🏭 LayupScheduler: Sample P1 purchase order:', p1PurchaseOrders[0]);
-      console.log('🏭 LayupScheduler: First 5 P1 purchase orders:', p1PurchaseOrders.slice(0, 5).map(o => ({
-        orderId: o.orderId,
-        source: o.source,
-        stockModelId: o.stockModelId,
-        product: o.product,
-        customer: o.customer,
-        unitNumber: o.unitNumber,
-        totalUnits: o.totalUnits
-      })));
-      
-      // Check if P1 orders are being assigned to molds properly
-      const assignedP1Orders = p1PurchaseOrders.filter(o => orderAssignments[o.orderId]);
-      const unassignedP1Orders = p1PurchaseOrders.filter(o => !orderAssignments[o.orderId]);
-      console.log('🏭 LayupScheduler: P1 PO assigned to molds:', assignedP1Orders.length);
-      console.log('🏭 LayupScheduler: P1 PO unassigned:', unassignedP1Orders.length);
-      
-      if (unassignedP1Orders.length > 0) {
-        console.log('🏭 LayupScheduler: Sample unassigned P1 PO:', unassignedP1Orders[0]);
-      }
-    } else {
-      console.log('❌ LayupScheduler: NO P1 PURCHASE ORDERS FOUND IN FRONTEND!');
+    if (orders.length > 0) {
+      const sourceCounts = orders.reduce((acc, order) => {
+        acc[order.source] = (acc[order.source] || 0) + 1;
+        return acc;
+      }, {} as {[key: string]: number});
+      console.log('📊 LayupScheduler loaded:', sourceCounts);
     }
-    
-    if (productionOrders.length > 0) {
-      console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
-      console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
-        orderId: o.orderId,
-        source: o.source,
-        stockModelId: o.stockModelId,
-        customer: o.customer
-      })));
-    }
-
-    // Log all order sources
-    const sourceCounts = orders.reduce((acc, order) => {
-      acc[order.source] = (acc[order.source] || 0) + 1;
-      return acc;
-    }, {} as {[key: string]: number});
-    console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
-
-    // Log when auto-schedule should run
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
-    } else {
-      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
-        orders: orders.length,
-        molds: molds.length,
-        employees: employees.length
-      });
-    }
-  }, [orders, molds, employees]);
+  }, [orders.length]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
@@ -776,7 +722,7 @@ export default function LayupScheduler() {
 
     // Re-enabled auto-scheduling to place production orders in calendar
 
-    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
+    console.log('🚀 Auto-scheduling', orders.length, 'orders');
 
     // Calculate dynamic scheduling window based on order due dates
     const calculateSchedulingWindow = () => {

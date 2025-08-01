@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Printer, Download, Save } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Printer, Download, Save, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface ChemicalEntry {
@@ -32,6 +33,50 @@ export default function WasteManagementForm() {
     { id: '5', chemicalName: '', quantity: '', containerSize: '', sds: '' }
   ]);
 
+  // Predefined chemical list that can be expanded
+  const [availableChemicals, setAvailableChemicals] = useState<string[]>([
+    'Acetone',
+    'Benzene',
+    'Chloroform',
+    'Ethanol',
+    'Formaldehyde',
+    'Hydrochloric Acid',
+    'Methanol',
+    'Paint Thinner',
+    'Solvent',
+    'Toluene',
+    'Xylene'
+  ]);
+
+  const [newChemicalInput, setNewChemicalInput] = useState<{ [key: string]: string }>({});
+  const [showAddChemical, setShowAddChemical] = useState<{ [key: string]: boolean }>({});
+
+  // Load saved chemicals from localStorage on component mount
+  useEffect(() => {
+    const savedChemicals = localStorage.getItem('wasteManagementChemicals');
+    if (savedChemicals) {
+      try {
+        const parsed = JSON.parse(savedChemicals);
+        setAvailableChemicals(prev => {
+          const combined = [...prev, ...parsed];
+          return [...new Set(combined)]; // Remove duplicates
+        });
+      } catch (error) {
+        console.error('Error loading saved chemicals:', error);
+      }
+    }
+  }, []);
+
+  // Save chemicals to localStorage whenever the list changes
+  const saveChemicalsToStorage = (chemicals: string[]) => {
+    const customChemicals = chemicals.filter(chem => 
+      !['Acetone', 'Benzene', 'Chloroform', 'Ethanol', 'Formaldehyde', 
+        'Hydrochloric Acid', 'Methanol', 'Paint Thinner', 'Solvent', 
+        'Toluene', 'Xylene'].includes(chem)
+    );
+    localStorage.setItem('wasteManagementChemicals', JSON.stringify(customChemicals));
+  };
+
   const handleFormDataChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -40,6 +85,31 @@ export default function WasteManagementForm() {
     setChemicalEntries(prev => prev.map(entry => 
       entry.id === id ? { ...entry, [field]: value } : entry
     ));
+  };
+
+  const addNewChemical = (entryId: string) => {
+    const newChemical = newChemicalInput[entryId]?.trim();
+    if (newChemical && !availableChemicals.includes(newChemical)) {
+      const updatedChemicals = [...availableChemicals, newChemical].sort();
+      setAvailableChemicals(updatedChemicals);
+      saveChemicalsToStorage(updatedChemicals);
+      
+      // Set this chemical for the current entry
+      handleChemicalEntryChange(entryId, 'chemicalName', newChemical);
+      
+      // Clear the input and hide the add form
+      setNewChemicalInput(prev => ({ ...prev, [entryId]: '' }));
+      setShowAddChemical(prev => ({ ...prev, [entryId]: false }));
+      
+      toast.success(`Added "${newChemical}" to chemical database`);
+    } else if (availableChemicals.includes(newChemical)) {
+      toast.error('Chemical already exists in the list');
+    }
+  };
+
+  const cancelAddChemical = (entryId: string) => {
+    setNewChemicalInput(prev => ({ ...prev, [entryId]: '' }));
+    setShowAddChemical(prev => ({ ...prev, [entryId]: false }));
   };
 
   const addChemicalEntry = () => {
@@ -188,12 +258,87 @@ export default function WasteManagementForm() {
                     {chemicalEntries.map((entry, index) => (
                       <tr key={entry.id} className="border-b border-gray-200">
                         <td className="py-2 px-1">
-                          <Input
-                            value={entry.chemicalName}
-                            onChange={(e) => handleChemicalEntryChange(entry.id, 'chemicalName', e.target.value)}
-                            className="border-0 bg-transparent focus:bg-gray-50 focus:ring-1 focus:ring-blue-500 text-sm h-8"
-                            placeholder="Enter chemical name or product"
-                          />
+                          {!showAddChemical[entry.id] ? (
+                            <div className="flex items-center gap-1">
+                              <Select 
+                                value={entry.chemicalName} 
+                                onValueChange={(value) => {
+                                  if (value === '__add_new__') {
+                                    setShowAddChemical(prev => ({ ...prev, [entry.id]: true }));
+                                  } else {
+                                    handleChemicalEntryChange(entry.id, 'chemicalName', value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-8 border-0 bg-transparent focus:bg-gray-50 focus:ring-1 focus:ring-blue-500 text-sm">
+                                  <SelectValue placeholder="Select or add chemical" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableChemicals.map((chemical) => (
+                                    <SelectItem key={chemical} value={chemical}>
+                                      {chemical}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__add_new__" className="text-blue-600 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Plus className="h-4 w-4" />
+                                      Add New Chemical
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {entry.chemicalName && (
+                                <Button
+                                  type="button"
+                                  onClick={() => setShowAddChemical(prev => ({ ...prev, [entry.id]: true }))}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
+                                  title="Add new chemical"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={newChemicalInput[entry.id] || ''}
+                                onChange={(e) => setNewChemicalInput(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                                className="border border-blue-300 bg-blue-50 focus:bg-white focus:ring-1 focus:ring-blue-500 text-sm h-8 flex-1"
+                                placeholder="Enter new chemical name"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addNewChemical(entry.id);
+                                  } else if (e.key === 'Escape') {
+                                    cancelAddChemical(entry.id);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => addNewChemical(entry.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                                title="Add chemical"
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => cancelAddChemical(entry.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-800"
+                                title="Cancel"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 px-1">
                           <Input

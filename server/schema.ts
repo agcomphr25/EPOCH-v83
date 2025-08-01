@@ -1320,6 +1320,27 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   isActive: z.boolean().default(true),
 });
 
+// Order Attachments Table
+export const orderAttachments = pgTable("order_attachments", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(), // References orders.id
+  fileName: text("file_name").notNull(), // Stored filename (unique)
+  originalFileName: text("original_file_name").notNull(), // User's original filename
+  fileSize: integer("file_size").notNull(), // File size in bytes
+  mimeType: text("mime_type").notNull(), // MIME type (image/jpeg, application/pdf, etc.)
+  filePath: text("file_path").notNull(), // Full path to file
+  uploadedBy: text("uploaded_by"), // User who uploaded (optional for now)
+  notes: text("notes"), // Optional notes about the attachment
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertOrderAttachmentSchema = createInsertSchema(orderAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertOrderAttachment = z.infer<typeof insertOrderAttachmentSchema>;
+export type OrderAttachment = typeof orderAttachments.$inferSelect;
+
 export const insertCustomerAddressSchema = createInsertSchema(customerAddresses).omit({
   id: true,
   createdAt: true,

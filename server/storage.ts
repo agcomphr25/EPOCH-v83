@@ -76,6 +76,9 @@ import {
   type DocumentCollection, type InsertDocumentCollection,
   // Payment types
   type Payment, type InsertPayment,
+  // Order attachment types
+  type OrderAttachment, type InsertOrderAttachment,
+  orderAttachments,
 
 } from "./schema";
 import { db } from "./db";
@@ -463,6 +466,12 @@ export interface IStorage {
   updateTaskItem(id: number, data: Partial<InsertTaskItem>): Promise<TaskItem>;
   updateTaskItemStatus(id: number, statusData: any): Promise<TaskItem>;
   deleteTaskItem(id: number): Promise<void>;
+
+  // Order Attachment Methods
+  getOrderAttachments(orderId: string): Promise<OrderAttachment[]>;
+  getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
+  createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
+  deleteOrderAttachment(attachmentId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4199,6 +4208,37 @@ export class DatabaseStorage implements IStorage {
         eq(documentCollectionRelations.collectionId, collectionId),
         eq(documentCollectionRelations.documentId, documentId)
       ));
+  }
+
+  // Order Attachment Methods
+  async getOrderAttachments(orderId: string): Promise<OrderAttachment[]> {
+    return await db
+      .select()
+      .from(orderAttachments)
+      .where(eq(orderAttachments.orderId, orderId))
+      .orderBy(desc(orderAttachments.createdAt));
+  }
+
+  async getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(orderAttachments)
+      .where(eq(orderAttachments.id, attachmentId));
+    return attachment || undefined;
+  }
+
+  async createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment> {
+    const [attachment] = await db
+      .insert(orderAttachments)
+      .values(data)
+      .returning();
+    return attachment;
+  }
+
+  async deleteOrderAttachment(attachmentId: number): Promise<void> {
+    await db
+      .delete(orderAttachments)
+      .where(eq(orderAttachments.id, attachmentId));
   }
 
 }

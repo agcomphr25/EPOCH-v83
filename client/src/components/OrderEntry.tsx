@@ -19,6 +19,7 @@ import debounce from 'lodash.debounce';
 import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
+import { OrderAttachments } from '@/components/OrderAttachments';
 import type { Customer } from '@shared/schema';
 import { useFeatureValidation, useFeatureStateValidation } from '@/hooks/useFeatureValidation';
 import { useDataConsistencyValidation } from '@/hooks/useDataConsistencyValidation';
@@ -1040,7 +1041,12 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-
+              {/* Order Attachments */}
+              {orderId && (
+                <div className="mt-6">
+                  <OrderAttachments orderId={orderId} />
+                </div>
+              )}
 
               {/* Stock Model Selection and Price Override Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

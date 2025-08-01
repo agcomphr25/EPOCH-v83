@@ -12,6 +12,7 @@ import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
+import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 
@@ -45,6 +46,9 @@ export function registerRoutes(app: Express): Server {
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);
+
+  // Order attachments routes
+  app.use('/api/order-attachments', orderAttachmentsRoutes);
 
   // Mold management routes
   app.use('/api/molds', moldsRoutes);

@@ -29,8 +29,26 @@ export function useUnifiedLayupOrders() {
   // P2 orders are now handled separately in P2LayupScheduler
   const { data: p1Orders = [], isLoading: p1Loading } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
-    select: (data: UnifiedLayupOrder[]) => data || [],
+    select: (data: UnifiedLayupOrder[]) => {
+      console.log('🔄 useUnifiedLayupOrders: Raw data received:', data?.length || 0, 'orders');
+      if (data && data.length > 0) {
+        const p1PurchaseOrders = data.filter(o => o.source === 'p1_purchase_order');
+        const mainOrders = data.filter(o => o.source === 'main_orders');
+        console.log('🔄 useUnifiedLayupOrders: P1 Purchase orders:', p1PurchaseOrders.length);
+        console.log('🔄 useUnifiedLayupOrders: Main orders:', mainOrders.length);
+        if (p1PurchaseOrders.length > 0) {
+          console.log('🔄 useUnifiedLayupOrders: Sample P1 PO:', {
+            orderId: p1PurchaseOrders[0].orderId,
+            product: p1PurchaseOrders[0].product,
+            stockModelId: p1PurchaseOrders[0].stockModelId,
+            source: p1PurchaseOrders[0].source
+          });
+        }
+      }
+      return data || [];
+    },
     refetchInterval: 30000,
+    staleTime: 10000, // Consider data fresh for 10 seconds
   });
 
   // Only P1 orders now - P2 orders excluded from unified scheduler

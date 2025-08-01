@@ -642,7 +642,15 @@ export default function LayupScheduler() {
     onSuccess: () => {
       setHasUnsavedScheduleChanges(false);
       console.log('✅ Schedule saved successfully');
-      // Optionally refresh data
+      
+      // Trigger queue synchronization after saving schedule
+      notifyScheduleUpdate({
+        scheduleUpdated: true,
+        orderCount: Object.keys(orderAssignments).length,
+        mesaUniversalCount: orders.filter(o => o.source === 'production_order' && o.product === 'Mesa - Universal').length
+      });
+      
+      // Refresh both scheduler and queue data
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
     onError: (error) => {
@@ -1901,6 +1909,16 @@ export default function LayupScheduler() {
       ...prev,
       [orderId]: { moldId, date: dateIso }
     }));
+
+    // Trigger real-time queue sync when order is moved
+    notifyScheduleUpdate({
+      orderMoved: {
+        orderId,
+        moldId,
+        date: dateIso
+      },
+      mesaUniversalCount: orders.filter(o => o.source === 'production_order' && o.product === 'Mesa - Universal').length
+    });
 
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);

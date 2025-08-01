@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import type { Mold, InsertMold } from '../../../shared/schema';
 
@@ -6,10 +6,16 @@ export default function useMoldSettings() {
   const [molds, setMolds] = useState<Mold[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Debug state changes
+  // Memoize expensive calculations
+  const enabledMolds = useMemo(() => molds.filter(m => m.enabled), [molds]);
+  const activeMolds = useMemo(() => molds.filter(m => m.isActive), [molds]);
+
+  // Debug state changes only when count changes significantly
   useEffect(() => {
-    console.log('🔧 useMoldSettings: Molds state changed:', molds);
-  }, [molds]);
+    if (molds.length > 0) {
+      console.log('🔧 useMoldSettings: Molds loaded:', molds.length);
+    }
+  }, [molds.length]);
 
   const fetchMolds = async () => {
     try {
@@ -94,5 +100,14 @@ export default function useMoldSettings() {
     }
   };
 
-  return { molds, saveMold, deleteMold, toggleMoldStatus, loading, refetch: fetchMolds };
+  return { 
+    molds, 
+    enabledMolds, 
+    activeMolds, 
+    saveMold, 
+    deleteMold, 
+    toggleMoldStatus, 
+    loading, 
+    refetch: fetchMolds 
+  };
 }

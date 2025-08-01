@@ -2040,11 +2040,11 @@ export default function LayupScheduler() {
                   Mold Settings
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-4xl max-h-[80vh]">
                 <DialogHeader>
-                  <DialogTitle>Mold Configuration</DialogTitle>
+                  <DialogTitle>Mold Configuration ({molds.filter(m => m.isActive).length} Active Molds)</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                   {/* Add New Mold Form */}
                   <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
                     <div className="flex items-center mb-3">
@@ -2171,13 +2171,18 @@ export default function LayupScheduler() {
 
                   <Separator />
 
-                  {/* Existing Molds */}
+                  {/* Existing Molds - Limited for Performance */}
                   {molds.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       No molds configured yet. Use the form above to add your first mold.
                     </div>
                   ) : (
-                    molds.map(mold => (
+                    <div className="space-y-4">
+                      <div className="text-xs text-gray-500 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                        ⚡ Performance Mode: Showing first 15 molds of {molds.length} total for faster loading
+                      </div>
+                      
+                      {molds.slice(0, 15).map(mold => (
                       <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                         <Checkbox
                           checked={mold.enabled ?? true}
@@ -2265,7 +2270,7 @@ export default function LayupScheduler() {
 
                               {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
-                                {stockModels.slice(0, 50).map((model: any) => (
+                                {stockModels.slice(0, 25).map((model: any) => (
                                   <div key={model.id} className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`edit-stock-${mold.moldId}-${model.id}`}
@@ -2345,7 +2350,8 @@ export default function LayupScheduler() {
                           </Button>
                         </div>
                       </div>
-                    ))
+                    ))}
+                    </div>
                   )}
 
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">

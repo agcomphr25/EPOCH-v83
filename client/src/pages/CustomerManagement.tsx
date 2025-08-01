@@ -1693,6 +1693,70 @@ export default function CustomerManagement() {
                   </Select>
                 </div>
 
+                {/* Preferred Communication Method Section */}
+                <div>
+                  <Label className="text-sm font-medium">Preferred Communication Method</Label>
+                  <div className="flex flex-col space-y-3 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-comm-email"
+                        checked={formData.preferredCommunicationMethod.includes('email')}
+                        onCheckedChange={(checked) => {
+                          const methods = formData.preferredCommunicationMethod;
+                          if (checked) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: [...methods, 'email'] 
+                            }));
+                          } else {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: methods.filter(m => m !== 'email') 
+                            }));
+                          }
+                        }}
+                      />
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-blue-600" />
+                        <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
+                          Email
+                        </Label>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="edit-comm-sms"
+                        checked={formData.preferredCommunicationMethod.includes('sms')}
+                        onCheckedChange={(checked) => {
+                          const methods = formData.preferredCommunicationMethod;
+                          if (checked) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: [...methods, 'sms'] 
+                            }));
+                          } else {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
+                            }));
+                          }
+                        }}
+                      />
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-4 w-4 text-green-600" />
+                        <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
+                          SMS
+                        </Label>
+                      </div>
+                    </div>
+                    
+                    {formData.preferredCommunicationMethod.length === 0 && (
+                      <p className="text-sm text-gray-500 italic">No communication method selected</p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <Label htmlFor="edit-notes">Notes</Label>
                   <Textarea

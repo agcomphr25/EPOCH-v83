@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 
 interface TooltipProviderProps {
@@ -17,18 +17,32 @@ interface TooltipProps {
 
 const Tooltip = ({ children }: TooltipProps) => {
   const [isVisible, setIsVisible] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
     setIsVisible(true)
   }
   
   const handleMouseLeave = () => {
-    setIsVisible(false)
+    timeoutRef.current = setTimeout(() => {
+      setIsVisible(false)
+    }, 100)
   }
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
   
   return (
     <div 
-      className="relative inline-block w-full"
+      className="relative w-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -37,9 +51,7 @@ const Tooltip = ({ children }: TooltipProps) => {
           if (child.type === TooltipContent) {
             return React.cloneElement(child, { 
               ...child.props, 
-              isVisible,
-              onMouseEnter: handleMouseEnter,
-              onMouseLeave: handleMouseLeave
+              isVisible
             } as any)
           }
         }
@@ -82,19 +94,21 @@ interface TooltipContentProps extends React.HTMLAttributes<HTMLDivElement> {
 const TooltipContent = React.forwardRef<
   HTMLDivElement,
   TooltipContentProps
->(({ children, className, isVisible = false, onMouseEnter, onMouseLeave, ...props }, ref) => {
+>(({ children, className, isVisible = false, ...props }, ref) => {
   if (!isVisible) return null
   
   return (
     <div
       ref={ref}
       className={cn(
-        "absolute z-[60] min-w-[320px] max-w-lg overflow-visible rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 p-4 text-sm text-gray-900 dark:text-gray-100 shadow-xl",
-        "left-full ml-3 top-0 pointer-events-none",
+        "fixed z-[9999] w-80 rounded-lg border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 p-4 text-sm text-gray-900 dark:text-gray-100 shadow-2xl",
+        "transform translate-x-2 -translate-y-2",
         className
       )}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      style={{
+        left: '100%',
+        top: '0'
+      }}
       {...props}
     >
       {children}

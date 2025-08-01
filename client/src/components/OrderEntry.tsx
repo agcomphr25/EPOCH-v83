@@ -1040,73 +1040,7 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* Preferred Communication Method */}
-              <div>
-                <Label>Preferred Communication Method</Label>
-                <div className="flex items-center gap-6 mt-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="comm-email"
-                      checked={features.preferredCommunication?.includes('email') || false}
-                      onCheckedChange={(checked) => {
-                        const currentComm = features.preferredCommunication || [];
-                        if (checked) {
-                          const newComm = currentComm.includes('email') 
-                            ? currentComm 
-                            : [...currentComm, 'email'];
-                          setFeatures(prev => ({ ...prev, preferredCommunication: newComm }));
-                        } else {
-                          const newComm = currentComm.filter(method => method !== 'email');
-                          setFeatures(prev => ({ ...prev, preferredCommunication: newComm }));
-                        }
-                      }}
-                    />
-                    <Label 
-                      htmlFor="comm-email" 
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                    >
-                      <span>📧</span>
-                      Email
-                    </Label>
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="comm-sms"
-                      checked={features.preferredCommunication?.includes('sms') || false}
-                      onCheckedChange={(checked) => {
-                        const currentComm = features.preferredCommunication || [];
-                        if (checked) {
-                          const newComm = currentComm.includes('sms') 
-                            ? currentComm 
-                            : [...currentComm, 'sms'];
-                          setFeatures(prev => ({ ...prev, preferredCommunication: newComm }));
-                        } else {
-                          const newComm = currentComm.filter(method => method !== 'sms');
-                          setFeatures(prev => ({ ...prev, preferredCommunication: newComm }));
-                        }
-                      }}
-                    />
-                    <Label 
-                      htmlFor="comm-sms" 
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                    >
-                      <span>📱</span>
-                      SMS
-                    </Label>
-                  </div>
-                </div>
-                
-                {(!features.preferredCommunication || features.preferredCommunication.length === 0) && (
-                  <p className="text-sm text-gray-500 mt-1">No communication method selected</p>
-                )}
-                
-                {features.preferredCommunication && features.preferredCommunication.length > 0 && (
-                  <p className="text-sm text-green-600 mt-1">
-                    Selected: {features.preferredCommunication.join(', ').toUpperCase()}
-                  </p>
-                )}
-              </div>
 
               {/* Stock Model Selection and Price Override Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -2169,18 +2103,7 @@ export default function OrderEntry() {
                   </div>
                 </div>
 
-                {/* Preferred Communication */}
-                <div className="flex justify-between items-center">
-                  <span>Communication Preference:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{features.preferredCommunication && features.preferredCommunication.length > 0 
-                      ? features.preferredCommunication.map(method => {
-                          return method === 'email' ? '📧 Email' : '📱 SMS';
-                        }).join(', ')
-                      : 'Not selected'}</span>
-                    <span className="text-blue-600 font-bold">$0.00</span>
-                  </div>
-                </div>
+
 
                 {/* Miscellaneous Items */}
                 {miscItems.length > 0 && (

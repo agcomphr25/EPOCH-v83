@@ -33,10 +33,11 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { useToast } from '@/hooks/use-toast';
 
 
 // Draggable Order Item Component with responsive sizing
@@ -563,6 +564,7 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
@@ -658,6 +660,68 @@ export default function LayupScheduler() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Push to Layup/Plugging Queue workflow
+  const pushToLayupPluggingMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      return apiRequest('/api/push-to-layup-plugging', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { orderIds }
+      });
+    },
+    onSuccess: (result) => {
+      console.log('✅ Orders pushed to layup/plugging queue:', result);
+      toast({
+        title: "Orders Moved",
+        description: `${result.updatedOrders?.length || 0} orders moved to layup/plugging phase`,
+      });
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error) => {
+      console.error('❌ Failed to push orders:', error);
+      toast({
+        title: "Error",
+        description: "Failed to move orders to layup/plugging phase",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handlePushScheduledToQueue = async () => {
+    // Get all currently scheduled orders from this week
+    const currentWeekOrders = getOrdersForCurrentWeek();
+    const scheduledOrderIds = currentWeekOrders.map(order => order.orderId);
+    
+    if (scheduledOrderIds.length === 0) {
+      toast({
+        title: "No Orders",
+        description: "No orders are currently scheduled for this week",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
+  };
+
+  // Helper function to get current week's orders
+  const getOrdersForCurrentWeek = () => {
+    const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
+    const endOfCurrentWeek = addDays(startOfCurrentWeek, 4); // Friday end
+    
+    return processedOrders.filter(order => {
+      // Check if order is assigned to this week
+      const assignment = orderAssignments[order.orderId];
+      if (assignment) {
+        const assignedDate = new Date(assignment.date);
+        return assignedDate >= startOfCurrentWeek && assignedDate <= endOfCurrentWeek;
+      }
+      return false;
+    });
   };
 
 
@@ -2485,6 +2549,26 @@ export default function LayupScheduler() {
             >
               <Printer className="w-4 h-4 mr-2" />
               Print Schedule
+            </Button>
+
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handlePushScheduledToQueue}
+              disabled={pushToLayupPluggingMutation.isPending}
+              className="mr-4 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {pushToLayupPluggingMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Push to Queue
+                </>
+              )}
             </Button>
 
             <Button

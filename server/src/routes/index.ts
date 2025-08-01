@@ -614,6 +614,54 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Push scheduled orders to layup/plugging queue workflow
+  app.post('/api/push-to-layup-plugging', async (req, res) => {
+    try {
+      console.log('🔄 Push to Layup/Plugging Queue workflow initiated');
+      const { storage } = await import('../../storage');
+      const { orderIds } = req.body;
+
+      if (!orderIds || !Array.isArray(orderIds)) {
+        return res.status(400).json({ error: 'orderIds array is required' });
+      }
+
+      // Update orders to move them to the next department (layup/plugging phase)
+      const updatedOrders = [];
+      for (const orderId of orderIds) {
+        // Update production orders status to LAID_UP
+        const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+        if (productionOrder) {
+          const updated = await storage.updateProductionOrder(productionOrder.id, {
+            productionStatus: 'LAID_UP',
+            laidUpAt: new Date()
+          });
+          updatedOrders.push(updated);
+          console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
+        }
+
+        // Update regular order drafts to next department
+        const orderDrafts = await storage.getAllOrderDrafts();
+        const regularOrder = orderDrafts.find(o => o.orderId === orderId);
+        if (regularOrder && regularOrder.id) {
+          await storage.updateOrderDraft(regularOrder.id, {
+            currentDepartment: 'Barcode' // Move from Layup to next department
+          });
+          console.log(`✅ Regular order ${orderId} moved to Barcode department`);
+        }
+      }
+
+      console.log(`🔄 Successfully pushed ${updatedOrders.length} orders to layup/plugging queue`);
+      res.json({ 
+        success: true, 
+        message: `${updatedOrders.length} orders moved to layup/plugging phase`,
+        updatedOrders 
+      });
+    } catch (error) {
+      console.error('Push to layup/plugging error:', error);
+      res.status(500).json({ error: 'Failed to push orders to layup/plugging queue' });
+    }
+  });
+
   // Legacy unified layup queue endpoint (kept for backward compatibility)
   app.get('/api/layup-queue', async (req, res) => {
     try {

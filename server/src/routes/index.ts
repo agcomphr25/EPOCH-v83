@@ -470,6 +470,7 @@ export function registerRoutes(app: Express): Server {
           product: isMesaUniversal ? 'Mesa - Universal' : po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
+          orderType: 'P1', // Add explicit orderType for P1 purchase orders
           department: 'Layup',
           currentDepartment: 'Layup',
           priorityScore: adjustedPriorityScore,

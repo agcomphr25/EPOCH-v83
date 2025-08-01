@@ -25,6 +25,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Core Features**:
     -   **Order Management**: Includes dynamic product configuration, a comprehensive feature consolidation system, and robust order editing capabilities. Features like Rails, Paint, Bottom Metal, and Handedness persist correctly.
     -   **Layup Scheduler**: Implements an advanced auto-scheduling algorithm for production orders, prioritizing by score and due date, with a Monday-Thursday work week distribution. It supports drag-and-drop scheduling, mold filtering, and employee capacity management. Visual indicators include a 4-color status system for production pipeline overview based on due dates.
+    -   **Department Queue Management**: Enhanced navigation with separate "Shipping QC" and "Shipping" department options. Features CSS-based hover tooltips that display comprehensive order details including all customizations and features without glitching or performance issues.
     -   **Customer Management**: Comprehensive CRM with CSV import/update, integrated SmartyStreets address validation and autocomplete.
     -   **Inventory Management**: Enhanced with search functionality, BOM integration, and part number display.
     -   **P1 & P2 Systems**: Distinct modules for P1 (regular) and P2 (OEM/supplier) orders, customers, purchase orders, and production order generation based on BOMs.

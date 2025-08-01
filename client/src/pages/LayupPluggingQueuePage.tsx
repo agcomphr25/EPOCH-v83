@@ -199,7 +199,7 @@ function QueueOrderItem({ order, getModelDisplayName, processedOrders }: {
           return (
             <div className="text-xs mt-1">
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                lopStatus.status === 'immediate' 
+                lopStatus.status === 'scheduled' 
                   ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                   : lopStatus.status === 'scheduled'
                   ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
@@ -257,20 +257,7 @@ export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const queryClient = useQueryClient();
   
-  // Use the same data source as LayupScheduler (now excludes P1 orders)
-  const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
-  
-  // Apply LOP processing exactly like LayupScheduler
-  const processedOrders = useMemo(() => {
-    if (availableOrders.length === 0) return [];
-    
-    const lopOrders = identifyLOPOrders(availableOrders as any[]);
-    const scheduledOrders = scheduleLOPAdjustments(lopOrders);
-    
-    return scheduledOrders;
-  }, [availableOrders]);
-  
-  // Get current week's layup schedule assignments
+  // Get current week's layup schedule assignments (SCHEDULED orders from Layup Scheduler)
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
     queryKey: ['layup-schedule'],
     queryFn: async () => {
@@ -282,6 +269,34 @@ export default function LayupPluggingQueuePage() {
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+  
+  // Get ALL orders to find details for scheduled orders
+  const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
+  
+  // Build processed orders from the SCHEDULE, not the raw queue
+  const processedOrders = useMemo(() => {
+    if (!currentSchedule || currentSchedule.length === 0 || availableOrders.length === 0) return [];
+    
+    // Map scheduled orders to their full order details
+    const scheduledOrdersWithDetails = currentSchedule.map((scheduleEntry: any) => {
+      const orderDetails = availableOrders.find((order: any) => order.orderId === scheduleEntry.orderId);
+      if (!orderDetails) {
+        console.warn(`⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders`);
+        return null;
+      }
+      
+      return {
+        ...orderDetails,
+        scheduledDate: scheduleEntry.scheduledDate,
+        moldId: scheduleEntry.moldId,
+        employeeId: scheduleEntry.employeeId,
+        scheduleId: scheduleEntry.id
+      };
+    }).filter(Boolean);
+    
+    console.log(`📋 Department Manager: Found ${scheduledOrdersWithDetails.length} scheduled orders out of ${currentSchedule.length} schedule entries`);
+    return scheduledOrdersWithDetails;
+  }, [currentSchedule, availableOrders]);
 
   // Get orders queued for barcode department (next department after layup)
   const { data: allOrders = [] } = useQuery({
@@ -318,26 +333,8 @@ export default function LayupPluggingQueuePage() {
     if (!Array.isArray(currentSchedule) || currentSchedule.length === 0 || !currentWeekDates.length) {
       console.log('🔍 No schedule data available - showing unscheduled orders. Schedule length:', (currentSchedule as any[]).length);
       
-      // If no schedule data, show available orders in today's column as fallback
-      if (processedOrders.length > 0) {
-        const grouped: {[key: string]: any[]} = {};
-        currentWeekDates.forEach(date => {
-          const dateStr = date.toISOString().split('T')[0];
-          grouped[dateStr] = [];
-        });
-        
-        // Put unscheduled orders in today's bucket
-        const todayStr = new Date().toISOString().split('T')[0];
-        if (grouped[todayStr]) {
-          grouped[todayStr] = processedOrders.slice(0, 50).map((order: any) => ({
-            ...order,
-            scheduledDate: todayStr,
-            source: order.source || 'p1_layup_queue',
-            isUnscheduled: true
-          }));
-        }
-        return grouped;
-      }
+      // If no schedule data, return empty - Department Manager only shows SCHEDULED orders
+      console.log('📋 No orders scheduled yet. Use Layup Scheduler to schedule orders first.');
       return {};
     }
 
@@ -788,14 +785,14 @@ export default function LayupPluggingQueuePage() {
                         {dayOrders.length > 0 && (
                           <Button
                             variant="outline"
-                            size="xs"
+                            size="sm"
                             onClick={() => {
                               const dayOrderIds = dayOrders.map(o => o.orderId);
                               const allSelected = dayOrderIds.every(id => selectedOrders.includes(id));
                               if (allSelected) {
                                 setSelectedOrders(prev => prev.filter(id => !dayOrderIds.includes(id)));
                               } else {
-                                setSelectedOrders(prev => [...new Set([...prev, ...dayOrderIds])]);
+                                setSelectedOrders(prev => [...Array.from(new Set([...prev, ...dayOrderIds]))]);
                               }
                             }}
                             className="text-xs h-6"

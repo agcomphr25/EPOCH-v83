@@ -1,14 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 // Using custom CSS hover tooltip instead of complex components
-import { TrendingUp, ArrowLeft, CheckCircle } from 'lucide-react';
+import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function QCShippingQueuePage() {
+  // State for selected orders
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
@@ -123,6 +128,52 @@ export default function QCShippingQueuePage() {
     return details.join('\n');
   };
 
+  // Handle checkbox selection
+  const handleOrderSelection = (orderId: string, checked: boolean) => {
+    const newSelected = new Set(selectedOrders);
+    if (checked) {
+      newSelected.add(orderId);
+    } else {
+      newSelected.delete(orderId);
+    }
+    setSelectedOrders(newSelected);
+  };
+
+  // Handle select all/none
+  const handleSelectAll = () => {
+    if (selectedOrders.size === qcShippingOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(qcShippingOrders.map(order => order.orderId)));
+    }
+  };
+
+  // Progress selected orders to shipping
+  const progressToShipping = async () => {
+    if (selectedOrders.size === 0) return;
+    
+    try {
+      // Update each selected order to move to shipping department
+      for (const orderId of selectedOrders) {
+        await fetch(`/api/orders/${orderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            currentDepartment: 'Shipping',
+            department: 'Shipping',
+            status: 'IN_PROGRESS' 
+          })
+        });
+      }
+      
+      // Clear selections and refresh data
+      setSelectedOrders(new Set());
+      // The query will automatically refetch due to React Query
+    } catch (error) {
+      console.error('Error progressing orders to shipping:', error);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -177,9 +228,21 @@ export default function QCShippingQueuePage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Shipping QC Department Queue</span>
-            <Badge variant="outline" className="ml-2">
-              {qcShippingOrders.length} Orders
-            </Badge>
+            <div className="flex items-center gap-2">
+              {qcShippingOrders.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="text-xs"
+                >
+                  {selectedOrders.size === qcShippingOrders.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              )}
+              <Badge variant="outline" className="ml-2">
+                {qcShippingOrders.length} Orders
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -197,15 +260,22 @@ export default function QCShippingQueuePage() {
 
                 return (
                   <div key={order.orderId} className="relative group">
-                    <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-shadow duration-200 cursor-pointer">
+                    <Card className={`border-l-4 border-l-green-500 hover:shadow-lg transition-shadow duration-200 cursor-pointer ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <div className="font-semibold text-lg">
                             {getDisplayOrderId(order)}
                           </div>
-                          <Badge variant="secondary" className="text-xs">
-                            {order.status}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {order.status}
+                            </Badge>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                              className="ml-2"
+                            />
+                          </div>
                         </div>
                       </CardHeader>
                       <CardContent className="pt-0">
@@ -264,6 +334,20 @@ export default function QCShippingQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Progress to Shipping Button */}
+      {selectedOrders.size > 0 && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button
+            onClick={progressToShipping}
+            size="lg"
+            className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
+          >
+            <ArrowRight className="mr-2 h-5 w-5" />
+            Progress {selectedOrders.size} Order{selectedOrders.size !== 1 ? 's' : ''} to Shipping
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

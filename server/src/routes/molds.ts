@@ -34,22 +34,11 @@ router.get('/:moldId', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const result = insertMoldSchema.parse(req.body);
-    
-    // Check if mold with this ID already exists
-    const existingMold = await storage.getMold(result.moldId);
-    if (existingMold) {
-      return res.status(409).json({ error: "Mold with this ID already exists" });
-    }
-    
     const mold = await storage.createMold(result);
     res.json(mold);
   } catch (error) {
     console.error("Mold creation error:", error);
-    if (error.code === '23505') {
-      res.status(409).json({ error: "Mold with this ID already exists" });
-    } else {
-      res.status(400).json({ error: "Invalid mold data" });
-    }
+    res.status(400).json({ error: "Invalid mold data" });
   }
 });
 

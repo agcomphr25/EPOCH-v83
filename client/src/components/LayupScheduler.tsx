@@ -499,12 +499,8 @@ function DroppableCell({
     }
   });
 
-  // Debug logging for each cell - especially track P1 purchase orders
-  const p1OrdersInCell = orders.filter(o => o?.source === 'p1_purchase_order');
-  if (p1OrdersInCell.length > 0) {
-    console.log(`🎯 DroppableCell [${moldId}]: Found ${p1OrdersInCell.length} P1 PO orders:`, p1OrdersInCell.map(o => o?.orderId));
-  }
-  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} total orders`, orders.map(o => o?.orderId));
+  // Debug logging for each cell
+  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
 
   const isFriday = date.getDay() === 5;
 
@@ -556,8 +552,6 @@ export default function LayupScheduler() {
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
   const [bulkMoldCount, setBulkMoldCount] = useState(1);
   const [isBulkMode, setIsBulkMode] = useState(false);
-  const [isCreatingMold, setIsCreatingMold] = useState(false);
-  const [isSavingMold, setIsSavingMold] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ employeeId: '', rate: 1.5, hours: 8 });
   const [employeeChanges, setEmployeeChanges] = useState<{[key: string]: {rate: number, hours: number}}>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -572,17 +566,8 @@ export default function LayupScheduler() {
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
-  // Lazy load stock models only when mold configuration is opened
-  const [moldDialogOpen, setMoldDialogOpen] = useState(false);
-  const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
-    queryKey: ['/api/stock-models'],
-    staleTime: 10 * 60 * 1000, // 10 minute cache
-    enabled: moldDialogOpen, // Only load when dialog is opened
-  });
-
   // Debug molds data
   console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
-  
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
   // Load existing schedule data from database
@@ -702,12 +687,39 @@ export default function LayupScheduler() {
     return scheduledOrders;
   }, [orders]);
 
-  // Performance: Minimal logging only when orders change
+  // Debug production orders specifically
   useEffect(() => {
-    if (orders.length > 0) {
-      console.log('📊 LayupScheduler:', orders.length, 'orders loaded');
+    const productionOrders = orders.filter(order => order.source === 'production_order');
+    console.log('🏭 LayupScheduler: Total orders loaded:', orders.length);
+    console.log('🏭 LayupScheduler: Production orders found:', productionOrders.length);
+    if (productionOrders.length > 0) {
+      console.log('🏭 LayupScheduler: Sample production order:', productionOrders[0]);
+      console.log('🏭 LayupScheduler: First 5 production orders:', productionOrders.slice(0, 5).map(o => ({
+        orderId: o.orderId,
+        source: o.source,
+        stockModelId: o.stockModelId,
+        customer: o.customer
+      })));
     }
-  }, [orders.length]);
+
+    // Log all order sources
+    const sourceCounts = orders.reduce((acc, order) => {
+      acc[order.source] = (acc[order.source] || 0) + 1;
+      return acc;
+    }, {} as {[key: string]: number});
+    console.log('🏭 LayupScheduler: Orders by source:', sourceCounts);
+
+    // Log when auto-schedule should run
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+      console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
+    } else {
+      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+        orders: orders.length,
+        molds: molds.length,
+        employees: employees.length
+      });
+    }
+  }, [orders, molds, employees]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
@@ -718,7 +730,7 @@ export default function LayupScheduler() {
 
     // Re-enabled auto-scheduling to place production orders in calendar
 
-    console.log('🚀 Auto-scheduling', orders.length, 'orders');
+    console.log('🚀 Generating auto-schedule for', orders.length, 'orders');
 
     // Calculate dynamic scheduling window based on order due dates
     const calculateSchedulingWindow = () => {
@@ -782,17 +794,10 @@ export default function LayupScheduler() {
       // For production orders and P1 purchase orders, try to use the part name as the stock model
       if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.product) {
         modelId = order.product;
-        console.log('🔧 P1/Production order modelId mapping:', {
-          orderId: order.orderId,
-          source: order.source,
-          originalModelId: order.stockModelId || order.modelId,
-          productName: order.product,
-          finalModelId: modelId
-        });
       }
 
       if (!modelId) {
-        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source, 'Product:', order.product);
+        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
       }
 
@@ -834,23 +839,8 @@ export default function LayupScheduler() {
     const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
-    // DEBUG: Check what orders we received, especially P1 purchase orders
     console.log('🎯 Starting single-card-per-cell assignment algorithm');
     console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
-    
-    const p1PurchaseOrders = orders.filter(o => o.source === 'p1_purchase_order');
-    console.log(`🛍️ P1 PURCHASE ORDERS IN SCHEDULER: ${p1PurchaseOrders.length} orders`);
-    if (p1PurchaseOrders.length > 0) {
-      console.log('🛍️ Sample P1 purchase orders:', p1PurchaseOrders.slice(0, 3).map(o => ({
-        orderId: o.orderId,
-        product: o.product,
-        stockModelId: o.stockModelId,
-        source: o.source
-      })));
-    }
-    
-    const mainOrders = orders.filter(o => o.source === 'main_orders');
-    console.log(`📋 MAIN ORDERS IN SCHEDULER: ${mainOrders.length} orders`);
 
     // Debug mold configurations
     molds.filter(m => m.enabled).forEach(mold => {
@@ -975,7 +965,10 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
-  // Stock models are fetched lazily when mold dialog opens (see above)
+  // Fetch stock models to get display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  }) as { data: any[] };
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
@@ -1792,77 +1785,37 @@ export default function LayupScheduler() {
   };
 
   const handleAddMold = async () => {
-    if (!newMold.moldName.trim() || isCreatingMold) return;
+    if (!newMold.moldName.trim()) return;
 
-    setIsCreatingMold(true);
-    try {
-      if (isBulkMode && bulkMoldCount > 1) {
-        // Create multiple molds with sequential processing to prevent database conflicts
-        console.log(`Creating ${bulkMoldCount} ${newMold.moldName} molds...`);
-        
-        for (let i = 1; i <= bulkMoldCount; i++) {
-          const moldId = `${newMold.moldName}-${i}`;
-          
-          try {
-            await saveMold({
-              moldId,
-              modelName: newMold.moldName,
-              stockModels: newMold.stockModels,
-              instanceNumber: i,
-              multiplier: newMold.multiplier,
-              enabled: true
-            });
-            console.log(`✅ Created mold ${i}/${bulkMoldCount}: ${moldId}`);
-            
-            // Small delay to prevent database overload
-            if (i < bulkMoldCount) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          } catch (error: any) {
-            console.error(`❌ Failed to create mold ${moldId}:`, error);
-            if (error?.response?.status === 409) {
-              console.log(`⚠️ Mold ${moldId} already exists, skipping...`);
-            } else {
-              throw error;
-            }
-          }
-        }
-        console.log(`✅ Bulk creation completed for ${newMold.moldName} molds`);
-      } else {
-        // Create single mold
-        const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
-        
-        try {
-          await saveMold({
-            moldId,
-            modelName: newMold.moldName,
-            stockModels: newMold.stockModels,
-            instanceNumber: newMold.instanceNumber,
-            multiplier: newMold.multiplier,
-            enabled: true
-          });
-          console.log(`✅ Successfully created mold: ${moldId}`);
-        } catch (error: any) {
-          if (error?.response?.status === 409) {
-            console.log(`⚠️ Mold ${moldId} already exists`);
-            alert(`Mold ${moldId} already exists. Please choose a different name or instance number.`);
-            return;
-          } else {
-            throw error;
-          }
-        }
+    if (isBulkMode && bulkMoldCount > 1) {
+      // Create multiple molds with different instance numbers
+      for (let i = 1; i <= bulkMoldCount; i++) {
+        const moldId = `${newMold.moldName}-${i}`;
+        await saveMold({
+          moldId,
+          modelName: newMold.moldName,
+          stockModels: newMold.stockModels,
+          instanceNumber: i,
+          multiplier: newMold.multiplier,
+          enabled: true
+        });
       }
-
-      // Reset form only on successful completion
-      setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
-      setBulkMoldCount(1);
-      setIsBulkMode(false);
-    } catch (error) {
-      console.error('Failed to create mold:', error);
-      alert('Failed to create mold. Please try again.');
-    } finally {
-      setIsCreatingMold(false);
+    } else {
+      // Create single mold
+      const moldId = `${newMold.moldName}-${newMold.instanceNumber}`;
+      await saveMold({
+        moldId,
+        modelName: newMold.moldName,
+        stockModels: newMold.stockModels,
+        instanceNumber: newMold.instanceNumber,
+        multiplier: newMold.multiplier,
+        enabled: true
+      });
     }
+
+    setNewMold({ moldName: '', stockModels: [], instanceNumber: 1, multiplier: 2 });
+    setBulkMoldCount(1);
+    setIsBulkMode(false);
   };
 
   const handleAddEmployee = async () => {
@@ -1966,11 +1919,6 @@ export default function LayupScheduler() {
                   {orders.filter(o => o.source === 'production_order').length} Production Orders
                 </span>
               </div>
-              <div className="bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2 rounded-lg">
-                <span className="text-cyan-700 dark:text-cyan-300 font-medium">
-                  {orders.filter(o => o.source === 'p1_purchase_order').length} P1 Purchase Orders
-                </span>
-              </div>
               <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
                 <span className="text-green-700 dark:text-green-300 font-medium">{molds.filter(m => m.enabled).length} Active Molds</span>
               </div>
@@ -1986,18 +1934,18 @@ export default function LayupScheduler() {
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
 
-            <Dialog open={moldDialogOpen} onOpenChange={setMoldDialogOpen}>
+            <Dialog>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Settings className="w-4 h-4 mr-2" />
                   Mold Settings
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Mold Configuration ({molds.filter(m => m.isActive).length} Active Molds)</DialogTitle>
+                  <DialogTitle>Mold Configuration</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-4 max-h-96 overflow-y-auto">
                   {/* Add New Mold Form */}
                   <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
                     <div className="flex items-center mb-3">
@@ -2112,30 +2060,21 @@ export default function LayupScheduler() {
                       onClick={handleAddMold} 
                       className="mt-3" 
                       size="sm"
-                      disabled={!newMold.moldName.trim() || isCreatingMold}
+                      disabled={!newMold.moldName.trim()}
                     >
-                      {isCreatingMold ? (
-                        isBulkMode ? `Creating ${bulkMoldCount} Molds...` : 'Creating Mold...'
-                      ) : (
-                        isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'
-                      )}
+                      {isBulkMode ? `Add ${bulkMoldCount} Molds` : 'Add Mold'}
                     </Button>
                   </div>
 
                   <Separator />
 
-                  {/* Existing Molds - Limited for Performance */}
+                  {/* Existing Molds */}
                   {molds.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       No molds configured yet. Use the form above to add your first mold.
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <div className="text-xs text-gray-500 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
-                        ⚡ Performance Mode: Showing first 15 molds of {molds.length} total for faster loading
-                      </div>
-                      
-                      {molds.slice(0, 15).map(mold => (
+                    molds.map(mold => (
                       <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                         <Checkbox
                           checked={mold.enabled ?? true}
@@ -2223,10 +2162,7 @@ export default function LayupScheduler() {
 
                               {editingMoldId === mold.moldId ? (
                               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2 bg-white dark:bg-gray-900">
-                                {stockModelsLoading ? (
-                                  <div className="text-xs text-gray-500">Loading stock models...</div>
-                                ) : (
-                                  stockModels.slice(0, 25).map((model: any) => (
+                                {stockModels.map((model: any) => (
                                   <div key={model.id} className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`edit-stock-${mold.moldId}-${model.id}`}
@@ -2246,12 +2182,7 @@ export default function LayupScheduler() {
                                       {model.displayName || model.name || model.id}
                                     </label>
                                   </div>
-                                )))}
-                                {!stockModelsLoading && stockModels.length > 25 && (
-                                  <div className="text-xs text-gray-500 italic">
-                                    Showing first 25 models for performance.
-                                  </div>
-                                )}
+                                ))}
                               </div>
                             ) : (
                               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -2306,8 +2237,7 @@ export default function LayupScheduler() {
                           </Button>
                         </div>
                       </div>
-                    ))}
-                    </div>
+                    ))
                   )}
 
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">

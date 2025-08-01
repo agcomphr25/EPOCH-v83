@@ -25,9 +25,7 @@ export function useP2LayupOrders() {
   const { data: orders = [], isLoading: loading, refetch: reloadOrders } = useQuery({
     queryKey: ['/api/p2-layup-queue'],
     select: (data: P2LayupOrder[]) => data || [],
-    refetchInterval: false, // Disable auto-refresh for performance
-    staleTime: 1800000, // 30 minute cache
-    refetchOnWindowFocus: false
+    refetchInterval: 30000, // Refresh every 30 seconds to get new P2 production orders
   });
 
   return {

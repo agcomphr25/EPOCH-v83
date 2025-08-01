@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import type { Mold, InsertMold } from '../../../shared/schema';
 
@@ -6,16 +6,10 @@ export default function useMoldSettings() {
   const [molds, setMolds] = useState<Mold[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Memoize expensive calculations
-  const enabledMolds = useMemo(() => molds.filter(m => m.enabled), [molds]);
-  const activeMolds = useMemo(() => molds.filter(m => m.isActive), [molds]);
-
-  // Debug state changes only when count changes significantly
+  // Debug state changes
   useEffect(() => {
-    if (molds.length > 0) {
-      console.log('🔧 useMoldSettings: Molds loaded:', molds.length);
-    }
-  }, [molds.length]);
+    console.log('🔧 useMoldSettings: Molds state changed:', molds);
+  }, [molds]);
 
   const fetchMolds = async () => {
     try {
@@ -53,22 +47,15 @@ export default function useMoldSettings() {
           ms.map(m => (m.moldId === updatedMold.moldId ? { ...m, ...updatedMold } : m))
         );
       } else {
-        // Create new mold with better error handling
+        // Create new mold
         const newMold = await apiRequest('/api/molds', {
           method: 'POST',
           body: updatedMold,
         });
         setMolds(ms => [...ms, newMold]);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to save mold:', error);
-      // Re-throw the error with better context for the UI
-      if (error?.response?.status === 409) {
-        const err = new Error(`Mold ${updatedMold.moldId} already exists`);
-        (err as any).response = { status: 409 };
-        throw err;
-      }
-      throw error;
     }
   };
 
@@ -100,14 +87,5 @@ export default function useMoldSettings() {
     }
   };
 
-  return { 
-    molds, 
-    enabledMolds, 
-    activeMolds, 
-    saveMold, 
-    deleteMold, 
-    toggleMoldStatus, 
-    loading, 
-    refetch: fetchMolds 
-  };
+  return { molds, saveMold, deleteMold, toggleMoldStatus, loading, refetch: fetchMolds };
 }

@@ -428,21 +428,9 @@ export function registerRoutes(app: Express): Server {
   });
 
   // P1 Layup Queue endpoint - combines regular orders and P1 purchase orders
-  // P1 layup queue cache
-  let p1QueueCache: any = null;
-  let p1CacheTime = 0;
-  const P1_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      // Return cached data if available and fresh
-      const now = Date.now();
-      if (p1QueueCache && (now - p1CacheTime) < P1_CACHE_DURATION) {
-        console.log('⚡ Returning cached P1 queue data');
-        return res.json(p1QueueCache);
-      }
-
-      console.log('🏭 Processing fresh P1 layup queue...');
+      console.log('🏭 Starting P1 layup queue processing...');
       const { storage } = await import('../../storage');
 
       // Get only finalized orders from draft table that are ready for production
@@ -463,24 +451,10 @@ export function registerRoutes(app: Express): Server {
       const pos = await storage.getAllPurchaseOrders();
       const activePos = pos.filter(po => po.status === 'OPEN');
 
-      console.log('🔧 Found active POs:', activePos.length);
-
       const p1LayupOrders = [];
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        console.log(`🔧 PO ${po.poNumber} has ${items.length} total items`);
-        
         const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
-        console.log(`🔧 PO ${po.poNumber} has ${stockModelItems.length} stock model items`);
-        
-        if (stockModelItems.length > 0) {
-          console.log('🔧 Sample stock model items:', stockModelItems.slice(0, 3).map(item => ({
-            id: item.id,
-            itemId: item.itemId,
-            quantity: item.quantity,
-            itemName: item.itemName
-          })));
-        }
 
         for (const item of stockModelItems) {
           // Calculate priority score based on due date urgency
@@ -489,34 +463,26 @@ export function registerRoutes(app: Express): Server {
           const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
 
-          // Handle quantity - create individual entries for each unit if quantity > 1
-          const quantity = item.quantity || 1;
-          console.log(`🔧 Creating ${quantity} layup orders for item ${item.itemId}`);
-          
-          for (let i = 1; i <= quantity; i++) {
-            p1LayupOrders.push({
-              id: `p1-${po.id}-${item.id}-${i}`,
-              orderId: `P1-${po.poNumber}-${item.id}-${i}`,
-              orderDate: po.poDate,
-              customer: po.customerName,
-              product: item.itemId,
-              quantity: 1, // Each layup order is for 1 unit
-              status: 'PENDING',
-              department: 'Layup',
-              currentDepartment: 'Layup',
-              priorityScore: priorityScore,
-              dueDate: po.expectedDelivery,
-              source: 'p1_purchase_order' as const,
-              poId: po.id,
-              poItemId: item.id,
-              unitNumber: i,
-              totalUnits: quantity,
-              stockModelId: item.itemId, // Use item ID as stock model
-              specifications: item.specifications,
-              createdAt: po.createdAt,
-              updatedAt: po.updatedAt
-            });
-          }
+          p1LayupOrders.push({
+            id: `p1-${po.id}-${item.id}`,
+            orderId: `P1-${po.poNumber}-${item.id}`,
+            orderDate: po.poDate,
+            customer: po.customerName,
+            product: item.itemId,
+            quantity: item.quantity,
+            status: 'PENDING',
+            department: 'Layup',
+            currentDepartment: 'Layup',
+            priorityScore: priorityScore,
+            dueDate: po.expectedDelivery,
+            source: 'p1_purchase_order' as const,
+            poId: po.id,
+            poItemId: item.id,
+            stockModelId: item.itemId, // Use item ID as stock model
+            specifications: item.specifications,
+            createdAt: po.createdAt,
+            updatedAt: po.updatedAt
+          });
         }
       }
 
@@ -549,11 +515,6 @@ export function registerRoutes(app: Express): Server {
 
       console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
       console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
-
-      // Cache the result
-      p1QueueCache = combinedOrders;
-      p1CacheTime = now;
-      console.log('⚡ Cached P1 queue data for performance');
 
       res.json(combinedOrders);
     } catch (error) {

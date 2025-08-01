@@ -48,18 +48,27 @@ class ScheduleSlot:
 
 def schedule_orders_with_mesa_constraints(orders: List[Order], molds: List[Mold], employees: List[Employee], max_weeks=8) -> List[ScheduleSlot]:
     """
-    Enhanced scheduler with Mesa Universal constraints:
-    - Mesa Universal orders limited to 8 per day
-    - Mesa Universal orders get highest priority
+    Enhanced scheduler for Mesa Universal and regular orders:
+    - Mesa Universal orders limited to 8 per day (highest priority)
+    - Regular orders fill remaining capacity
     - Work week: Monday-Thursday
+    - All orders processed together with proper prioritization
     """
     
-    # Sort orders: Mesa Universal first, then by priority and deadline
+    # Sort orders: Mesa Universal first (priority 0), then regular orders by priority and deadline
     def sort_key(order):
-        is_mesa = order.stock_model_id == 'mesa_universal' or order.order_type == 'mesa_universal'
-        return (0 if is_mesa else 1, order.priority, order.deadline)
+        is_mesa = (order.stock_model_id == 'mesa_universal' or 
+                  order.order_type == 'mesa_universal' or
+                  order.order_type == 'production_order')
+        base_priority = 0 if is_mesa else 100  # Mesa Universal gets much higher priority
+        return (base_priority + order.priority, order.deadline)
     
     orders = sorted(orders, key=sort_key)
+    print(f"📋 Processing {len(orders)} orders:")
+    mesa_count = sum(1 for o in orders if (o.stock_model_id == 'mesa_universal' or o.order_type == 'mesa_universal' or o.order_type == 'production_order'))
+    regular_count = len(orders) - mesa_count
+    print(f"   • {mesa_count} Mesa Universal/Production orders (8/day limit)")
+    print(f"   • {regular_count} Regular orders")
     schedule = []
     
     # Track daily usage
@@ -87,7 +96,8 @@ def schedule_orders_with_mesa_constraints(orders: List[Order], molds: List[Mold]
         attempts = 0
         
         is_mesa_universal = (order.stock_model_id == 'mesa_universal' or 
-                           order.order_type == 'mesa_universal')
+                           order.order_type == 'mesa_universal' or
+                           order.order_type == 'production_order')
         
         while not scheduled and attempts < max_attempts:
             # Skip non-work days
@@ -108,9 +118,15 @@ def schedule_orders_with_mesa_constraints(orders: List[Order], molds: List[Mold]
             # Find compatible molds
             compatible_molds = []
             for mold in molds:
-                if (order.order_type in mold.compatible_types or 
-                    (order.stock_model_id and order.stock_model_id in mold.stock_models)):
-                    
+                # Check compatibility based on order type and stock model
+                is_compatible = (
+                    order.order_type in mold.compatible_types or
+                    (order.stock_model_id and order.stock_model_id in mold.stock_models) or
+                    (is_mesa_universal and 'mesa_universal' in mold.stock_models) or
+                    (not is_mesa_universal and ('regular' in mold.compatible_types or 'P1' in mold.compatible_types))
+                )
+                
+                if is_compatible:
                     # Check mold capacity for this date
                     mold_usage = daily_mold_usage.get((date_key, mold.mold_id), 0)
                     if mold_usage < mold.capacity:
@@ -119,7 +135,14 @@ def schedule_orders_with_mesa_constraints(orders: List[Order], molds: List[Mold]
             # Find available employees
             available_employees = []
             for employee in employees:
-                if order.order_type in employee.skills:
+                # Check if employee can handle this order type
+                can_handle = (
+                    order.order_type in employee.skills or
+                    (is_mesa_universal and 'mesa_universal' in employee.skills) or
+                    (not is_mesa_universal and ('regular' in employee.skills or 'P1' in employee.skills))
+                )
+                
+                if can_handle:
                     # Check employee daily capacity
                     emp_usage = daily_employee_usage.get((date_key, employee.employee_id), 0)
                     if emp_usage < employee.hours_per_day:
@@ -155,7 +178,8 @@ def schedule_orders_with_mesa_constraints(orders: List[Order], molds: List[Mold]
                     daily_mesa_count[date_key] = daily_mesa_count.get(date_key, 0) + 1
                 
                 scheduled = True
-                print(f"✅ Scheduled {order.order_id} ({'Mesa Universal' if is_mesa_universal else 'Regular'}) on {date_key}")
+                order_type_label = 'Mesa Universal/Production' if is_mesa_universal else 'Regular'
+                print(f"✅ Scheduled {order.order_id} ({order_type_label}) on {date_key} - Mold: {selected_mold.mold_id}")
                 
                 if is_mesa_universal:
                     print(f"   Mesa Universal count for {date_key}: {daily_mesa_count[date_key]}/8")
@@ -223,7 +247,9 @@ def main():
             daily_summary[date] = {"mesa": 0, "regular": 0, "total": 0}
         
         order = next(o for o in orders if o.order_id == slot.order_id)
-        is_mesa = order.stock_model_id == 'mesa_universal' or order.order_type == 'mesa_universal'
+        is_mesa = (order.stock_model_id == 'mesa_universal' or 
+                  order.order_type == 'mesa_universal' or 
+                  order.order_type == 'production_order')
         
         if is_mesa:
             daily_summary[date]["mesa"] += 1

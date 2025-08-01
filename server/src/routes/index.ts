@@ -631,7 +631,8 @@ export function registerRoutes(app: Express): Server {
       const schedulerInput = {
         orders: orders.map((order: any) => ({
           order_id: order.orderId,
-          order_type: order.source === 'production_order' ? 'mesa_universal' : 'regular',
+          order_type: order.source === 'production_order' ? 'production_order' : 
+                     order.stockModelId === 'mesa_universal' ? 'mesa_universal' : 'regular',
           features: order.features || {},
           quantity: order.quantity || 1,
           priority: order.priorityScore || 50,
@@ -641,12 +642,12 @@ export function registerRoutes(app: Express): Server {
         molds: molds.map((mold: any) => ({
           mold_id: mold.moldId,
           capacity: mold.multiplier || 1,
-          compatible_types: mold.stockModels || [],
+          compatible_types: ['production_order', 'mesa_universal', 'regular', 'P1'],
           stock_models: mold.stockModels || []
         })),
         employees: employees.map((emp: any) => ({
           employee_id: emp.employeeId,
-          skills: ['mesa_universal', 'regular', 'P1'], // All employees can handle all types
+          skills: ['production_order', 'mesa_universal', 'regular', 'P1'], // All employees can handle all types
           prod_rate: emp.rate || 1,
           hours_per_day: emp.hours || 10
         }))

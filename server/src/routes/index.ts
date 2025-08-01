@@ -458,8 +458,8 @@ export function registerRoutes(app: Express): Server {
         const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
 
-        // Determine if this is a Mesa Universal order based on the order ID pattern
-        const isMesaUniversal = po.orderId?.startsWith('PUR00199') || po.itemId === 'mesa_universal';
+        // Determine if this is a Mesa Universal order based on the item name and type
+        const isMesaUniversal = po.itemName === 'Mesa - Universal' || po.itemId === 'mesa_universal';
         const adjustedPriorityScore = isMesaUniversal ? 20 : priorityScore; // Mesa Universal gets highest priority
         
         return {

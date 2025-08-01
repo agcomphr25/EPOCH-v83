@@ -499,8 +499,12 @@ function DroppableCell({
     }
   });
 
-  // Debug logging for each cell
-  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
+  // Debug logging for each cell - especially track P1 purchase orders
+  const p1OrdersInCell = orders.filter(o => o?.source === 'p1_purchase_order');
+  if (p1OrdersInCell.length > 0) {
+    console.log(`🎯 DroppableCell [${moldId}]: Found ${p1OrdersInCell.length} P1 PO orders:`, p1OrdersInCell.map(o => o?.orderId));
+  }
+  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} total orders`, orders.map(o => o?.orderId));
 
   const isFriday = date.getDay() === 5;
 
@@ -709,6 +713,18 @@ export default function LayupScheduler() {
         unitNumber: o.unitNumber,
         totalUnits: o.totalUnits
       })));
+      
+      // Check if P1 orders are being assigned to molds properly
+      const assignedP1Orders = p1PurchaseOrders.filter(o => orderAssignments[o.orderId]);
+      const unassignedP1Orders = p1PurchaseOrders.filter(o => !orderAssignments[o.orderId]);
+      console.log('🏭 LayupScheduler: P1 PO assigned to molds:', assignedP1Orders.length);
+      console.log('🏭 LayupScheduler: P1 PO unassigned:', unassignedP1Orders.length);
+      
+      if (unassignedP1Orders.length > 0) {
+        console.log('🏭 LayupScheduler: Sample unassigned P1 PO:', unassignedP1Orders[0]);
+      }
+    } else {
+      console.log('❌ LayupScheduler: NO P1 PURCHASE ORDERS FOUND IN FRONTEND!');
     }
     
     if (productionOrders.length > 0) {
@@ -813,10 +829,17 @@ export default function LayupScheduler() {
       // For production orders and P1 purchase orders, try to use the part name as the stock model
       if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.product) {
         modelId = order.product;
+        console.log('🔧 P1/Production order modelId mapping:', {
+          orderId: order.orderId,
+          source: order.source,
+          originalModelId: order.stockModelId || order.modelId,
+          productName: order.product,
+          finalModelId: modelId
+        });
       }
 
       if (!modelId) {
-        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
+        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source, 'Product:', order.product);
         return [];
       }
 

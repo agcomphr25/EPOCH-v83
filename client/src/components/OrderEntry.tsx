@@ -44,6 +44,14 @@ interface FeatureDefinition {
   subcategory?: string;
 }
 
+interface MiscItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
 export default function OrderEntry() {
   console.log("OrderEntry component rendering...");
   const { toast } = useToast();
@@ -90,6 +98,39 @@ export default function OrderEntry() {
 
   // Payment state - simplified for multiple payments
   const [orderPayments, setOrderPayments] = useState<any[]>([]);
+  
+  // Miscellaneous items state
+  const [miscItems, setMiscItems] = useState<MiscItem[]>([]);
+
+  // Miscellaneous items functions
+  const addMiscItem = () => {
+    const newItem: MiscItem = {
+      id: Date.now().toString(),
+      description: '',
+      quantity: 1,
+      unitPrice: 0,
+      total: 0
+    };
+    setMiscItems(prev => [...prev, newItem]);
+  };
+
+  const updateMiscItem = (id: string, field: keyof MiscItem, value: string | number) => {
+    setMiscItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const updated = { ...item, [field]: value };
+        // Recalculate total when quantity or unitPrice changes
+        if (field === 'quantity' || field === 'unitPrice') {
+          updated.total = updated.quantity * updated.unitPrice;
+        }
+        return updated;
+      }
+      return item;
+    }));
+  };
+
+  const removeMiscItem = (id: string) => {
+    setMiscItems(prev => prev.filter(item => item.id !== id));
+  };
 
   // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
@@ -228,9 +269,14 @@ export default function OrderEntry() {
       }
     }
 
+    // Add miscellaneous items total
+    const miscTotal = miscItems.reduce((sum, item) => sum + item.total, 0);
+    total += miscTotal;
+    console.log('💰 Price calculation - Misc items total:', miscTotal);
+
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -726,6 +772,7 @@ export default function OrderEntry() {
         customDiscountValue,
         showCustomDiscount,
         priceOverride,
+        miscItems: miscItems,
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -801,6 +848,7 @@ export default function OrderEntry() {
     setEditingOrderId(null);
     // Reset payment state - payments now handled by PaymentManager
     setOrderPayments([]);
+    setMiscItems([]);
     generateOrderId();
   };
 
@@ -1585,6 +1633,87 @@ export default function OrderEntry() {
                 />
               </div>
 
+              {/* Miscellaneous Items */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">Miscellaneous Items</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addMiscItem}
+                    className="h-8 px-3"
+                  >
+                    + Add Item
+                  </Button>
+                </div>
+                
+                {miscItems.length > 0 && (
+                  <div className="space-y-3">
+                    {miscItems.map((item) => (
+                      <div key={item.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div className="md:col-span-2">
+                            <Label htmlFor={`misc-desc-${item.id}`} className="text-sm">Description</Label>
+                            <Input
+                              id={`misc-desc-${item.id}`}
+                              value={item.description}
+                              onChange={(e) => updateMiscItem(item.id, 'description', e.target.value)}
+                              placeholder="Item description..."
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`misc-qty-${item.id}`} className="text-sm">Quantity</Label>
+                            <Input
+                              id={`misc-qty-${item.id}`}
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => updateMiscItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`misc-price-${item.id}`} className="text-sm">Unit Price</Label>
+                            <Input
+                              id={`misc-price-${item.id}`}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(e) => updateMiscItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-600">
+                            Total: <span className="font-medium text-blue-600">${item.total.toFixed(2)}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeMiscItem(item.id)}
+                            className="h-8 px-3 text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {miscItems.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                    <p className="text-sm">No miscellaneous items added</p>
+                    <p className="text-xs mt-1">Click "Add Item" to include custom items with pricing</p>
+                  </div>
+                )}
+              </div>
+
 
               </form>
             </CardContent>
@@ -1965,6 +2094,30 @@ export default function OrderEntry() {
                     <span className="text-blue-600 font-bold">$0.00</span>
                   </div>
                 </div>
+
+                {/* Miscellaneous Items */}
+                {miscItems.length > 0 && (
+                  <div className="border-t pt-3 mt-3">
+                    <div className="font-medium text-base mb-2">Miscellaneous Items</div>
+                    <div className="space-y-2">
+                      {miscItems.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center text-sm">
+                          <div className="flex-1">
+                            <div className="font-medium">{item.description || 'Untitled Item'}</div>
+                            <div className="text-gray-500">Qty: {item.quantity} × ${item.unitPrice.toFixed(2)}</div>
+                          </div>
+                          <span className="text-blue-600 font-bold">${item.total.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center font-medium pt-2 border-t">
+                        <span>Misc Items Total:</span>
+                        <span className="text-blue-600 font-bold">
+                          ${miscItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Discount Code */}

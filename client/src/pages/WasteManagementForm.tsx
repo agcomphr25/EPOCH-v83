@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Printer, Download, Save, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,7 +15,7 @@ interface ChemicalEntry {
   chemicalName: string;
   quantity: string;
   containerSize: string;
-  sds: string;
+  sds: boolean;
 }
 
 export default function WasteManagementForm() {
@@ -26,11 +27,11 @@ export default function WasteManagementForm() {
   });
 
   const [chemicalEntries, setChemicalEntries] = useState<ChemicalEntry[]>([
-    { id: '1', chemicalName: '', quantity: '', containerSize: '', sds: '' },
-    { id: '2', chemicalName: '', quantity: '', containerSize: '', sds: '' },
-    { id: '3', chemicalName: '', quantity: '', containerSize: '', sds: '' },
-    { id: '4', chemicalName: '', quantity: '', containerSize: '', sds: '' },
-    { id: '5', chemicalName: '', quantity: '', containerSize: '', sds: '' }
+    { id: '1', chemicalName: '', quantity: '', containerSize: '', sds: false },
+    { id: '2', chemicalName: '', quantity: '', containerSize: '', sds: false },
+    { id: '3', chemicalName: '', quantity: '', containerSize: '', sds: false },
+    { id: '4', chemicalName: '', quantity: '', containerSize: '', sds: false },
+    { id: '5', chemicalName: '', quantity: '', containerSize: '', sds: false }
   ]);
 
   // Predefined chemical list that can be expanded
@@ -48,10 +49,24 @@ export default function WasteManagementForm() {
     'Xylene'
   ]);
 
+  // Predefined container sizes that can be expanded
+  const [availableContainerSizes, setAvailableContainerSizes] = useState<string[]>([
+    '5 gal',
+    '1 gal',
+    'Pint',
+    '55 gal drum',
+    '30 gal drum',
+    '5 gal bucket',
+    'Quart',
+    'Gallon jug'
+  ]);
+
   const [newChemicalInput, setNewChemicalInput] = useState<{ [key: string]: string }>({});
   const [showAddChemical, setShowAddChemical] = useState<{ [key: string]: boolean }>({});
+  const [newContainerSizeInput, setNewContainerSizeInput] = useState<{ [key: string]: string }>({});
+  const [showAddContainerSize, setShowAddContainerSize] = useState<{ [key: string]: boolean }>({});
 
-  // Load saved chemicals from localStorage on component mount
+  // Load saved chemicals and container sizes from localStorage on component mount
   useEffect(() => {
     const savedChemicals = localStorage.getItem('wasteManagementChemicals');
     if (savedChemicals) {
@@ -59,10 +74,23 @@ export default function WasteManagementForm() {
         const parsed = JSON.parse(savedChemicals);
         setAvailableChemicals(prev => {
           const combined = [...prev, ...parsed];
-          return [...new Set(combined)]; // Remove duplicates
+          return Array.from(new Set(combined)); // Remove duplicates
         });
       } catch (error) {
         console.error('Error loading saved chemicals:', error);
+      }
+    }
+
+    const savedContainerSizes = localStorage.getItem('wasteManagementContainerSizes');
+    if (savedContainerSizes) {
+      try {
+        const parsed = JSON.parse(savedContainerSizes);
+        setAvailableContainerSizes(prev => {
+          const combined = [...prev, ...parsed];
+          return Array.from(new Set(combined)); // Remove duplicates
+        });
+      } catch (error) {
+        console.error('Error loading saved container sizes:', error);
       }
     }
   }, []);
@@ -77,11 +105,20 @@ export default function WasteManagementForm() {
     localStorage.setItem('wasteManagementChemicals', JSON.stringify(customChemicals));
   };
 
+  // Save container sizes to localStorage whenever the list changes
+  const saveContainerSizesToStorage = (sizes: string[]) => {
+    const customSizes = sizes.filter(size => 
+      !['5 gal', '1 gal', 'Pint', '55 gal drum', '30 gal drum', 
+        '5 gal bucket', 'Quart', 'Gallon jug'].includes(size)
+    );
+    localStorage.setItem('wasteManagementContainerSizes', JSON.stringify(customSizes));
+  };
+
   const handleFormDataChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleChemicalEntryChange = (id: string, field: keyof ChemicalEntry, value: string) => {
+  const handleChemicalEntryChange = (id: string, field: keyof ChemicalEntry, value: string | boolean) => {
     setChemicalEntries(prev => prev.map(entry => 
       entry.id === id ? { ...entry, [field]: value } : entry
     ));
@@ -112,6 +149,31 @@ export default function WasteManagementForm() {
     setShowAddChemical(prev => ({ ...prev, [entryId]: false }));
   };
 
+  const addNewContainerSize = (entryId: string) => {
+    const newSize = newContainerSizeInput[entryId]?.trim();
+    if (newSize && !availableContainerSizes.includes(newSize)) {
+      const updatedSizes = [...availableContainerSizes, newSize].sort();
+      setAvailableContainerSizes(updatedSizes);
+      saveContainerSizesToStorage(updatedSizes);
+      
+      // Set this size for the current entry
+      handleChemicalEntryChange(entryId, 'containerSize', newSize);
+      
+      // Clear the input and hide the add form
+      setNewContainerSizeInput(prev => ({ ...prev, [entryId]: '' }));
+      setShowAddContainerSize(prev => ({ ...prev, [entryId]: false }));
+      
+      toast.success(`Added "${newSize}" to container sizes`);
+    } else if (availableContainerSizes.includes(newSize)) {
+      toast.error('Container size already exists in the list');
+    }
+  };
+
+  const cancelAddContainerSize = (entryId: string) => {
+    setNewContainerSizeInput(prev => ({ ...prev, [entryId]: '' }));
+    setShowAddContainerSize(prev => ({ ...prev, [entryId]: false }));
+  };
+
   const addChemicalEntry = () => {
     const newId = (chemicalEntries.length + 1).toString();
     setChemicalEntries(prev => [...prev, {
@@ -119,7 +181,7 @@ export default function WasteManagementForm() {
       chemicalName: '',
       quantity: '',
       containerSize: '',
-      sds: ''
+      sds: false
     }]);
   };
 
@@ -349,20 +411,84 @@ export default function WasteManagementForm() {
                           />
                         </td>
                         <td className="py-2 px-1">
-                          <Input
-                            value={entry.containerSize}
-                            onChange={(e) => handleChemicalEntryChange(entry.id, 'containerSize', e.target.value)}
-                            className="border-0 bg-transparent focus:bg-gray-50 focus:ring-1 focus:ring-blue-500 text-sm h-8 text-center"
-                            placeholder="Size"
-                          />
+                          {!showAddContainerSize[entry.id] ? (
+                            <div className="flex items-center gap-1">
+                              <Select 
+                                value={entry.containerSize} 
+                                onValueChange={(value) => {
+                                  if (value === '__add_new__') {
+                                    setShowAddContainerSize(prev => ({ ...prev, [entry.id]: true }));
+                                  } else {
+                                    handleChemicalEntryChange(entry.id, 'containerSize', value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-8 border-0 bg-transparent focus:bg-gray-50 focus:ring-1 focus:ring-blue-500 text-sm">
+                                  <SelectValue placeholder="Select size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableContainerSizes.map((size) => (
+                                    <SelectItem key={size} value={size}>
+                                      {size}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__add_new__" className="text-blue-600 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Plus className="h-4 w-4" />
+                                      Add New Size
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={newContainerSizeInput[entry.id] || ''}
+                                onChange={(e) => setNewContainerSizeInput(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                                className="border border-blue-300 bg-blue-50 focus:bg-white focus:ring-1 focus:ring-blue-500 text-sm h-8 flex-1"
+                                placeholder="Enter new size"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addNewContainerSize(entry.id);
+                                  } else if (e.key === 'Escape') {
+                                    cancelAddContainerSize(entry.id);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => addNewContainerSize(entry.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                                title="Add size"
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => cancelAddContainerSize(entry.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-800"
+                                title="Cancel"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 px-1">
-                          <Input
-                            value={entry.sds}
-                            onChange={(e) => handleChemicalEntryChange(entry.id, 'sds', e.target.value)}
-                            className="border-0 bg-transparent focus:bg-gray-50 focus:ring-1 focus:ring-blue-500 text-sm h-8 text-center"
-                            placeholder="Y/N"
-                          />
+                          <div className="flex justify-center">
+                            <Checkbox
+                              checked={entry.sds}
+                              onCheckedChange={(checked) => handleChemicalEntryChange(entry.id, 'sds', checked === true)}
+                              className="h-5 w-5"
+                            />
+                          </div>
                         </td>
                         <td className="py-2 px-1 print:hidden">
                           {chemicalEntries.length > 1 && (

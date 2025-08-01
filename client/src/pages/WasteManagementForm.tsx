@@ -248,7 +248,34 @@ export default function WasteManagementForm() {
 
   const loadDraft = (draft: any) => {
     setFormData(draft.formData);
-    setChemicalEntries(draft.chemicalEntries);
+    
+    // Load the saved chemical entries and ensure we have at least 5 rows
+    const loadedEntries = draft.chemicalEntries || [];
+    const minEntries = 5;
+    
+    // Ensure proper ID sequence and minimum 5 entries
+    const processedEntries = loadedEntries.map((entry, index) => ({
+      ...entry,
+      id: (index + 1).toString()
+    }));
+    
+    // If we have fewer than 5 entries, pad with empty entries
+    if (processedEntries.length < minEntries) {
+      const additionalEntries = [];
+      for (let i = processedEntries.length; i < minEntries; i++) {
+        additionalEntries.push({
+          id: (i + 1).toString(),
+          chemicalName: '',
+          quantity: '',
+          containerSize: '',
+          sds: false
+        });
+      }
+      setChemicalEntries([...processedEntries, ...additionalEntries]);
+    } else {
+      setChemicalEntries(processedEntries);
+    }
+    
     toast.success('Draft loaded successfully');
   };
 

@@ -281,16 +281,32 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         const failX = width - margin - 60;
         
         // Pass checkbox
-        page.drawText('☐ Pass', {
+        page.drawRectangle({
           x: passX,
+          y: checkboxY - 6,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        page.drawText('Pass', {
+          x: passX + 16,
           y: currentY - 8,
           size: 10,
           font: font,
         });
         
         // Fail checkbox  
-        page.drawText('☐ Fail', {
+        page.drawRectangle({
           x: failX,
+          y: checkboxY - 6,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        page.drawText('Fail', {
+          x: failX + 16,
           y: currentY - 8,
           size: 10,
           font: font,

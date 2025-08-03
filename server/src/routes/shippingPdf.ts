@@ -252,67 +252,67 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         // Create a clean row with borders for each item
         page.drawRectangle({
           x: margin,
-          y: currentY - 25,
+          y: currentY - 30,
           width: printableWidth,
-          height: 25,
+          height: 30,
           borderColor: rgb(0.8, 0.8, 0.8),
           borderWidth: 0.5,
         });
         
-        // Item number
+        // Item number - positioned properly within the row
         page.drawText(`${itemNumber}.`, {
-          x: margin + 5,
-          y: currentY - 8,
+          x: margin + 8,
+          y: currentY - 12,
           size: 11,
           font: boldFont,
         });
         
-        // Checklist item text - clean and readable
+        // Checklist item text - with proper spacing from number
         page.drawText(item, {
-          x: margin + 25,
-          y: currentY - 8,
+          x: margin + 30,
+          y: currentY - 12,
           size: 10,
           font: font,
         });
         
-        // Pass/Fail checkboxes - clean alignment
-        const checkboxY = currentY - 12;
-        const passX = width - margin - 120;
-        const failX = width - margin - 60;
+        // Pass/Fail checkboxes - better positioned
+        const checkboxY = currentY - 18;
+        const passX = width - margin - 140;
+        const failX = width - margin - 70;
         
         // Pass checkbox
         page.drawRectangle({
           x: passX,
-          y: checkboxY - 6,
+          y: checkboxY,
           width: 12,
           height: 12,
           borderColor: rgb(0, 0, 0),
           borderWidth: 1,
         });
         page.drawText('Pass', {
-          x: passX + 16,
-          y: currentY - 8,
-          size: 10,
+          x: passX + 18,
+          y: currentY - 12,
+          size: 9,
           font: font,
         });
         
         // Fail checkbox  
         page.drawRectangle({
           x: failX,
-          y: checkboxY - 6,
+          y: checkboxY,
           width: 12,
           height: 12,
           borderColor: rgb(0, 0, 0),
           borderWidth: 1,
         });
         page.drawText('Fail', {
-          x: failX + 16,
-          y: currentY - 8,
-          size: 10,
+          x: failX + 18,
+          y: currentY - 12,
+          size: 9,
           font: font,
         });
         
-        currentY -= 30;
+        currentY -= 35;
       });
     });
     

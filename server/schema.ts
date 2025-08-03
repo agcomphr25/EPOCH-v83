@@ -208,6 +208,18 @@ export const orderDrafts = pgTable("order_drafts", {
   paymentAmount: real("payment_amount"),
   paymentDate: timestamp("payment_date"),
   paymentTimestamp: timestamp("payment_timestamp"),
+  // Shipping and Tracking Information
+  trackingNumber: text("tracking_number"),
+  shippingCarrier: text("shipping_carrier").default("UPS"),
+  shippingMethod: text("shipping_method").default("Ground"),
+  shippedDate: timestamp("shipped_date"),
+  estimatedDelivery: timestamp("estimated_delivery"),
+  shippingLabelGenerated: boolean("shipping_label_generated").default(false),
+  customerNotified: boolean("customer_notified").default(false),
+  notificationMethod: text("notification_method"), // email, sms, both
+  notificationSentAt: timestamp("notification_sent_at"),
+  deliveryConfirmed: boolean("delivery_confirmed").default(false),
+  deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

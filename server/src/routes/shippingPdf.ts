@@ -1225,6 +1225,28 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         throw new Error('UPS API response missing tracking number or label image');
       }
 
+      // Save tracking information to database
+      const { updateTrackingInfo, sendCustomerNotification } = await import('../../utils/notifications');
+      await updateTrackingInfo(orderId, {
+        trackingNumber,
+        carrier: 'UPS',
+        shippedDate: new Date(),
+        estimatedDelivery: undefined // UPS response may include this
+      });
+
+      // Send customer notification
+      try {
+        await sendCustomerNotification({
+          orderId,
+          trackingNumber,
+          carrier: 'UPS'
+        });
+        console.log(`Customer notification sent for order ${orderId}`);
+      } catch (notificationError) {
+        console.error('Failed to send customer notification:', notificationError);
+        // Don't fail the entire request if notification fails
+      }
+
       // Convert base64 label image to PDF
       const labelBuffer = Buffer.from(labelImage, 'base64');
       
@@ -1293,9 +1315,21 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         color: rgb(0.8, 0, 0),
       });
       
+      // Generate placeholder tracking number
+      const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
+      
+      // Save placeholder tracking information to database
+      const { updateTrackingInfo } = await import('../../utils/notifications');
+      await updateTrackingInfo(orderId, {
+        trackingNumber: placeholderTrackingNumber,
+        carrier: 'UPS (Placeholder)',
+        shippedDate: new Date(),
+        estimatedDelivery: undefined
+      });
+
       // Tracking number placeholder
       currentY -= 30;
-      placeholderPage.drawText('Tracking #: PLACEHOLDER-LABEL', {
+      placeholderPage.drawText(`Tracking #: ${placeholderTrackingNumber}`, {
         x: 50,
         y: currentY,
         size: 12,
@@ -1674,6 +1708,85 @@ router.get('/test-ups-credentials', async (req: Request, res: Response) => {
       error: error instanceof Error ? error.message : 'Unknown error',
       details: 'Check UPS developer portal to verify credentials are activated'
     });
+  }
+});
+
+// API route to update tracking information manually
+router.post('/update-tracking/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { trackingNumber, carrier, estimatedDelivery, sendNotification } = req.body;
+
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'Tracking number is required' });
+    }
+
+    // Update tracking information
+    const { updateTrackingInfo, sendCustomerNotification } = await import('../../utils/notifications');
+    await updateTrackingInfo(orderId, {
+      trackingNumber,
+      carrier: carrier || 'UPS',
+      shippedDate: new Date(),
+      estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
+    });
+
+    // Send customer notification if requested
+    let notificationResult = null;
+    if (sendNotification) {
+      try {
+        notificationResult = await sendCustomerNotification({
+          orderId,
+          trackingNumber,
+          carrier: carrier || 'UPS',
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
+        });
+      } catch (error) {
+        console.error('Notification error:', error);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Tracking information updated successfully',
+      notification: notificationResult
+    });
+
+  } catch (error) {
+    console.error('Error updating tracking:', error);
+    res.status(500).json({ error: 'Failed to update tracking information' });
+  }
+});
+
+// API route to get tracking information for an order
+router.get('/tracking/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    const { storage } = await import('../../storage');
+    const orders = await storage.getAllOrderDrafts();
+    const order = orders.find(o => o.orderId === orderId);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({
+      orderId: order.orderId,
+      trackingNumber: order.trackingNumber,
+      shippingCarrier: order.shippingCarrier,
+      shippingMethod: order.shippingMethod,
+      shippedDate: order.shippedDate,
+      estimatedDelivery: order.estimatedDelivery,
+      customerNotified: order.customerNotified,
+      notificationMethod: order.notificationMethod,
+      notificationSentAt: order.notificationSentAt,
+      deliveryConfirmed: order.deliveryConfirmed,
+      deliveryConfirmedAt: order.deliveryConfirmedAt
+    });
+
+  } catch (error) {
+    console.error('Error getting tracking info:', error);
+    res.status(500).json({ error: 'Failed to get tracking information' });
   }
 });
 

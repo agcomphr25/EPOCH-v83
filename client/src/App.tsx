@@ -68,6 +68,7 @@ import FinishQCQueuePage from "./pages/FinishQCQueuePage";
 import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
+import ShippingManagement from "./pages/ShippingManagement";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -229,6 +230,9 @@ function App() {
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />
+                  
+                  {/* Shipping Management Routes */}
+                  <Route path="/shipping-management" component={ShippingManagement} />
 
                   {/* Catch-all route for 404 */}
                   <Route component={NotFound} />

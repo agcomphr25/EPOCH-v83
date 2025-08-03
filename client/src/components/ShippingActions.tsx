@@ -125,8 +125,11 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
       
       toast({
         title: "Shipping Label Generated",
-        description: `UPS shipping label for order ${orderId} has been downloaded.`,
+        description: `UPS shipping label for order ${orderId} has been downloaded and tracking info saved.`,
       });
+      
+      // Refresh any tracking displays if needed
+      window.dispatchEvent(new CustomEvent('trackingUpdated', { detail: { orderId } }));
       
       setShippingDialogOpen(false);
       

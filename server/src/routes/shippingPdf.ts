@@ -33,7 +33,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     
     // Header with company branding - optimized for printing
     let currentY = height - margin;
-    page.drawText('AGAT COMPOSITE PARTS', {
+    page.drawText('AG COMPOSITES', {
       x: margin,
       y: currentY,
       size: 18,
@@ -406,7 +406,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     });
     
     currentY -= 18;
-    page.drawText('AGAT.QC.INSPECTOR', {
+    page.drawText('AG.QC.INSPECTOR', {
       x: margin + 5,
       y: currentY,
       size: 11,
@@ -476,7 +476,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Header section with company branding
     let currentY = height - margin;
-    page.drawText('AGAT COMPOSITE PARTS', {
+    page.drawText('AG COMPOSITES', {
       x: margin,
       y: currentY,
       size: 20,

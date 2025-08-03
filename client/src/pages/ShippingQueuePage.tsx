@@ -168,7 +168,7 @@ export default function ShippingQueuePage() {
                             onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
                           />
                           <div className="text-sm font-semibold text-blue-600">
-                            {getDisplayOrderId(order.orderId)}
+                            {getDisplayOrderId(order)}
                           </div>
                         </div>
                         {materialType && (

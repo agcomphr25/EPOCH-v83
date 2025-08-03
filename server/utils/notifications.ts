@@ -1,5 +1,5 @@
-import { db } from '../../db';
-import { orderDrafts, customers } from '../../schema';
+import { db } from '../db.js';
+import { orderDrafts, customers } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 export interface NotificationData {

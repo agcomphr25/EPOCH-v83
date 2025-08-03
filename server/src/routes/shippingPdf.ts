@@ -95,72 +95,276 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
     
-    const checklistItems = [
-      'Visual inspection completed',
-      'Dimensional accuracy verified',
-      'Surface finish quality approved',
-      'Hardware installation checked',
-      'Functionality testing passed',
-      'Packaging requirements met',
-      'Documentation complete',
-      'Customer specifications verified',
-      'Final quality approval'
+    const checklistSections = [
+      {
+        title: 'DIMENSIONAL INSPECTION',
+        items: [
+          'Overall length measurement verified',
+          'Critical dimensions checked against drawings',
+          'Tolerance requirements met',
+          'Hole alignments verified'
+        ]
+      },
+      {
+        title: 'SURFACE QUALITY',
+        items: [
+          'Surface finish meets specifications',
+          'No visible defects or scratches',
+          'Color match approved',
+          'Texture consistency verified'
+        ]
+      },
+      {
+        title: 'FUNCTIONAL TESTING',
+        items: [
+          'Fit and function verified',
+          'Hardware installation complete',
+          'Moving parts operate smoothly',
+          'Safety mechanisms tested'
+        ]
+      },
+      {
+        title: 'FINAL INSPECTION',
+        items: [
+          'Customer specifications met',
+          'Packaging requirements satisfied',
+          'Documentation complete',
+          'Ready for shipment'
+        ]
+      }
     ];
     
     currentY -= 30;
-    checklistItems.forEach((item, index) => {
-      // Draw checkbox
-      page.drawRectangle({
+    
+    checklistSections.forEach((section, sectionIndex) => {
+      // Section header
+      page.drawText(section.title, {
         x: 50,
-        y: currentY - 12,
-        width: 12,
-        height: 12,
-        borderColor: rgb(0, 0, 0),
-        borderWidth: 1,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      currentY -= 20;
+      
+      // Section items
+      section.items.forEach((item, itemIndex) => {
+        // Draw checkbox
+        page.drawRectangle({
+          x: 60,
+          y: currentY - 12,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        
+        // Draw checklist item text
+        page.drawText(item, {
+          x: 80,
+          y: currentY - 8,
+          size: 9,
+          font: font,
+        });
+        
+        // Add pass/fail boxes
+        page.drawText('Pass:', {
+          x: 320,
+          y: currentY - 8,
+          size: 8,
+          font: font,
+        });
+        page.drawRectangle({
+          x: 350,
+          y: currentY - 12,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        
+        page.drawText('Fail:', {
+          x: 370,
+          y: currentY - 8,
+          size: 8,
+          font: font,
+        });
+        page.drawRectangle({
+          x: 395,
+          y: currentY - 12,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        
+        page.drawText('N/A:', {
+          x: 415,
+          y: currentY - 8,
+          size: 8,
+          font: font,
+        });
+        page.drawRectangle({
+          x: 440,
+          y: currentY - 12,
+          width: 12,
+          height: 12,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 1,
+        });
+        
+        currentY -= 22;
       });
       
-      // Draw checklist item text
-      page.drawText(item, {
-        x: 70,
-        y: currentY - 8,
-        size: 10,
-        font: font,
-      });
-      
-      currentY -= 25;
+      currentY -= 15; // Extra space between sections
     });
+    
+    // Notes section
+    currentY -= 20;
+    page.drawText('NOTES / COMMENTS:', {
+      x: 50,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    
+    currentY -= 20;
+    // Draw lines for notes
+    for (let i = 0; i < 4; i++) {
+      page.drawLine({
+        start: { x: 50, y: currentY },
+        end: { x: 550, y: currentY },
+        thickness: 0.5,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+      currentY -= 15;
+    }
     
     // Signature sections
-    currentY -= 30;
-    page.drawText('QC Inspector Signature: ________________________', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
     currentY -= 20;
-    page.drawText('Date: _______________', {
+    page.drawText('INSPECTION RESULTS:', {
+      x: 50,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    
+    currentY -= 25;
+    
+    // Overall result checkboxes
+    page.drawText('Overall Result:', {
       x: 50,
       y: currentY,
       size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText('PASS:', {
+      x: 150,
+      y: currentY,
+      size: 10,
       font: font,
+    });
+    page.drawRectangle({
+      x: 185,
+      y: currentY - 4,
+      width: 15,
+      height: 15,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('FAIL:', {
+      x: 220,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    page.drawRectangle({
+      x: 250,
+      y: currentY - 4,
+      width: 15,
+      height: 15,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('CONDITIONAL PASS:', {
+      x: 290,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    page.drawRectangle({
+      x: 400,
+      y: currentY - 4,
+      width: 15,
+      height: 15,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    currentY -= 40;
+    
+    // Signature areas
+    page.drawText('QC Inspector:', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawLine({
+      start: { x: 120, y: currentY - 5 },
+      end: { x: 280, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+    
+    page.drawText('Date:', {
+      x: 300,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawLine({
+      start: { x: 330, y: currentY - 5 },
+      end: { x: 450, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
     });
     
     currentY -= 30;
-    page.drawText('Supervisor Approval: ________________________', {
+    
+    page.drawText('Supervisor Approval:', {
       x: 50,
       y: currentY,
       size: 10,
-      font: font,
+      font: boldFont,
     });
     
-    currentY -= 20;
-    page.drawText('Date: _______________', {
-      x: 50,
+    page.drawLine({
+      start: { x: 150, y: currentY - 5 },
+      end: { x: 310, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+    
+    page.drawText('Date:', {
+      x: 330,
       y: currentY,
       size: 10,
-      font: font,
+      font: boldFont,
+    });
+    
+    page.drawLine({
+      start: { x: 360, y: currentY - 5 },
+      end: { x: 480, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
     });
     
     // Generate PDF bytes

@@ -781,8 +781,7 @@ export function registerRoutes(app: Express): Server {
       const p1LayupOrders = [];
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems =```text
-items.filter(item => item.itemId && item.itemId.trim());
+        const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
 
         for (const item of stockModelItems) {
           // Calculate priority score based on due date urgency

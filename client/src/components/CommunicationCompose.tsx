@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
 interface CommunicationComposeProps {
+  isOpen: boolean;
   customer?: {
     id: number;
     name: string;
@@ -19,6 +20,7 @@ interface CommunicationComposeProps {
   };
   defaultType?: 'email' | 'sms';
   onClose: () => void;
+  orderId?: string;
 }
 
 export default function CommunicationCompose({ 

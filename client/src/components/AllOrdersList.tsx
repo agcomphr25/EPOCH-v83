@@ -27,8 +27,8 @@ import OrderSummaryModal from './OrderSummaryModal';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import { CustomerDetailsTooltip } from './CustomerDetailsTooltip';
-import { CommunicationCompose } from './CommunicationCompose';
+import CustomerDetailsTooltip from './CustomerDetailsTooltip';
+import CommunicationCompose from './CommunicationCompose';
 
 const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 

@@ -1,96 +1,130 @@
-import { Router, Request, Response } from 'express';
+
+import { Router } from 'express';
+import { z } from 'zod';
 
 const router = Router();
 
-// Send customer notification (email or SMS)
-router.post('/send-notification', async (req: Request, res: Response) => {
+// Email schema
+const emailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1),
+  message: z.string().min(1),
+  customerId: z.string(),
+  orderId: z.string().optional().nullable()
+});
+
+// SMS schema
+const smsSchema = z.object({
+  to: z.string().min(10),
+  message: z.string().min(1).max(160),
+  customerId: z.string(),
+  orderId: z.string().optional().nullable()
+});
+
+// Send email via SendGrid
+router.post('/email', async (req, res) => {
   try {
-    const { orderId, trackingNumber, customerName, customerEmail, customerPhone, method, message } = req.body;
+    const data = emailSchema.parse(req.body);
     
-    console.log(`📧 Sending ${method} notification for order ${orderId}`);
-    console.log(`Tracking: ${trackingNumber}`);
-    console.log(`Customer: ${customerName}`);
-    console.log(`Message: ${message}`);
+    // Initialize SendGrid
+    const sgMail = require('@sendgrid/mail');
+    const apiKey = process.env.SENDGRID_API_KEY;
     
-    // Simulate sending notification based on method
-    if (method === 'email' && customerEmail) {
-      // In a real implementation, this would integrate with an email service like SendGrid, AWS SES, etc.
-      console.log(`✉️ EMAIL sent to: ${customerEmail}`);
-      
-      // Simulate email sending delay
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Log the communication
-      const { storage } = await import('../../storage');
-      // Note: This would require a communications table in the database schema
-      
-      res.json({
-        success: true,
-        method: 'email',
-        recipient: customerEmail,
-        timestamp: new Date().toISOString(),
-        message: 'Email notification sent successfully'
-      });
-      
-    } else if (method === 'sms' && customerPhone) {
-      // In a real implementation, this would integrate with Twilio, AWS SNS, etc.
-      console.log(`📱 SMS sent to: ${customerPhone}`);
-      
-      // Simulate SMS sending delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      res.json({
-        success: true,
-        method: 'sms',
-        recipient: customerPhone,
-        timestamp: new Date().toISOString(),
-        message: 'SMS notification sent successfully'
-      });
-      
-    } else {
-      res.status(400).json({
-        success: false,
-        error: `Missing ${method === 'email' ? 'email address' : 'phone number'} for ${method} notification`
+    if (!apiKey) {
+      return res.status(500).json({ error: 'SendGrid API key not configured' });
+    }
+    
+    sgMail.setApiKey(apiKey);
+    
+    const msg = {
+      to: data.to,
+      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@yourcompany.com',
+      subject: data.subject,
+      text: data.message,
+      html: data.message.replace(/\n/g, '<br>')
+    };
+    
+    await sgMail.send(msg);
+    
+    // Log the communication
+    console.log(`Email sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Email sent successfully',
+      messageId: Date.now().toString()
+    });
+    
+  } catch (error: any) {
+    console.error('SendGrid email error:', error);
+    
+    if (error.response?.body?.errors) {
+      return res.status(400).json({ 
+        error: 'SendGrid error', 
+        details: error.response.body.errors 
       });
     }
     
-  } catch (error) {
-    console.error('Error sending notification:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to send notification'
+    res.status(500).json({ 
+      error: 'Failed to send email', 
+      details: error.message 
     });
   }
 });
 
-// Get customer communication preferences
-router.get('/preferences/:customerId', async (req: Request, res: Response) => {
+// Send SMS via Twilio
+router.post('/sms', async (req, res) => {
+  try {
+    const data = smsSchema.parse(req.body);
+    
+    // Initialize Twilio
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    
+    if (!accountSid || !authToken || !fromNumber) {
+      return res.status(500).json({ error: 'Twilio credentials not configured' });
+    }
+    
+    const twilio = require('twilio')(accountSid, authToken);
+    
+    const message = await twilio.messages.create({
+      body: data.message,
+      from: fromNumber,
+      to: data.to
+    });
+    
+    // Log the communication
+    console.log(`SMS sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'SMS sent successfully',
+      messageId: message.sid
+    });
+    
+  } catch (error: any) {
+    console.error('Twilio SMS error:', error);
+    
+    res.status(500).json({ 
+      error: 'Failed to send SMS', 
+      details: error.message 
+    });
+  }
+});
+
+// Get communication history (optional feature)
+router.get('/history/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
     
-    // Get customer data from storage
-    const { storage } = await import('../../storage');
-    const customers = await storage.getAllCustomers();
-    const customer = customers.find(c => c.id.toString() === customerId || c.name === customerId);
+    // This would typically fetch from a communications log table
+    // For now, return empty array
+    res.json([]);
     
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
-    }
-    
-    // Return communication preferences (in a real app, this would be stored in customer profile)
-    res.json({
-      customerId: customer.id,
-      customerName: customer.name,
-      email: customer.email || null,
-      phone: customer.phone || null,
-      preferredMethod: customer.email ? 'email' : customer.phone ? 'sms' : 'email',
-      allowEmail: !!customer.email,
-      allowSms: !!customer.phone
-    });
-    
-  } catch (error) {
-    console.error('Error getting customer preferences:', error);
-    res.status(500).json({ error: 'Failed to get customer preferences' });
+  } catch (error: any) {
+    console.error('Communication history error:', error);
+    res.status(500).json({ error: 'Failed to fetch communication history' });
   }
 });
 

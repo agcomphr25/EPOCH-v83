@@ -13,7 +13,6 @@ import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
 import shippingPdfRoute from './shippingPdf';
-import communicationsRoutes from './communications';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
@@ -60,9 +59,6 @@ export function registerRoutes(app: Express): Server {
 
   // Shipping PDF generation routes
   app.use('/api/shipping-pdf', shippingPdfRoute);
-
-  // Communications routes
-  app.use('/api/communications', communicationsRoutes);
 
   // Discount management routes
   app.use('/api', discountsRoutes);
@@ -583,10 +579,10 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 P2 LAYUP SCHEDULE API CALLED');
       const { storage } = await import('../../storage');
-      
+
       const scheduleEntries = await storage.getAllLayupSchedule();
       console.log('🔧 Found P2 layup schedule entries:', scheduleEntries.length);
-      
+
       res.json(scheduleEntries);
     } catch (error) {
       console.error("P2 layup schedule error:", error);
@@ -598,10 +594,10 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 P2 LAYUP SCHEDULE CREATE API CALLED');
       const { storage } = await import('../../storage');
-      
+
       const scheduleData = req.body;
       const result = await storage.createLayupSchedule(scheduleData);
-      
+
       console.log('🔧 P2 Schedule entry created:', result);
       res.json(result);
     } catch (error) {
@@ -614,10 +610,10 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 P2 LAYUP SCHEDULE DELETE API CALLED');
       const { storage } = await import('../../storage');
-      
+
       const { orderId } = req.params;
       await storage.deleteLayupScheduleByOrder(orderId);
-      
+
       console.log('🔧 P2 Schedule entries deleted for order:', orderId);
       res.json({ success: true });
     } catch (error) {
@@ -632,9 +628,9 @@ export function registerRoutes(app: Express): Server {
       console.log('🐍 Running Python scheduler with Mesa Universal constraints...');
       const { spawn } = require('child_process');
       const path = require('path');
-      
+
       const { orders = [], molds = [], employees = [] } = req.body;
-      
+
       if (orders.length === 0) {
         return res.status(400).json({ error: 'Orders array is required' });
       }
@@ -691,7 +687,7 @@ export function registerRoutes(app: Express): Server {
           // Extract JSON from output (filter out console.log messages)
           const lines = output.trim().split('\n');
           const jsonLine = lines.find(line => line.startsWith('{'));
-          
+
           if (!jsonLine) {
             console.log('Python scheduler output:', output);
             return res.json({ schedule: [], summary: {}, raw_output: output });
@@ -699,7 +695,7 @@ export function registerRoutes(app: Express): Server {
 
           const result = JSON.parse(jsonLine);
           console.log(`🐍 Python scheduler completed: ${result.schedule?.length || 0} orders scheduled`);
-          
+
           res.json(result);
         } catch (parseError) {
           console.error('Failed to parse Python scheduler output:', parseError);
@@ -785,7 +781,8 @@ export function registerRoutes(app: Express): Server {
       const p1LayupOrders = [];
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
-        const stockModelItems = items.filter(item => item.itemId && item.itemId.trim());
+        const stockModelItems =```text
+items.filter(item => item.itemId && item.itemId.trim());
 
         for (const item of stockModelItems) {
           // Calculate priority score based on due date urgency
@@ -1103,3 +1100,25 @@ export function registerRoutes(app: Express): Server {
   // Create and return HTTP server
   return createServer(app);
 }
+
+import tasksRouter from './tasks';
+import secureVerificationRouter from './secureVerification';
+import communicationsRouter from './communications';
+
+export { 
+  customersRoutes as customersRouter, 
+  ordersRoutes as ordersRouter, 
+  inventoryRoutes as inventoryRouter, 
+  formsRoutes as formsRouter, 
+  documentsRoutes as documentsRouter, 
+  discountsRoutes as discountsRouter, 
+  employeesRoutes as employeesRouter, 
+  qualityRoutes as qualityRouter, 
+  bomsRoutes as bomsRouter, 
+  moldsRoutes as moldsRouter, 
+  kickbackRoutes as kickbacksRouter, 
+  orderAttachmentsRoutes as orderAttachmentsRouter, 
+  tasksRoutes as tasksRouter,
+  secureVerificationRouter as secureVerificationRouter,
+  communicationsRouter as communicationsRouter
+};

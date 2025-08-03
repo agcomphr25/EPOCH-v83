@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import toast from 'react-hot-toast';
+import CommunicationCompose from '@/components/CommunicationCompose';
 
 // Form validation schema for kickback creation
 const kickbackFormSchema = insertKickbackSchema.extend({
@@ -93,6 +94,11 @@ export default function OrdersList() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('orderDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [communicationModal, setCommunicationModal] = useState<{
+    isOpen: boolean;
+    customer: { id: string; name: string; email?: string; phone?: string };
+    orderId?: string;
+  } | null>(null);
   const { toast: showToast } = useToast();
 
   // Initialize kickback form
@@ -176,6 +182,26 @@ export default function OrdersList() {
 
   const handleProgressOrder = (orderId: string, nextDepartment: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment });
+  };
+
+  const handleOpenCommunication = (order: Order) => {
+    const customer = customers?.find(c => c.id.toString() === order.customerId);
+    if (customer) {
+      setCommunicationModal({
+        isOpen: true,
+        customer: {
+          id: customer.id.toString(),
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone
+        },
+        orderId: order.orderId
+      });
+    }
+  };
+
+  const handleCloseCommunication = () => {
+    setCommunicationModal(null);
   };
   
   const handleExportCSV = async () => {
@@ -685,15 +711,39 @@ export default function OrdersList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <CustomerDetailsTooltip 
-                        customerId={order.customerId} 
-                        customerName={getCustomerName(order.customerId) || 'N/A'}
-                      >
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          {getCustomerName(order.customerId) || 'N/A'}
+                      <div className="relative group">
+                        <CustomerDetailsTooltip 
+                          customerId={order.customerId} 
+                          customerName={getCustomerName(order.customerId) || 'N/A'}
+                        >
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            {getCustomerName(order.customerId) || 'N/A'}
+                          </div>
+                        </CustomerDetailsTooltip>
+                        
+                        {/* Communication Buttons - Show on Hover */}
+                        <div className="absolute left-0 top-full mt-1 hidden group-hover:flex bg-white border border-gray-200 rounded-md shadow-lg p-1 z-10">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-blue-50"
+                            onClick={() => handleOpenCommunication(order)}
+                            title="Send Email"
+                          >
+                            <Mail className="h-4 w-4 text-blue-600" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-green-50"
+                            onClick={() => handleOpenCommunication(order)}
+                            title="Send SMS"
+                          >
+                            <MessageSquare className="h-4 w-4 text-green-600" />
+                          </Button>
                         </div>
-                      </CustomerDetailsTooltip>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -987,6 +1037,16 @@ export default function OrdersList() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Communication Compose Modal */}
+      {communicationModal && (
+        <CommunicationCompose
+          isOpen={communicationModal.isOpen}
+          onClose={handleCloseCommunication}
+          customer={communicationModal.customer}
+          orderId={communicationModal.orderId}
+        />
+      )}
     </div>
   );
   } catch (error) {

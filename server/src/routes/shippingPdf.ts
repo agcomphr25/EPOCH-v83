@@ -243,228 +243,96 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     currentY -= 30;
     
     checklistSections.forEach((section, sectionIndex) => {
-      // Section header - no separate header since it's just one section
-      currentY -= 10;
+      currentY -= 20;
       
-      // Section items
+      // Section items - clean layout
       section.items.forEach((item, itemIndex) => {
-        // Number the items
         const itemNumber = itemIndex + 1;
         
-        // Draw item number
-        page.drawText(`${itemNumber})`, {
+        // Create a clean row with borders for each item
+        page.drawRectangle({
           x: margin,
-          y: currentY,
+          y: currentY - 25,
+          width: printableWidth,
+          height: 25,
+          borderColor: rgb(0.8, 0.8, 0.8),
+          borderWidth: 0.5,
+        });
+        
+        // Item number
+        page.drawText(`${itemNumber}.`, {
+          x: margin + 5,
+          y: currentY - 8,
           size: 11,
           font: boldFont,
         });
         
-        // Draw checklist item text - improved positioning for longer text
-        const textLines = item.split('\n');
+        // Checklist item text - clean and readable
         page.drawText(item, {
           x: margin + 25,
-          y: currentY,
+          y: currentY - 8,
           size: 10,
           font: font,
         });
         
-        // Add pass/fail boxes - positioned on the right
-        const responseX = width - margin - 200;
-        page.drawText('Pass:', {
-          x: responseX,
-          y: currentY,
+        // Pass/Fail checkboxes - clean alignment
+        const checkboxY = currentY - 12;
+        const passX = width - margin - 120;
+        const failX = width - margin - 60;
+        
+        // Pass checkbox
+        page.drawText('☐ Pass', {
+          x: passX,
+          y: currentY - 8,
           size: 10,
           font: font,
         });
-        page.drawRectangle({
-          x: responseX + 35,
-          y: currentY - 6,
-          width: 16,
-          height: 16,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1.5,
-        });
         
-        page.drawText('Fail:', {
-          x: responseX + 65,
-          y: currentY,
+        // Fail checkbox  
+        page.drawText('☐ Fail', {
+          x: failX,
+          y: currentY - 8,
           size: 10,
           font: font,
         });
-        page.drawRectangle({
-          x: responseX + 95,
-          y: currentY - 6,
-          width: 16,
-          height: 16,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1.5,
-        });
         
-        page.drawText('N/A:', {
-          x: responseX + 125,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-        page.drawRectangle({
-          x: responseX + 155,
-          y: currentY - 6,
-          width: 16,
-          height: 16,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1.5,
-        });
-        
-        currentY -= 35; // More space for longer text items
+        currentY -= 30;
       });
-      
-      currentY -= 10; // Extra space after section
     });
     
-    // Notes section
-    currentY -= 30;
-    page.drawText('NOTES / COMMENTS:', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    
-    currentY -= 25;
-    // Draw lines for notes - full width for printing
-    for (let i = 0; i < 5; i++) {
-      page.drawLine({
-        start: { x: margin, y: currentY },
-        end: { x: width - margin, y: currentY },
-        thickness: 1,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-      currentY -= 18;
-    }
-    
-    // Signature sections
-    currentY -= 30;
-    page.drawText('INSPECTION RESULTS:', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    
-    currentY -= 30;
-    
-    // Overall result checkboxes - improved layout for printing
-    page.drawText('Overall Result:', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
-    
-    page.drawText('PASS:', {
-      x: margin + 120,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: margin + 160,
-      y: currentY - 6,
-      width: 16,
-      height: 16,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1.5,
-    });
-    
-    page.drawText('FAIL:', {
-      x: margin + 200,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: margin + 235,
-      y: currentY - 6,
-      width: 16,
-      height: 16,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1.5,
-    });
-    
-    page.drawText('CONDITIONAL PASS:', {
-      x: margin + 275,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: margin + 400,
-      y: currentY - 6,
-      width: 16,
-      height: 16,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1.5,
-    });
-    
+    // Clean spacing before signature section
     currentY -= 50;
     
-    // Signature areas - better spaced for printing
-    page.drawText('QC Inspector:', {
+    // Simple clean signature section
+    currentY -= 70;
+    
+    // Single signature and date section - clean and simple
+    page.drawText('INSPECTOR SIGNATURE:', {
       x: margin,
       y: currentY,
-      size: 11,
+      size: 12,
       font: boldFont,
     });
     
+    // Signature line
     page.drawLine({
-      start: { x: margin + 90, y: currentY - 8 },
-      end: { x: margin + 250, y: currentY - 8 },
+      start: { x: margin + 150, y: currentY - 5 },
+      end: { x: margin + 350, y: currentY - 5 },
       thickness: 1.5,
       color: rgb(0, 0, 0),
     });
     
-    page.drawText('Date:', {
-      x: margin + 270,
+    // Date field
+    page.drawText('DATE:', {
+      x: margin + 380,
       y: currentY,
-      size: 11,
+      size: 12,
       font: boldFont,
     });
     
     page.drawLine({
-      start: { x: margin + 310, y: currentY - 8 },
-      end: { x: width - margin, y: currentY - 8 },
-      thickness: 1.5,
-      color: rgb(0, 0, 0),
-    });
-    
-    currentY -= 40;
-    
-    page.drawText('Supervisor Approval:', {
-      x: margin,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
-    
-    page.drawLine({
-      start: { x: margin + 130, y: currentY - 8 },
-      end: { x: margin + 290, y: currentY - 8 },
-      thickness: 1.5,
-      color: rgb(0, 0, 0),
-    });
-    
-    page.drawText('Date:', {
-      x: margin + 310,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-    });
-    
-    page.drawLine({
-      start: { x: margin + 350, y: currentY - 8 },
-      end: { x: width - margin, y: currentY - 8 },
+      start: { x: margin + 420, y: currentY - 5 },
+      end: { x: width - margin, y: currentY - 5 },
       thickness: 1.5,
       color: rgb(0, 0, 0),
     });

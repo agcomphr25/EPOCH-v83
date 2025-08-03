@@ -82,7 +82,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte } from "drizzle-orm";
+import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
@@ -848,7 +848,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
-    return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    // Join with customers table to get customer names
+    const result = await db
+      .select({
+        ...getTableColumns(orderDrafts),
+        customerName: customers.name,
+      })
+      .from(orderDrafts)
+      .leftJoin(customers, eq(orderDrafts.customerId, customers.id))
+      .orderBy(desc(orderDrafts.updatedAt));
+    
+    // Map the result to include customer name as part of the order data
+    return result.map(row => ({
+      ...row,
+      customer: row.customerName || 'Unknown Customer'
+    })) as OrderDraft[];
   }
 
   async getLastOrderId(): Promise<string> {

@@ -245,16 +245,38 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     checklistSections.forEach((section, sectionIndex) => {
       currentY -= 20;
       
-      // Section items - clean layout
+      // Section items - clean layout with word wrapping
       section.items.forEach((item, itemIndex) => {
         const itemNumber = itemIndex + 1;
+        
+        // Calculate text wrapping for long items
+        const maxTextWidth = printableWidth - 200; // Leave space for checkboxes
+        const words = item.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        words.forEach(word => {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          // Approximate text width calculation (simple estimate)
+          if (testLine.length * 6 > maxTextWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        });
+        if (currentLine) lines.push(currentLine);
+        
+        // Calculate row height based on number of lines
+        const lineHeight = 15;
+        const rowHeight = Math.max(30, lines.length * lineHeight + 10);
         
         // Create a clean row with borders for each item
         page.drawRectangle({
           x: margin,
-          y: currentY - 30,
+          y: currentY - rowHeight,
           width: printableWidth,
-          height: 30,
+          height: rowHeight,
           borderColor: rgb(0.8, 0.8, 0.8),
           borderWidth: 0.5,
         });
@@ -262,21 +284,23 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         // Item number - positioned properly within the row
         page.drawText(`${itemNumber}.`, {
           x: margin + 8,
-          y: currentY - 12,
+          y: currentY - 15,
           size: 11,
           font: boldFont,
         });
         
-        // Checklist item text - with proper spacing from number
-        page.drawText(item, {
-          x: margin + 30,
-          y: currentY - 12,
-          size: 10,
-          font: font,
+        // Checklist item text - with word wrapping
+        lines.forEach((line, lineIndex) => {
+          page.drawText(line, {
+            x: margin + 30,
+            y: currentY - 15 - (lineIndex * lineHeight),
+            size: 10,
+            font: font,
+          });
         });
         
-        // Pass/Fail checkboxes - better positioned
-        const checkboxY = currentY - 18;
+        // Pass/Fail checkboxes - centered in row
+        const checkboxY = currentY - (rowHeight / 2) - 6;
         const passX = width - margin - 140;
         const failX = width - margin - 70;
         
@@ -291,7 +315,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         });
         page.drawText('Pass', {
           x: passX + 18,
-          y: currentY - 12,
+          y: checkboxY + 3,
           size: 9,
           font: font,
         });
@@ -307,12 +331,12 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         });
         page.drawText('Fail', {
           x: failX + 18,
-          y: currentY - 12,
+          y: checkboxY + 3,
           size: 9,
           font: font,
         });
         
-        currentY -= 35;
+        currentY -= rowHeight + 5;
       });
     });
     

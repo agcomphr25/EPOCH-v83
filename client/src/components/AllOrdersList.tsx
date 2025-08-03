@@ -39,7 +39,14 @@ export default function AllOrdersList() {
   const queryClient = useQueryClient();
   const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [hoveredCustomer, setHoveredCustomer] = useState(null);
+
+  // Set up global handler for communication buttons in tooltip
+  React.useEffect(() => {
+    window.handleCommunicationOpen = handleCommunicationOpen;
+    return () => {
+      delete window.handleCommunicationOpen;
+    };
+  }, []);
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
@@ -283,46 +290,11 @@ export default function AllOrdersList() {
                       })() : '-'}
                     </TableCell>
                     <TableCell>
-                      <div 
-                        className="relative"
-                        onMouseEnter={() => setHoveredCustomer(order.customer?.id)}
-                        onMouseLeave={() => setHoveredCustomer(null)}
-                      >
-                        <CustomerDetailsTooltip customer={order.customer}>
-                          <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
-                            {order.customer?.name || 'N/A'}
-                          </span>
-                        </CustomerDetailsTooltip>
-
-                        {hoveredCustomer === order.customer?.id && order.customer && (
-                          <div className="absolute top-0 right-0 flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-1 z-10">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 hover:bg-blue-50 dark:hover:bg-blue-900"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCommunicationOpen(order.customer, 'email');
-                              }}
-                              title="Send Email"
-                            >
-                              <Mail className="h-3 w-3 text-blue-600" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 hover:bg-green-50 dark:hover:bg-green-900"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCommunicationOpen(order.customer, 'sms');
-                              }}
-                              title="Send SMS"
-                            >
-                              <MessageSquare className="h-3 w-3 text-green-600" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                      <CustomerDetailsTooltip customer={order.customer}>
+                        <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
+                          {order.customer?.name || 'N/A'}
+                        </span>
+                      </CustomerDetailsTooltip>
                     </TableCell>
                     <TableCell>
                       {order.product || getModelDisplayName(order.modelId)}

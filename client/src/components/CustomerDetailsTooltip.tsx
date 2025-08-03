@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Phone, MapPin, Building2 } from 'lucide-react';
+import { User, Building2, Mail, Phone, MapPin, FileText, MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Customer {
   id: number;
@@ -149,6 +150,53 @@ export default function CustomerDetailsTooltip({ customerId, customerName, child
               <div className="text-sm">
                 <span className="font-medium">Notes:</span>
                 <p className="text-gray-600 mt-1">{customer.notes}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Communication Actions */}
+          {customer && (customer.email || customer.phone) && (
+            <div className="border-t pt-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Contact:</span>
+                <div className="flex gap-1">
+                  {customer.email && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 hover:bg-blue-50 dark:hover:bg-blue-900"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // This will need to be passed down as a prop from the parent component
+                        if (window.handleCommunicationOpen) {
+                          window.handleCommunicationOpen(customer, 'email');
+                        }
+                      }}
+                      title="Send Email"
+                    >
+                      <Mail className="h-3 w-3 text-blue-600 mr-1" />
+                      Email
+                    </Button>
+                  )}
+                  {customer.phone && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 hover:bg-green-50 dark:hover:bg-green-900"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // This will need to be passed down as a prop from the parent component
+                        if (window.handleCommunicationOpen) {
+                          window.handleCommunicationOpen(customer, 'sms');
+                        }
+                      }}
+                      title="Send SMS"
+                    >
+                      <MessageSquare className="h-3 w-3 text-green-600 mr-1" />
+                      SMS
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}

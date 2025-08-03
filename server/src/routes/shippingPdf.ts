@@ -17,203 +17,209 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     
-    // Create a new PDF document
+    // Create a new PDF document optimized for printing
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Standard letter size
+    const page = pdfDoc.addPage([612, 792]); // Standard US Letter size (8.5" x 11")
     const { width, height } = page.getSize();
+    
+    // Define print-friendly margins
+    const margin = 50;
+    const printableWidth = width - (margin * 2);
+    const printableHeight = height - (margin * 2);
     
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // Header with company branding
-    let currentY = height - 40;
+    // Header with company branding - optimized for printing
+    let currentY = height - margin;
     page.drawText('AGAT COMPOSITE PARTS', {
-      x: 50,
+      x: margin,
       y: currentY,
-      size: 16,
+      size: 18,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
     
-    currentY -= 20;
+    currentY -= 25;
     page.drawText('Quality Control Inspection Report', {
-      x: 50,
+      x: margin,
       y: currentY,
       size: 14,
       font: boldFont,
-      color: rgb(0.2, 0.2, 0.2),
+      color: rgb(0, 0, 0),
     });
     
-    // Document control box
+    // Document control box - positioned for better printing
+    const docBoxX = width - margin - 200;
     page.drawRectangle({
-      x: 350,
+      x: docBoxX,
       y: currentY - 10,
       width: 200,
-      height: 70,
+      height: 80,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
     
     page.drawText('Document No:', {
-      x: 355,
-      y: currentY + 40,
-      size: 9,
+      x: docBoxX + 5,
+      y: currentY + 50,
+      size: 10,
       font: boldFont,
     });
     
     page.drawText(`QC-${orderId}`, {
-      x: 430,
-      y: currentY + 40,
-      size: 9,
+      x: docBoxX + 80,
+      y: currentY + 50,
+      size: 10,
       font: font,
     });
     
     page.drawText('Revision:', {
-      x: 355,
-      y: currentY + 25,
-      size: 9,
+      x: docBoxX + 5,
+      y: currentY + 35,
+      size: 10,
       font: boldFont,
     });
     
     page.drawText('Rev. A', {
-      x: 430,
-      y: currentY + 25,
-      size: 9,
+      x: docBoxX + 80,
+      y: currentY + 35,
+      size: 10,
       font: font,
     });
     
     page.drawText('Date:', {
-      x: 355,
-      y: currentY + 10,
-      size: 9,
+      x: docBoxX + 5,
+      y: currentY + 20,
+      size: 10,
       font: boldFont,
     });
     
     page.drawText(new Date().toLocaleDateString(), {
-      x: 430,
-      y: currentY + 10,
-      size: 9,
+      x: docBoxX + 80,
+      y: currentY + 20,
+      size: 10,
       font: font,
     });
     
     page.drawText('Page 1 of 1', {
-      x: 355,
-      y: currentY - 5,
+      x: docBoxX + 5,
+      y: currentY + 5,
       size: 9,
       font: font,
     });
     
     // Part information section
-    currentY -= 90;
+    currentY -= 100;
     page.drawText('PART INFORMATION', {
-      x: 50,
+      x: margin,
       y: currentY,
       size: 12,
       font: boldFont,
     });
     
-    // Draw a border around part info
+    // Draw a border around part info - full width for printing
     page.drawRectangle({
-      x: 45,
-      y: currentY - 85,
-      width: 500,
-      height: 70,
+      x: margin,
+      y: currentY - 90,
+      width: printableWidth,
+      height: 80,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
     
-    currentY -= 20;
+    currentY -= 25;
     page.drawText(`Work Order No:`, {
-      x: 50,
+      x: margin + 5,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`${orderId}`, {
-      x: 150,
+      x: margin + 100,
       y: currentY,
       size: 10,
       font: font,
     });
     
     page.drawText(`Customer:`, {
-      x: 300,
+      x: margin + 250,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`${order.customerId || 'N/A'}`, {
-      x: 360,
+      x: margin + 310,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    currentY -= 18;
+    currentY -= 20;
     page.drawText(`Part Number:`, {
-      x: 50,
+      x: margin + 5,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`${order.modelId || 'N/A'}`, {
-      x: 150,
+      x: margin + 100,
       y: currentY,
       size: 10,
       font: font,
     });
     
     page.drawText(`Quantity:`, {
-      x: 300,
+      x: margin + 250,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`1`, {
-      x: 360,
+      x: margin + 310,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    currentY -= 18;
+    currentY -= 20;
     page.drawText(`Drawing No:`, {
-      x: 50,
+      x: margin + 5,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`DWG-${orderId}`, {
-      x: 150,
+      x: margin + 100,
       y: currentY,
       size: 10,
       font: font,
     });
     
     page.drawText(`Order Date:`, {
-      x: 300,
+      x: margin + 250,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
     page.drawText(`${order.orderDate || new Date().toLocaleDateString()}`, {
-      x: 360,
+      x: margin + 310,
       y: currentY,
       size: 10,
       font: font,
     });
     
     // QC Checklist items
-    currentY -= 40;
+    currentY -= 50;
     page.drawText('QUALITY CONTROL CHECKLIST', {
-      x: 50,
+      x: margin,
       y: currentY,
       size: 14,
       font: boldFont,
@@ -263,78 +269,79 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     checklistSections.forEach((section, sectionIndex) => {
       // Section header
       page.drawText(section.title, {
-        x: 50,
+        x: margin,
         y: currentY,
         size: 11,
         font: boldFont,
-        color: rgb(0.2, 0.2, 0.2),
+        color: rgb(0, 0, 0),
       });
-      currentY -= 20;
+      currentY -= 25;
       
       // Section items
       section.items.forEach((item, itemIndex) => {
-        // Draw checkbox
+        // Draw checkbox - larger for print clarity
         page.drawRectangle({
-          x: 60,
-          y: currentY - 12,
-          width: 12,
-          height: 12,
+          x: margin + 10,
+          y: currentY - 14,
+          width: 14,
+          height: 14,
           borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
+          borderWidth: 1.5,
         });
         
-        // Draw checklist item text
+        // Draw checklist item text - improved positioning
         page.drawText(item, {
-          x: 80,
+          x: margin + 35,
+          y: currentY - 8,
+          size: 10,
+          font: font,
+        });
+        
+        // Add pass/fail boxes - better spacing for printing
+        const responseX = width - margin - 200;
+        page.drawText('Pass:', {
+          x: responseX,
           y: currentY - 8,
           size: 9,
           font: font,
         });
-        
-        // Add pass/fail boxes
-        page.drawText('Pass:', {
-          x: 320,
-          y: currentY - 8,
-          size: 8,
-          font: font,
-        });
         page.drawRectangle({
-          x: 350,
-          y: currentY - 12,
-          width: 12,
-          height: 12,
+          x: responseX + 30,
+          y: currentY - 14,
+          width: 14,
+          height: 14,
           borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
+          borderWidth: 1.5,
         });
         
         page.drawText('Fail:', {
-          x: 370,
+          x: responseX + 55,
           y: currentY - 8,
-          size: 8,
+          size: 9,
           font: font,
         });
         page.drawRectangle({
-          x: 395,
-          y: currentY - 12,
-          width: 12,
-          height: 12,
+          x: responseX + 80,
+          y: currentY - 14,
+          width: 14,
+          height: 14,
           borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
+          borderWidth: 1.5,
         });
         
         page.drawText('N/A:', {
-          x: 415,
+          x: responseX + 105,
           y: currentY - 8,
-          size: 8,
+          size: 9,
           font: font,
         });
         page.drawRectangle({
-          x: 440,
-          y: currentY - 12,
-          width: 12,
-          height: 12,
+          x: responseX + 135,
+          y: currentY - 14,
+          width: 14,
+          height: 14,
           borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
+          borderWidth: 1.5,
         });
         
         currentY -= 22;
@@ -344,193 +351,193 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     });
     
     // Notes section
-    currentY -= 20;
+    currentY -= 30;
     page.drawText('NOTES / COMMENTS:', {
-      x: 50,
+      x: margin,
       y: currentY,
       size: 11,
       font: boldFont,
-      color: rgb(0.2, 0.2, 0.2),
-    });
-    
-    currentY -= 20;
-    // Draw lines for notes
-    for (let i = 0; i < 4; i++) {
-      page.drawLine({
-        start: { x: 50, y: currentY },
-        end: { x: 550, y: currentY },
-        thickness: 0.5,
-        color: rgb(0.7, 0.7, 0.7),
-      });
-      currentY -= 15;
-    }
-    
-    // Signature sections
-    currentY -= 20;
-    page.drawText('INSPECTION RESULTS:', {
-      x: 50,
-      y: currentY,
-      size: 11,
-      font: boldFont,
-      color: rgb(0.2, 0.2, 0.2),
-    });
-    
-    currentY -= 25;
-    
-    // Overall result checkboxes
-    page.drawText('Overall Result:', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText('PASS:', {
-      x: 150,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: 185,
-      y: currentY - 4,
-      width: 15,
-      height: 15,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-    
-    page.drawText('FAIL:', {
-      x: 220,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: 250,
-      y: currentY - 4,
-      width: 15,
-      height: 15,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-    
-    page.drawText('CONDITIONAL PASS:', {
-      x: 290,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    page.drawRectangle({
-      x: 400,
-      y: currentY - 4,
-      width: 15,
-      height: 15,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-    
-    currentY -= 40;
-    
-    // Signature areas
-    page.drawText('QC Inspector:', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawLine({
-      start: { x: 120, y: currentY - 5 },
-      end: { x: 280, y: currentY - 5 },
-      thickness: 1,
       color: rgb(0, 0, 0),
     });
     
-    page.drawText('Date:', {
-      x: 300,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
+    currentY -= 25;
+    // Draw lines for notes - full width for printing
+    for (let i = 0; i < 5; i++) {
+      page.drawLine({
+        start: { x: margin, y: currentY },
+        end: { x: width - margin, y: currentY },
+        thickness: 1,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      currentY -= 18;
+    }
     
-    page.drawLine({
-      start: { x: 330, y: currentY - 5 },
-      end: { x: 450, y: currentY - 5 },
-      thickness: 1,
+    // Signature sections
+    currentY -= 30;
+    page.drawText('INSPECTION RESULTS:', {
+      x: margin,
+      y: currentY,
+      size: 11,
+      font: boldFont,
       color: rgb(0, 0, 0),
     });
     
     currentY -= 30;
     
-    page.drawText('Supervisor Approval:', {
-      x: 50,
+    // Overall result checkboxes - improved layout for printing
+    page.drawText('Overall Result:', {
+      x: margin,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+    });
+    
+    page.drawText('PASS:', {
+      x: margin + 120,
       y: currentY,
       size: 10,
+      font: font,
+    });
+    page.drawRectangle({
+      x: margin + 160,
+      y: currentY - 6,
+      width: 16,
+      height: 16,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1.5,
+    });
+    
+    page.drawText('FAIL:', {
+      x: margin + 200,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    page.drawRectangle({
+      x: margin + 235,
+      y: currentY - 6,
+      width: 16,
+      height: 16,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1.5,
+    });
+    
+    page.drawText('CONDITIONAL PASS:', {
+      x: margin + 275,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    page.drawRectangle({
+      x: margin + 400,
+      y: currentY - 6,
+      width: 16,
+      height: 16,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1.5,
+    });
+    
+    currentY -= 50;
+    
+    // Signature areas - better spaced for printing
+    page.drawText('QC Inspector:', {
+      x: margin,
+      y: currentY,
+      size: 11,
       font: boldFont,
     });
     
     page.drawLine({
-      start: { x: 150, y: currentY - 5 },
-      end: { x: 310, y: currentY - 5 },
-      thickness: 1,
+      start: { x: margin + 90, y: currentY - 8 },
+      end: { x: margin + 250, y: currentY - 8 },
+      thickness: 1.5,
       color: rgb(0, 0, 0),
     });
     
     page.drawText('Date:', {
-      x: 330,
+      x: margin + 270,
       y: currentY,
-      size: 10,
+      size: 11,
       font: boldFont,
     });
     
     page.drawLine({
-      start: { x: 360, y: currentY - 5 },
-      end: { x: 480, y: currentY - 5 },
-      thickness: 1,
+      start: { x: margin + 310, y: currentY - 8 },
+      end: { x: width - margin, y: currentY - 8 },
+      thickness: 1.5,
       color: rgb(0, 0, 0),
     });
     
-    // Digital signature section
-    currentY -= 50;
-    page.drawText('DIGITAL CERTIFICATION', {
-      x: 50,
+    currentY -= 40;
+    
+    page.drawText('Supervisor Approval:', {
+      x: margin,
       y: currentY,
       size: 11,
       font: boldFont,
-      color: rgb(0.2, 0.2, 0.2),
     });
     
-    currentY -= 20;
+    page.drawLine({
+      start: { x: margin + 130, y: currentY - 8 },
+      end: { x: margin + 290, y: currentY - 8 },
+      thickness: 1.5,
+      color: rgb(0, 0, 0),
+    });
+    
+    page.drawText('Date:', {
+      x: margin + 310,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+    });
+    
+    page.drawLine({
+      start: { x: margin + 350, y: currentY - 8 },
+      end: { x: width - margin, y: currentY - 8 },
+      thickness: 1.5,
+      color: rgb(0, 0, 0),
+    });
+    
+    // Digital signature section - print optimized
+    currentY -= 60;
+    page.drawText('DIGITAL CERTIFICATION', {
+      x: margin,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    
+    currentY -= 25;
     page.drawRectangle({
-      x: 45,
-      y: currentY - 40,
-      width: 500,
-      height: 35,
-      borderColor: rgb(0.7, 0.7, 0.7),
+      x: margin,
+      y: currentY - 45,
+      width: printableWidth,
+      height: 40,
+      borderColor: rgb(0.5, 0.5, 0.5),
       borderWidth: 1,
     });
     
-    currentY -= 10;
+    currentY -= 15;
     page.drawText('This document has been digitally certified by:', {
-      x: 50,
+      x: margin + 5,
       y: currentY,
-      size: 9,
+      size: 10,
       font: font,
     });
     
-    currentY -= 15;
+    currentY -= 18;
     page.drawText('AGAT.QC.INSPECTOR', {
-      x: 50,
+      x: margin + 5,
       y: currentY,
-      size: 10,
+      size: 11,
       font: boldFont,
     });
     
     page.drawText(`Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
-      x: 300,
+      x: margin + 250,
       y: currentY,
-      size: 9,
+      size: 10,
       font: font,
     });
     

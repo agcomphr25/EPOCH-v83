@@ -848,20 +848,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
-    // Join with customers table to get customer names
-    const result = await db
-      .select({
-        ...getTableColumns(orderDrafts),
-        customerName: customers.name,
-      })
-      .from(orderDrafts)
-      .leftJoin(customers, eq(orderDrafts.customerId, customers.id))
-      .orderBy(desc(orderDrafts.updatedAt));
+    // First get all orders
+    const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
     
-    // Map the result to include customer name as part of the order data
-    return result.map(row => ({
-      ...row,
-      customer: row.customerName || 'Unknown Customer'
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select().from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    
+    // Enrich orders with customer names
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId) || 'Unknown Customer'
     })) as OrderDraft[];
   }
 
@@ -1031,7 +1028,19 @@ export class DatabaseStorage implements IStorage {
   async getAllOrders(): Promise<OrderDraft[]> {
     // For now, return from orderDrafts table as it has the order data
     // In the future, this could be changed to use the main orders table
-    return await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    
+    // First get all orders
+    const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+    
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select().from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+    
+    // Enrich orders with customer names
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+    })) as OrderDraft[];
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {

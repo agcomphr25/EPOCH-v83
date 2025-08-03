@@ -83,7 +83,7 @@ async function createUPSShipment(shipmentData: any) {
   return result;
 }
 
-function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDetails: any) {
+function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDetails: any, packageValue?: number) {
   return {
     ShipmentRequest: {
       Request: {
@@ -166,6 +166,16 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
               Code: "LBS"
             },
             Weight: packageDetails.weight || "10"
+          },
+          InsuredValue: {
+            CurrencyCode: "USD",
+            MonetaryValue: (packageValue || 0).toFixed(2)
+          },
+          PackageServiceOptions: {
+            DeclaredValue: {
+              CurrencyCode: "USD", 
+              MonetaryValue: (packageValue || 0).toFixed(2)
+            }
           }
         },
         LabelSpecification: {
@@ -1191,7 +1201,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { packageDetails, shippingAddress: providedShippingAddress } = req.body;
+    const { packageDetails, shippingAddress: providedShippingAddress, packageValue } = req.body;
     
     // Get order data from storage
     const { storage } = await import('../../storage');
@@ -1262,9 +1272,12 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Package weight is required' });
     }
 
+    // Calculate package value from order if not provided
+    const calculatedPackageValue = packageValue || (order.finalPrice || order.basePrice || 0);
+
     try {
       // Create UPS shipment using real API
-      const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
+      const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails, calculatedPackageValue);
       const upsResponse = await createUPSShipment(shipmentRequest);
       
       // Extract tracking number and label from UPS response
@@ -1497,6 +1510,15 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           font: placeholderFont,
         });
       }
+      
+      // Package value information
+      currentY -= 20;
+      placeholderPage.drawText(`Declared Value: $${calculatedPackageValue?.toFixed(2) || '0.00'}`, {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderBoldFont,
+      });
       
       // Note about UPS API integration
       currentY -= 40;

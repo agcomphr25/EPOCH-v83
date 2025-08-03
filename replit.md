@@ -7,6 +7,13 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+**August 3, 2025**: Enhanced shipping management system with comprehensive improvements:
+- Implemented automatic customer address population for shipping labels from order and customer_addresses table
+- Added package value/cost integration with automatic calculation from order pricing (finalPrice/basePrice)
+- Enhanced UPS API integration with declared value and insurance options for customs and shipping protection
+- Improved shipping label fallback system with customer information auto-population and package value display
+- Created customer address preview endpoint for pre-shipping validation
+
 **August 1, 2025**: Enhanced Waste Management Form in P2 Forms section:
 - Replaced complex form with simplified, user-friendly version matching PDF structure exactly
 - Implemented smart dropdown functionality for chemical names with persistent storage

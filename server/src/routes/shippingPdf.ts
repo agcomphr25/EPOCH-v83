@@ -1,7 +1,166 @@
 import { Router, Request, Response } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fetch from 'node-fetch';
 
 const router = Router();
+
+// UPS API Configuration
+const UPS_API_BASE_URL = 'https://wwwcie.ups.com/ship/v1/shipments'; // Sandbox URL
+// const UPS_API_BASE_URL = 'https://onlinetools.ups.com/ship/v1/shipments'; // Production URL
+
+// UPS API Helper Functions
+async function getUPSAccessToken() {
+  const credentials = {
+    username: process.env.UPS_USER_ID,
+    password: process.env.UPS_PASSWORD,
+    accessKey: process.env.UPS_ACCESS_KEY
+  };
+
+  const response = await fetch('https://wwwcie.ups.com/security/v1/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`
+    },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials'
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`UPS OAuth failed: ${response.statusText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.access_token;
+}
+
+async function createUPSShipment(shipmentData: any) {
+  const accessToken = await getUPSAccessToken();
+  
+  const response = await fetch(UPS_API_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+      'transId': Math.random().toString(36).substring(7),
+      'transactionSrc': 'AG_Composites_ERP'
+    },
+    body: JSON.stringify(shipmentData)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`UPS Shipment creation failed: ${response.statusText} - ${errorText}`);
+  }
+
+  return await response.json();
+}
+
+function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDetails: any) {
+  return {
+    ShipmentRequest: {
+      Request: {
+        RequestOption: "nonvalidate",
+        TransactionReference: {
+          CustomerContext: `Order-${orderData.orderId}`
+        }
+      },
+      Shipment: {
+        Description: `AG Composites Order ${orderData.orderId}`,
+        Shipper: {
+          Name: "AG Composites",
+          AttentionName: "Shipping Department",
+          TaxIdentificationNumber: "",
+          Phone: {
+            Number: "1234567890",
+            Extension: ""
+          },
+          ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
+          FaxNumber: "",
+          Address: {
+            AddressLine: ["123 Manufacturing Way"],
+            City: "Industrial City",
+            StateProvinceCode: "ST",
+            PostalCode: "12345",
+            CountryCode: "US"
+          }
+        },
+        ShipTo: {
+          Name: shippingAddress.name,
+          AttentionName: shippingAddress.name,
+          Phone: {
+            Number: "0000000000"
+          },
+          Address: {
+            AddressLine: [shippingAddress.street],
+            City: shippingAddress.city,
+            StateProvinceCode: shippingAddress.state,
+            PostalCode: shippingAddress.zip,
+            CountryCode: "US"
+          }
+        },
+        ShipFrom: {
+          Name: "AG Composites",
+          AttentionName: "Shipping Department",
+          Phone: {
+            Number: "1234567890"
+          },
+          FaxNumber: "",
+          Address: {
+            AddressLine: ["123 Manufacturing Way"],
+            City: "Industrial City",
+            StateProvinceCode: "ST",
+            PostalCode: "12345",
+            CountryCode: "US"
+          }
+        },
+        PaymentInformation: {
+          ShipmentCharge: {
+            Type: "01",
+            BillShipper: {
+              AccountNumber: process.env.UPS_ACCOUNT_NUMBER
+            }
+          }
+        },
+        Service: {
+          Code: "03",
+          Description: "Ground"
+        },
+        Package: {
+          Description: `Composite Parts - Order ${orderData.orderId}`,
+          Packaging: {
+            Code: "02",
+            Description: "Customer Supplied Package"
+          },
+          Dimensions: {
+            UnitOfMeasurement: {
+              Code: "IN",
+              Description: "Inches"
+            },
+            Length: packageDetails.length || "12",
+            Width: packageDetails.width || "12",
+            Height: packageDetails.height || "12"
+          },
+          PackageWeight: {
+            UnitOfMeasurement: {
+              Code: "LBS",
+              Description: "Pounds"
+            },
+            Weight: packageDetails.weight || "10"
+          }
+        },
+        LabelSpecification: {
+          LabelImageFormat: {
+            Code: "GIF",
+            Description: "GIF"
+          },
+          HTTPUserAgent: "Mozilla/4.5"
+        }
+      }
+    }
+  };
+}
 
 // Generate QC Checklist PDF
 router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
@@ -458,7 +617,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
-    const customer = customers.find(c => c.id === order.customerId);
+    const customer = customers.find(c => c.id?.toString() === order.customerId?.toString());
     const customerAddresses = addresses.filter(a => a.customerId === order.customerId);
     
     // Create a new PDF document optimized for sales orders
@@ -719,7 +878,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
     
-    const basePrice = model?.price || order.totalPrice || 0;
+    const basePrice = model?.price || 0;
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + 380,
       y: currentY,
@@ -1011,7 +1170,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   }
 });
 
-// Generate UPS Shipping Label (placeholder for UPS API integration)
+// Generate UPS Shipping Label with real UPS API integration
 router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
@@ -1025,196 +1184,248 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
-    // TODO: Integrate with UPS API
-    // For now, create a placeholder shipping label PDF
-    
-    // Create a new PDF document
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
-    const { width, height } = page.getSize();
-    
-    // Load fonts
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
-    // Header
-    let currentY = height - 40;
-    page.drawText('UPS SHIPPING LABEL', {
-      x: 50,
-      y: currentY,
-      size: 16,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    
-    // Tracking number placeholder
-    currentY -= 40;
-    page.drawText('Tracking #: 1Z999AA1234567890', {
-      x: 50,
-      y: currentY,
-      size: 12,
-      font: boldFont,
-    });
-    
-    // From address
-    currentY -= 40;
-    page.drawText('FROM:', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    currentY -= 20;
-    page.drawText('AG Composites', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 15;
-    page.drawText('123 Manufacturing Way', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 15;
-    page.drawText('Industrial City, ST 12345', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    // To address
-    currentY -= 40;
-    page.drawText('TO:', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    if (shippingAddress) {
-      currentY -= 20;
-      page.drawText(shippingAddress.name || 'Customer Name', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-      
-      currentY -= 15;
-      page.drawText(shippingAddress.street || 'Customer Address', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-      
-      currentY -= 15;
-      page.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-    } else {
-      currentY -= 20;
-      page.drawText('Customer Address Required', {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
+
+    // Validate required fields
+    if (!shippingAddress || !shippingAddress.name || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
+      return res.status(400).json({ error: 'Complete shipping address is required' });
     }
+
+    if (!packageDetails || !packageDetails.weight) {
+      return res.status(400).json({ error: 'Package weight is required' });
+    }
+
+    try {
+      // Create UPS shipment using real API
+      const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
+      const upsResponse = await createUPSShipment(shipmentRequest);
+      
+      // Extract tracking number and label from UPS response
+      const upsData = upsResponse as any;
+      const trackingNumber = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.TrackingNumber;
+      const labelImage = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+      
+      if (!trackingNumber || !labelImage) {
+        throw new Error('UPS API response missing tracking number or label image');
+      }
+
+      // Convert base64 label image to PDF
+      const labelBuffer = Buffer.from(labelImage, 'base64');
+      
+      // Create PDF document with the UPS label
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+      
+      // Embed the UPS label image
+      const labelImageObj = await pdfDoc.embedPng(labelBuffer);
+      const { width, height } = page.getSize();
+      
+      // Scale image to fit page
+      const imgDims = labelImageObj.scale(1);
+      const scaleFactor = Math.min(width / imgDims.width, height / imgDims.height);
+      
+      page.drawImage(labelImageObj, {
+        x: (width - imgDims.width * scaleFactor) / 2,
+        y: (height - imgDims.height * scaleFactor) / 2,
+        width: imgDims.width * scaleFactor,
+        height: imgDims.height * scaleFactor,
+      });
+
+      // Generate PDF bytes
+      const pdfBytes = await pdfDoc.save();
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`);
+      res.setHeader('Content-Length', pdfBytes.length);
+      
+      // Send PDF
+      res.send(Buffer.from(pdfBytes));
+      
+    } catch (upsError) {
+      console.error('UPS API Error:', upsError);
+      
+      // Fallback to placeholder label if UPS API fails
+      console.log('Falling back to placeholder label due to UPS API error');
+      
+      // Create a placeholder shipping label PDF with error information
+      const placeholderPdfDoc = await PDFDocument.create();
+      const placeholderPage = placeholderPdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+      const { width: placeholderWidth, height: placeholderHeight } = placeholderPage.getSize();
+      
+      // Load fonts
+      const placeholderFont = await placeholderPdfDoc.embedFont(StandardFonts.Helvetica);
+      const placeholderBoldFont = await placeholderPdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // Service info
-    currentY -= 40;
-    page.drawText('Service: UPS Ground', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 15;
-    page.drawText(`Order: ${orderId}`, {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    if (packageDetails) {
-      currentY -= 15;
-      page.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
+      // Header
+      let currentY = placeholderHeight - 40;
+      placeholderPage.drawText('UPS SHIPPING LABEL (FALLBACK)', {
+        x: 50,
+        y: currentY,
+        size: 16,
+        font: placeholderBoldFont,
+        color: rgb(0, 0, 0),
+      });
+      
+      // UPS API Error message
+      currentY -= 30;
+      placeholderPage.drawText('UPS API Error - Using Placeholder Label', {
         x: 50,
         y: currentY,
         size: 10,
-        font: font,
+        font: placeholderBoldFont,
+        color: rgb(0.8, 0, 0),
+      });
+      
+      // Tracking number placeholder
+      currentY -= 30;
+      placeholderPage.drawText('Tracking #: PLACEHOLDER-LABEL', {
+        x: 50,
+        y: currentY,
+        size: 12,
+        font: placeholderBoldFont,
+      });
+      
+      // From address
+      currentY -= 40;
+      placeholderPage.drawText('FROM:', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderBoldFont,
+      });
+      
+      currentY -= 20;
+      placeholderPage.drawText('AG Composites', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderFont,
       });
       
       currentY -= 15;
-      page.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
+      placeholderPage.drawText('123 Manufacturing Way', {
         x: 50,
         y: currentY,
         size: 10,
-        font: font,
+        font: placeholderFont,
       });
+      
+      currentY -= 15;
+      placeholderPage.drawText('Industrial City, ST 12345', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderFont,
+      });
+      
+      // To address
+      currentY -= 40;
+      placeholderPage.drawText('TO:', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderBoldFont,
+      });
+      
+      if (shippingAddress) {
+        currentY -= 20;
+        placeholderPage.drawText(shippingAddress.name || 'Customer Name', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+        
+        currentY -= 15;
+        placeholderPage.drawText(shippingAddress.street || 'Customer Address', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+        
+        currentY -= 15;
+        placeholderPage.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+      } else {
+        currentY -= 20;
+        placeholderPage.drawText('Customer Address Required', {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+      }
+      
+      // Service info
+      currentY -= 40;
+      placeholderPage.drawText('Service: UPS Ground', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderFont,
+      });
+      
+      currentY -= 15;
+      placeholderPage.drawText(`Order: ${orderId}`, {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: placeholderFont,
+      });
+      
+      if (packageDetails) {
+        currentY -= 15;
+        placeholderPage.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+        
+        currentY -= 15;
+        placeholderPage.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
+          x: 50,
+          y: currentY,
+          size: 10,
+          font: placeholderFont,
+        });
+      }
+      
+      // Note about UPS API integration
+      currentY -= 40;
+      placeholderPage.drawText('Note: UPS API credentials may need verification.', {
+        x: 50,
+        y: currentY,
+        size: 8,
+        font: placeholderFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      
+      currentY -= 12;
+      placeholderPage.drawText('Contact administrator to configure UPS integration.', {
+        x: 50,
+        y: currentY,
+        size: 8,
+        font: placeholderFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      
+      // Generate PDF bytes
+      const fallbackPdfBytes = await placeholderPdfDoc.save();
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="Shipping-Label-Fallback-${orderId}.pdf"`);
+      res.setHeader('Content-Length', fallbackPdfBytes.length);
+      
+      // Send PDF
+      res.send(Buffer.from(fallbackPdfBytes));
     }
-    
-    // Placeholder barcode area
-    currentY -= 60;
-    page.drawRectangle({
-      x: 50,
-      y: currentY - 40,
-      width: 300,
-      height: 40,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-    
-    page.drawText('BARCODE PLACEHOLDER', {
-      x: 150,
-      y: currentY - 25,
-      size: 10,
-      font: font,
-    });
-    
-    // Note about UPS API integration
-    currentY -= 80;
-    page.drawText('Note: This is a placeholder label.', {
-      x: 50,
-      y: currentY,
-      size: 8,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-    
-    currentY -= 12;
-    page.drawText('UPS API integration required for live labels.', {
-      x: 50,
-      y: currentY,
-      size: 8,
-      font: font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-    
-    // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
-    
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Shipping-Label-${orderId}.pdf"`);
-    res.setHeader('Content-Length', pdfBytes.length);
-    
-    // Send PDF
-    res.send(Buffer.from(pdfBytes));
     
   } catch (error) {
     console.error('Error generating shipping label PDF:', error);

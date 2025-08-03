@@ -710,9 +710,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (order.features && Object.keys(order.features).length > 0) {
       Object.entries(order.features).forEach(([featureKey, featureValue]) => {
         if (featureValue && featureValue !== false && featureValue !== '') {
-          // Find feature details for pricing
+          // Find feature details for pricing and display name
           const featureDetail = features.find(f => f.id === featureKey);
-          const featureName = featureDetail ? featureDetail.name : featureKey;
+          const featureName = featureDetail ? (featureDetail.displayName || featureDetail.name) : featureKey;
           const featurePrice = featureDetail ? featureDetail.price || 0 : 0;
           
           // Display feature line

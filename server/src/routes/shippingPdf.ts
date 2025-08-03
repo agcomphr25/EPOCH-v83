@@ -1203,33 +1203,44 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     const { orderId } = req.params;
     const { packageDetails, shippingAddress: providedShippingAddress, packageValue } = req.body;
     
-    // Get order data from storage
-    const { storage } = await import('../../storage');
-    const orders = await storage.getAllOrderDrafts();
-    const order = orders.find(o => o.orderId === orderId);
+    // Get order, customer, and address data directly from database
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+    const { orderDrafts, customers, customerAddresses } = await import('../../schema');
     
-    if (!order) {
+    // First get the order
+    const orders = await db.select()
+      .from(orderDrafts)
+      .where(eq(orderDrafts.orderId, orderId));
+
+    if (!orders || orders.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Get customer information automatically from order
-    const customers = await storage.getAllCustomers();
-    const customer = customers.find(c => c.id === parseInt(order.customerId));
+    const order = orders[0];
+
+    // Then get customer and address information using the order's customer_id
+    const orderResult = await db.select({
+      customer: customers,
+      address: customerAddresses
+    })
+    .from(customers)
+    .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id))
+    .where(eq(customers.id, parseInt(order.customerId)));
+
+    if (!orderResult || orderResult.length === 0) {
+      return res.status(404).json({ error: 'Customer not found for this order' });
+    }
+
+    const customer = orderResult[0].customer;
     
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found for this order' });
     }
 
-    // Get customer address from customer_addresses table
-    const { db } = await import('../../db');
-    const { eq } = await import('drizzle-orm');
-    const { customerAddresses } = await import('../../schema');
-    
-    const customerAddressRecords = await db.select()
-      .from(customerAddresses)
-      .where(eq(customerAddresses.customerId, parseInt(order.customerId)));
-    
-    const customerAddress = customerAddressRecords.find(addr => addr.isDefault) || customerAddressRecords[0];
+    // Find the default address or use the first available address
+    const customerAddress = orderResult.find(r => r.address?.isDefault)?.address || 
+                           orderResult.find(r => r.address)?.address;
 
     // Auto-populate shipping address from customer data, allow override from request
     const shippingAddress = providedShippingAddress || (customerAddress ? {
@@ -1237,7 +1248,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       street: customerAddress.street,
       city: customerAddress.city,
       state: customerAddress.state,
-      zip: customerAddress.zipCode // Note: database field is zip_code
+      zip: customerAddress.zipCode // Database field is zip_code, mapped to zipCode
     } : {
       name: customer.name,
       street: '',

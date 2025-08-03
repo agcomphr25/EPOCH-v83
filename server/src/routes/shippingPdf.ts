@@ -1191,7 +1191,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { shippingAddress, packageDetails } = req.body;
+    const { packageDetails, shippingAddress: providedShippingAddress } = req.body;
     
     // Get order data from storage
     const { storage } = await import('../../storage');
@@ -1202,9 +1202,60 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // Get customer information automatically from order
+    const customers = await storage.getAllCustomers();
+    const customer = customers.find(c => c.id === parseInt(order.customerId));
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found for this order' });
+    }
+
+    // Get customer address from customer_addresses table
+    const { db } = await import('../../db');
+    const { eq } = await import('drizzle-orm');
+    const { customerAddresses } = await import('../../schema');
+    
+    const customerAddressRecords = await db.select()
+      .from(customerAddresses)
+      .where(eq(customerAddresses.customerId, parseInt(order.customerId)));
+    
+    const customerAddress = customerAddressRecords.find(addr => addr.isDefault) || customerAddressRecords[0];
+
+    // Auto-populate shipping address from customer data, allow override from request
+    const shippingAddress = providedShippingAddress || (customerAddress ? {
+      name: customer.name,
+      street: customerAddress.street,
+      city: customerAddress.city,
+      state: customerAddress.state,
+      zip: customerAddress.zipCode // Note: database field is zip_code
+    } : {
+      name: customer.name,
+      street: '',
+      city: '',
+      state: '',
+      zip: ''
+    });
+
     // Validate required fields
     if (!shippingAddress || !shippingAddress.name || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
-      return res.status(400).json({ error: 'Complete shipping address is required' });
+      return res.status(400).json({ 
+        error: 'Complete shipping address is required. Please provide shipping address in the request body.',
+        customerInfo: {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone
+        },
+        requiredFields: ['name', 'street', 'city', 'state', 'zip'],
+        example: {
+          shippingAddress: {
+            name: customer.name,
+            street: "123 Main St",
+            city: "Huntsville",
+            state: "AL",
+            zip: "35801"
+          }
+        }
+      });
     }
 
     if (!packageDetails || !packageDetails.weight) {

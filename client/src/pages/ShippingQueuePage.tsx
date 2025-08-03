@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { ShippingActions } from '@/components/ShippingActions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, ArrowLeft } from 'lucide-react';
@@ -143,6 +144,9 @@ export default function ShippingQueuePage() {
                           </div>
                         )}
                       </div>
+                      
+                      {/* Shipping Actions */}
+                      <ShippingActions orderId={order.orderId} orderData={order} />
                     </CardContent>
                   </Card>
                 );

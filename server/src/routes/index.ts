@@ -12,6 +12,7 @@ import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
+import shippingPdfRoute from './shippingPdf';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
@@ -55,6 +56,9 @@ export function registerRoutes(app: Express): Server {
 
   // Layup PDF generation routes
   app.use('/api/pdf', layupPdfRoute);
+
+  // Shipping PDF generation routes
+  app.use('/api/shipping-pdf', shippingPdfRoute);
 
   // Discount management routes
   app.use('/api', discountsRoutes);

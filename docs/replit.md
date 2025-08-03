@@ -6,6 +6,7 @@ This is a full-stack manufacturing ERP system built with React, TypeScript, Expr
 
 ## Recent Changes
 
+- **August 3, 2025 (Evening)**: SHIPPING DEPARTMENT QUEUE MANAGER ENHANCEMENTS - Added three action buttons to each order in the shipping queue: QC Checklist PDF generation, Sales Order PDF generation, and UPS Shipping Label creation. Created ShippingActions component with modal forms for shipping address and package details. Implemented comprehensive PDF generation API endpoints using pdf-lib for professional document creation.
 - **July 16, 2025 (Evening)**: ARCHITECTURE CLARIFICATION & DOCUMENTATION - Addressed framework confusion feedback by creating comprehensive README.md documenting tech stack choices (Vite+React, not Next.js). Reorganized database schema to `/server/schema.ts` while maintaining `/shared/schema.ts` re-export for client access. Added clear project structure documentation and architecture decisions.
 - **July 16, 2025 (Evening)**: PROJECT STRUCTURE REORGANIZATION - Successfully cleaned up "monolithic root" issue by organizing files into logical folders: moved all debug/test scripts to `/scripts`, data files to `/data`, documentation to `/docs`, while preserving working `/client`, `/server`, `/shared` structure. Application continues running without interruption.
 - **July 16, 2025 (Evening)**: TIME CLOCK ADMINISTRATION ENHANCEMENT - Added "Current Date" field to Time Clock Administration modal for both Add Entry and Edit Entry dialogs. Field auto-defaults to today's date and is user-editable.

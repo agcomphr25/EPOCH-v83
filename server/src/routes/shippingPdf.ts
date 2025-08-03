@@ -655,4 +655,210 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
   }
 });
 
+// Generate Bulk UPS Shipping Label
+router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
+  try {
+    const { orderIds, shippingAddress, packageDetails, trackingNumber } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'Order IDs array is required' });
+    }
+    
+    // Get order data from storage
+    const { storage } = await import('../../storage');
+    const orders = await storage.getAllOrderDrafts();
+    const selectedOrders = orders.filter(o => orderIds.includes(o.orderId));
+    
+    if (selectedOrders.length === 0) {
+      return res.status(404).json({ error: 'No matching orders found' });
+    }
+    
+    // Create a new PDF document
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+    const { width, height } = page.getSize();
+    
+    // Load fonts
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Header
+    let currentY = height - 40;
+    page.drawText('UPS BULK SHIPPING LABEL', {
+      x: 50,
+      y: currentY,
+      size: 16,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    
+    // Tracking number
+    currentY -= 40;
+    page.drawText(`Tracking #: ${trackingNumber || '1Z999AA1234567890'}`, {
+      x: 50,
+      y: currentY,
+      size: 12,
+      font: boldFont,
+    });
+    
+    // From address
+    currentY -= 40;
+    page.drawText('FROM:', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    currentY -= 20;
+    page.drawText('AG Composites', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    currentY -= 15;
+    page.drawText('123 Manufacturing Way', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    currentY -= 15;
+    page.drawText('Industrial City, ST 12345', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    // To address
+    currentY -= 40;
+    page.drawText('TO:', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    if (shippingAddress) {
+      currentY -= 20;
+      page.drawText(shippingAddress.name || 'Customer Name', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+      
+      currentY -= 15;
+      page.drawText(shippingAddress.street || 'Customer Address', {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+      
+      currentY -= 15;
+      page.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+    }
+    
+    // Service info
+    currentY -= 40;
+    page.drawText('Service: UPS Ground', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    currentY -= 15;
+    page.drawText(`Orders (${orderIds.length}): ${orderIds.join(', ')}`, {
+      x: 50,
+      y: currentY,
+      size: 9,
+      font: font,
+    });
+    
+    if (packageDetails) {
+      currentY -= 15;
+      page.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+      
+      currentY -= 15;
+      page.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
+        x: 50,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+    }
+    
+    // Order details section
+    currentY -= 30;
+    page.drawText('CONTENTS:', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    currentY -= 15;
+    selectedOrders.forEach((order, index) => {
+      if (currentY > 100) { // Only show if there's space
+        page.drawText(`${order.orderId} - ${order.customerId || 'Customer'}`, {
+          x: 50,
+          y: currentY,
+          size: 8,
+          font: font,
+        });
+        currentY -= 12;
+      }
+    });
+    
+    // Placeholder barcode area
+    currentY -= 20;
+    page.drawRectangle({
+      x: 50,
+      y: currentY - 40,
+      width: 300,
+      height: 40,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('BARCODE PLACEHOLDER', {
+      x: 150,
+      y: currentY - 25,
+      size: 10,
+      font: font,
+    });
+    
+    // Generate PDF bytes
+    const pdfBytes = await pdfDoc.save();
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Bulk-Shipping-Label-${trackingNumber || 'BULK'}.pdf"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    
+    // Send PDF
+    res.send(Buffer.from(pdfBytes));
+    
+  } catch (error) {
+    console.error('Error generating bulk shipping label PDF:', error);
+    res.status(500).json({ error: 'Failed to generate bulk shipping label PDF' });
+  }
+});
+
 export default router;

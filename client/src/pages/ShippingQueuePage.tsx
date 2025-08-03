@@ -1,14 +1,18 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { ShippingActions } from '@/components/ShippingActions';
+import { BulkShippingActions } from '@/components/BulkShippingActions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function ShippingQueuePage() {
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
@@ -44,6 +48,26 @@ export default function ShippingQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  const handleOrderSelection = (orderId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(prev => [...prev, orderId]);
+    } else {
+      setSelectedOrders(prev => prev.filter(id => id !== orderId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedOrders(shippingOrders.map(order => order.orderId));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedOrders([]);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -53,6 +77,15 @@ export default function ShippingQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
+
+      {/* Bulk Shipping Actions */}
+      {selectedOrders.length > 0 && (
+        <BulkShippingActions 
+          selectedOrders={selectedOrders} 
+          onClearSelection={clearSelection}
+          shippingOrders={shippingOrders}
+        />
+      )}
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -96,10 +129,21 @@ export default function ShippingQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Shipping Department Manager</span>
-            <Badge variant="outline" className="ml-2">
-              {shippingOrders.length} Orders
-            </Badge>
+            <div className="flex items-center gap-3">
+              <span>Shipping Department Manager</span>
+              <Badge variant="outline" className="ml-2">
+                {shippingOrders.length} Orders
+              </Badge>
+              {shippingOrders.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedOrders.length === shippingOrders.length}
+                    onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                  />
+                  <span className="text-sm text-gray-600">Select All</span>
+                </div>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -118,8 +162,14 @@ export default function ShippingQueuePage() {
                   <Card key={order.id} className="hover:shadow-md transition-shadow border border-gray-200">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start mb-2">
-                        <div className="text-sm font-semibold text-blue-600">
-                          {getDisplayOrderId(order.orderId)}
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedOrders.includes(order.orderId)}
+                            onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                          />
+                          <div className="text-sm font-semibold text-blue-600">
+                            {getDisplayOrderId(order.orderId)}
+                          </div>
                         </div>
                         {materialType && (
                           <Badge variant="secondary" className="text-xs">

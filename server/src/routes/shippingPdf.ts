@@ -534,243 +534,553 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     
-    // Get order data from storage
+    // Get comprehensive order data from storage
     const { storage } = await import('../../storage');
     const orders = await storage.getAllOrderDrafts();
     const stockModels = await storage.getAllStockModels();
+    const customers = await storage.getAllCustomers();
+    const features = await storage.getAllFeatures();
+    const addresses = await storage.getAllAddresses();
+    
     const order = orders.find(o => o.orderId === orderId);
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
     
-    // Get model info
+    // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
+    const customer = customers.find(c => c.id === order.customerId);
+    const customerAddresses = addresses.filter(a => a.customerId === order.customerId);
     
-    // Create a new PDF document
+    // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Standard letter size
+    const page = pdfDoc.addPage([612, 792]); // Standard US Letter size
     const { width, height } = page.getSize();
+    
+    // Define margins and layout
+    const margin = 50;
+    const printableWidth = width - (margin * 2);
     
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // Header
-    let currentY = height - 60;
-    page.drawText('SALES ORDER', {
-      x: 50,
+    // Header section with company branding
+    let currentY = height - margin;
+    page.drawText('AGAT COMPOSITE PARTS', {
+      x: margin,
       y: currentY,
-      size: 24,
+      size: 20,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
     
-    // Company info
-    currentY -= 40;
-    page.drawText('AG Composites', {
-      x: 50,
+    // Sales Order title
+    currentY -= 30;
+    page.drawText('SALES ORDER', {
+      x: margin,
       y: currentY,
-      size: 14,
+      size: 16,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    
+    // Order number and date box
+    const orderBoxX = width - margin - 200;
+    page.drawRectangle({
+      x: orderBoxX,
+      y: currentY - 5,
+      width: 200,
+      height: 60,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('Order Number:', {
+      x: orderBoxX + 5,
+      y: currentY + 30,
+      size: 10,
       font: boldFont,
     });
     
-    currentY -= 20;
-    page.drawText('123 Manufacturing Way', {
-      x: 50,
+    page.drawText(orderId, {
+      x: orderBoxX + 90,
+      y: currentY + 30,
+      size: 10,
+      font: font,
+    });
+    
+    page.drawText('Date:', {
+      x: orderBoxX + 5,
+      y: currentY + 15,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(new Date().toLocaleDateString(), {
+      x: orderBoxX + 90,
+      y: currentY + 15,
+      size: 10,
+      font: font,
+    });
+    
+    page.drawText('Due Date:', {
+      x: orderBoxX + 5,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
+      x: orderBoxX + 90,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    currentY -= 15;
-    page.drawText('Industrial City, ST 12345', {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    // Order information
-    currentY -= 40;
-    page.drawText(`Sales Order #: ${orderId}`, {
-      x: 50,
+    // Customer Information Section
+    currentY -= 80;
+    page.drawText('BILL TO:', {
+      x: margin,
       y: currentY,
       size: 12,
       font: boldFont,
     });
     
-    page.drawText(`Date: ${new Date().toLocaleDateString()}`, {
-      x: 400,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 25;
-    page.drawText(`Customer: ${order.customerId || 'N/A'}`, {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 15;
-    page.drawText(`Order Date: ${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : 'N/A'}`, {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    if (order.dueDate) {
-      currentY -= 15;
-      page.drawText(`Due Date: ${new Date(order.dueDate).toLocaleDateString()}`, {
-        x: 50,
+    // Bill to address
+    currentY -= 20;
+    if (customer) {
+      page.drawText(customer.name || 'N/A', {
+        x: margin,
         y: currentY,
         size: 10,
         font: font,
       });
+      
+      currentY -= 15;
+      if (customer.email) {
+        page.drawText(customer.email, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+        currentY -= 15;
+      }
+      
+      if (customer.phone) {
+        page.drawText(customer.phone, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+        currentY -= 15;
+      }
     }
     
-    // Order details table header
-    currentY -= 40;
+    // Ship to address (if different)
+    const shipToY = currentY + 75;
+    page.drawText('SHIP TO:', {
+      x: margin + 250,
+      y: shipToY,
+      size: 12,
+      font: boldFont,
+    });
+    
+    let shipCurrentY = shipToY - 20;
+    if (customerAddresses.length > 0) {
+      const primaryAddress = customerAddresses[0];
+      page.drawText(customer?.name || 'N/A', {
+        x: margin + 250,
+        y: shipCurrentY,
+        size: 10,
+        font: font,
+      });
+      
+      shipCurrentY -= 15;
+      page.drawText(primaryAddress.street || '', {
+        x: margin + 250,
+        y: shipCurrentY,
+        size: 10,
+        font: font,
+      });
+      
+      shipCurrentY -= 15;
+      const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
+      if (cityStateZip !== ', ') {
+        page.drawText(cityStateZip, {
+          x: margin + 250,
+          y: shipCurrentY,
+          size: 10,
+          font: font,
+        });
+      }
+    }
+    
+    // Order Details Section
+    currentY -= 70;
     page.drawText('ORDER DETAILS', {
-      x: 50,
+      x: margin,
       y: currentY,
       size: 14,
       font: boldFont,
     });
     
-    currentY -= 25;
+    // Create order details table
+    currentY -= 30;
+    
+    // Table border
+    page.drawRectangle({
+      x: margin,
+      y: currentY - 120,
+      width: printableWidth,
+      height: 120,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
     // Table headers
-    page.drawText('Description', {
-      x: 50,
-      y: currentY,
+    page.drawRectangle({
+      x: margin,
+      y: currentY - 25,
+      width: printableWidth,
+      height: 25,
+      color: rgb(0.9, 0.9, 0.9),
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('Item Description', {
+      x: margin + 5,
+      y: currentY - 15,
       size: 10,
       font: boldFont,
     });
     
-    page.drawText('Model', {
-      x: 200,
-      y: currentY,
+    page.drawText('Model/SKU', {
+      x: margin + 200,
+      y: currentY - 15,
       size: 10,
       font: boldFont,
     });
     
     page.drawText('Qty', {
-      x: 350,
-      y: currentY,
+      x: margin + 320,
+      y: currentY - 15,
       size: 10,
       font: boldFont,
     });
     
-    page.drawText('Price', {
-      x: 450,
-      y: currentY,
+    page.drawText('Unit Price', {
+      x: margin + 380,
+      y: currentY - 15,
       size: 10,
       font: boldFont,
     });
     
-    // Draw line under headers
-    currentY -= 5;
-    page.drawLine({
-      start: { x: 50, y: currentY },
-      end: { x: 550, y: currentY },
-      thickness: 1,
-      color: rgb(0, 0, 0),
+    page.drawText('Total', {
+      x: margin + 460,
+      y: currentY - 15,
+      size: 10,
+      font: boldFont,
     });
     
-    // Order item
-    currentY -= 20;
-    page.drawText(model?.displayName || model?.name || order.modelId || 'Custom Product', {
-      x: 50,
+    // Main product line
+    currentY -= 45;
+    const productName = model?.displayName || model?.name || 'Custom Stock';
+    page.drawText(productName, {
+      x: margin + 5,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    page.drawText(order.modelId || 'N/A', {
-      x: 200,
+    page.drawText(order.modelId || 'CUSTOM', {
+      x: margin + 200,
       y: currentY,
       size: 10,
       font: font,
     });
     
     page.drawText('1', {
-      x: 350,
+      x: margin + 320,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    page.drawText(model?.price ? `$${model.price.toFixed(2)}` : 'Quote', {
-      x: 450,
+    const basePrice = model?.price || order.totalPrice || 0;
+    page.drawText(`$${basePrice.toFixed(2)}`, {
+      x: margin + 380,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    // Features/specifications
+    page.drawText(`$${basePrice.toFixed(2)}`, {
+      x: margin + 460,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    // Features and Customizations Section
+    currentY -= 140;
+    page.drawText('FEATURES & CUSTOMIZATIONS', {
+      x: margin,
+      y: currentY,
+      size: 14,
+      font: boldFont,
+    });
+    
+    currentY -= 25;
+    let featureTotal = 0;
+    let featureLineCount = 0;
+    
     if (order.features && Object.keys(order.features).length > 0) {
-      currentY -= 30;
-      page.drawText('SPECIFICATIONS', {
-        x: 50,
+      Object.entries(order.features).forEach(([featureKey, featureValue]) => {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          // Find feature details for pricing
+          const featureDetail = features.find(f => f.id === featureKey);
+          const featureName = featureDetail ? featureDetail.name : featureKey;
+          const featurePrice = featureDetail ? featureDetail.price || 0 : 0;
+          
+          // Display feature line
+          page.drawText(`• ${featureName}`, {
+            x: margin + 5,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+          
+          if (typeof featureValue === 'string' && featureValue !== 'true') {
+            page.drawText(`(${featureValue})`, {
+              x: margin + 200,
+              y: currentY,
+              size: 9,
+              font: font,
+            });
+          }
+          
+          if (featurePrice > 0) {
+            page.drawText(`+$${featurePrice.toFixed(2)}`, {
+              x: margin + 400,
+              y: currentY,
+              size: 10,
+              font: font,
+            });
+            featureTotal += featurePrice;
+          }
+          
+          currentY -= 18;
+          featureLineCount++;
+        }
+      });
+    }
+    
+    if (featureLineCount === 0) {
+      page.drawText('Standard configuration - no additional features', {
+        x: margin + 5,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+      currentY -= 18;
+    }
+    
+    // Order Notes/Special Instructions
+    if (order.notes) {
+      currentY -= 15;
+      page.drawText('SPECIAL INSTRUCTIONS:', {
+        x: margin,
         y: currentY,
         size: 12,
         font: boldFont,
       });
       
       currentY -= 20;
-      Object.entries(order.features).forEach(([key, value]) => {
-        if (value) {
-          page.drawText(`${key}: ${value}`, {
-            x: 50,
+      // Word wrap the notes
+      const noteWords = order.notes.split(' ');
+      let currentLine = '';
+      const maxLineLength = 70;
+      
+      noteWords.forEach(word => {
+        if ((currentLine + ' ' + word).length > maxLineLength) {
+          page.drawText(currentLine, {
+            x: margin + 5,
             y: currentY,
-            size: 9,
+            size: 10,
             font: font,
           });
           currentY -= 15;
+          currentLine = word;
+        } else {
+          currentLine += (currentLine ? ' ' : '') + word;
         }
+      });
+      
+      if (currentLine) {
+        page.drawText(currentLine, {
+          x: margin + 5,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+        currentY -= 15;
+      }
+    }
+    
+    // Totals Section
+    currentY -= 40;
+    
+    // Create totals box
+    const totalsBoxX = width - margin - 200;
+    page.drawRectangle({
+      x: totalsBoxX,
+      y: currentY - 80,
+      width: 200,
+      height: 80,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    // Subtotal
+    page.drawText('Subtotal:', {
+      x: totalsBoxX + 10,
+      y: currentY - 20,
+      size: 11,
+      font: boldFont,
+    });
+    
+    page.drawText(`$${basePrice.toFixed(2)}`, {
+      x: totalsBoxX + 120,
+      y: currentY - 20,
+      size: 11,
+      font: font,
+    });
+    
+    // Features total
+    if (featureTotal > 0) {
+      currentY -= 18;
+      page.drawText('Features:', {
+        x: totalsBoxX + 10,
+        y: currentY - 20,
+        size: 11,
+        font: boldFont,
+      });
+      
+      page.drawText(`$${featureTotal.toFixed(2)}`, {
+        x: totalsBoxX + 120,
+        y: currentY - 20,
+        size: 11,
+        font: font,
       });
     }
     
-    // Total section
-    currentY -= 30;
+    // Separator line
     page.drawLine({
-      start: { x: 350, y: currentY },
-      end: { x: 550, y: currentY },
+      start: { x: totalsBoxX + 10, y: currentY - 30 },
+      end: { x: totalsBoxX + 190, y: currentY - 30 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
     
+    // Total
+    const finalTotal = basePrice + featureTotal;
+    page.drawText('TOTAL:', {
+      x: totalsBoxX + 10,
+      y: currentY - 50,
+      size: 12,
+      font: boldFont,
+    });
+    
+    page.drawText(`$${finalTotal.toFixed(2)}`, {
+      x: totalsBoxX + 120,
+      y: currentY - 50,
+      size: 12,
+      font: boldFont,
+    });
+    
+    // Terms and Conditions Section
+    currentY -= 120;
+    page.drawText('TERMS AND CONDITIONS', {
+      x: margin,
+      y: currentY,
+      size: 12,
+      font: boldFont,
+    });
+    
     currentY -= 20;
-    page.drawText('Total:', {
-      x: 400,
+    const terms = [
+      '• Payment: 50% deposit required to begin production, balance due upon completion',
+      '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
+      '• Custom items are non-returnable unless defective',
+      '• Shipping costs additional - calculated at time of shipment',
+      '• Prices valid for 30 days from quote date'
+    ];
+    
+    terms.forEach(term => {
+      page.drawText(term, {
+        x: margin,
+        y: currentY,
+        size: 9,
+        font: font,
+      });
+      currentY -= 15;
+    });
+    
+    // Acceptance signature area
+    currentY -= 30;
+    page.drawText('CUSTOMER APPROVAL', {
+      x: margin,
       y: currentY,
       size: 12,
       font: boldFont,
     });
     
-    page.drawText(model?.price ? `$${model.price.toFixed(2)}` : 'Quote', {
-      x: 450,
-      y: currentY,
-      size: 12,
-      font: boldFont,
-    });
-    
-    // Footer
-    currentY -= 60;
-    page.drawText('Terms and Conditions:', {
-      x: 50,
+    currentY -= 25;
+    page.drawText('Customer Signature:', {
+      x: margin,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
-    currentY -= 15;
-    page.drawText('Payment due upon completion. Custom manufacturing items are non-returnable.', {
-      x: 50,
+    page.drawLine({
+      start: { x: margin + 120, y: currentY - 5 },
+      end: { x: margin + 300, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+    
+    page.drawText('Date:', {
+      x: margin + 320,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawLine({
+      start: { x: margin + 350, y: currentY - 5 },
+      end: { x: margin + 450, y: currentY - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+    
+    // Company footer
+    currentY -= 40;
+    page.drawText('Thank you for your business!', {
+      x: margin,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+    });
+    
+    currentY -= 20;
+    page.drawText('Questions? Contact us at sales@agatcomposite.com or (XXX) XXX-XXXX', {
+      x: margin,
       y: currentY,
       size: 9,
       font: font,

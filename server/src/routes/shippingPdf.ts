@@ -16,10 +16,23 @@ async function getUPSAccessToken() {
     accessKey: process.env.UPS_ACCESS_KEY
   };
 
+  // Validate credentials exist
+  if (!credentials.username || !credentials.password || !credentials.accessKey) {
+    throw new Error('UPS credentials missing: username, password, or access key not provided');
+  }
+
+  console.log('UPS OAuth Request Details:', {
+    url: 'https://wwwcie.ups.com/security/v1/oauth/token',
+    username: credentials.username ? 'PROVIDED' : 'MISSING',
+    password: credentials.password ? 'PROVIDED' : 'MISSING',
+    accessKey: credentials.accessKey ? 'PROVIDED' : 'MISSING'
+  });
+
   const response = await fetch('https://wwwcie.ups.com/security/v1/oauth/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'x-merchant-id': credentials.username,
       'Authorization': `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`
     },
     body: new URLSearchParams({
@@ -28,7 +41,14 @@ async function getUPSAccessToken() {
   });
 
   if (!response.ok) {
-    throw new Error(`UPS OAuth failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('UPS OAuth Error Details:', {
+      status: response.status,
+      statusText: response.statusText,
+      response: errorText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    throw new Error(`UPS OAuth failed: ${response.statusText} - ${errorText}`);
   }
 
   const data = await response.json() as any;
@@ -38,30 +58,36 @@ async function getUPSAccessToken() {
 async function createUPSShipment(shipmentData: any) {
   const accessToken = await getUPSAccessToken();
   
+  const transId = Math.random().toString(36).substring(7);
+  
   const response = await fetch(UPS_API_BASE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
-      'transId': Math.random().toString(36).substring(7),
-      'transactionSrc': 'AG_Composites_ERP'
+      'transId': transId,
+      'transactionSrc': 'AG_Composites_ERP',
+      'x-merchant-id': process.env.UPS_USER_ID || ''
     },
     body: JSON.stringify(shipmentData)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('UPS Shipment Error Response:', errorText);
     throw new Error(`UPS Shipment creation failed: ${response.statusText} - ${errorText}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+  console.log('UPS Shipment Success:', JSON.stringify(result, null, 2));
+  return result;
 }
 
 function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDetails: any) {
   return {
     ShipmentRequest: {
       Request: {
-        RequestOption: "nonvalidate",
+        RequestOption: "validate",
         TransactionReference: {
           CustomerContext: `Order-${orderData.orderId}`
         }
@@ -71,18 +97,15 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
         Shipper: {
           Name: "AG Composites",
           AttentionName: "Shipping Department",
-          TaxIdentificationNumber: "",
           Phone: {
-            Number: "1234567890",
-            Extension: ""
+            Number: "5551234567"
           },
           ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
-          FaxNumber: "",
           Address: {
             AddressLine: ["123 Manufacturing Way"],
             City: "Industrial City",
-            StateProvinceCode: "ST",
-            PostalCode: "12345",
+            StateProvinceCode: "CA",
+            PostalCode: "90210",
             CountryCode: "US"
           }
         },
@@ -90,7 +113,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           Name: shippingAddress.name,
           AttentionName: shippingAddress.name,
           Phone: {
-            Number: "0000000000"
+            Number: "5550000000"
           },
           Address: {
             AddressLine: [shippingAddress.street],
@@ -104,14 +127,13 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           Name: "AG Composites",
           AttentionName: "Shipping Department",
           Phone: {
-            Number: "1234567890"
+            Number: "5551234567"
           },
-          FaxNumber: "",
           Address: {
             AddressLine: ["123 Manufacturing Way"],
             City: "Industrial City",
-            StateProvinceCode: "ST",
-            PostalCode: "12345",
+            StateProvinceCode: "CA",
+            PostalCode: "90210",
             CountryCode: "US"
           }
         },
@@ -124,19 +146,16 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           }
         },
         Service: {
-          Code: "03",
-          Description: "Ground"
+          Code: "03"
         },
         Package: {
           Description: `Composite Parts - Order ${orderData.orderId}`,
           Packaging: {
-            Code: "02",
-            Description: "Customer Supplied Package"
+            Code: "02"
           },
           Dimensions: {
             UnitOfMeasurement: {
-              Code: "IN",
-              Description: "Inches"
+              Code: "IN"
             },
             Length: packageDetails.length || "12",
             Width: packageDetails.width || "12",
@@ -144,16 +163,14 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           },
           PackageWeight: {
             UnitOfMeasurement: {
-              Code: "LBS",
-              Description: "Pounds"
+              Code: "LBS"
             },
             Weight: packageDetails.weight || "10"
           }
         },
         LabelSpecification: {
           LabelImageFormat: {
-            Code: "GIF",
-            Description: "GIF"
+            Code: "GIF"
           },
           HTTPUserAgent: "Mozilla/4.5"
         }
@@ -1636,6 +1653,27 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error generating bulk shipping label PDF:', error);
     res.status(500).json({ error: 'Failed to generate bulk shipping label PDF' });
+  }
+});
+
+// Diagnostic endpoint to test UPS credentials
+router.get('/test-ups-credentials', async (req: Request, res: Response) => {
+  try {
+    console.log('Testing UPS credentials...');
+    const accessToken = await getUPSAccessToken();
+    
+    res.json({
+      success: true,
+      message: 'UPS credentials are valid',
+      hasAccessToken: !!accessToken
+    });
+  } catch (error) {
+    console.error('UPS credential test failed:', error);
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: 'Check UPS developer portal to verify credentials are activated'
+    });
   }
 });
 

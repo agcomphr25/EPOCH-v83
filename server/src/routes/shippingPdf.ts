@@ -26,61 +26,185 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // Header
-    let currentY = height - 60;
-    page.drawText('QC CHECKLIST', {
+    // Header with company branding
+    let currentY = height - 40;
+    page.drawText('AGAT COMPOSITE PARTS', {
       x: 50,
       y: currentY,
-      size: 24,
+      size: 16,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
     
-    // Company info
-    currentY -= 40;
-    page.drawText('AG Composites', {
+    currentY -= 20;
+    page.drawText('Quality Control Inspection Report', {
       x: 50,
       y: currentY,
-      size: 12,
+      size: 14,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    
+    // Document control box
+    page.drawRectangle({
+      x: 350,
+      y: currentY - 10,
+      width: 200,
+      height: 70,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    page.drawText('Document No:', {
+      x: 355,
+      y: currentY + 40,
+      size: 9,
       font: boldFont,
     });
     
-    currentY -= 15;
-    page.drawText('Quality Control Department', {
-      x: 50,
-      y: currentY,
-      size: 10,
+    page.drawText(`QC-${orderId}`, {
+      x: 430,
+      y: currentY + 40,
+      size: 9,
       font: font,
     });
     
-    // Order information
-    currentY -= 40;
-    page.drawText(`Order ID: ${orderId}`, {
+    page.drawText('Revision:', {
+      x: 355,
+      y: currentY + 25,
+      size: 9,
+      font: boldFont,
+    });
+    
+    page.drawText('Rev. A', {
+      x: 430,
+      y: currentY + 25,
+      size: 9,
+      font: font,
+    });
+    
+    page.drawText('Date:', {
+      x: 355,
+      y: currentY + 10,
+      size: 9,
+      font: boldFont,
+    });
+    
+    page.drawText(new Date().toLocaleDateString(), {
+      x: 430,
+      y: currentY + 10,
+      size: 9,
+      font: font,
+    });
+    
+    page.drawText('Page 1 of 1', {
+      x: 355,
+      y: currentY - 5,
+      size: 9,
+      font: font,
+    });
+    
+    // Part information section
+    currentY -= 90;
+    page.drawText('PART INFORMATION', {
       x: 50,
       y: currentY,
       size: 12,
       font: boldFont,
+    });
+    
+    // Draw a border around part info
+    page.drawRectangle({
+      x: 45,
+      y: currentY - 85,
+      width: 500,
+      height: 70,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
     });
     
     currentY -= 20;
-    page.drawText(`Customer: ${order.customerId || 'N/A'}`, {
+    page.drawText(`Work Order No:`, {
       x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`${orderId}`, {
+      x: 150,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    currentY -= 15;
-    page.drawText(`Product: ${order.modelId || 'N/A'}`, {
-      x: 50,
+    page.drawText(`Customer:`, {
+      x: 300,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`${order.customerId || 'N/A'}`, {
+      x: 360,
       y: currentY,
       size: 10,
       font: font,
     });
     
-    currentY -= 15;
-    page.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+    currentY -= 18;
+    page.drawText(`Part Number:`, {
       x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`${order.modelId || 'N/A'}`, {
+      x: 150,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    page.drawText(`Quantity:`, {
+      x: 300,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`1`, {
+      x: 360,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    currentY -= 18;
+    page.drawText(`Drawing No:`, {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`DWG-${orderId}`, {
+      x: 150,
+      y: currentY,
+      size: 10,
+      font: font,
+    });
+    
+    page.drawText(`Order Date:`, {
+      x: 300,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`${order.orderDate || new Date().toLocaleDateString()}`, {
+      x: 360,
       y: currentY,
       size: 10,
       font: font,
@@ -365,6 +489,49 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       end: { x: 480, y: currentY - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
+    });
+    
+    // Digital signature section
+    currentY -= 50;
+    page.drawText('DIGITAL CERTIFICATION', {
+      x: 50,
+      y: currentY,
+      size: 11,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    
+    currentY -= 20;
+    page.drawRectangle({
+      x: 45,
+      y: currentY - 40,
+      width: 500,
+      height: 35,
+      borderColor: rgb(0.7, 0.7, 0.7),
+      borderWidth: 1,
+    });
+    
+    currentY -= 10;
+    page.drawText('This document has been digitally certified by:', {
+      x: 50,
+      y: currentY,
+      size: 9,
+      font: font,
+    });
+    
+    currentY -= 15;
+    page.drawText('AGAT.QC.INSPECTOR', {
+      x: 50,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+    
+    page.drawText(`Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
+      x: 300,
+      y: currentY,
+      size: 9,
+      font: font,
     });
     
     // Generate PDF bytes

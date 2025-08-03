@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,15 +11,14 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
 interface CommunicationComposeProps {
-  isOpen: boolean;
-  onClose: () => void;
-  customer: {
-    id: string;
+  customer?: {
+    id: number;
     name: string;
     email?: string;
     phone?: string;
   };
-  orderId?: string;
+  defaultType?: 'email' | 'sms';
+  onClose: () => void;
 }
 
 export default function CommunicationCompose({ 
@@ -31,12 +29,12 @@ export default function CommunicationCompose({
 }: CommunicationComposeProps) {
   const [activeTab, setActiveTab] = useState('email');
   const [emailData, setEmailData] = useState({
-    to: customer.email || '',
+    to: customer?.email || '',
     subject: orderId ? `Regarding Order ${orderId}` : 'Order Update',
     message: ''
   });
   const [smsData, setSmsData] = useState({
-    to: customer.phone || '',
+    to: customer?.phone || '',
     message: ''
   });
   const [sending, setSending] = useState(false);
@@ -72,7 +70,7 @@ export default function CommunicationCompose({
 
       // Reset form
       setEmailData({
-        to: customer.email || '',
+        to: customer?.email || '',
         subject: orderId ? `Regarding Order ${orderId}` : 'Order Update',
         message: ''
       });
@@ -117,7 +115,7 @@ export default function CommunicationCompose({
 
       // Reset form
       setSmsData({
-        to: customer.phone || '',
+        to: customer?.phone || '',
         message: ''
       });
       onClose();
@@ -138,7 +136,7 @@ export default function CommunicationCompose({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            Compose Message - {customer.name}
+            Compose Message - {customer?.name}
             {orderId && <span className="text-sm text-gray-500">({orderId})</span>}
           </DialogTitle>
         </DialogHeader>
@@ -171,7 +169,7 @@ export default function CommunicationCompose({
                     placeholder="customer@example.com"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="email-subject">Subject</Label>
                   <Input
@@ -181,7 +179,7 @@ export default function CommunicationCompose({
                     placeholder="Email subject"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="email-message">Message</Label>
                   <Textarea
@@ -223,7 +221,7 @@ export default function CommunicationCompose({
                     placeholder="+1234567890"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="sms-message">Message</Label>
                   <Textarea

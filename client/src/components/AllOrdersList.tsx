@@ -20,13 +20,15 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, AlertTriangle, Package2, Edit, Search, X } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Package2, Edit, Search, X, Mail, MessageSquare } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { CustomerDetailsTooltip } from './CustomerDetailsTooltip';
+import { CommunicationCompose } from './CommunicationCompose';
 
 const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
@@ -35,6 +37,9 @@ export default function AllOrdersList() {
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
+  const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [hoveredCustomer, setHoveredCustomer] = useState(null);
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
@@ -109,12 +114,12 @@ export default function AllOrdersList() {
   const filteredOrders = orders?.filter(order => {
     // Department filter
     const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
-    
+
     // Search filter - search in multiple fields
     if (!searchTerm.trim()) {
       return departmentMatch;
     }
-    
+
     const searchLower = searchTerm.toLowerCase();
     const searchFields = [
       order.orderId?.toLowerCase(),
@@ -124,9 +129,9 @@ export default function AllOrdersList() {
       order.product?.toLowerCase(),
       order.modelId?.toLowerCase()
     ].filter(Boolean);
-    
+
     const searchMatch = searchFields.some(field => field?.includes(searchLower));
-    
+
     return departmentMatch && searchMatch;
   }) || [];
 
@@ -160,6 +165,18 @@ export default function AllOrdersList() {
   const getNextDepartment = (currentDept: string) => {
     const index = departments.indexOf(currentDept);
     return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+  };
+  const handleCommunicationOpen = (customer, communicationType) => {
+    setSelectedCustomer({
+      ...customer,
+      preferredCommunication: communicationType
+    });
+    setCommunicationModalOpen(true);
+  };
+
+  const handleCommunicationClose = () => {
+    setCommunicationModalOpen(false);
+    setSelectedCustomer(null);
   };
 
   if (isLoading) {
@@ -202,7 +219,7 @@ export default function AllOrdersList() {
                   </Button>
                 )}
               </div>
-              
+
               {/* Department Filter */}
               <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
                 <SelectTrigger className="w-48">
@@ -237,7 +254,7 @@ export default function AllOrdersList() {
                 const nextDept = getNextDepartment(order.currentDepartment);
                 const isComplete = order.currentDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
-                
+
                 return (
                   <TableRow key={order.orderId}>
                     <TableCell className="font-medium">
@@ -265,7 +282,48 @@ export default function AllOrdersList() {
                         });
                       })() : '-'}
                     </TableCell>
-                    <TableCell>{order.customer || order.customerId}</TableCell>
+                    <TableCell>
+                      <div 
+                        className="relative"
+                        onMouseEnter={() => setHoveredCustomer(order.customer?.id)}
+                        onMouseLeave={() => setHoveredCustomer(null)}
+                      >
+                        <CustomerDetailsTooltip customer={order.customer}>
+                          <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
+                            {order.customer?.name || 'N/A'}
+                          </span>
+                        </CustomerDetailsTooltip>
+
+                        {hoveredCustomer === order.customer?.id && order.customer && (
+                          <div className="absolute top-0 right-0 flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-1 z-10">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 hover:bg-blue-50 dark:hover:bg-blue-900"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCommunicationOpen(order.customer, 'email');
+                              }}
+                              title="Send Email"
+                            >
+                              <Mail className="h-3 w-3 text-blue-600" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 hover:bg-green-50 dark:hover:bg-green-900"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCommunicationOpen(order.customer, 'sms');
+                              }}
+                              title="Send SMS"
+                            >
+                              <MessageSquare className="h-3 w-3 text-green-600" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {order.product || getModelDisplayName(order.modelId)}
                       {stockModels.length === 0 && (
@@ -313,7 +371,7 @@ export default function AllOrdersList() {
                             Edit
                           </Button>
                         </Link>
-                        
+
                         {!isScrapped && !isComplete && nextDept && (
                           <Button
                             size="sm"
@@ -324,7 +382,7 @@ export default function AllOrdersList() {
                             {nextDept}
                           </Button>
                         )}
-                        
+
                         {!isScrapped && (
                           <Button
                             size="sm"
@@ -336,7 +394,7 @@ export default function AllOrdersList() {
                             Scrap
                           </Button>
                         )}
-                        
+
                         {isScrapped && (
                           <Button
                             size="sm"
@@ -355,7 +413,7 @@ export default function AllOrdersList() {
               })}
             </TableBody>
           </Table>
-          
+
           {filteredOrders.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No orders found for the selected criteria
@@ -369,6 +427,14 @@ export default function AllOrdersList() {
           order={scrapModalOrder}
           onSubmit={handleScrapOrder}
           onClose={() => setScrapModalOrder(null)}
+        />
+      )}
+
+      {communicationModalOpen && selectedCustomer && (
+        <CommunicationCompose
+          customer={selectedCustomer}
+          onClose={handleCommunicationClose}
+          defaultType={selectedCustomer.preferredCommunication}
         />
       )}
     </>

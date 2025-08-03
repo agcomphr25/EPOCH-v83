@@ -227,39 +227,15 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     
     const checklistSections = [
       {
-        title: 'DIMENSIONAL INSPECTION',
+        title: 'SHIPPING QUALITY CONTROL CHECKLIST',
         items: [
-          'Overall length measurement verified',
-          'Critical dimensions checked against drawings',
-          'Tolerance requirements met',
-          'Hole alignments verified'
-        ]
-      },
-      {
-        title: 'SURFACE QUALITY',
-        items: [
-          'Surface finish meets specifications',
-          'No visible defects or scratches',
-          'Color match approved',
-          'Texture consistency verified'
-        ]
-      },
-      {
-        title: 'FUNCTIONAL TESTING',
-        items: [
-          'Fit and function verified',
-          'Hardware installation complete',
-          'Moving parts operate smoothly',
-          'Safety mechanisms tested'
-        ]
-      },
-      {
-        title: 'FINAL INSPECTION',
-        items: [
-          'Customer specifications met',
-          'Packaging requirements satisfied',
-          'Documentation complete',
-          'Ready for shipment'
+          'The proper stock(s) is being shipped: (e.g. Alpine Hunter, CAT, etc.)',
+          'Stock(s) is inletted according to the work order: (action, barrel, bottom metal, right or left hand)',
+          'Stock(s) is the proper color:',
+          'Custom options are present and completed: (QD Cups, rail, LOP, tri-pod option, etc)',
+          'Swivel studs are installed correctly:',
+          'Stock(s) is being shipped to the correct address:',
+          'Buttpad and overall stock finish meet QC standards:'
         ]
       }
     ];
@@ -267,87 +243,82 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     currentY -= 30;
     
     checklistSections.forEach((section, sectionIndex) => {
-      // Section header
-      page.drawText(section.title, {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-        color: rgb(0, 0, 0),
-      });
-      currentY -= 25;
+      // Section header - no separate header since it's just one section
+      currentY -= 10;
       
       // Section items
       section.items.forEach((item, itemIndex) => {
-        // Draw checkbox - larger for print clarity
-        page.drawRectangle({
-          x: margin + 10,
-          y: currentY - 14,
-          width: 14,
-          height: 14,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1.5,
+        // Number the items
+        const itemNumber = itemIndex + 1;
+        
+        // Draw item number
+        page.drawText(`${itemNumber})`, {
+          x: margin,
+          y: currentY,
+          size: 11,
+          font: boldFont,
         });
         
-        // Draw checklist item text - improved positioning
+        // Draw checklist item text - improved positioning for longer text
+        const textLines = item.split('\n');
         page.drawText(item, {
-          x: margin + 35,
-          y: currentY - 8,
+          x: margin + 25,
+          y: currentY,
           size: 10,
           font: font,
         });
         
-        // Add pass/fail boxes - better spacing for printing
+        // Add pass/fail boxes - positioned on the right
         const responseX = width - margin - 200;
         page.drawText('Pass:', {
           x: responseX,
-          y: currentY - 8,
-          size: 9,
+          y: currentY,
+          size: 10,
           font: font,
         });
         page.drawRectangle({
-          x: responseX + 30,
-          y: currentY - 14,
-          width: 14,
-          height: 14,
+          x: responseX + 35,
+          y: currentY - 6,
+          width: 16,
+          height: 16,
           borderColor: rgb(0, 0, 0),
           borderWidth: 1.5,
         });
         
         page.drawText('Fail:', {
-          x: responseX + 55,
-          y: currentY - 8,
-          size: 9,
+          x: responseX + 65,
+          y: currentY,
+          size: 10,
           font: font,
         });
         page.drawRectangle({
-          x: responseX + 80,
-          y: currentY - 14,
-          width: 14,
-          height: 14,
+          x: responseX + 95,
+          y: currentY - 6,
+          width: 16,
+          height: 16,
           borderColor: rgb(0, 0, 0),
           borderWidth: 1.5,
         });
         
         page.drawText('N/A:', {
-          x: responseX + 105,
-          y: currentY - 8,
-          size: 9,
+          x: responseX + 125,
+          y: currentY,
+          size: 10,
           font: font,
         });
         page.drawRectangle({
-          x: responseX + 135,
-          y: currentY - 14,
-          width: 14,
-          height: 14,
+          x: responseX + 155,
+          y: currentY - 6,
+          width: 16,
+          height: 16,
           borderColor: rgb(0, 0, 0),
           borderWidth: 1.5,
         });
         
-        currentY -= 22;
+        currentY -= 35; // More space for longer text items
       });
       
-      currentY -= 15; // Extra space between sections
+      currentY -= 10; // Extra space after section
     });
     
     // Notes section

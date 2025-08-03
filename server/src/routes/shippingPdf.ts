@@ -1273,7 +1273,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     }
 
     // Calculate package value from order if not provided
-    const calculatedPackageValue = packageValue || (order.finalPrice || order.basePrice || 0);
+    const calculatedPackageValue = packageValue || (order.priceOverride || 0);
 
     try {
       // Create UPS shipment using real API

@@ -1915,6 +1915,37 @@ export default function LayupScheduler() {
         const order = orders.find(o => o.orderId === orderId);
         return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
       }).length);
+    } else if (schedule.length > 0 && Object.keys(orderAssignments).length > 0) {
+      // Preserve existing P1 purchase order assignments while adding new regular orders
+      console.log('🔄 Merging schedule with existing assignments (preserving P1 purchase orders)');
+      
+      const existingP1Assignments = Object.entries(orderAssignments).filter(([orderId]) => {
+        const order = orders.find(o => o.orderId === orderId);
+        return order?.source === 'p1_purchase_order';
+      });
+      
+      console.log('🏭 Preserving P1 purchase order assignments:', existingP1Assignments.length);
+      
+      const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      // Keep existing P1 purchase order assignments
+      existingP1Assignments.forEach(([orderId, assignment]) => {
+        newAssignments[orderId] = assignment;
+      });
+      
+      // Add new assignments for regular orders only
+      schedule.forEach(item => {
+        const order = orders.find(o => o.orderId === item.orderId);
+        if (order?.source === 'main_orders' && !newAssignments[item.orderId]) {
+          newAssignments[item.orderId] = {
+            moldId: item.moldId,
+            date: item.scheduledDate.toISOString()
+          };
+        }
+      });
+      
+      setOrderAssignments(newAssignments);
+      console.log('✅ Merged assignments:', Object.keys(newAssignments).length);
     } else {
       console.log('❌ Not applying auto-schedule:', {
         scheduleLength: schedule.length,

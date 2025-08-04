@@ -17,6 +17,7 @@ import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
 import communicationsRoutes from './communications';
+import secureVerificationRoutes from './secureVerification';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -1116,5 +1117,8 @@ export {
   bomsRoutes as bomsRouter, 
   moldsRoutes as moldsRouter, 
   kickbackRoutes as kickbacksRouter, 
-  orderAttachmentsRoutes as orderAttachmentsRouter
+  orderAttachmentsRoutes as orderAttachmentsRouter,
+  tasksRoutes as tasksRouter,
+  communicationsRoutes as communicationsRouter,
+  secureVerificationRoutes as secureVerificationRouter
 };

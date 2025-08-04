@@ -125,6 +125,49 @@ export default function ShippingQueuePage() {
     }
   };
 
+  const handleSalesOrderDownload = async () => {
+    if (!selectedCard) {
+      toast({
+        title: "No order selected",
+        description: "Please select an order to generate sales order invoice",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const selectedOrder = getSelectedOrder();
+      if (!selectedOrder) {
+        toast({
+          title: "Order not found",
+          description: "Selected order not found in shipping queue",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Generating sales order invoice...",
+        description: "Please wait while we generate the PDF"
+      });
+
+      const pdfBlob = await fetchPdf('/api/shipping-pdf/sales-order', selectedOrder.orderId);
+      downloadPdf(pdfBlob, `Sales-Order-${selectedOrder.orderId}.pdf`);
+      
+      toast({
+        title: "Sales order invoice downloaded",
+        description: `Sales order invoice for ${selectedOrder.orderId} has been downloaded`
+      });
+    } catch (error) {
+      console.error('Error generating sales order:', error);
+      toast({
+        title: "Error generating sales order",
+        description: "Failed to generate sales order PDF",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -316,15 +359,15 @@ export default function ShippingQueuePage() {
             <span className="text-sm font-medium text-gray-700">QC Checklist</span>
           </button>
           
-          <Link 
-            href="/order-entry" 
+          <button 
+            onClick={handleSalesOrderDownload}
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">📋</span>
             </div>
             <span className="text-sm font-medium text-gray-700">Sales Order</span>
-          </Link>
+          </button>
           
           <Link 
             href="/shipping-management" 

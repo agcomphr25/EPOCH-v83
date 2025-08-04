@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPOs, createPO, updatePO, deletePO, type PurchaseOrder, type CreatePurchaseOrderData } from '@/lib/poUtils';
+import { fetchPOs, createPO, updatePO, deletePO, fetchPOItems, type PurchaseOrder, type CreatePurchaseOrderData, type PurchaseOrderItem } from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import POItemsManager from './POItemsManager';
+
+// Component to display PO quantity
+function POQuantityDisplay({ poId }: { poId: number }) {
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: [`/api/pos/${poId}/items`],
+    queryFn: () => fetchPOItems(poId)
+  });
+
+  const totalQuantity = items.reduce((sum, item: PurchaseOrderItem) => sum + item.quantity, 0);
+
+  if (isLoading) {
+    return <span className="text-gray-500">Loading...</span>;
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Package className="w-4 h-4 text-blue-600" />
+      <span className="font-medium text-blue-600">{totalQuantity} items</span>
+    </div>
+  );
+}
 
 export default function POManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -387,6 +408,9 @@ export default function POManager() {
                         <CardDescription className="mt-1">
                           {po.customerName} ({po.customerId})
                         </CardDescription>
+                        <div className="mt-2">
+                          <POQuantityDisplay poId={po.id} />
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <Badge className={getStatusColor(po.status)}>

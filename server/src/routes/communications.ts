@@ -9,7 +9,7 @@ const emailSchema = z.object({
   to: z.string().email(),
   subject: z.string().min(1),
   message: z.string().min(1),
-  customerId: z.string(),
+  customerId: z.union([z.string(), z.number()]).transform(val => String(val)),
   orderId: z.string().optional().nullable()
 });
 
@@ -17,7 +17,7 @@ const emailSchema = z.object({
 const smsSchema = z.object({
   to: z.string().min(10),
   message: z.string().min(1).max(160),
-  customerId: z.string(),
+  customerId: z.union([z.string(), z.number()]).transform(val => String(val)),
   orderId: z.string().optional().nullable()
 });
 

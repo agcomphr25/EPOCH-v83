@@ -787,9 +787,11 @@ export default function LayupScheduler() {
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Filter out P1 PO orders - they go directly to Department Manager, not through scheduling
+  // Include both main orders and P1 purchase order items for scheduling
   const orders = useMemo(() => {
-    return allOrders.filter(order => order.source === 'main_orders');
+    return allOrders.filter(order => 
+      order.source === 'main_orders' || order.source === 'p1_purchase_order'
+    );
   }, [allOrders]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
@@ -819,10 +821,10 @@ export default function LayupScheduler() {
   // Debug filtering results
   useEffect(() => {
     const regularOrders = orders.filter(order => order.source === 'main_orders');
-    const filteredOutP1Orders = allOrders.filter(order => order.source === 'p1_purchase_order');
+    const p1Orders = orders.filter(order => order.source === 'p1_purchase_order');
     console.log('🏭 LayupScheduler: Total orders from API:', allOrders.length);
     console.log('🏭 LayupScheduler: Regular orders for scheduling:', regularOrders.length);
-    console.log('🏭 LayupScheduler: P1 PO orders filtered out:', filteredOutP1Orders.length);
+    console.log('🏭 LayupScheduler: P1 PO orders for scheduling:', p1Orders.length);
     if (regularOrders.length > 0) {
       console.log('🏭 LayupScheduler: Sample regular order for scheduling:', regularOrders[0]);
       console.log('🏭 LayupScheduler: First 5 regular orders:', regularOrders.slice(0, 5).map(o => ({

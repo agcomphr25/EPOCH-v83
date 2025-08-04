@@ -223,35 +223,41 @@ export default function ShippingQueuePage() {
         </CardContent>
       </Card>
 
-      {/* Bottom Action Panel - Shows when a single card is selected */}
-      {selectedCard && (
-        <Card className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t-2 border-blue-500 shadow-lg z-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="text-lg font-semibold text-blue-600">
-                  Selected Order: {getDisplayOrderId(getSelectedOrder())}
+      {/* Bottom Action Panel - Always visible at bottom of page */}
+      <div className="mt-8">
+        <Card className="bg-gray-50 dark:bg-gray-800">
+          <CardContent className="p-6">
+            {selectedCard ? (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="text-lg font-semibold text-blue-600">
+                      Selected Order: {getDisplayOrderId(getSelectedOrder())}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Customer: {getSelectedOrder()?.customer}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedCard(null)}
+                    className="text-gray-500 hover:text-gray-700 text-xl px-2 py-1 hover:bg-gray-200 rounded"
+                  >
+                    ×
+                  </button>
                 </div>
-                <div className="text-sm text-gray-600">
-                  Customer: {getSelectedOrder()?.customer}
-                </div>
+                
+                {/* Shipping Actions for Selected Order */}
+                <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
               </div>
-              <button
-                onClick={() => setSelectedCard(null)}
-                className="text-gray-500 hover:text-gray-700 text-xl"
-              >
-                ×
-              </button>
-            </div>
-            
-            {/* Shipping Actions for Selected Order */}
-            <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-lg font-medium mb-2">Select an order to print shipping documents</div>
+                <div className="text-sm">Click on any order card above to see available printing options</div>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
-
-      {/* Add bottom padding when action panel is visible */}
-      {selectedCard && <div className="h-32" />}
+      </div>
     </div>
   );
 }

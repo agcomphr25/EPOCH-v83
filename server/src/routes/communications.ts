@@ -95,13 +95,27 @@ router.post('/sms', async (req, res) => {
       to: data.to
     });
     
-    // Log the communication
-    console.log(`SMS sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
+    // Log detailed SMS information for debugging
+    console.log(`SMS Details:`, {
+      messageId: message.sid,
+      to: data.to,
+      from: fromNumber,
+      status: message.status,
+      direction: message.direction,
+      customerId: data.customerId,
+      orderId: data.orderId
+    });
     
     res.json({ 
       success: true, 
       message: 'SMS sent successfully',
-      messageId: message.sid
+      messageId: message.sid,
+      status: message.status,
+      twilioResponse: {
+        sid: message.sid,
+        status: message.status,
+        direction: message.direction
+      }
     });
     
   } catch (error: any) {
@@ -111,6 +125,39 @@ router.post('/sms', async (req, res) => {
       error: 'Failed to send SMS', 
       details: error.message 
     });
+  }
+});
+
+// Check SMS message status
+router.get('/sms-status/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    
+    if (!accountSid || !authToken) {
+      return res.status(500).json({ error: 'Twilio credentials not configured' });
+    }
+    
+    const twilioClient = twilio(accountSid, authToken);
+    const message = await twilioClient.messages(messageId).fetch();
+    
+    res.json({
+      messageId: message.sid,
+      status: message.status,
+      errorCode: message.errorCode,
+      errorMessage: message.errorMessage,
+      to: message.to,
+      from: message.from,
+      dateCreated: message.dateCreated,
+      dateUpdated: message.dateUpdated,
+      dateSent: message.dateSent
+    });
+    
+  } catch (error: any) {
+    console.error('SMS status check error:', error);
+    res.status(500).json({ error: 'Failed to check SMS status', details: error.message });
   }
 });
 

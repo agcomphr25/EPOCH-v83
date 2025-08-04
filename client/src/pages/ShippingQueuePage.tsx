@@ -118,11 +118,12 @@ export default function ShippingQueuePage() {
           </CardContent>
         </Card>
 
-        {/* Current Department */}
+        {/* Current Department Count */}
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
-            <CardTitle className="text-green-700 dark:text-green-300">
-              Ready to Ship
+            <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Shipping
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -136,43 +137,39 @@ export default function ShippingQueuePage() {
         </Card>
       </div>
 
-      {/* Current Department Queue */}
+      {/* Orders List */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span>Shipping Department Manager</span>
-              <Badge variant="outline" className="ml-2">
-                {shippingOrders.length} Orders
-              </Badge>
-              {shippingOrders.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={selectedOrders.length === shippingOrders.length}
-                    onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
-                  />
-                  <span className="text-sm text-gray-600">Select All</span>
-                </div>
-              )}
-            </div>
-          </CardTitle>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle>Shipping Queue ({shippingOrders.length} orders)</CardTitle>
+            {shippingOrders.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selectedOrders.length === shippingOrders.length}
+                  onCheckedChange={handleSelectAll}
+                />
+                <span className="text-sm text-gray-600">Select All</span>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {shippingOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No orders in Shipping queue
+              <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <div className="text-lg font-medium mb-2">No orders in shipping queue</div>
+              <div className="text-sm">Orders will appear here when they're ready for shipping</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid gap-4">
               {shippingOrders.map((order: any) => {
-                const modelId = order.stockModelId || order.modelId;
-                const materialType = modelId?.startsWith('cf_') ? 'CF' : 
-                                   modelId?.startsWith('fg_') ? 'FG' : null;
-
                 const isSelected = selectedCard === order.orderId;
+                const modelId = order.stockModelId || order.modelId;
+                const materialType = order.features?.material_type;
+                
                 return (
                   <Card 
-                    key={order.id} 
+                    key={order.orderId}
                     className={`hover:shadow-md transition-all cursor-pointer ${
                       isSelected 
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
@@ -256,3 +253,44 @@ export default function ShippingQueuePage() {
                 <div className="text-sm">Click on any order card above to see available printing options</div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bottom Action Buttons */}
+      <div className="mt-8 bg-white border-t border-gray-200 shadow-lg">
+        <div className="flex justify-around items-center py-4 px-4 max-w-lg mx-auto">
+          <Link 
+            href="/qc" 
+            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">✓</span>
+            </div>
+            <span className="text-sm font-medium text-gray-700">QC Checklist</span>
+          </Link>
+          
+          <Link 
+            href="/order-entry" 
+            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+          >
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">📋</span>
+            </div>
+            <span className="text-sm font-medium text-gray-700">Sales Order</span>
+          </Link>
+          
+          <Link 
+            href="/shipping-management" 
+            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+          >
+            <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">📦</span>
+            </div>
+            <span className="text-sm font-medium text-gray-700">Shipping Label</span>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

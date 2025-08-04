@@ -10,10 +10,13 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { Link } from 'wouter';
+import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const { toast } = useToast();
   
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -77,6 +80,49 @@ export default function ShippingQueuePage() {
   const getSelectedOrder = () => {
     if (!selectedCard) return null;
     return shippingOrders.find(order => order.orderId === selectedCard);
+  };
+
+  const handleQCChecklistDownload = async () => {
+    if (!selectedCard) {
+      toast({
+        title: "No order selected",
+        description: "Please select an order to generate QC checklist",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const selectedOrder = getSelectedOrder();
+      if (!selectedOrder) {
+        toast({
+          title: "Order not found",
+          description: "Selected order not found in shipping queue",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Generating QC checklist...",
+        description: "Please wait while we generate the PDF"
+      });
+
+      const pdfBlob = await fetchPdf('/api/shipping-pdf/qc-checklist', selectedOrder.orderId);
+      downloadPdf(pdfBlob, `QC-Checklist-${selectedOrder.orderId}.pdf`);
+      
+      toast({
+        title: "QC checklist downloaded",
+        description: `QC checklist for order ${selectedOrder.orderId} has been downloaded`
+      });
+    } catch (error) {
+      console.error('Error generating QC checklist:', error);
+      toast({
+        title: "Error generating QC checklist",
+        description: "Failed to generate QC checklist PDF",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -260,15 +306,15 @@ export default function ShippingQueuePage() {
       {/* Bottom Action Buttons */}
       <div className="mt-8 bg-white border-t border-gray-200 shadow-lg">
         <div className="flex justify-around items-center py-4 px-4 max-w-lg mx-auto">
-          <Link 
-            href="/qc" 
+          <button 
+            onClick={handleQCChecklistDownload}
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">✓</span>
             </div>
             <span className="text-sm font-medium text-gray-700">QC Checklist</span>
-          </Link>
+          </button>
           
           <Link 
             href="/order-entry" 

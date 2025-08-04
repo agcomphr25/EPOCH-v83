@@ -1479,7 +1479,19 @@ export default function OrderEntry() {
 
                   {/* QD Quick Detach Cups */}
                   <div>
-                    <Label>QD Quick Detach Cups</Label>
+                    <Label className="flex items-center gap-2">
+                      QD Quick Detach Cups
+                      {(() => {
+                        const selectedModel = modelOptions.find(m => m.id === modelId);
+                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                           selectedModel?.name?.toLowerCase().includes('chalk');
+                        return isChalkModel && (
+                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                            Chalk Model - Limited Options
+                          </span>
+                        );
+                      })()}
+                    </Label>
                     <Select 
                       key={`qd-accessory-${renderKey}-${features.qd_accessory || 'empty'}`}
                       value={features.qd_accessory || undefined} 
@@ -1503,9 +1515,29 @@ export default function OrderEntry() {
                             return null;
                           }
 
-                          return qdFeature.options
-                            .filter(option => option.value && option.value.trim() !== '')
-                            .map((option) => (
+                          // Check if selected model contains "Chalk" in the name
+                          const selectedModel = modelOptions.find(m => m.id === modelId);
+                          const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                             selectedModel?.name?.toLowerCase().includes('chalk');
+                          
+                          // Define limited QD options for Chalk models (based on actual database values)
+                          const chalkQDOptions = ['no_qds', 'qd_1_right_butt', 'qd_1_left_butt'];
+                          
+                          // Filter options based on model type
+                          let availableOptions = qdFeature.options.filter(option => option.value && option.value.trim() !== '');
+                          
+                          if (isChalkModel) {
+                            console.log('🎯 Chalk model detected for QDs:', selectedModel?.displayName);
+                            console.log('🎯 Original QD options:', availableOptions.map(o => o.label));
+                            
+                            availableOptions = availableOptions.filter(option => 
+                              chalkQDOptions.includes(option.value)
+                            );
+                            
+                            console.log('🎯 Filtered QD options for Chalk:', availableOptions.map(o => o.label));
+                          }
+
+                          return availableOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>

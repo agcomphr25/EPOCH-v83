@@ -7,9 +7,10 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
-**August 4, 2025**: Added conditional Rails feature filtering for Chalk stock models:
+**August 4, 2025**: Added conditional Rails and QD feature filtering for Chalk stock models:
 - Implemented hard-coded feature parameters for Stock Models containing "Chalk" in the name
 - Chalk models now only show limited Rails options: "4" ARCA Rail", "AG Pic", and "AG Pic w/Int Stud"
+- Chalk models now only show limited QD options: "No QDs", "QDs - 1 Right (Butt)", and "QDs - 1 Left (Butt)"
 - Added visual indicator showing "Chalk Model - Limited Options" badge when Chalk model is selected  
 - Enhanced Order Entry form with conditional logic based on selected stock model type
 - Added "Glenn Test Fork" button to Order Entry form for GitHub fork demonstration

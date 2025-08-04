@@ -9,6 +9,7 @@ import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { Link } from 'wouter';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -255,9 +256,3 @@ export default function ShippingQueuePage() {
                 <div className="text-sm">Click on any order card above to see available printing options</div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}

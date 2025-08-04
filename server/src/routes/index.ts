@@ -682,7 +682,7 @@ export function registerRoutes(app: Express): Server {
         errorOutput += data.toString();
       });
 
-      pythonProcess.on('close', (code) => {
+      pythonProcess.on('close', (code: number | null) => {
         if (code !== 0) {
           console.error('Python scheduler error:', errorOutput);
           return res.status(500).json({ error: 'Python scheduler failed', details: errorOutput });
@@ -747,7 +747,7 @@ export function registerRoutes(app: Express): Server {
         const orderDrafts = await storage.getAllOrderDrafts();
         const regularOrder = orderDrafts.find(o => o.orderId === orderId);
         if (regularOrder && regularOrder.id) {
-          await storage.updateOrderDraft(regularOrder.id, {
+          await storage.updateOrderDraft(regularOrder.id.toString(), {
             currentDepartment: 'Barcode' // Move from Layup to next department
           });
           console.log(`✅ Regular order ${orderId} moved to Barcode department`);

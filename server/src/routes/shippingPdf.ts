@@ -1152,7 +1152,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     })
     .from(customers)
     .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id))
-    .where(eq(customers.id, parseInt(order.customerId)));
+    .where(eq(customers.id, parseInt(order.customerId || '0')));
 
     if (!orderResult || orderResult.length === 0) {
       return res.status(404).json({ error: 'Customer not found for this order' });

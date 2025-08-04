@@ -119,7 +119,11 @@ export default function ShippingQueuePage() {
         description: "Please wait while we generate the PDF"
       });
 
-      const pdfBlob = await fetchPdf('/api/shipping-pdf/qc-checklist', orderId);
+      const response = await fetch(`/api/shipping-pdf/qc-checklist/${orderId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const pdfBlob = await response.blob();
       downloadPdf(pdfBlob, `QC-Checklist-${orderId}.pdf`);
       
       toast({
@@ -173,7 +177,11 @@ export default function ShippingQueuePage() {
         description: "Please wait while we generate the PDF"
       });
 
-      const pdfBlob = await fetchPdf('/api/shipping-pdf/sales-order', orderId);
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const pdfBlob = await response.blob();
       downloadPdf(pdfBlob, `Sales-Order-${orderId}.pdf`);
       
       toast({

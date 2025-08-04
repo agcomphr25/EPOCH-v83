@@ -16,6 +16,7 @@ import shippingPdfRoute from './shippingPdf';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
+import communicationsRoutes from './communications';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -65,6 +66,9 @@ export function registerRoutes(app: Express): Server {
 
   // BOM management routes
   app.use('/api/boms', bomsRoutes);
+
+  // Communications management routes
+  app.use('/api/communications', communicationsRoutes);
 
   // Health check endpoint for deployment debugging
   app.get('/api/health', async (req, res) => {
@@ -1100,10 +1104,6 @@ export function registerRoutes(app: Express): Server {
   return createServer(app);
 }
 
-import tasksRouter from './tasks';
-import secureVerificationRouter from './secureVerification';
-import communicationsRouter from './communications';
-
 export { 
   customersRoutes as customersRouter, 
   ordersRoutes as ordersRouter, 
@@ -1116,8 +1116,5 @@ export {
   bomsRoutes as bomsRouter, 
   moldsRoutes as moldsRouter, 
   kickbackRoutes as kickbacksRouter, 
-  orderAttachmentsRoutes as orderAttachmentsRouter, 
-  tasksRoutes as tasksRouter,
-  secureVerificationRouter as secureVerificationRouter,
-  communicationsRouter as communicationsRouter
+  orderAttachmentsRoutes as orderAttachmentsRouter
 };

@@ -129,3 +129,94 @@ router.get('/history/:customerId', async (req, res) => {
 });
 
 export default router;
+import express from 'express';
+import sgMail from '@sendgrid/mail';
+import twilio from 'twilio';
+
+const router = express.Router();
+
+// Initialize SendGrid
+const sendGridApiKey = process.env.SENDGRID_API_KEY;
+if (sendGridApiKey) {
+  sgMail.setApiKey(sendGridApiKey);
+}
+
+// Initialize Twilio
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// Send email endpoint
+router.post('/email', async (req, res) => {
+  try {
+    const { to, subject, message, customerId, orderId } = req.body;
+
+    if (!sendGridApiKey) {
+      return res.status(500).json({ error: 'SendGrid API key not configured' });
+    }
+
+    if (!to || !subject || !message) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, message' });
+    }
+
+    const msg = {
+      to: to,
+      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@agcomposites.com',
+      subject: subject,
+      text: message,
+      html: message.replace(/\n/g, '<br>'),
+    };
+
+    await sgMail.send(msg);
+
+    // Log the communication (you can store this in your database)
+    console.log(`Email sent to ${to} for customer ${customerId}, order ${orderId || 'N/A'}`);
+
+    res.json({ success: true, message: 'Email sent successfully' });
+  } catch (error: any) {
+    console.error('SendGrid error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send email',
+      details: error.message || 'Unknown error'
+    });
+  }
+});
+
+// Send SMS endpoint
+router.post('/sms', async (req, res) => {
+  try {
+    const { to, message, customerId, orderId } = req.body;
+
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+      return res.status(500).json({ error: 'Twilio credentials not configured' });
+    }
+
+    if (!to || !message) {
+      return res.status(400).json({ error: 'Missing required fields: to, message' });
+    }
+
+    const twilioMessage = await twilioClient.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER || '+1234567890',
+      to: to
+    });
+
+    // Log the communication (you can store this in your database)
+    console.log(`SMS sent to ${to} for customer ${customerId}, order ${orderId || 'N/A'}`);
+
+    res.json({ 
+      success: true, 
+      message: 'SMS sent successfully',
+      messageId: twilioMessage.sid
+    });
+  } catch (error: any) {
+    console.error('Twilio error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send SMS',
+      details: error.message || 'Unknown error'
+    });
+  }
+});
+
+export default router;

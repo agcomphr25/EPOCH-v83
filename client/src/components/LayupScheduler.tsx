@@ -2749,18 +2749,6 @@ export default function LayupScheduler() {
             </Button>
 
             <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                console.log('Red test button clicked!');
-                alert('Red test button works!');
-              }}
-              className="mr-4 bg-red-600 hover:bg-red-700 text-white"
-            >
-              Red Test Button
-            </Button>
-
-            <Button
               variant="outline"
               size="sm"
               onClick={() => {

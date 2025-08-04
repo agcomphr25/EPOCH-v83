@@ -296,110 +296,38 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
     
-    // Part information section
+    // Order information section - simplified for shipping
     currentY -= 100;
-    page.drawText('PART INFORMATION', {
+    page.drawText('ORDER INFORMATION', {
       x: margin,
       y: currentY,
       size: 12,
       font: boldFont,
     });
     
-    // Draw a border around part info - full width for printing
+    // Draw a border around order info - simplified layout
     page.drawRectangle({
       x: margin,
-      y: currentY - 90,
+      y: currentY - 50,
       width: printableWidth,
-      height: 80,
+      height: 40,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
     
     currentY -= 25;
-    page.drawText(`Work Order No:`, {
+    page.drawText(`Order ID: ${orderId}`, {
       x: margin + 5,
       y: currentY,
       size: 10,
       font: boldFont,
     });
     
-    page.drawText(`${orderId}`, {
-      x: margin + 100,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    page.drawText(`Customer:`, {
+    page.drawText(`Order Date: ${order.orderDate || new Date().toLocaleDateString()}`, {
       x: margin + 250,
       y: currentY,
       size: 10,
       font: boldFont,
-    });
-    
-    page.drawText(`${order.customerId || 'N/A'}`, {
-      x: margin + 310,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 20;
-    page.drawText(`Part Number:`, {
-      x: margin + 5,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(`${order.modelId || 'N/A'}`, {
-      x: margin + 100,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    page.drawText(`Quantity:`, {
-      x: margin + 250,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(`1`, {
-      x: margin + 310,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    currentY -= 20;
-    page.drawText(`Drawing No:`, {
-      x: margin + 5,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(`DWG-${orderId}`, {
-      x: margin + 100,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-    
-    page.drawText(`Order Date:`, {
-      x: margin + 250,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-    
-    page.drawText(`${order.orderDate || new Date().toLocaleDateString()}`, {
-      x: margin + 310,
-      y: currentY,
-      size: 10,
-      font: font,
     });
     
     // QC Checklist items
@@ -415,13 +343,11 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       {
         title: 'SHIPPING QUALITY CONTROL CHECKLIST',
         items: [
-          'The proper stock(s) is being shipped: (e.g. Alpine Hunter, CAT, etc.)',
-          'Stock(s) is inletted according to the work order: (action, barrel, bottom metal, right or left hand)',
-          'Stock(s) is the proper color:',
-          'Custom options are present and completed: (QD Cups, rail, LOP, tri-pod option, etc)',
-          'Swivel studs are installed correctly:',
-          'Stock(s) is being shipped to the correct address:',
-          'Buttpad and overall stock finish meet QC standards:'
+          'Correct items included for this order',
+          'Package properly sealed and labeled',
+          'Shipping address verified as correct',
+          'Customer information matches order',
+          'All items meet quality standards for shipping'
         ]
       }
     ];

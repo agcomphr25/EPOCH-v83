@@ -7,11 +7,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
-**August 4, 2025**: Enhanced Purchase Order Management and Layup Scheduler:
-- Added quantity display to Purchase Order Management cards showing total items per PO
-- Implemented POQuantityDisplay component with real-time item quantity calculation
-- Added red test button to Layup Scheduler control bar for testing functionality
-- Enhanced PO cards with package icon and quantity information display
+**August 4, 2025**: Fixed P1 Purchase Order Integration in Layup Scheduler:
+- Resolved critical issue where P1 purchase order stocks disappeared from LayupScheduler after auto-scheduling
+- Fixed conflicting auto-scheduling processes that were overwriting P1 purchase order assignments
+- Added logic to preserve existing P1 purchase order assignments when applying regular order schedules
+- Implemented distinctive purple styling for P1 purchase order items in the scheduler
+- Modified calendar cell rendering to use processedOrders for complete order visibility
+- Enhanced Purchase Order Management cards with quantity display and package icons
+- Added POQuantityDisplay component with real-time item quantity calculation
 
 **August 3, 2025**: Enhanced shipping management system with comprehensive improvements:
 - Implemented automatic customer address population for shipping labels from order and customer_addresses table

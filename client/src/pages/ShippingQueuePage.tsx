@@ -12,6 +12,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
   
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -66,6 +67,15 @@ export default function ShippingQueuePage() {
 
   const clearSelection = () => {
     setSelectedOrders([]);
+  };
+
+  const handleCardSelection = (orderId: string) => {
+    setSelectedCard(selectedCard === orderId ? null : orderId);
+  };
+
+  const getSelectedOrder = () => {
+    if (!selectedCard) return null;
+    return shippingOrders.find(order => order.orderId === selectedCard);
   };
 
   return (
@@ -158,16 +168,26 @@ export default function ShippingQueuePage() {
                 const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                                    modelId?.startsWith('fg_') ? 'FG' : null;
 
+                const isSelected = selectedCard === order.orderId;
                 return (
-                  <Card key={order.id} className="hover:shadow-md transition-shadow border border-gray-200">
+                  <Card 
+                    key={order.id} 
+                    className={`hover:shadow-md transition-all cursor-pointer ${
+                      isSelected 
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => handleCardSelection(order.orderId)}
+                  >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                           <Checkbox
                             checked={selectedOrders.includes(order.orderId)}
                             onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
                           />
-                          <div className="text-sm font-semibold text-blue-600">
+                          <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
                             {getDisplayOrderId(order)}
                           </div>
                         </div>
@@ -194,9 +214,6 @@ export default function ShippingQueuePage() {
                           </div>
                         )}
                       </div>
-                      
-                      {/* Shipping Actions */}
-                      <ShippingActions orderId={order.orderId} orderData={order} />
                     </CardContent>
                   </Card>
                 );
@@ -205,6 +222,36 @@ export default function ShippingQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bottom Action Panel - Shows when a single card is selected */}
+      {selectedCard && (
+        <Card className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t-2 border-blue-500 shadow-lg z-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="text-lg font-semibold text-blue-600">
+                  Selected Order: {getDisplayOrderId(getSelectedOrder())}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Customer: {getSelectedOrder()?.customer}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCard(null)}
+                className="text-gray-500 hover:text-gray-700 text-xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Shipping Actions for Selected Order */}
+            <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add bottom padding when action panel is visible */}
+      {selectedCard && <div className="h-32" />}
     </div>
   );
 }

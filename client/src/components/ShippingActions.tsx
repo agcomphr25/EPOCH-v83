@@ -161,28 +161,28 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   };
 
   return (
-    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
+    <div className="flex gap-3">
       {/* QC Checklist Button */}
       <Button
-        size="sm"
+        size="default"
         variant="outline"
         onClick={handleQCChecklist}
         disabled={isGeneratingQC}
-        className="flex-1 text-xs"
+        className="flex-1 h-12"
       >
-        <ClipboardCheck className="h-3 w-3 mr-1" />
+        <ClipboardCheck className="h-4 w-4 mr-2" />
         {isGeneratingQC ? 'Generating...' : 'QC Checklist'}
       </Button>
 
       {/* Sales Order Button */}
       <Button
-        size="sm"
+        size="default"
         variant="outline"
         onClick={handleSalesOrder}
         disabled={isGeneratingSO}
-        className="flex-1 text-xs"
+        className="flex-1 h-12"
       >
-        <FileText className="h-3 w-3 mr-1" />
+        <FileText className="h-4 w-4 mr-2" />
         {isGeneratingSO ? 'Generating...' : 'Sales Order'}
       </Button>
 
@@ -190,11 +190,11 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
       <Dialog open={shippingDialogOpen} onOpenChange={setShippingDialogOpen}>
         <DialogTrigger asChild>
           <Button
-            size="sm"
+            size="default"
             variant="outline"
-            className="flex-1 text-xs"
+            className="flex-1 h-12"
           >
-            <Truck className="h-3 w-3 mr-1" />
+            <Truck className="h-4 w-4 mr-2" />
             Shipping Label
           </Button>
         </DialogTrigger>

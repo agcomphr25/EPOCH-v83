@@ -1846,11 +1846,14 @@ export default function LayupScheduler() {
     })
   );
 
-  // Generate schedule
+  // Generate schedule (exclude P1 purchase orders - they're handled by generateAutoSchedule)
   const schedule = useMemo(() => {
     if (!orders.length || !molds.length || !employees.length) return [];
 
-    const orderData = orders.map(order => ({
+    // Filter out P1 purchase orders from the memoized schedule to prevent conflicts
+    const regularOrders = orders.filter(order => order.source !== 'p1_purchase_order');
+    
+    const orderData = regularOrders.map(order => ({
       orderId: order.orderId,
       orderDate: new Date(order.orderDate),
       dueDate: order.dueDate ? new Date(order.dueDate) : undefined,
@@ -1916,7 +1919,7 @@ export default function LayupScheduler() {
         return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
       }).length);
     } else if (schedule.length > 0 && Object.keys(orderAssignments).length > 0) {
-      // Preserve existing P1 purchase order assignments while adding new regular orders
+      // Preserve existing assignments (especially P1 purchase orders) while adding new regular orders
       console.log('🔄 Merging schedule with existing assignments (preserving P1 purchase orders)');
       
       const existingP1Assignments = Object.entries(orderAssignments).filter(([orderId]) => {
@@ -1924,16 +1927,17 @@ export default function LayupScheduler() {
         return order?.source === 'p1_purchase_order';
       });
       
-      console.log('🏭 Preserving P1 purchase order assignments:', existingP1Assignments.length);
-      
-      const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      
-      // Keep existing P1 purchase order assignments
-      existingP1Assignments.forEach(([orderId, assignment]) => {
-        newAssignments[orderId] = assignment;
+      const existingProductionAssignments = Object.entries(orderAssignments).filter(([orderId]) => {
+        const order = orders.find(o => o.orderId === orderId);
+        return order?.source === 'production_order';
       });
       
-      // Add new assignments for regular orders only
+      console.log('🏭 Preserving P1 purchase order assignments:', existingP1Assignments.length);
+      console.log('🏭 Preserving production order assignments:', existingProductionAssignments.length);
+      
+      const newAssignments: {[orderId: string]: { moldId: string, date: string }} = { ...orderAssignments };
+      
+      // Add new assignments for regular orders that aren't already assigned
       schedule.forEach(item => {
         const order = orders.find(o => o.orderId === item.orderId);
         if (order?.source === 'main_orders' && !newAssignments[item.orderId]) {

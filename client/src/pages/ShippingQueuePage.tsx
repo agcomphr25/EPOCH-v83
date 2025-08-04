@@ -83,37 +83,48 @@ export default function ShippingQueuePage() {
   };
 
   const handleQCChecklistDownload = async () => {
-    if (!selectedCard) {
+    // Check for selected order - either from card selection or checkbox selection
+    let targetOrder = null;
+    let orderId = '';
+
+    if (selectedCard) {
+      // Use card selection if available
+      targetOrder = getSelectedOrder();
+      orderId = selectedCard;
+    } else if (selectedOrders.length === 1) {
+      // Use single checkbox selection if only one order is selected
+      orderId = selectedOrders[0];
+      targetOrder = shippingOrders.find(order => order.orderId === orderId);
+    } else {
       toast({
         title: "No order selected",
-        description: "Please select an order to generate QC checklist",
+        description: "Please select a single order by clicking on it or checking one checkbox",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!targetOrder) {
+      toast({
+        title: "Order not found",
+        description: "Selected order not found in shipping queue",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      const selectedOrder = getSelectedOrder();
-      if (!selectedOrder) {
-        toast({
-          title: "Order not found",
-          description: "Selected order not found in shipping queue",
-          variant: "destructive"
-        });
-        return;
-      }
-
       toast({
         title: "Generating QC checklist...",
         description: "Please wait while we generate the PDF"
       });
 
-      const pdfBlob = await fetchPdf('/api/shipping-pdf/qc-checklist', selectedOrder.orderId);
-      downloadPdf(pdfBlob, `QC-Checklist-${selectedOrder.orderId}.pdf`);
+      const pdfBlob = await fetchPdf('/api/shipping-pdf/qc-checklist', orderId);
+      downloadPdf(pdfBlob, `QC-Checklist-${orderId}.pdf`);
       
       toast({
         title: "QC checklist downloaded",
-        description: `QC checklist for order ${selectedOrder.orderId} has been downloaded`
+        description: `QC checklist for order ${orderId} has been downloaded`
       });
     } catch (error) {
       console.error('Error generating QC checklist:', error);
@@ -126,37 +137,48 @@ export default function ShippingQueuePage() {
   };
 
   const handleSalesOrderDownload = async () => {
-    if (!selectedCard) {
+    // Check for selected order - either from card selection or checkbox selection
+    let targetOrder = null;
+    let orderId = '';
+
+    if (selectedCard) {
+      // Use card selection if available
+      targetOrder = getSelectedOrder();
+      orderId = selectedCard;
+    } else if (selectedOrders.length === 1) {
+      // Use single checkbox selection if only one order is selected
+      orderId = selectedOrders[0];
+      targetOrder = shippingOrders.find(order => order.orderId === orderId);
+    } else {
       toast({
         title: "No order selected",
-        description: "Please select an order to generate sales order invoice",
+        description: "Please select a single order by clicking on it or checking one checkbox",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!targetOrder) {
+      toast({
+        title: "Order not found",
+        description: "Selected order not found in shipping queue",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      const selectedOrder = getSelectedOrder();
-      if (!selectedOrder) {
-        toast({
-          title: "Order not found",
-          description: "Selected order not found in shipping queue",
-          variant: "destructive"
-        });
-        return;
-      }
-
       toast({
         title: "Generating sales order invoice...",
         description: "Please wait while we generate the PDF"
       });
 
-      const pdfBlob = await fetchPdf('/api/shipping-pdf/sales-order', selectedOrder.orderId);
-      downloadPdf(pdfBlob, `Sales-Order-${selectedOrder.orderId}.pdf`);
+      const pdfBlob = await fetchPdf('/api/shipping-pdf/sales-order', orderId);
+      downloadPdf(pdfBlob, `Sales-Order-${orderId}.pdf`);
       
       toast({
         title: "Sales order invoice downloaded",
-        description: `Sales order invoice for ${selectedOrder.orderId} has been downloaded`
+        description: `Sales order invoice for ${orderId} has been downloaded`
       });
     } catch (error) {
       console.error('Error generating sales order:', error);

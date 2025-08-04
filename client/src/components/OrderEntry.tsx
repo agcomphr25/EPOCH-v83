@@ -1517,7 +1517,19 @@ export default function OrderEntry() {
 
                   {/* Rails */}
                   <div>
-                    <Label>Rails</Label>
+                    <Label className="flex items-center gap-2">
+                      Rails
+                      {(() => {
+                        const selectedModel = modelOptions.find(m => m.id === modelId);
+                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                           selectedModel?.name?.toLowerCase().includes('chalk');
+                        return isChalkModel && (
+                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                            Chalk Model - Limited Options
+                          </span>
+                        );
+                      })()}
+                    </Label>
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
                       {(() => {
                         const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
@@ -1533,9 +1545,32 @@ export default function OrderEntry() {
                           </div>;
                         }
 
-                        return railsFeature.options
-                          .filter(option => option.value && option.value.trim() !== '')
-                          .map((option) => (
+                        // Check if selected model contains "Chalk" in the name
+                        const selectedModel = modelOptions.find(m => m.id === modelId);
+                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                           selectedModel?.name?.toLowerCase().includes('chalk');
+                        
+                        // Define limited Rails options for Chalk models (based on actual database values)
+                        const chalkRailsOptions = ['arca_4', 'pic_rail', 'pic_intgrated_stud'];
+                        
+                        // Filter options based on model type
+                        let availableOptions = railsFeature.options.filter(option => option.value && option.value.trim() !== '');
+                        
+                        if (isChalkModel) {
+                          console.log('🎯 Chalk model detected:', selectedModel?.displayName);
+                          console.log('🎯 Original Rails options:', availableOptions.map(o => o.label));
+                          
+                          availableOptions = availableOptions.filter(option => 
+                            chalkRailsOptions.includes(option.value) ||
+                            option.label?.toLowerCase().includes('4" arca rail') ||
+                            option.label?.toLowerCase().includes('ag pic') ||
+                            option.label?.toLowerCase().includes('ag pic w/int stud')
+                          );
+                          
+                          console.log('🎯 Filtered Rails options for Chalk:', availableOptions.map(o => o.label));
+                        }
+                        
+                        return availableOptions.map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Checkbox
                               id={`rail-option-${option.value}`}

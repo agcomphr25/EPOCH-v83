@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route, Router, Link } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -128,7 +128,7 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <Router>
-          <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen bg-gray-50 pb-20">
             <Navigation />
             <OfflineIndicator />
             <main className="container mx-auto px-4 py-8">
@@ -238,6 +238,41 @@ function App() {
                   <Route component={NotFound} />
                 </Switch>
               </main>
+              
+              {/* Bottom Navigation */}
+              <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+                <div className="flex justify-around items-center py-3 px-4 max-w-lg mx-auto">
+                  <Link 
+                    href="/qc" 
+                    className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+                  >
+                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">✓</span>
+                    </div>
+                    <span className="text-xs font-medium text-gray-700">QC Checklist</span>
+                  </Link>
+                  
+                  <Link 
+                    href="/order-entry" 
+                    className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+                  >
+                    <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">📋</span>
+                    </div>
+                    <span className="text-xs font-medium text-gray-700">Sales Order</span>
+                  </Link>
+                  
+                  <Link 
+                    href="/shipping-management" 
+                    className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
+                  >
+                    <div className="w-6 h-6 bg-orange-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">📦</span>
+                    </div>
+                    <span className="text-xs font-medium text-gray-700">Shipping Label</span>
+                  </Link>
+                </div>
+              </div>
           </div>
           <Toaster />
           <HotToaster />

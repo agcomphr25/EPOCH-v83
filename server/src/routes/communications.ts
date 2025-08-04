@@ -1,6 +1,8 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
+import sgMail from '@sendgrid/mail';
+import twilio from 'twilio';
 
 const router = Router();
 
@@ -27,7 +29,6 @@ router.post('/email', async (req, res) => {
     const data = emailSchema.parse(req.body);
     
     // Initialize SendGrid
-    const sgMail = require('@sendgrid/mail');
     const apiKey = process.env.SENDGRID_API_KEY;
     
     if (!apiKey) {
@@ -86,9 +87,9 @@ router.post('/sms', async (req, res) => {
       return res.status(500).json({ error: 'Twilio credentials not configured' });
     }
     
-    const twilio = require('twilio')(accountSid, authToken);
+    const twilioClient = twilio(accountSid, authToken);
     
-    const message = await twilio.messages.create({
+    const message = await twilioClient.messages.create({
       body: data.message,
       from: fromNumber,
       to: data.to

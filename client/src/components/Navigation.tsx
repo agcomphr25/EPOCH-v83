@@ -504,7 +504,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setFormsReportsExpanded(false)}
+                          onClick={() => {
+                            setFormsReportsExpanded(false);
+                            // Close all other dropdowns too
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -548,7 +560,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setInventoryExpanded(false)}
+                          onClick={() => {
+                            setInventoryExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -592,7 +616,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setQcMaintenanceExpanded(false)}
+                          onClick={() => {
+                            setQcMaintenanceExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -636,7 +672,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setEmployeesExpanded(false)}
+                          onClick={() => {
+                            setEmployeesExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -680,7 +728,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setFinanceExpanded(false)}
+                          onClick={() => {
+                            setFinanceExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -724,7 +784,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setTestDashboardsExpanded(false)}
+                          onClick={() => {
+                            setTestDashboardsExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -768,7 +840,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setPurchaseOrdersExpanded(false)}
+                          onClick={() => {
+                            setPurchaseOrdersExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -812,7 +896,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setProductionSchedulingExpanded(false)}
+                          onClick={() => {
+                            setProductionSchedulingExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -856,7 +952,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setDepartmentQueueExpanded(false)}
+                          onClick={() => {
+                            setDepartmentQueueExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setVerifiedModulesExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -900,7 +1008,19 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => setVerifiedModulesExpanded(false)}
+                          onClick={() => {
+                            setVerifiedModulesExpanded(false);
+                            // Close all other dropdowns too
+                            setFormsReportsExpanded(false);
+                            setInventoryExpanded(false);
+                            setQcMaintenanceExpanded(false);
+                            setEmployeesExpanded(false);
+                            setFinanceExpanded(false);
+                            setTestDashboardsExpanded(false);
+                            setPurchaseOrdersExpanded(false);
+                            setProductionSchedulingExpanded(false);
+                            setDepartmentQueueExpanded(false);
+                          }}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -925,125 +1045,7 @@ export default function Navigation() {
         </div>
       </div>
 
-      {/* Additional Mobile Navigation - Only show dropdowns on smaller screens */}
-      <div className="lg:hidden border-t border-gray-200">
-        <div className="px-4 py-2">
-          <nav className="flex flex-wrap gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.path;
-
-              return (
-                <Link key={item.path} href={item.path}>
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    size="sm"
-                    className={cn(
-                      "flex items-center gap-2 text-xs",
-                      isActive && "bg-primary text-white"
-                    )}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {item.label}
-                  </Button>
-                </Link>
-              );
-            })}
-
-            {/* Forms & Reports in Mobile */}
-            <div className="relative">
-              <Button
-                variant={isFormsReportsActive ? "default" : "ghost"}
-                size="sm"
-                className={cn(
-                  "flex items-center gap-2 text-xs",
-                  isFormsReportsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('formsReports', formsReportsExpanded, setFormsReportsExpanded)}
-              >
-                <FormInput className="h-3 w-3" />
-                Forms & Reports
-                {formsReportsExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </Button>
-
-              {formsReportsExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
-                  {formsReportsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={() => setFormsReportsExpanded(false)}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Verified Modules in Mobile */}
-            <div className="relative">
-              <Button
-                variant={isVerifiedModulesActive ? "default" : "ghost"}
-                size="sm"
-                className={cn(
-                  "flex items-center gap-2 text-xs",
-                  isVerifiedModulesActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('verifiedModules', verifiedModulesExpanded, setVerifiedModulesExpanded)}
-              >
-                <Settings className="h-3 w-3" />
-                Verified Modules
-                {verifiedModulesExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </Button>
-
-              {verifiedModulesExpanded && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[150px]">
-                  {verifiedModulesItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={() => setVerifiedModulesExpanded(false)}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-
-          </nav>
-        </div>
-      </div>
+      
     </header>
   );
 }

@@ -754,9 +754,6 @@ export default function CustomerManagement() {
           notes: data.notes,
           isActive: data.isActive,
         },
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-        },
       });
 
       // Create address if address fields are provided
@@ -772,9 +769,6 @@ export default function CustomerManagement() {
             country: data.country,
             type: data.addressType,
             isDefault: true,
-          },
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
           },
         });
       }
@@ -806,9 +800,6 @@ export default function CustomerManagement() {
       apiRequest(`/api/customers/${id}`, {
         method: 'PUT',
         body: data,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-        },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
@@ -832,9 +823,6 @@ export default function CustomerManagement() {
   const deleteCustomerMutation = useMutation({
     mutationFn: (id: number) => apiRequest(`/api/customers/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
@@ -859,9 +847,6 @@ export default function CustomerManagement() {
     mutationFn: (data: AddressFormData) => apiRequest('/api/addresses', {
       method: 'POST',
       body: data,
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -885,9 +870,6 @@ export default function CustomerManagement() {
     mutationFn: (data: AddressFormData & { id: number }) => apiRequest(`/api/addresses/${data.id}`, {
       method: 'PUT',
       body: data,
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -910,9 +892,6 @@ export default function CustomerManagement() {
   const deleteAddressMutation = useMutation({
     mutationFn: (id: number) => apiRequest(`/api/addresses/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -1008,23 +987,15 @@ export default function CustomerManagement() {
           
           if (existingAddress) {
             // Update existing address
-            await fetch(`/api/addresses/${existingAddress.id}`, {
+            await apiRequest(`/api/addresses/${existingAddress.id}`, {
               method: 'PUT',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-              },
-              body: JSON.stringify(addressData)
+              body: addressData
             });
           } else {
             // Create new address
-            await fetch('/api/addresses', {
+            await apiRequest('/api/addresses', {
               method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-              },
-              body: JSON.stringify(addressData)
+              body: addressData
             });
           }
           
@@ -1259,9 +1230,6 @@ export default function CustomerManagement() {
       const result = await apiRequest('/api/customers/import/csv', {
         method: 'POST',
         body: { csvData: csvString },
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`,
-        },
       });
 
       setIsProcessingCSV(false);

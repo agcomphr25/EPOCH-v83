@@ -23,28 +23,36 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(
-  url: string,
-  options?: {
-    method?: string;
-    body?: any;
-    headers?: Record<string, string>;
-  }
-): Promise<any> {
-  const { method = 'GET', body, headers = {} } = options || {};
-  
-  const res = await fetch(url, {
-    method,
-    headers: {
-      ...headers,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include",
-  });
+export async function apiRequest(url: string, options: RequestInit = {}) {
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  const fullUrl = `${baseUrl}${url}`;
 
-  await throwIfResNotOk(res);
-  return res.json();
+  // Get session token from localStorage
+  const sessionToken = localStorage.getItem('sessionToken') || '';
+
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
+    ...options.headers,
+  };
+
+  const config: RequestInit = {
+    ...options,
+    headers: defaultHeaders,
+  };
+
+  if (options.body && typeof options.body === 'object') {
+    config.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(fullUrl, config);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

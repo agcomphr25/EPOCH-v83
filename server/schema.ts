@@ -1300,6 +1300,25 @@ export const communicationLogs = pgTable("communication_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// New table for customer communications to record both incoming and outgoing messages
+export const customerCommunications = pgTable("customer_communications", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
+  communicationLogId: integer("communication_log_id").references(() => communicationLogs.id), // Link to the actual log entry
+  threadId: text("thread_id"), // For grouping related messages
+  direction: text("direction").notNull(), // 'inbound' or 'outbound'
+  type: text("type").notNull(), // e.g., 'inquiry', 'response', 'support-ticket', 'feedback'
+  subject: text("subject"),
+  message: text("message").notNull(),
+  priority: text("priority").default("normal").notNull(), // 'low', 'normal', 'high', 'urgent'
+  assignedTo: text("assigned_to"), // User responsible for handling the communication
+  status: text("status").default("open").notNull(), // 'open', 'in-progress', 'resolved', 'closed'
+  externalId: text("external_id"), // ID from external communication system (e.g., email thread ID)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+
 export const pdfDocuments = pgTable("pdf_documents", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull(),
@@ -1372,14 +1391,17 @@ export const insertCommunicationLogSchema = createInsertSchema(communicationLogs
   id: true,
   createdAt: true,
 }).extend({
-  orderId: z.string().min(1, "Order ID is required"),
+  orderId: z.string().optional(),
   customerId: z.string().min(1, "Customer ID is required"),
-  type: z.enum(['order-confirmation', 'shipping-notification', 'quality-alert']),
+  type: z.enum(['order-confirmation', 'shipping-notification', 'quality-alert', 'customer-inquiry', 'customer-response', 'general']),
   method: z.enum(['email', 'sms']),
+  direction: z.enum(['inbound', 'outbound']),
   recipient: z.string().min(1, "Recipient is required"),
+  sender: z.string().optional(),
   subject: z.string().optional(),
-  message: z.string().optional(),
-  status: z.enum(['pending', 'sent', 'failed']).default('pending'),
+  message: z.string().min(1, "Message is required"),
+  status: z.enum(['pending', 'sent', 'failed', 'received']).default('pending'),
+  externalId: z.string().optional(),
 });
 
 export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
@@ -1861,12 +1883,12 @@ export const taskItems = pgTable('task_items', {
   category: text('category'), // Optional category/project grouping
   priority: text('priority').default('Medium').notNull(), // Low, Medium, High, Critical
   dueDate: timestamp('due_date'),
-  
+
   // Status checkboxes
   gjStatus: boolean('gj_status').default(false).notNull(), // GJ checkbox
   tmStatus: boolean('tm_status').default(false).notNull(), // TM checkbox
   finishedStatus: boolean('finished_status').default(false).notNull(), // Finished checkbox
-  
+
   // Tracking fields
   assignedTo: text('assigned_to'), // Who is responsible
   createdBy: text('created_by').notNull(), // Who created the task
@@ -1876,7 +1898,7 @@ export const taskItems = pgTable('task_items', {
   tmCompletedAt: timestamp('tm_completed_at'), // When TM was checked
   finishedCompletedBy: text('finished_completed_by'), // Who marked as finished
   finishedCompletedAt: timestamp('finished_completed_at'), // When marked as finished
-  
+
   notes: text('notes'), // Additional notes/comments
   isActive: boolean('is_active').default(true).notNull(), // For soft delete
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -2057,3 +2079,19 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+// New validation schema for Customer Communications
+export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().min(1, "Customer ID is required"),
+  communicationLogId: z.number().optional(),
+  threadId: z.string().optional(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  assignedTo: z.string().optional(),
+  // Include fields from communicationLogs that might be relevant here, if needed
+  // This depends on how customerCommunications is intended to be used alongside communicationLogs
+  // For now, assuming it augments communicationLogs with customer-specific context
+});

@@ -10,7 +10,7 @@ export default function CommunicationInboxPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Mail className="h-8 w-8" />
-          Communication Inbox
+          Customer Communication Inbox
         </h1>
         <p className="text-muted-foreground mt-2">
           View and respond to customer messages and inquiries

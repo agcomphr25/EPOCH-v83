@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuContent,
+  NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
+  NavigationMenuIndicator,
+  NavigationMenuViewport,
+  NavigationMenuSub,
+  NavigationMenuListItem,
+} from "@/components/ui/navigation-menu"
 
 export default function Navigation() {
   const [location] = useLocation();
@@ -22,7 +34,7 @@ export default function Navigation() {
   // Helper function to toggle dropdown
   const toggleDropdown = useCallback((dropdownName: string, isExpanded: boolean, setExpanded: (value: boolean) => void) => {
     setExpanded(!isExpanded);
-    
+
     // Close other dropdowns when opening a new one
     if (!isExpanded) {
       if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
@@ -447,6 +459,39 @@ export default function Navigation() {
                 </Link>
               );
             })}
+
+            {/* Communications Dropdown */}
+            <NavigationMenuItem>
+              <NavigationMenuTrigger className={cn(navigationMenuTriggerStyle(), "h-8")}>
+                <Mail className="mr-2 h-4 w-4" />
+                Communications
+              </NavigationMenuTrigger>
+              <NavigationMenuContent>
+                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-2">
+                  <li className="row-span-3">
+                    <NavigationMenuLink asChild>
+                      <Link href="/communications/inbox">
+                        <a className="flex h-full w-full select-none flex-col justify-end rounded-md bg-gradient-to-b from-muted/50 to-muted p-6 no-underline outline-none focus:shadow-md">
+                          <MessageSquare className="h-6 w-6" />
+                          <div className="mb-2 mt-4 text-lg font-medium">
+                            Inbox
+                          </div>
+                          <p className="text-sm leading-tight text-muted-foreground">
+                            View and manage all incoming SMS and Email messages.
+                          </p>
+                        </a>
+                      </Link>
+                    </NavigationMenuLink>
+                  </li>
+                  <ListItem href="/communications/sms" title="SMS">
+                    Send and receive SMS messages.
+                  </ListItem>
+                  <ListItem href="/communications/email" title="Email">
+                    Send and receive emails.
+                  </ListItem>
+                </ul>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
 
             {/* Forms & Reports Dropdown */}
             <div className="relative">
@@ -1022,4 +1067,27 @@ export default function Navigation() {
       </div>
     </header>
   );
+}
+
+// Helper component for NavigationMenu
+function ListItem(props: { className?: string; title: string; href: string; children: React.ReactNode }) {
+  return (
+    <li>
+      <NavigationMenuLink asChild>
+        <Link href={props.href}>
+          <a
+            className={cn(
+              "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+              props.className
+            )}
+          >
+            <div className="text-sm font-medium leading-none">{props.title}</div>
+            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+              {props.children}
+            </p>
+          </a>
+        </Link>
+      </NavigationMenuLink>
+    </li>
+  )
 }

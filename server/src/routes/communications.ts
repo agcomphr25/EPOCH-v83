@@ -161,7 +161,59 @@ router.get('/sms-status/:messageId', async (req, res) => {
   }
 });
 
-// Get communication history (optional feature)
+// Twilio webhook for incoming SMS
+router.post('/sms/webhook', async (req, res) => {
+  try {
+    const { From, To, Body, MessageSid } = req.body;
+    
+    console.log('Incoming SMS:', {
+      from: From,
+      to: To,
+      body: Body,
+      messageId: MessageSid,
+      timestamp: new Date()
+    });
+
+    // TODO: Store in database and associate with customer
+    // You would look up the customer by phone number
+    // and save this as an inbound communication
+    
+    // Respond with empty TwiML to acknowledge receipt
+    res.set('Content-Type', 'text/xml');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    
+  } catch (error: any) {
+    console.error('SMS webhook error:', error);
+    res.status(500).send('Error processing SMS webhook');
+  }
+});
+
+// SendGrid webhook for incoming emails (requires SendGrid Inbound Parse)
+router.post('/email/webhook', async (req, res) => {
+  try {
+    const { from, to, subject, text, html } = req.body;
+    
+    console.log('Incoming Email:', {
+      from,
+      to,
+      subject,
+      text: text?.substring(0, 100) + '...',
+      timestamp: new Date()
+    });
+
+    // TODO: Store in database and associate with customer
+    // You would look up the customer by email address
+    // and save this as an inbound communication
+    
+    res.status(200).send('OK');
+    
+  } catch (error: any) {
+    console.error('Email webhook error:', error);
+    res.status(500).send('Error processing email webhook');
+  }
+});
+
+// Get communication history (including inbound/outbound)
 router.get('/history/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -173,6 +225,21 @@ router.get('/history/:customerId', async (req, res) => {
   } catch (error: any) {
     console.error('Communication history error:', error);
     res.status(500).json({ error: 'Failed to fetch communication history' });
+  }
+});
+
+// Get all recent inbound messages for admin dashboard
+router.get('/inbox', async (req, res) => {
+  try {
+    // TODO: Implement database query for recent inbound messages
+    // This would show all unread/recent customer responses
+    const mockInboxMessages = [];
+    
+    res.json(mockInboxMessages);
+    
+  } catch (error: any) {
+    console.error('Inbox error:', error);
+    res.status(500).json({ error: 'Failed to fetch inbox messages' });
   }
 });
 

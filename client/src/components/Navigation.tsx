@@ -461,37 +461,17 @@ export default function Navigation() {
             })}
 
             {/* Communications Dropdown */}
-            <NavigationMenuItem>
-              <NavigationMenuTrigger className={cn(navigationMenuTriggerStyle(), "h-8")}>
-                <Mail className="mr-2 h-4 w-4" />
+            <div className="relative">
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 text-sm"
+                onClick={() => toggleDropdown('communications', false, () => {})}
+              >
+                <Mail className="h-4 w-4" />
                 Communications
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-2">
-                  <li className="row-span-3">
-                    <NavigationMenuLink asChild>
-                      <Link href="/communications/inbox">
-                        <a className="flex h-full w-full select-none flex-col justify-end rounded-md bg-gradient-to-b from-muted/50 to-muted p-6 no-underline outline-none focus:shadow-md">
-                          <MessageSquare className="h-6 w-6" />
-                          <div className="mb-2 mt-4 text-lg font-medium">
-                            Inbox
-                          </div>
-                          <p className="text-sm leading-tight text-muted-foreground">
-                            View and manage all incoming SMS and Email messages.
-                          </p>
-                        </a>
-                      </Link>
-                    </NavigationMenuLink>
-                  </li>
-                  <ListItem href="/communications/sms" title="SMS">
-                    Send and receive SMS messages.
-                  </ListItem>
-                  <ListItem href="/communications/email" title="Email">
-                    Send and receive emails.
-                  </ListItem>
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
 
             {/* Forms & Reports Dropdown */}
             <div className="relative">

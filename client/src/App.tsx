@@ -29,12 +29,13 @@ import MaintenancePage from "./pages/MaintenancePage";
 import EmployeePortalPage from "./pages/EmployeePortalPage";
 import TimeClockAdminPage from "./pages/TimeClockAdminPage";
 import Module8TestPage from "./pages/Module8TestPage";
+import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import APJournalPage from "./pages/APJournalPage";
 import ARJournalPage from "./pages/ARJournalPage";
 import COGSReportPage from "./pages/COGSReportPage";
 import FinanceDashboardPage from "./pages/FinanceDashboardPage";
-import EnhancedFormsPage from "./pages/EnhancedFormsPage";
-import EnhancedReportsPage from "./pages/EnhancedReportsPage";
+import EnhancedFormsPage from './pages/EnhancedFormsPage';
+import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
@@ -113,7 +114,7 @@ function App() {
             {error.message}
             {error.stack && "\n\nStack trace:\n" + error.stack}
           </pre>
-          <button 
+          <button
             className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             onClick={() => window.location.reload()}
           >
@@ -185,12 +186,9 @@ function App() {
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
-                  <Route path="/agtest" component={AGTestDashboard} />
-                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
-                  <Route path="/admintest" component={ADMINTestDashboard} />
-                  <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
-                  <Route path="/stacitest" component={STACITestDashboard} />
-                  <Route path="/stacitest-dashboard" component={STACITestDashboard} />
+                  <Route path="/communications/inbox" component={CommunicationInboxPage} />
+                  <Route path="/enhanced-forms" component={EnhancedFormsPage} />
+                  <Route path="/enhanced-reports" component={EnhancedReportsPage} />
 
                   {/* Finance Routes */}
                   <Route path="/finance/ap-journal" component={APJournalPage} />
@@ -230,7 +228,7 @@ function App() {
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />
-                  
+
                   {/* Shipping Management Routes */}
                   <Route path="/shipping-management" component={ShippingManagement} />
 

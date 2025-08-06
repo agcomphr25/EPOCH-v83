@@ -465,11 +465,10 @@ export default function Navigation() {
               <Button
                 variant="ghost"
                 className="flex items-center gap-2 text-sm"
-                onClick={() => toggleDropdown('communications', false, () => {})}
+                onClick={() => window.location.href = '/communications/inbox'}
               >
                 <Mail className="h-4 w-4" />
                 Communications
-                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 

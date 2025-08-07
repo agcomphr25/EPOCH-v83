@@ -220,6 +220,16 @@ export interface IStorage {
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
+  
+  // Search Orders
+  searchOrders(query: string): Promise<{
+    id: string;
+    orderId: string | null;
+    serialNumber: string | null;
+    customerName: string | null;
+    poNumber: string | null;
+    stockModel: string | null;
+  }[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -1046,6 +1056,36 @@ export class DatabaseStorage implements IStorage {
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {
     const [order] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
     return order || undefined;
+  }
+
+  async searchOrders(query: string): Promise<{
+    id: string;
+    orderId: string | null;
+    serialNumber: string | null;
+    customerName: string | null;
+    poNumber: string | null;
+    stockModel: string | null;
+  }[]> {
+    const searchConditions = [
+      ilike(orderDrafts.orderId, `%${query}%`),
+      ilike(orderDrafts.serialNumber, `%${query}%`),
+      ilike(orderDrafts.customerName, `%${query}%`),
+      ilike(orderDrafts.poNumber, `%${query}%`),
+      ilike(orderDrafts.stockModel, `%${query}%`)
+    ].filter(Boolean);
+
+    return await db
+      .select({
+        id: orderDrafts.id,
+        orderId: orderDrafts.orderId,
+        serialNumber: orderDrafts.serialNumber,
+        customerName: orderDrafts.customerName,
+        poNumber: orderDrafts.poNumber,
+        stockModel: orderDrafts.stockModel,
+      })
+      .from(orderDrafts)
+      .where(or(...searchConditions))
+      .limit(10);
   }
 
   // Payments CRUD

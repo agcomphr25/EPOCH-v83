@@ -70,6 +70,8 @@ import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingManagement from "./pages/ShippingManagement";
+import NonconformanceDashboard from "./components/NonconformanceDashboard";
+import NonconformanceReport from "./components/NonconformanceReport";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -221,6 +223,10 @@ function App() {
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/p2-layup-scheduler" component={P2LayupSchedulerPage} />
+                  
+                  {/* Nonconformance Tracking Routes */}
+                  <Route path="/nonconformance" component={NonconformanceDashboard} />
+                  <Route path="/nonconformance-report" component={NonconformanceReport} />
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />

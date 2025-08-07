@@ -1,0 +1,656 @@
+Here’s a full React + Tailwind + plain-JS scaffold for Module 17: Nonconforming Item Tracking. 🔨🤖🔧
+
+1. Task Understanding
+You need a client-side module to create, edit, list, and report on nonconforming items, backed by REST endpoints. It includes:
+
+Utility functions for CRUD + analytics calls
+
+React hooks to fetch data
+
+Three main components (Form modal, Dashboard, Report)
+
+Tailwind for styling, Headless UI for dialogs/combobox, Recharts for charts, react-hot-toast for notifications.
+
+2. Approach Outline
+Utilities: src/utils/nonconformanceUtils.js
+
+Hooks:
+
+useNonconformance for record lists
+
+useNonconformanceAnalytics for chart data
+
+Components:
+
+Form Modal (NonconformanceFormModal.jsx)
+
+Dashboard (NonconformanceDashboard.jsx)
+
+Report (NonconformanceReport.jsx)
+
+Dependencies: Install required libs.
+
+Routes: Wire components to /nonconformance and /nonconformance/report.
+
+3. Execution
+🔧 3.1 Utils: src/utils/nonconformanceUtils.js
+js
+Copy
+Edit
+import axios from 'axios';
+
+/**
+ * createRecord(data)
+ * POST /api/nonconformance
+ */
+export function createRecord(data) {
+  return axios.post('/api/nonconformance', data);
+}
+
+/**
+ * updateRecord(id, data)
+ * PUT /api/nonconformance/{id}
+ */
+export function updateRecord(id, data) {
+  return axios.put(`/api/nonconformance/${id}`, data);
+}
+
+/**
+ * fetchRecords(filters)
+ * GET /api/nonconformance?…
+ */
+export function fetchRecords(filters) {
+  const params = new URLSearchParams(filters).toString();
+  return axios.get(`/api/nonconformance?${params}`);
+}
+
+/**
+ * fetchAnalytics(filters)
+ * GET /api/nonconformance/analytics?…
+ */
+export function fetchAnalytics(filters) {
+  const params = new URLSearchParams(filters).toString();
+  return axios.get(`/api/nonconformance/analytics?${params}`);
+}
+
+/**
+ * fetchOne(id)
+ * GET /api/nonconformance/{id}
+ */
+export function fetchOne(id) {
+  return axios.get(`/api/nonconformance/${id}`);
+}
+🔧 3.2 Hooks
+src/hooks/useNonconformance.js
+js
+Copy
+Edit
+import { useState, useEffect } from 'react';
+import { fetchRecords } from '../utils/nonconformanceUtils';
+
+export default function useNonconformance(filters) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchRecords(filters)
+      .then(res => setRecords(res.data))
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  return { records, loading };
+}
+src/hooks/useNonconformanceAnalytics.js
+js
+Copy
+Edit
+import { useState, useEffect } from 'react';
+import { fetchAnalytics } from '../utils/nonconformanceUtils';
+
+export default function useNonconformanceAnalytics(filters) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchAnalytics(filters)
+      .then(res => setData(res.data))
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  return { data, loading };
+}
+🔧 3.3 Components
+Note: All components assume you have Tailwind CSS set up and have wrapped your app in <ToastContainer /> from react-hot-toast.
+
+3.3.1 src/components/NonconformanceFormModal.jsx
+jsx
+Copy
+Edit
+import { Fragment, useState, useEffect } from 'react';
+import { Dialog, Transition, Combobox } from '@headlessui/react';
+import { createRecord, updateRecord, fetchOne } from '../utils/nonconformanceUtils';
+import toast from 'react-hot-toast';
+import axios from 'axios';
+import { formatISO } from 'date-fns';
+
+const issueOptions = [
+  'Customer Request for Additional Work',
+  'Wrong Inlet/CNC Error',
+  'Does Not Meet Customer QC Requirements',
+];
+const dispositionOptions = ['Scrap', 'Repair', 'Use As Is', 'Use for Reference'];
+const authorizationOptions = ['Customer', 'Glenn', 'AG', 'Matt', 'Laurie'];
+
+export default function NonconformanceFormModal({ open, onClose, onSaved, recordToEdit }) {
+  const isEdit = Boolean(recordToEdit);
+  const [form, setForm] = useState({
+    orderId: '', serialNumber: '', customerName: '',
+    poNumber: '', stockModel: '', quantity: 1,
+    issueCause: issueOptions[0], manufacturerDefect: false,
+    disposition: dispositionOptions[0], authorization: authorizationOptions[0],
+    dispositionDate: formatISO(new Date(), { representation: 'date' }),
+    notes: '', status: 'Open',
+  });
+  const [orderQuery, setOrderQuery] = useState('');
+  const [orderResults, setOrderResults] = useState([]);
+
+  // Load record for edit
+  useEffect(() => {
+    if (isEdit) {
+      fetchOne(recordToEdit.id).then(res => {
+        setForm({ ...res.data, status: res.data.status || 'Open' });
+      });
+    }
+  }, [recordToEdit]);
+
+  // Async order search
+  useEffect(() => {
+    if (orderQuery.length < 2) return setOrderResults([]);
+    axios.get(`/api/orders/search?query=${orderQuery}`)
+      .then(res => setOrderResults(res.data));
+  }, [orderQuery]);
+
+  function handleSave() {
+    const fn = isEdit
+      ? updateRecord(recordToEdit.id, form)
+      : createRecord(form);
+    fn.then(() => {
+      toast.success(`Record ${isEdit ? 'updated' : 'created'}!`);
+      onSaved();
+      onClose();
+    }).catch(() => toast.error('Save failed.'));
+  }
+
+  return (
+    <Transition.Root show={open} as={Fragment}>
+      <Dialog as="div" className="fixed inset-0 z-10 overflow-y-auto" onClose={onClose}>
+        <div className="flex items-end justify-center min-h-screen px-4 pb-20 text-center sm:block sm:p-0">
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+            leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
+          >
+            <Dialog.Overlay className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" />
+          </Transition.Child>
+          {/* Modal panel */}
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300" enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" enterTo="opacity-100 translate-y-0 sm:scale-100"
+            leave="ease-in duration-200" leaveFrom="opacity-100 translate-y-0 sm:scale-100" leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+          >
+            <div className="inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-lg">
+              <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                {isEdit ? 'Edit' : 'New'} Nonconformance
+              </Dialog.Title>
+              <div className="mt-4 space-y-4">
+                {/* Search Order Combobox */}
+                <div>
+                  <Combobox value={form.orderId} onChange={val => {
+                    const sel = orderResults.find(o => o.orderId === val);
+                    setForm({
+                      ...form,
+                      orderId: sel.orderId,
+                      serialNumber: sel.serialNumber,
+                      customerName: sel.customerName,
+                      poNumber: sel.poNumber,
+                      stockModel: sel.stockModel,
+                    });
+                  }}>
+                    <Combobox.Input
+                      className="w-full border rounded p-2"
+                      onChange={e => setOrderQuery(e.target.value)}
+                      displayValue={() => form.orderId}
+                      placeholder="Search Order ID / Serial / Customer..."
+                    />
+                    {orderResults.length > 0 && (
+                      <Combobox.Options className="border rounded mt-1 bg-white max-h-60 overflow-auto">
+                        {orderResults.map(o => (
+                          <Combobox.Option
+                            key={o.orderId}
+                            value={o.orderId}
+                            className={({ active }) =>
+                              `cursor-pointer select-none p-2 ${active ? 'bg-indigo-500 text-white' : ''}`
+                            }
+                          >
+                            {`${o.orderId} / ${o.serialNumber} / ${o.customerName}`}
+                          </Combobox.Option>
+                        ))}
+                      </Combobox.Options>
+                    )}
+                  </Combobox>
+                </div>
+                {/* Quantity */}
+                <div>
+                  <label className="block text-sm">Quantity</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded p-2"
+                    value={form.quantity}
+                    onChange={e => setForm({ ...form, quantity: +e.target.value })}
+                  />
+                </div>
+                {/* Issue/Cause */}
+                <div>
+                  <label className="block text-sm">Issue/Cause</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={form.issueCause}
+                    onChange={e => setForm({ ...form, issueCause: e.target.value })}
+                  >
+                    {issueOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Manufacturer Defect */}
+                <div>
+                  <span className="text-sm">Manufacturer Defect?</span>
+                  <div className="flex space-x-4 mt-1">
+                    {['Yes','No'].map(v => (
+                      <label key={v} className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          className="form-radio"
+                          name="manufacturerDefect"
+                          checked={(v==='Yes') === form.manufacturerDefect}
+                          onChange={() => setForm({ ...form, manufacturerDefect: v==='Yes' })}
+                        />
+                        <span className="ml-2">{v}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {/* Disposition */}
+                <div>
+                  <label className="block text-sm">Disposition</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={form.disposition}
+                    onChange={e => setForm({ ...form, disposition: e.target.value })}
+                  >
+                    {dispositionOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Authorization */}
+                <div>
+                  <label className="block text-sm">Authorization</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={form.authorization}
+                    onChange={e => setForm({ ...form, authorization: e.target.value })}
+                  >
+                    {authorizationOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Serial # (if manual) */}
+                <div>
+                  <label className="block text-sm">Order / Serial #</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded p-2"
+                    value={form.serialNumber}
+                    onChange={e => setForm({ ...form, serialNumber: e.target.value })}
+                  />
+                </div>
+                {/* Disposition Date */}
+                <div>
+                  <label className="block text-sm">Disposition Date</label>
+                  <input
+                    type="date"
+                    className="w-full border rounded p-2"
+                    value={form.dispositionDate}
+                    onChange={e => setForm({ ...form, dispositionDate: e.target.value })}
+                  />
+                </div>
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm">Notes</label>
+                  <textarea
+                    className="w-full border rounded p-2"
+                    rows={3}
+                    value={form.notes}
+                    onChange={e => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+                {/* Status (edit only) */}
+                {isEdit && (
+                  <div>
+                    <label className="block text-sm">Status</label>
+                    <select
+                      className="w-full border rounded p-2"
+                      value={form.status}
+                      onChange={e => setForm({ ...form, status: e.target.value })}
+                    >
+                      <option>Open</option>
+                      <option>Resolved</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                  onClick={onClose}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  onClick={handleSave}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </Transition.Child>
+        </div>
+      </Dialog>
+    </Transition.Root>
+  );
+}
+3.3.2 src/components/NonconformanceDashboard.jsx
+jsx
+Copy
+Edit
+import { useState } from 'react';
+import useNonconformance from '../hooks/useNonconformance';
+import NonconformanceFormModal from './NonconformanceFormModal';
+import { format, addDays, parseISO } from 'date-fns';
+
+export default function NonconformanceDashboard() {
+  // Filter state
+  const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', stockModel: '', issueCause: '', status: '', search: '' });
+  const { records, loading } = useNonconformance(filters);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editRecord, setEditRecord] = useState(null);
+
+  function resetFilters() {
+    setFilters({ dateFrom: '', dateTo: '', stockModel: '', issueCause: '', status: '', search: '' });
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      {/* Filters + New */}
+      <div className="flex flex-wrap items-end gap-4">
+        <input
+          type="date"
+          value={filters.dateFrom}
+          onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))}
+          className="border rounded p-2"
+          placeholder="From"
+        />
+        <input
+          type="date"
+          value={filters.dateTo}
+          onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))}
+          className="border rounded p-2"
+          placeholder="To"
+        />
+        {/* Stock Model & Issue/Cause/Status */}
+        {['stockModel','issueCause','status'].map(key => (
+          <select
+            key={key}
+            className="border rounded p-2"
+            value={filters[key]}
+            onChange={e => setFilters(f => ({ ...f, [key]: e.target.value }))}
+          >
+            <option value="">{key}</option>
+            {/* For stockModel, fetch from /api/stock-models in real code */}
+            {key !== 'stockModel'
+              ? key === 'status'
+                ? ['Open','Resolved'].map(v => <option key={v}>{v}</option>)
+                : ['Customer Request for Additional Work','Wrong Inlet/CNC Error','Does Not Meet Customer QC Requirements'].map(v => <option key={v}>{v}</option>)
+              : []}
+          </select>
+        ))}
+        <input
+          type="text"
+          placeholder="Search..."
+          className="border rounded p-2 flex-grow"
+          value={filters.search}
+          onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+        />
+        <button
+          className="px-4 py-2 bg-green-600 text-white rounded"
+          onClick={() => setModalOpen(true)}
+        >
+          New Record
+        </button>
+        <button
+          className="px-4 py-2 bg-gray-300 rounded"
+          onClick={resetFilters}
+        >
+          Reset
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-auto bg-white shadow rounded">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {['Order ID','Serial #','Customer','PO #','Stock Model','Qty','Issue Cause','Disposition','Status','Dept','Actions'].map(h => (
+                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {loading
+              ? <tr><td colSpan="11" className="p-4 text-center">Loading…</td></tr>
+              : records.map(rec => {
+                  const dueDate = addDays(parseISO(rec.dispositionDate), 2);
+                  const isPast = new Date() > dueDate && rec.status === 'Open';
+                  const resolvedQuick = rec.status==='Resolved' && (parseISO(rec.resolvedAt) <= dueDate);
+                  return (
+                    <tr key={rec.id}>
+                      <td className="px-4 py-2">{rec.orderId}</td>
+                      <td className="px-4 py-2">{rec.serialNumber}</td>
+                      <td className="px-4 py-2">{rec.customerName}</td>
+                      <td className="px-4 py-2">{rec.poNumber}</td>
+                      <td className="px-4 py-2">{rec.stockModel}</td>
+                      <td className="px-4 py-2">{rec.quantity}</td>
+                      <td className="px-4 py-2">{rec.issueCause}</td>
+                      <td className="px-4 py-2">{rec.disposition}</td>
+                      <td className="px-4 py-2">{rec.status}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          resolvedQuick ? 'bg-green-100 text-green-800'
+                          : isPast ? 'bg-orange-100 text-orange-800'
+                          : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {resolvedQuick ? 'Resolved On-Time' : isPast ? 'Overdue' : 'In Progress'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          className="text-indigo-600 hover:text-indigo-900"
+                          onClick={() => { setEditRecord(rec); setModalOpen(true); }}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+            }
+          </tbody>
+        </table>
+      </div>
+
+      {/* Form Modal */}
+      {modalOpen && (
+        <NonconformanceFormModal
+          open={modalOpen}
+          onClose={() => { setModalOpen(false); setEditRecord(null); }}
+          onSaved={() => {} /* ideally trigger refetch: by resetting filters or passing reload flag */}
+          recordToEdit={editRecord}
+        />
+      )}
+    </div>
+  );
+}
+3.3.3 src/components/NonconformanceReport.jsx
+jsx
+Copy
+Edit
+import { useState } from 'react';
+import useNonconformanceAnalytics from '../hooks/useNonconformanceAnalytics';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts';
+
+export default function NonconformanceReport() {
+  const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', stockModel: '', issueCause: '' });
+  const { data, loading } = useNonconformanceAnalytics(filters);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <input
+          type="date"
+          className="border rounded p-2"
+          value={filters.dateFrom}
+          onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))}
+        />
+        <input
+          type="date"
+          className="border rounded p-2"
+          value={filters.dateTo}
+          onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))}
+        />
+        {['stockModel','issueCause'].map(key => (
+          <select
+            key={key}
+            className="border rounded p-2"
+            value={filters[key]}
+            onChange={e => setFilters(f => ({ ...f, [key]: e.target.value }))}
+          >
+            <option value="">{key}</option>
+            {/* populate real options via API in prod */}
+          </select>
+        ))}
+      </div>
+
+      {loading && <div>Loading analytics…</div>}
+      {data && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* By Dept */}
+          <div>
+            <h3 className="text-lg font-medium mb-2">By Department</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.byDept}>
+                <XAxis dataKey="dept"/>
+                <YAxis/>
+                <Tooltip/>
+                <Bar dataKey="count" fill="#4F46E5" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* By Model */}
+          <div>
+            <h3 className="text-lg font-medium mb-2">By Model</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.byModel}>
+                <XAxis dataKey="model"/>
+                <YAxis/>
+                <Tooltip/>
+                <Bar dataKey="count" fill="#10B981" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* By Cause */}
+          <div>
+            <h3 className="text-lg font-medium mb-2">By Cause</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.byCause}>
+                <XAxis dataKey="cause"/>
+                <YAxis/>
+                <Tooltip/>
+                <Bar dataKey="count" fill="#EF4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Scrap Rate */}
+          <div className="flex flex-col justify-center items-center">
+            <h3 className="text-lg font-medium mb-2">Scrap Rate</h3>
+            <span className="text-5xl font-bold text-gray-700">
+              {`${(data.scrapRate * 100).toFixed(2)}%`}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+🔧 3.4 Dependencies
+bash
+Copy
+Edit
+npm install axios react-hot-toast @headlessui/react recharts date-fns
+# + Tailwind CSS dependencies per your Tailwind setup
+🔧 3.5 Routes & Usage
+In your main router (e.g. src/App.jsx or wherever you define routes):
+
+jsx
+Copy
+Edit
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import NonconformanceDashboard from './components/NonconformanceDashboard';
+import NonconformanceReport from './components/NonconformanceReport';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/nonconformance" element={<NonconformanceDashboard />} />
+        <Route path="/nonconformance/report" element={<NonconformanceReport />} />
+        {/* …other routes */}
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+Ensure your backend provides these endpoints:
+
+POST /api/nonconformance
+
+PUT /api/nonconformance/{id}
+
+GET /api/nonconformance
+
+GET /api/nonconformance/{id}
+
+GET /api/nonconformance/analytics
+
+GET /api/orders/search?query=…
+
+GET /api/stock-models

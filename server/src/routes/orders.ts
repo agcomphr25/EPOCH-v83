@@ -62,6 +62,23 @@ router.get('/outstanding', async (req: Request, res: Response) => {
 
 
 
+// Search orders - must be before :orderId route
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || typeof query !== 'string' || query.length < 2) {
+      return res.json([]);
+    }
+
+    const results = await storage.searchOrders(query as string);
+    res.json(results);
+  } catch (error) {
+    console.error('Error searching orders:', error);
+    res.status(500).json({ error: 'Failed to search orders' });
+  }
+});
+
 // Order Draft Management
 router.get('/drafts', async (req: Request, res: Response) => {
   try {

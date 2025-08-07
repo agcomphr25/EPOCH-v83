@@ -1416,6 +1416,47 @@ export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments).omit({
   path: z.string().min(1, "Path is required"),
 });
 
+// Nonconformance Tracking - Module 17
+export const nonconformanceRecords = pgTable("nonconformance_records", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id"),
+  serialNumber: text("serial_number"),
+  customerName: text("customer_name"),
+  poNumber: text("po_number"),
+  stockModel: text("stock_model"),
+  quantity: integer("quantity").default(1),
+  issueCause: text("issue_cause").notNull(),
+  manufacturerDefect: boolean("manufacturer_defect").default(false),
+  disposition: text("disposition").notNull(),
+  authorization: text("auth_person").notNull(),
+  dispositionDate: date("disposition_date").notNull(),
+  notes: text("notes"),
+  status: text("status").default("Open"), // Open, Resolved
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertNonconformanceRecordSchema = createInsertSchema(nonconformanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().optional(),
+  serialNumber: z.string().optional(),
+  customerName: z.string().optional(),
+  poNumber: z.string().optional(),
+  stockModel: z.string().optional(),
+  quantity: z.number().min(1).default(1),
+  issueCause: z.string().min(1, "Issue cause is required"),
+  manufacturerDefect: z.boolean().default(false),
+  disposition: z.string().min(1, "Disposition is required"),
+  authorization: z.string().min(1, "Authorization is required"),
+  dispositionDate: z.string().min(1, "Disposition date is required"),
+  notes: z.string().optional(),
+  status: z.enum(['Open', 'Resolved']).default('Open'),
+});
+
 // Types for Module 8
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
@@ -1423,6 +1464,10 @@ export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
 export type CustomerAddress = typeof customerAddresses.$inferSelect;
 export type InsertCommunicationLog = z.infer<typeof insertCommunicationLogSchema>;
 export type CommunicationLog = typeof communicationLogs.$inferSelect;
+
+// Types for Module 17 - Nonconformance
+export type InsertNonconformanceRecord = z.infer<typeof insertNonconformanceRecordSchema>;
+export type NonconformanceRecord = typeof nonconformanceRecords.$inferSelect;
 export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
 export type PdfDocument = typeof pdfDocuments.$inferSelect;
 

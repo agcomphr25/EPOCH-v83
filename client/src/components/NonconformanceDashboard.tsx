@@ -161,12 +161,12 @@ export default function NonconformanceDashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Issue Cause</label>
-              <Select value={filters.issueCause} onValueChange={(value) => setFilters(f => ({ ...f, issueCause: value }))}>
+              <Select value={filters.issueCause || "all"} onValueChange={(value) => setFilters(f => ({ ...f, issueCause: value === "all" ? "" : value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Causes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Causes</SelectItem>
+                  <SelectItem value="all" key="all-causes">All Causes</SelectItem>
                   {issueOptions.map(option => (
                     <SelectItem key={option} value={option}>{option}</SelectItem>
                   ))}
@@ -175,12 +175,12 @@ export default function NonconformanceDashboard() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <Select value={filters.status} onValueChange={(value) => setFilters(f => ({ ...f, status: value }))}>
+              <Select value={filters.status || "all"} onValueChange={(value) => setFilters(f => ({ ...f, status: value === "all" ? "" : value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all" key="all-statuses">All Statuses</SelectItem>
                   <SelectItem value="Open">Open</SelectItem>
                   <SelectItem value="Resolved">Resolved</SelectItem>
                 </SelectContent>

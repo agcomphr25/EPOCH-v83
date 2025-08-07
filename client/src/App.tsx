@@ -75,6 +75,7 @@ import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
+import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -221,6 +222,7 @@ function App() {
                   <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
                   <Route path="/purchase-review-checklist" component={PurchaseReviewChecklist} />
                   <Route path="/purchase-review-submissions" component={PurchaseReviewSubmissions} />
+                  <Route path="/manufacturers-certificate" component={ManufacturersCertificate} />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />

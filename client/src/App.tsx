@@ -184,6 +184,11 @@ function App() {
                   {/* Auth Routes */}
                   <Route path="/login" component={LoginPage} />
 
+                  {/* Test Dashboard Routes */}
+                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
+                  <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
+                  <Route path="/stacitest-dashboard" component={STACITestDashboard} />
+                  
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />

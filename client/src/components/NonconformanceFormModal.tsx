@@ -79,17 +79,27 @@ export default function NonconformanceFormModal({
     }
   }, [recordToEdit, isEdit]);
 
-  // Search orders
+  // Search orders from all orders list
   useEffect(() => {
-    if (orderQuery.length < 2) {
-      setOrderResults([]);
-      return;
-    }
-
     const searchOrders = async () => {
       try {
-        const data = await apiRequest(`/api/orders/search?query=${encodeURIComponent(orderQuery)}`);
-        setOrderResults(data || []);
+        if (orderQuery.length === 0) {
+          // Fetch all orders initially
+          const data = await apiRequest('/api/orders');
+          setOrderResults((data || []).slice(0, 50)); // Limit to first 50 for performance
+        } else if (orderQuery.length >= 2) {
+          // Search with filter
+          const data = await apiRequest('/api/orders');
+          const filtered = (data || []).filter((order: any) => 
+            (order.orderId && order.orderId.toLowerCase().includes(orderQuery.toLowerCase())) ||
+            (order.serialNumber && order.serialNumber.toLowerCase().includes(orderQuery.toLowerCase())) ||
+            (order.customer && order.customer.toLowerCase().includes(orderQuery.toLowerCase())) ||
+            (order.customerName && order.customerName.toLowerCase().includes(orderQuery.toLowerCase()))
+          ).slice(0, 20); // Limit results for performance
+          setOrderResults(filtered);
+        } else {
+          setOrderResults([]);
+        }
       } catch (error) {
         console.error('Error searching orders:', error);
         setOrderResults([]);
@@ -103,11 +113,11 @@ export default function NonconformanceFormModal({
   const handleOrderSelect = (selectedOrder: any) => {
     setForm({
       ...form,
-      orderId: selectedOrder.orderId || '',
+      orderId: selectedOrder.orderId || selectedOrder.id || '',
       serialNumber: selectedOrder.serialNumber || '',
-      customerName: selectedOrder.customerName || '',
-      poNumber: selectedOrder.poNumber || '',
-      stockModel: selectedOrder.stockModel || '',
+      customerName: selectedOrder.customerName || selectedOrder.customer || '',
+      poNumber: selectedOrder.poNumber || selectedOrder.po || '',
+      stockModel: selectedOrder.stockModel || selectedOrder.model || '',
     });
     setOrderQuery('');
     setOrderResults([]);
@@ -163,32 +173,56 @@ export default function NonconformanceFormModal({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Order Search */}
+          {/* Order Search Dropdown */}
           <div className="space-y-2">
             <Label>Search Order</Label>
-            <div className="relative">
-              <Input
-                placeholder="Search by Order ID, Serial Number, or Customer..."
-                value={orderQuery}
-                onChange={(e) => setOrderQuery(e.target.value)}
-              />
-              {orderResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                  {orderResults.map((order: any) => (
-                    <div
-                      key={order.id}
-                      className="p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleOrderSelect(order)}
-                    >
-                      <div className="font-medium">{order.orderId}</div>
-                      <div className="text-sm text-gray-600">
-                        {order.serialNumber} • {order.customerName}
-                      </div>
-                    </div>
-                  ))}
+            <Select 
+              value={form.orderId} 
+              onValueChange={(selectedOrderId) => {
+                const selectedOrder = orderResults.find(order => order.orderId === selectedOrderId);
+                if (selectedOrder) {
+                  handleOrderSelect(selectedOrder);
+                }
+              }}
+              onOpenChange={(open) => {
+                if (open && orderResults.length === 0) {
+                  // Trigger initial search when dropdown opens
+                  setOrderQuery('');
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Search and select an order...">
+                  {form.orderId ? `${form.orderId} - ${form.customerName}` : "Search and select an order..."}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <div className="p-2">
+                  <Input
+                    placeholder="Type to search orders..."
+                    value={orderQuery}
+                    onChange={(e) => setOrderQuery(e.target.value)}
+                    className="mb-2"
+                  />
                 </div>
-              )}
-            </div>
+                {orderResults.length > 0 ? (
+                  orderResults.map((order: any) => (
+                    <SelectItem key={order.id} value={order.orderId || order.id}>
+                      <div className="flex flex-col">
+                        <div className="font-medium">{order.orderId}</div>
+                        <div className="text-sm text-gray-600">
+                          {order.serialNumber && `${order.serialNumber} • `}{order.customerName}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))
+                ) : orderQuery.length >= 2 ? (
+                  <div className="p-2 text-sm text-gray-500">No orders found</div>
+                ) : (
+                  <div className="p-2 text-sm text-gray-500">Type to search orders...</div>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Order Details */}

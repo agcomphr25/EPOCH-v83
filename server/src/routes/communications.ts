@@ -332,35 +332,38 @@ router.get('/history/:customerId', async (req, res) => {
 router.get('/inbox', async (req, res) => {
   try {
     const inboxMessages = await db
-      .select({
-        id: communicationLogs.id,
-        customerId: communicationLogs.customerId,
-        customerName: customers.name,
-        customerEmail: customers.email,
-        customerPhone: customers.phone,
-        type: communicationLogs.type,
-        method: communicationLogs.method,
-        direction: communicationLogs.direction,
-        sender: communicationLogs.sender,
-        recipient: communicationLogs.recipient,
-        subject: communicationLogs.subject,
-        message: communicationLogs.message,
-        status: communicationLogs.status,
-        isRead: communicationLogs.isRead,
-        receivedAt: communicationLogs.receivedAt,
-        sentAt: communicationLogs.sentAt,
-        createdAt: communicationLogs.createdAt,
-        priority: customerCommunications.priority,
-        assignedTo: customerCommunications.assignedTo,
-        resolvedAt: customerCommunications.resolvedAt
-      })
+      .select()
       .from(communicationLogs)
       .leftJoin(customers, eq(communicationLogs.customerId, sql`${customers.id}::text`))
       .leftJoin(customerCommunications, eq(communicationLogs.id, customerCommunications.communicationLogId))
       .orderBy(desc(communicationLogs.createdAt))
       .limit(100);
     
-    res.json(inboxMessages);
+    // Transform the results to flatten the structure
+    const transformedMessages = inboxMessages.map(row => ({
+      id: row.communication_logs.id,
+      customerId: row.communication_logs.customerId,
+      customerName: row.customers?.name || 'Unknown Customer',
+      customerEmail: row.customers?.email,
+      customerPhone: row.customers?.phone,
+      type: row.communication_logs.type,
+      method: row.communication_logs.method,
+      direction: row.communication_logs.direction,
+      sender: row.communication_logs.sender,
+      recipient: row.communication_logs.recipient,
+      subject: row.communication_logs.subject,
+      message: row.communication_logs.message,
+      status: row.communication_logs.status,
+      isRead: row.communication_logs.isRead || false,
+      receivedAt: row.communication_logs.receivedAt,
+      sentAt: row.communication_logs.sentAt,
+      createdAt: row.communication_logs.createdAt,
+      priority: row.customer_communications?.priority || 'normal',
+      assignedTo: row.customer_communications?.assignedTo,
+      resolvedAt: row.customer_communications?.resolvedAt
+    }));
+    
+    res.json(transformedMessages);
     
   } catch (error: any) {
     console.error('Inbox error:', error);

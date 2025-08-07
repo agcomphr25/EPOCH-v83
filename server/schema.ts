@@ -1292,11 +1292,16 @@ export const communicationLogs = pgTable("communication_logs", {
   type: text("type").notNull(), // order-confirmation, shipping-notification, quality-alert
   method: text("method").notNull(), // email, sms
   recipient: text("recipient").notNull(), // email address or phone number
+  sender: text("sender"), // sender email/phone for inbound messages
   subject: text("subject"),
   message: text("message"),
-  status: text("status").notNull().default("pending"), // pending, sent, failed
+  status: text("status").notNull().default("pending"), // pending, sent, failed, received
   error: text("error"),
+  direction: text("direction").default("outbound"), // inbound, outbound
+  externalId: text("external_id"), // External message ID from Twilio/SendGrid
+  isRead: boolean("is_read").default(false), // Whether message has been read
   sentAt: timestamp("sent_at"),
+  receivedAt: timestamp("received_at"), // For inbound messages
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

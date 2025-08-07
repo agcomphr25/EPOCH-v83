@@ -72,6 +72,7 @@ import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingManagement from "./pages/ShippingManagement";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
+import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -215,6 +216,7 @@ function App() {
                   {/* P2 Forms Routes */}
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/waste-management-form" component={WasteManagementForm} />
+                  <Route path="/rfq-risk-assessment" component={RFQRiskAssessment} />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />

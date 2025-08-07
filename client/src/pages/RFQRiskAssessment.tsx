@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,30 @@ export default function RFQRiskAssessment() {
     printedName: '',
     signature: ''
   });
+
+  // Effect to handle canvas resizing
+  useEffect(() => {
+    const resizeCanvas = () => {
+      if (signatureCanvasRef.current) {
+        const canvas = signatureCanvasRef.current.getCanvas();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        // Store the scale factors for proper mouse coordinate mapping
+        canvas.dataset.scaleX = scaleX.toString();
+        canvas.dataset.scaleY = scaleY.toString();
+      }
+    };
+
+    // Resize on mount and window resize
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, []);
 
   // Risk scoring system
   const getRiskScore = (value: string) => {
@@ -614,14 +638,19 @@ export default function RFQRiskAssessment() {
             
             <div className="mt-6">
               <Label className="block mb-2">Digital Signature</Label>
-              <div className="border border-gray-300 rounded-md p-2 bg-white">
+              <div className="border border-gray-300 rounded-md p-2 bg-white" style={{ width: '100%', maxWidth: '500px' }}>
                 <SignatureCanvas
                   ref={signatureCanvasRef}
                   penColor="black"
                   canvasProps={{
-                    width: 400,
-                    height: 150,
-                    className: 'signature-canvas border rounded w-full'
+                    width: 500,
+                    height: 200,
+                    style: {
+                      width: '100%',
+                      height: '200px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '4px'
+                    }
                   }}
                   onEnd={saveSignature}
                 />

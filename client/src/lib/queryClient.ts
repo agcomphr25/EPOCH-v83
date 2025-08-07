@@ -27,29 +27,44 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
 
-  // Get session token from localStorage
+  // Get tokens from localStorage (prefer JWT token for API requests)
+  const jwtToken = localStorage.getItem('jwtToken') || '';
   const sessionToken = localStorage.getItem('sessionToken') || '';
+  const token = jwtToken || sessionToken;
 
   const defaultHeaders = {
     'Content-Type': 'application/json',
-    ...(sessionToken && { 'Authorization': `Bearer ${sessionToken}` }),
+    ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
 
   const config: RequestInit = {
     ...options,
     headers: defaultHeaders,
+    credentials: 'include', // Include cookies for session-based auth
   };
 
-  if (options.body && typeof options.body === 'object') {
+  if (options.body && typeof options.body === 'object' && !options.headers?.['Content-Type']?.includes('multipart/form-data')) {
     config.body = JSON.stringify(options.body);
   }
 
   const response = await fetch(fullUrl, config);
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || `HTTP error! status: ${response.status}`);
+    let errorMessage = `HTTP error! status: ${response.status}`;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorMessage;
+    } catch {
+      // If JSON parsing fails, use text
+      try {
+        const text = await response.text();
+        errorMessage = text || errorMessage;
+      } catch {
+        // Keep the default error message
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -61,8 +76,19 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    // Get tokens for authenticated requests
+    const jwtToken = localStorage.getItem('jwtToken') || '';
+    const sessionToken = localStorage.getItem('sessionToken') || '';
+    const token = jwtToken || sessionToken;
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

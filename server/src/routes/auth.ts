@@ -20,18 +20,20 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    // Set secure cookie
+    // Set secure cookie with enhanced security
     res.cookie('sessionToken', result.sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always use secure cookies
       sameSite: 'strict',
       maxAge: 8 * 60 * 60 * 1000, // 8 hours
+      path: '/', // Explicit path
     });
 
     res.json({
       success: true,
       user: result.user,
-      sessionToken: result.sessionToken
+      sessionToken: result.sessionToken,
+      token: result.token // Include JWT token for client-side storage
     });
   } catch (error) {
     console.error('Login error:', error);

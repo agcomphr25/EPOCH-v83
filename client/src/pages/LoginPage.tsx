@@ -35,9 +35,17 @@ export default function LoginPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      // Store both session token and JWT token
+      if (data.sessionToken) {
+        localStorage.setItem('sessionToken', data.sessionToken);
+      }
+      if (data.token) {
+        localStorage.setItem('jwtToken', data.token);
+      }
+      
       toast({
         title: "Login Successful",
-        description: `Welcome back, ${data.user?.name || 'User'}!`,
+        description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
       // Redirect based on role

@@ -198,6 +198,14 @@ export default function RFQRiskAssessment() {
     }
   };
 
+  // Handle form submission
+  const handleSubmitAssessment = () => {
+    // TODO: Implement form submission logic
+    // For now, just show a placeholder message
+    console.log('RFQ Risk Assessment submitted:', formData);
+    alert('Assessment submission functionality will be implemented soon.');
+  };
+
 
 
   const RiskRadioGroup = ({ 
@@ -629,6 +637,17 @@ export default function RFQRiskAssessment() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Submit Button */}
+        <div className="flex justify-center mb-6">
+          <Button 
+            onClick={handleSubmitAssessment}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
+            size="lg"
+          >
+            Submit Assessment
+          </Button>
+        </div>
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-500 mb-8">

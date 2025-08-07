@@ -52,7 +52,6 @@ router.post('/email', async (req, res) => {
     
     // Store in database
     const [communicationLog] = await db.insert(communicationLogs).values({
-      orderId: data.orderId || null, // Allow null orderId for general communications
       customerId: data.customerId,
       type: 'general',
       method: 'email',
@@ -122,7 +121,6 @@ router.post('/sms', async (req, res) => {
 
     // Store in database
     const [communicationLog] = await db.insert(communicationLogs).values({
-      orderId: data.orderId || null, // Allow null orderId for general communications
       customerId: data.customerId,
       type: 'general',
       method: 'sms',
@@ -332,7 +330,11 @@ router.get('/history/:customerId', async (req, res) => {
 router.get('/inbox', async (req, res) => {
   try {
     const inboxMessages = await db
-      .select()
+      .select({
+        communication_logs: communicationLogs,
+        customers: customers,
+        customer_communications: customerCommunications
+      })
       .from(communicationLogs)
       .leftJoin(customers, eq(communicationLogs.customerId, sql`${customers.id}::text`))
       .leftJoin(customerCommunications, eq(communicationLogs.id, customerCommunications.communicationLogId))

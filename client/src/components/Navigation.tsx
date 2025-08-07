@@ -188,6 +188,12 @@ export default function Navigation() {
       description: 'QC inspections and definitions'
     },
     {
+      path: '/nonconformance',
+      label: 'Nonconformance Tracking',
+      icon: ClipboardList,
+      description: 'Track and manage quality issues and dispositions'
+    },
+    {
       path: '/maintenance',
       label: 'Maintenance',
       icon: Wrench,

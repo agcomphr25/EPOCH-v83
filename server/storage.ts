@@ -1,4 +1,4 @@
-import { 
+import {
   users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
@@ -14,6 +14,9 @@ import {
   documents, documentTags, documentTagRelations, documentCollections, documentCollectionRelations,
   // New employee management tables
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
+  // allOrders table as the finalized orders table
+  allOrders,
+  // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
   type PersistentDiscount, type InsertPersistentDiscount,
@@ -23,6 +26,7 @@ import {
   type Feature, type InsertFeature,
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
+  type AllOrder, type InsertAllOrder, // Type for finalized orders
   type Form, type InsertForm,
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
@@ -100,12 +104,12 @@ export interface IStorage {
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
   generatePortalToken(employeeId: number): Promise<string>;
   validatePortalToken(token: string): Promise<{ employeeId: number; isValid: boolean }>;
-  
+
   // Time clock methods for portal
   getTimeClockEntry(employeeId: string, date: string): Promise<TimeClockEntry | undefined>;
   clockIn(employeeId: string): Promise<TimeClockEntry>;
   clockOut(employeeId: string): Promise<TimeClockEntry>;
-  
+
   // Daily checklist methods for portal
   getDailyChecklist(employeeId: string, date: string): Promise<ChecklistItem[]>;
   updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]>;
@@ -170,9 +174,9 @@ export interface IStorage {
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
-  getAllOrders(): Promise<OrderDraft[]>;
+  // getAllOrders(): Promise<OrderDraft[]>; // This method is now overridden below with new functionality
   getOrderById(orderId: string): Promise<OrderDraft | undefined>;
-  
+
   // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
   markOrderIdAsUsed(orderId: string): Promise<void>;
@@ -200,6 +204,7 @@ export interface IStorage {
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
+  getInventoryItemByAgPartNumber(agPartNumber: string): Promise<InventoryItem | undefined>;
   getInventoryItemByCode(code: string): Promise<InventoryItem | undefined>;
   createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem>;
   updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem>;
@@ -220,7 +225,7 @@ export interface IStorage {
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
-  
+
   // Search Orders
   searchOrders(query: string): Promise<{
     id: string;
@@ -444,6 +449,10 @@ export interface IStorage {
   updateLayupSchedule(id: number, data: Partial<InsertLayupSchedule>): Promise<LayupSchedule>;
   deleteLayupSchedule(id: number): Promise<void>;
   overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
+  deleteLayupScheduleByOrder(orderId: string): Promise<void>;
+
+  // Get unified layup orders (combining regular orders and P1 PO items)
+  getUnifiedLayupOrders(): Promise<any[]>;
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
@@ -454,7 +463,11 @@ export interface IStorage {
 
   // BOM Management Methods
   getAllBOMs(): Promise<BomDefinition[]>;
-  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[] }) | undefined>;
+  getBOMDetails(bomId: number): Promise<(BomDefinition & { items: BomItem[], hierarchicalItems?: any[] }) | undefined>;
+  getBOMDefinition(bomId: number): Promise<BomDefinition | undefined>; // Helper to get BOM definition
+  buildHierarchicalItems(items: BomItem[]): Promise<any[]>; // Helper to build hierarchical BOM structure
+  createSubAssemblyReference(parentBomId: number, childBomId: number, partName: string, quantity: number, quantityMultiplier?: number, notes?: string): Promise<BomItem>;
+  getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]>;
   createBOM(data: InsertBomDefinition): Promise<BomDefinition>;
   updateBOM(bomId: number, data: Partial<InsertBomDefinition>): Promise<BomDefinition>;
   deleteBOM(bomId: number): Promise<void>;
@@ -469,6 +482,13 @@ export interface IStorage {
   updatePurchaseReviewChecklist(id: number, data: Partial<InsertPurchaseReviewChecklist>): Promise<PurchaseReviewChecklist>;
   deletePurchaseReviewChecklist(id: number): Promise<void>;
 
+  // Manufacturer's Certificate of Conformance Methods
+  getAllManufacturersCertificates(): Promise<ManufacturersCertificate[]>;
+  getManufacturersCertificate(id: number): Promise<ManufacturersCertificate | undefined>;
+  createManufacturersCertificate(data: InsertManufacturersCertificate): Promise<ManufacturersCertificate>;
+  updateManufacturersCertificate(id: number, data: Partial<InsertManufacturersCertificate>): Promise<ManufacturersCertificate>;
+  deleteManufacturersCertificate(id: number): Promise<void>;
+
   // Task Tracker Methods
   getAllTaskItems(): Promise<TaskItem[]>;
   getTaskItemById(id: number): Promise<TaskItem | undefined>;
@@ -477,11 +497,74 @@ export interface IStorage {
   updateTaskItemStatus(id: number, statusData: any): Promise<TaskItem>;
   deleteTaskItem(id: number): Promise<void>;
 
+  // Kickback Tracking CRUD
+  getAllKickbacks(): Promise<Kickback[]>;
+  getKickbacksByOrderId(orderId: string): Promise<Kickback[]>;
+  getKickbacksByStatus(status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'): Promise<Kickback[]>;
+  getKickbacksByDepartment(department: string): Promise<Kickback[]>;
+  getKickback(id: number): Promise<Kickback | undefined>;
+  createKickback(data: InsertKickback): Promise<Kickback>;
+  updateKickback(id: number, data: Partial<InsertKickback>): Promise<Kickback>;
+  deleteKickback(id: number): Promise<void>;
+
+  // Kickback Analytics Methods
+  getKickbackAnalytics(dateRange?: { start: Date; end: Date }): Promise<{
+    totalKickbacks: number;
+    byDepartment: { [key: string]: number };
+    byReasonCode: { [key: string]: number };
+    byStatus: { [key: string]: number };
+    byPriority: { [key: string]: number };
+    resolvedKickbacks: number;
+    averageResolutionTime: number | null;
+  }>;
+
+  // Document Management System CRUD Methods
+
+  // Documents CRUD (Document Management System)
+  getAllManagedDocuments(): Promise<Document[]>;
+  getManagedDocument(id: number): Promise<Document | undefined>;
+  searchDocuments(query: string): Promise<Document[]>;
+  getManagedDocumentsByType(documentType: string): Promise<Document[]>;
+  createManagedDocument(data: InsertDocument): Promise<Document>;
+  updateManagedDocument(id: number, data: Partial<InsertDocument>): Promise<Document>;
+  deleteManagedDocument(id: number): Promise<void>;
+
+  // Document Tags CRUD
+  getAllTags(): Promise<DocumentTag[]>;
+  getTagsByCategory(category: string): Promise<DocumentTag[]>;
+  createTag(data: InsertDocumentTag): Promise<DocumentTag>;
+  updateTag(id: number, data: Partial<InsertDocumentTag>): Promise<DocumentTag>;
+  deleteTag(id: number): Promise<void>;
+
+  // Document Tag Relations
+  getDocumentTags(documentId: number): Promise<DocumentTag[]>;
+  addTagToDocument(documentId: number, tagId: number): Promise<void>;
+  removeTagFromDocument(documentId: number, tagId: number): Promise<void>;
+
+  // Document Collections CRUD
+  getAllCollections(): Promise<DocumentCollection[]>;
+  getCollection(id: number): Promise<DocumentCollection | undefined>;
+  getCollectionsByType(collectionType: string): Promise<DocumentCollection[]>;
+  createCollection(data: InsertDocumentCollection): Promise<DocumentCollection>;
+  updateCollection(id: number, data: Partial<InsertDocumentCollection>): Promise<DocumentCollection>;
+  deleteCollection(id: number): Promise<void>;
+
+  // Document Collection Relations
+  getCollectionDocuments(collectionId: number): Promise<Document[]>;
+  addDocumentToCollection(collectionId: number, documentId: number, relationshipType?: string, displayOrder?: number, addedBy?: number): Promise<void>;
+  removeDocumentFromCollection(collectionId: number, documentId: number): Promise<void>;
+
   // Order Attachment Methods
   getOrderAttachments(orderId: string): Promise<OrderAttachment[]>;
   getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
+
+  // Add methods for finalized orders
+  getAllFinalizedOrders(): Promise<AllOrder[]>;
+  finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
+  getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
+  updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -498,7 +581,7 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     // Hash the password before inserting
     const passwordHash = await bcrypt.hash(insertUser.password, 12);
-    
+
     // Create user data with hashed password
     const userData = {
       username: insertUser.username,
@@ -700,7 +783,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return rawFeatures.map(feature => ({
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     }));
@@ -713,7 +796,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -728,7 +811,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -747,7 +830,7 @@ export class DatabaseStorage implements IStorage {
     // Parse JSON options field if it's a string
     return {
       ...feature,
-      options: typeof feature.options === 'string' 
+      options: typeof feature.options === 'string'
         ? (feature.options ? JSON.parse(feature.options) : null)
         : feature.options
     };
@@ -772,7 +855,7 @@ export class DatabaseStorage implements IStorage {
     let baseId = data.id || data.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     let id = baseId;
     let counter = 1;
-    
+
     // Check for existing ID and increment if needed
     while (true) {
       try {
@@ -809,20 +892,20 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log('=== CREATING ORDER DRAFT ===');
       console.log('Data:', JSON.stringify(data, null, 2));
-      
+
       // Generate barcode if not provided
       const dataWithBarcode = {
         ...data,
         barcode: data.barcode || `P1-${data.orderId}`
       };
-      
+
       const [draft] = await db.insert(orderDrafts).values(dataWithBarcode).returning();
       console.log('Created draft:', draft.id);
-      
+
       // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
       await this.markOrderIdAsUsed(data.orderId);
       console.log(`FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`);
-      
+
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);
@@ -860,11 +943,11 @@ export class DatabaseStorage implements IStorage {
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
     // First get all orders
     const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
-    
+
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
-    
+
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
@@ -891,7 +974,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const now = new Date();
       const currentPrefix = getCurrentYearMonthPrefix(now);
-      
+
       // Clean up expired reservations first (non-atomic, but helps keep table clean)
       try {
         await db.delete(orderIdReservations).where(
@@ -917,7 +1000,7 @@ export class DatabaseStorage implements IStorage {
               .where(like(orderDrafts.orderId, `${currentPrefix}%`))
               .orderBy(desc(orderDrafts.orderId))
               .limit(1),
-            
+
             // Get highest sequence from active reservations
             db
               .select({ sequenceNumber: orderIdReservations.sequenceNumber })
@@ -954,7 +1037,7 @@ export class DatabaseStorage implements IStorage {
 
           // Atomically reserve the Order ID using INSERT (will fail if duplicate)
           const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
-          
+
           await db.insert(orderIdReservations).values({
             orderId: nextOrderId,
             yearMonthPrefix: currentPrefix,
@@ -1004,7 +1087,7 @@ export class DatabaseStorage implements IStorage {
           usedAt: new Date(),
         })
         .where(eq(orderIdReservations.orderId, orderId));
-      
+
       console.log(`Marked Order ID as used: ${orderId}`);
     } catch (error) {
       console.error(`Error marking Order ID as used: ${orderId}`, error);
@@ -1023,7 +1106,7 @@ export class DatabaseStorage implements IStorage {
             lt(orderIdReservations.expiresAt, new Date())
           )
         );
-      
+
       const count = result.rowCount || 0;
       if (count > 0) {
         console.log(`Cleaned up ${count} expired Order ID reservations`);
@@ -1035,17 +1118,15 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Get all orders (drafts)
   async getAllOrders(): Promise<OrderDraft[]> {
-    // For now, return from orderDrafts table as it has the order data
-    // In the future, this could be changed to use the main orders table
-    
     // First get all orders
     const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
-    
+
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
-    
+
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
@@ -1200,7 +1281,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.orderDate instanceof Date) {
       updateData.orderDate = updateData.orderDate.toISOString();
     }
-    
+
     const [item] = await db.update(inventoryItems)
       .set(updateData)
       .where(eq(inventoryItems.id, id))
@@ -1233,7 +1314,7 @@ export class DatabaseStorage implements IStorage {
       insertData.manufactureDate = insertData.manufactureDate.toISOString();
     }
     // Remove scannedAt handling as it's not in the InsertInventoryScan type
-    
+
     const [scan] = await db.insert(inventoryScans).values([insertData]).returning();
     // Note: Inventory scans are now for tracking only, not affecting inventory levels
     // since the new inventory schema doesn't track onHand/committed quantities
@@ -1268,7 +1349,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.actualDelivery instanceof Date) {
       updateData.actualDelivery = updateData.actualDelivery.toISOString();
     }
-    
+
     const [request] = await db.update(partsRequests)
       .set(updateData)
       .where(eq(partsRequests.id, id))
@@ -1319,7 +1400,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.hireDate instanceof Date) {
       updateData.hireDate = updateData.hireDate.toISOString();
     }
-    
+
     const [employee] = await db.update(employees)
       .set(updateData)
       .where(eq(employees.id, id))
@@ -1347,21 +1428,21 @@ export class DatabaseStorage implements IStorage {
     const token = nanoid(32);
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30); // 30 days expiry
-    
+
     await db.update(employees)
-      .set({ 
+      .set({
         portalToken: token,
         portalTokenExpiry: expiry,
         updatedAt: new Date()
       })
       .where(eq(employees.id, employeeId));
-    
+
     return token;
   }
 
   async updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void> {
     await db.update(employees)
-      .set({ 
+      .set({
         portalToken: token,
         portalTokenExpiry: expiry,
         updatedAt: new Date()
@@ -1405,14 +1486,14 @@ export class DatabaseStorage implements IStorage {
   async getEmployeeCertifications(employeeId?: number): Promise<EmployeeCertification[]> {
     let query = db.select().from(employeeCertifications)
       .where(eq(employeeCertifications.isActive, true));
-    
+
     if (employeeId) {
       query = query.where(and(
         eq(employeeCertifications.isActive, true),
         eq(employeeCertifications.employeeId, employeeId)
       ));
     }
-    
+
     return await query.orderBy(employeeCertifications.dateObtained);
   }
 
@@ -1431,7 +1512,7 @@ export class DatabaseStorage implements IStorage {
     if (insertData.expiryDate instanceof Date) {
       insertData.expiryDate = insertData.expiryDate.toISOString();
     }
-    
+
     const [empCert] = await db.insert(employeeCertifications).values([insertData]).returning();
     return empCert;
   }
@@ -1445,7 +1526,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.expiryDate instanceof Date) {
       updateData.expiryDate = updateData.expiryDate.toISOString();
     }
-    
+
     const [empCert] = await db.update(employeeCertifications)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeCertifications.id, id))
@@ -1462,7 +1543,7 @@ export class DatabaseStorage implements IStorage {
   async getExpiringCertifications(days: number): Promise<EmployeeCertification[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
-    
+
     return await db.select().from(employeeCertifications)
       .where(and(
         eq(employeeCertifications.isActive, true),
@@ -1490,7 +1571,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(evaluations.evaluationPeriodEnd));
   }
 
-  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[]> {
+  async getEvaluationsByEvaluator(evaluatorId: number): Promise<Evaluation[] > {
     return await db.select().from(evaluations)
       .where(eq(evaluations.evaluatorId, evaluatorId))
       .orderBy(desc(evaluations.createdAt));
@@ -1511,7 +1592,7 @@ export class DatabaseStorage implements IStorage {
     if (insertData.reviewedAt instanceof Date) {
       insertData.reviewedAt = insertData.reviewedAt.toISOString();
     }
-    
+
     const [evaluation] = await db.insert(evaluations).values([insertData]).returning();
     return evaluation;
   }
@@ -1531,7 +1612,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.reviewedAt instanceof Date) {
       updateData.reviewedAt = updateData.reviewedAt.toISOString();
     }
-    
+
     const [evaluation] = await db.update(evaluations)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(evaluations.id, id))
@@ -1545,7 +1626,7 @@ export class DatabaseStorage implements IStorage {
 
   async submitEvaluation(id: number): Promise<Evaluation> {
     const [evaluation] = await db.update(evaluations)
-      .set({ 
+      .set({
         status: 'SUBMITTED',
         submittedAt: new Date(),
         updatedAt: new Date()
@@ -1557,7 +1638,7 @@ export class DatabaseStorage implements IStorage {
 
   async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
     const [evaluation] = await db.update(evaluations)
-      .set({ 
+      .set({
         ...reviewData,
         status: 'REVIEWED',
         reviewedAt: new Date(),
@@ -1618,14 +1699,14 @@ export class DatabaseStorage implements IStorage {
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
     let query = db.select().from(employeeDocuments)
       .where(eq(employeeDocuments.isActive, true));
-    
+
     if (employeeId) {
       query = query.where(and(
         eq(employeeDocuments.isActive, true),
         eq(employeeDocuments.employeeId, employeeId)
       ));
     }
-    
+
     return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
@@ -1660,7 +1741,7 @@ export class DatabaseStorage implements IStorage {
         eq(employeeDocuments.documentType, documentType),
         eq(employeeDocuments.isActive, true)
       ));
-    
+
     if (employeeId) {
       query = query.where(and(
         eq(employeeDocuments.documentType, documentType),
@@ -1668,14 +1749,14 @@ export class DatabaseStorage implements IStorage {
         eq(employeeDocuments.isActive, true)
       ));
     }
-    
+
     return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
-    
+
     return await db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.isActive, true),
@@ -1693,15 +1774,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditLogs(employeeId?: number, action?: string): Promise<EmployeeAuditLog[]> {
     let query = db.select().from(employeeAuditLog);
-    
+
     const conditions = [];
     if (employeeId) conditions.push(eq(employeeAuditLog.employeeId, employeeId));
     if (action) conditions.push(eq(employeeAuditLog.action, action));
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
-    
+
     return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
@@ -1711,7 +1792,7 @@ export class DatabaseStorage implements IStorage {
         gte(employeeAuditLog.timestamp, startDate),
         lte(employeeAuditLog.timestamp, endDate)
       ));
-    
+
     if (employeeId) {
       query = query.where(and(
         gte(employeeAuditLog.timestamp, startDate),
@@ -1719,7 +1800,7 @@ export class DatabaseStorage implements IStorage {
         eq(employeeAuditLog.employeeId, employeeId)
       ));
     }
-    
+
     return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
@@ -2046,10 +2127,10 @@ export class DatabaseStorage implements IStorage {
 
   async signOnboardingDoc(id: number, signatureDataURL: string): Promise<OnboardingDoc> {
     const [doc] = await db.update(onboardingDocs)
-      .set({ 
-        signed: true, 
-        signatureDataURL, 
-        signedAt: new Date() 
+      .set({
+        signed: true,
+        signatureDataURL,
+        signedAt: new Date()
       })
       .where(eq(onboardingDocs.id, id))
       .returning();
@@ -2338,7 +2419,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(productionOrders)
       .where(eq(productionOrders.poId, poId));
-    
+
     if (existingOrders.length > 0) {
       console.log(`🏭 Found ${existingOrders.length} existing production orders for PO ${poId}`);
       console.log(`🏭 Returning existing production orders instead of creating duplicates`);
@@ -2350,7 +2431,7 @@ export class DatabaseStorage implements IStorage {
     if (isNaN(customerIdNum)) {
       throw new Error('Invalid customer ID in purchase order');
     }
-    
+
     const customer = await this.getCustomer(customerIdNum);
     if (!customer) {
       throw new Error('Customer not found');
@@ -2447,7 +2528,7 @@ export class DatabaseStorage implements IStorage {
       .from(employeeLayupSettings)
       .where(eq(employeeLayupSettings.isActive, true))
       .orderBy(employeeLayupSettings.employeeId);
-    
+
     return result.map(r => ({
       ...r,
       name: r.name || r.employeeId
@@ -2469,20 +2550,20 @@ export class DatabaseStorage implements IStorage {
 
   async updateEmployeeLayupSettings(employeeId: string, data: Partial<InsertEmployeeLayupSettings>): Promise<EmployeeLayupSettings> {
     console.log(`🔄 Storage: Updating employee "${employeeId}" with data:`, data);
-    
+
     // Check if employee exists first
     const existing = await this.getEmployeeLayupSettings(employeeId);
     if (!existing) {
       console.log(`❌ Employee "${employeeId}" not found in layup settings`);
       throw new Error(`Employee "${employeeId}" not found in layup settings`);
     }
-    
+
     const [result] = await db
       .update(employeeLayupSettings)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(employeeLayupSettings.employeeId, employeeId))
       .returning();
-      
+
     console.log(`✅ Storage: Updated employee "${employeeId}":`, result);
     return result;
   }
@@ -2494,7 +2575,7 @@ export class DatabaseStorage implements IStorage {
   // Layup Scheduler: Orders CRUD
   async getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]> {
     let query = db.select().from(layupOrders);
-    
+
     const conditions = [];
     if (filters?.status) {
       conditions.push(eq(layupOrders.status, filters.status));
@@ -2502,11 +2583,11 @@ export class DatabaseStorage implements IStorage {
     if (filters?.department) {
       conditions.push(eq(layupOrders.department, filters.department));
     }
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
-    
+
     return await query.orderBy(layupOrders.priorityScore, layupOrders.orderDate);
   }
 
@@ -2642,10 +2723,10 @@ export class DatabaseStorage implements IStorage {
     // First, mark any existing schedule entries as overridden
     await db
       .update(layupSchedule)
-      .set({ 
-        isOverride: true, 
-        overriddenAt: new Date(), 
-        overriddenBy 
+      .set({
+        isOverride: true,
+        overriddenAt: new Date(),
+        overriddenBy
       })
       .where(eq(layupSchedule.orderId, orderId));
 
@@ -2668,8 +2749,8 @@ export class DatabaseStorage implements IStorage {
     try {
       // Use GROUP BY to count orders by current department from orderDrafts
       const results = await db
-        .select({ 
-          department: orderDrafts.currentDepartment, 
+        .select({
+          department: orderDrafts.currentDepartment,
           count: sql<number>`count(*)::integer`
         })
         .from(orderDrafts)
@@ -2731,7 +2812,7 @@ export class DatabaseStorage implements IStorage {
 
         // Calculate days in current department
         const daysInDept = this.calculateDaysInDepartment(order);
-        
+
         // Calculate schedule status
         const scheduleStatus = this.calculateScheduleStatus(order, daysInDept);
 
@@ -2799,7 +2880,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const dueDate = new Date(order.dueDate);
     const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     // Define standard processing times for each department
     const departmentTimes = {
       'Layup': 35,
@@ -2811,18 +2892,18 @@ export class DatabaseStorage implements IStorage {
       'QC': 7,
       'Shipping': 7
     };
-    
+
     // Define department sequence
     const departmentSequence = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
-    
+
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
     const isDeptOverdue = daysInDept > currentDeptStandardTime;
-    
+
     // Calculate remaining time needed from current department onward
     const currentDeptIndex = departmentSequence.indexOf(order.currentDepartment);
     let remainingProcessingDays = 0;
-    
+
     if (currentDeptIndex !== -1) {
       for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
         const dept = departmentSequence[i];
@@ -2832,12 +2913,12 @@ export class DatabaseStorage implements IStorage {
       // Unknown department fallback
       remainingProcessingDays = currentDeptStandardTime;
     }
-    
+
     // Check if order cannot meet due date
     const cannotMeetDueDate = remainingProcessingDays > daysUntilDue;
-    
+
     console.log(`📊 Order ${order.orderId}: ${daysUntilDue} days until due, needs ${remainingProcessingDays} days remaining, ${daysInDept} days in ${order.currentDepartment} (limit: ${currentDeptStandardTime}), isAdj: ${isAdjusted}`);
-    
+
     // Determine status priority: cannot-meet-due overrides all others
     if (cannotMeetDueDate) {
       console.log(`🟠 Order ${order.orderId}: CANNOT-MEET-DUE - Cannot meet due date (needs ${remainingProcessingDays} days, has ${daysUntilDue}) ${isDeptOverdue ? '[Also over dept time]' : ''}`);
@@ -2880,7 +2961,7 @@ export class DatabaseStorage implements IStorage {
       // Prepare completion timestamp update based on current department
       const completionUpdates: any = {};
       const now = new Date();
-      
+
       switch (currentOrder.currentDepartment) {
         case 'Layup': completionUpdates.layupCompletedAt = now; break;
         case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
@@ -2964,6 +3045,7 @@ export class DatabaseStorage implements IStorage {
           agrOrderDetails: scrapOrder.agrOrderDetails,
           modelId: scrapOrder.modelId,
           handedness: scrapOrder.handedness,
+          shankLength: scrapOrder.shankLength,
           features: scrapOrder.features,
           featureQuantities: scrapOrder.featureQuantities,
           status: 'ACTIVE',
@@ -2982,7 +3064,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // BOM Management Implementation
+  // BOM Management Methods
   async getAllBOMs(): Promise<BomDefinition[]> {
     try {
       const boms = await db
@@ -3022,14 +3104,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // New method to build hierarchical BOM structure
+  async getBOMDefinition(bomId: number): Promise<BomDefinition | undefined> {
+    try {
+      const [bom] = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.id, bomId));
+      return bom;
+    } catch (error) {
+      console.error('Error fetching BOM definition:', error);
+      throw error;
+    }
+  }
+
+  // Method to build hierarchical BOM structure
   private async buildHierarchicalItems(items: BomItem[]): Promise<any[]> {
     try {
       const hierarchical = [];
-      
+
       for (const item of items) {
         const hierarchicalItem: any = { ...item };
-        
+
         // If this item references another BOM (sub-assembly)
         if (item.referenceBomId) {
           const referencedBom = await this.getBOMDetails(item.referenceBomId);
@@ -3040,10 +3135,10 @@ export class DatabaseStorage implements IStorage {
             };
           }
         }
-        
+
         hierarchical.push(hierarchicalItem);
       }
-      
+
       return hierarchical;
     } catch (error) {
       console.error('Error building hierarchical items:', error);
@@ -3057,7 +3152,7 @@ export class DatabaseStorage implements IStorage {
       // First verify both BOMs exist
       const parentBom = await this.getBOMDefinition(parentBomId);
       const childBom = await this.getBOMDefinition(childBomId);
-      
+
       if (!parentBom || !childBom) {
         throw new Error('Parent or child BOM not found');
       }
@@ -3067,7 +3162,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomItems)
         .where(eq(bomItems.bomId, childBomId));
-      
+
       const maxChildLevel = Math.max(...childItems.map(item => item.assemblyLevel || 0), 0);
       const assemblyLevel = maxChildLevel + 1;
 
@@ -3098,7 +3193,7 @@ export class DatabaseStorage implements IStorage {
   async getAvailableSubAssemblies(excludeBomId?: number): Promise<BomDefinition[]> {
     try {
       let whereCondition = eq(bomDefinitions.isActive, true);
-      
+
       if (excludeBomId) {
         whereCondition = and(
           eq(bomDefinitions.isActive, true),
@@ -3421,7 +3516,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomDefinitions)
         .where(eq(bomDefinitions.sku, poItem.partNumber));
-      
+
       if (bomDefs.length === 0) {
         console.warn(`No BOM definition found for SKU: ${poItem.partNumber}`);
         continue;
@@ -3441,15 +3536,15 @@ export class DatabaseStorage implements IStorage {
       // Create production orders for each BOM item
       for (let i = 0; i < bomItemsList.length; i++) {
         const bomItem = bomItemsList[i];
-        
+
         // Skip materials - only create production orders for manufactured parts
         if (bomItem.itemType === 'material') {
           console.log(`Skipping material item: ${bomItem.partName} - quantity tracking only`);
           continue;
         }
-        
+
         const totalQuantity = bomItem.quantity * poItem.quantity;
-        
+
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
           // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
@@ -3502,7 +3597,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bomDefinitions)
         .where(eq(bomDefinitions.sku, poItem.partNumber));
-      
+
       if (bomDefs.length === 0) {
         continue;
       }
@@ -3522,12 +3617,12 @@ export class DatabaseStorage implements IStorage {
       // Calculate material requirements
       for (const materialItem of materialItems) {
         const totalQuantity = materialItem.quantity * poItem.quantity;
-        
+
         // Check if this material is already in our requirements list
         const existingIndex = materialRequirements.findIndex(
           req => req.partName === materialItem.partName
         );
-        
+
         if (existingIndex >= 0) {
           // Add to existing requirement
           materialRequirements[existingIndex].totalQuantity += totalQuantity;
@@ -3578,10 +3673,10 @@ export class DatabaseStorage implements IStorage {
   async updateUserPassword(id: number, passwordHash: string): Promise<void> {
     await db
       .update(users)
-      .set({ 
-        passwordHash, 
+      .set({
+        passwordHash,
         passwordChangedAt: new Date(),
-        updatedAt: new Date() 
+        updatedAt: new Date()
       })
       .where(eq(users.id, id));
   }
@@ -3648,10 +3743,10 @@ export class DatabaseStorage implements IStorage {
   async clockIn(employeeId: string): Promise<TimeClockEntry> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     // Check if already clocked in today
     const existingEntry = await this.getTimeClockEntry(employeeId, today);
-    
+
     if (existingEntry && existingEntry.clockIn && !existingEntry.clockOut) {
       throw new Error('Already clocked in');
     }
@@ -3682,9 +3777,9 @@ export class DatabaseStorage implements IStorage {
   async clockOut(employeeId: string): Promise<TimeClockEntry> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    
+
     const existingEntry = await this.getTimeClockEntry(employeeId, today);
-    
+
     if (!existingEntry || !existingEntry.clockIn) {
       throw new Error('Must clock in first');
     }
@@ -3715,7 +3810,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateDailyChecklist(employeeId: string, data: any): Promise<ChecklistItem[]> {
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Delete existing entries for today
     await db
       .delete(checklistItems)
@@ -3930,7 +4025,7 @@ export class DatabaseStorage implements IStorage {
     averageResolutionTime: number | null;
   }> {
     let baseQuery = db.select().from(kickbacks);
-    
+
     if (dateRange) {
       baseQuery = baseQuery.where(
         and(
@@ -3947,7 +4042,7 @@ export class DatabaseStorage implements IStorage {
     const byReasonCode: { [key: string]: number } = {};
     const byStatus: { [key: string]: number } = {};
     const byPriority: { [key: string]: number } = {};
-    
+
     let resolvedKickbacks = 0;
     let totalResolutionTime = 0;
     let resolutionCount = 0;
@@ -3955,20 +4050,20 @@ export class DatabaseStorage implements IStorage {
     allKickbacks.forEach(kickback => {
       // Department counts
       byDepartment[kickback.kickbackDept] = (byDepartment[kickback.kickbackDept] || 0) + 1;
-      
+
       // Reason code counts
       byReasonCode[kickback.reasonCode] = (byReasonCode[kickback.reasonCode] || 0) + 1;
-      
+
       // Status counts
       byStatus[kickback.status] = (byStatus[kickback.status] || 0) + 1;
-      
+
       // Priority counts
       byPriority[kickback.priority] = (byPriority[kickback.priority] || 0) + 1;
 
       // Resolution tracking
       if (kickback.status === 'RESOLVED' || kickback.status === 'CLOSED') {
         resolvedKickbacks++;
-        
+
         if (kickback.resolvedAt) {
           const resolutionTime = kickback.resolvedAt.getTime() - kickback.kickbackDate.getTime();
           totalResolutionTime += resolutionTime;
@@ -3977,7 +4072,7 @@ export class DatabaseStorage implements IStorage {
       }
     });
 
-    const averageResolutionTime = resolutionCount > 0 
+    const averageResolutionTime = resolutionCount > 0
       ? totalResolutionTime / resolutionCount / (1000 * 60 * 60 * 24) // Convert to days
       : null;
 
@@ -3993,7 +4088,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Document Management System CRUD Methods
-  
+
   // Documents CRUD (Document Management System)
   async getAllManagedDocuments(): Promise<Document[]> {
     return await db
@@ -4121,7 +4216,7 @@ export class DatabaseStorage implements IStorage {
       .update(documentTags)
       .set({ isActive: false })
       .where(eq(documentTags.id, id));
-    
+
     // Remove tag relations
     await db
       .delete(documentTagRelations)
@@ -4222,7 +4317,7 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(documentCollectionRelations)
       .where(eq(documentCollectionRelations.collectionId, id));
-    
+
     await db
       .delete(documentCollections)
       .where(eq(documentCollections.id, id));
@@ -4310,6 +4405,123 @@ export class DatabaseStorage implements IStorage {
       .where(eq(orderAttachments.id, attachmentId));
   }
 
+  // Add methods for finalized orders
+  async getAllFinalizedOrders(): Promise<AllOrder[]> {
+    const orders = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
+
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select().from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+    // Enrich orders with customer names
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+    })) as AllOrder[];
+  }
+
+  // Finalize an order - move from draft to production
+  async finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder> {
+    // Get the draft order
+    const draft = await this.getOrderDraft(orderId);
+    if (!draft) {
+      throw new Error(`Draft order with ID ${orderId} not found`);
+    }
+
+    if (draft.status === 'FINALIZED') {
+      throw new Error(`Order ${orderId} is already finalized`);
+    }
+
+    // Create the finalized order data
+    const finalizedOrderData: InsertAllOrder = {
+      orderId: draft.orderId,
+      orderDate: draft.orderDate,
+      dueDate: draft.dueDate,
+      customerId: draft.customerId,
+      customerPO: draft.customerPO,
+      fbOrderNumber: draft.fbOrderNumber,
+      agrOrderDetails: draft.agrOrderDetails,
+      isCustomOrder: draft.isCustomOrder,
+      modelId: draft.modelId,
+      handedness: draft.handedness,
+      shankLength: draft.shankLength,
+      features: draft.features,
+      featureQuantities: draft.featureQuantities,
+      discountCode: draft.discountCode,
+      notes: draft.notes,
+      customDiscountType: draft.customDiscountType,
+      customDiscountValue: draft.customDiscountValue,
+      showCustomDiscount: draft.showCustomDiscount,
+      priceOverride: draft.priceOverride,
+      shipping: draft.shipping,
+      tikkaOption: draft.tikkaOption,
+      status: 'FINALIZED',
+      barcode: draft.barcode,
+      currentDepartment: draft.currentDepartment,
+      departmentHistory: draft.departmentHistory,
+      scrappedQuantity: draft.scrappedQuantity,
+      totalProduced: draft.totalProduced,
+      layupCompletedAt: draft.layupCompletedAt,
+      pluggingCompletedAt: draft.pluggingCompletedAt,
+      cncCompletedAt: draft.cncCompletedAt,
+      finishCompletedAt: draft.finishCompletedAt,
+      gunsmithCompletedAt: draft.gunsmithCompletedAt,
+      paintCompletedAt: draft.paintCompletedAt,
+      qcCompletedAt: draft.qcCompletedAt,
+      shippingCompletedAt: draft.shippingCompletedAt,
+      scrapDate: draft.scrapDate,
+      scrapReason: draft.scrapReason,
+      scrapDisposition: draft.scrapDisposition,
+      scrapAuthorization: draft.scrapAuthorization,
+      isReplacement: draft.isReplacement,
+      replacedOrderId: draft.replacedOrderId,
+      isPaid: draft.isPaid,
+      paymentType: draft.paymentType,
+      paymentAmount: draft.paymentAmount,
+      paymentDate: draft.paymentDate,
+      paymentTimestamp: draft.paymentTimestamp,
+      trackingNumber: draft.trackingNumber,
+      shippingCarrier: draft.shippingCarrier,
+      shippingMethod: draft.shippingMethod,
+      shippedDate: draft.shippedDate,
+      estimatedDelivery: draft.estimatedDelivery,
+      shippingLabelGenerated: draft.shippingLabelGenerated,
+      customerNotified: draft.customerNotified,
+      notificationMethod: draft.notificationMethod,
+      notificationSentAt: draft.notificationSentAt,
+      deliveryConfirmed: draft.deliveryConfirmed,
+      deliveryConfirmedAt: draft.deliveryConfirmedAt,
+      finalizedBy: finalizedBy || 'System'
+    };
+
+    // Insert into all_orders table
+    const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();
+
+    // Remove from order_drafts table
+    await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+
+    return finalizedOrder;
+  }
+
+  // Get finalized order by ID
+  async getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined> {
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    return order || undefined;
+  }
+
+  // Update finalized order
+  async updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder> {
+    const [order] = await db.update(allOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(allOrders.orderId, orderId))
+      .returning();
+
+    if (!order) {
+      throw new Error(`Finalized order with ID ${orderId} not found`);
+    }
+
+    return order;
+  }
 }
 
 export const storage = new DatabaseStorage();

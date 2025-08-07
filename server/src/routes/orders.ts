@@ -183,6 +183,72 @@ router.get('/all', async (req: Request, res: Response) => {
   }
 });
 
+// Get all finalized orders
+router.get('/finalized', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllFinalizedOrders();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving finalized orders:', error);
+    res.status(500).json({ error: "Failed to fetch finalized orders", details: (error as any).message });
+  }
+});
+
+// Finalize an order (move from draft to production)
+router.post('/draft/:id/finalize', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const { finalizedBy } = req.body;
+    
+    const finalizedOrder = await storage.finalizeOrder(orderId, finalizedBy);
+    res.json({ 
+      success: true, 
+      message: "Order finalized successfully",
+      order: finalizedOrder 
+    });
+  } catch (error) {
+    console.error('Finalize order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to finalize order" });
+  }
+});
+
+// Get finalized order by ID
+router.get('/finalized/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const order = await storage.getFinalizedOrderById(orderId);
+    
+    if (!order) {
+      return res.status(404).json({ error: "Finalized order not found" });
+    }
+    
+    res.json(order);
+  } catch (error) {
+    console.error('Get finalized order error:', error);
+    res.status(500).json({ error: "Failed to fetch finalized order" });
+  }
+});
+
+// Update finalized order
+router.put('/finalized/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const updates = req.body;
+    
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Update finalized order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to update finalized order" });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;

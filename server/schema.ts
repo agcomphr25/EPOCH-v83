@@ -1287,7 +1287,7 @@ export const customerAddresses = pgTable("customer_addresses", {
 
 export const communicationLogs = pgTable("communication_logs", {
   id: serial("id").primaryKey(),
-  orderId: text("order_id").notNull(),
+  orderId: text("order_id"), // Made nullable for general communications
   customerId: text("customer_id").notNull(),
   type: text("type").notNull(), // order-confirmation, shipping-notification, quality-alert
   method: text("method").notNull(), // email, sms

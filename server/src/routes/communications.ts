@@ -52,7 +52,7 @@ router.post('/email', async (req, res) => {
     
     // Store in database
     const [communicationLog] = await db.insert(communicationLogs).values({
-      orderId: data.orderId,
+      orderId: data.orderId || null, // Allow null orderId for general communications
       customerId: data.customerId,
       type: 'general',
       method: 'email',
@@ -122,7 +122,7 @@ router.post('/sms', async (req, res) => {
 
     // Store in database
     const [communicationLog] = await db.insert(communicationLogs).values({
-      orderId: data.orderId,
+      orderId: data.orderId || null, // Allow null orderId for general communications
       customerId: data.customerId,
       type: 'general',
       method: 'sms',

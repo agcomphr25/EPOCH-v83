@@ -111,13 +111,14 @@ export default function NonconformanceFormModal({
   }, [orderQuery]);
 
   const handleOrderSelect = (selectedOrder: any) => {
+    console.log('Selected order data:', selectedOrder); // Debug log to see available fields
     setForm({
       ...form,
       orderId: selectedOrder.orderId || selectedOrder.id || '',
       serialNumber: selectedOrder.serialNumber || '',
       customerName: selectedOrder.customerName || selectedOrder.customer || '',
-      poNumber: selectedOrder.poNumber || selectedOrder.po || '',
-      stockModel: selectedOrder.stockModel || selectedOrder.model || '',
+      poNumber: selectedOrder.poNumber || selectedOrder.po || selectedOrder.customerPO || '',
+      stockModel: selectedOrder.modelId || selectedOrder.stockModel || selectedOrder.model || selectedOrder.product || '',
     });
     setOrderQuery('');
     setOrderResults([]);

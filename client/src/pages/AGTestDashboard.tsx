@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, Calendar, List, Maximize2, Minimize2 } from 'lucide-react';
 import PipelineVisualization from '@/components/PipelineVisualization';
-import AllOrdersList from '@/components/AllOrdersList';
+
 import LayupScheduler from '@/components/LayupScheduler';
 
 export default function AGTestDashboard() {
@@ -93,28 +93,7 @@ export default function AGTestDashboard() {
             </CardContent>
           </Card>
 
-          {/* All Orders List */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <div className="flex items-center space-x-2">
-                <List className="w-5 h-5 text-green-600" />
-                <CardTitle className="text-lg">All Orders</CardTitle>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleExpand('orders')}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-96 overflow-auto">
-                <AllOrdersList />
-              </div>
-            </CardContent>
-          </Card>
+
 
           {/* Layup Scheduler */}
           <Card>
@@ -150,12 +129,7 @@ export default function AGTestDashboard() {
                   <CardTitle className="text-xl">Production Pipeline Overview - Expanded</CardTitle>
                 </>
               )}
-              {expandedSection === 'orders' && (
-                <>
-                  <List className="w-5 h-5 text-green-600" />
-                  <CardTitle className="text-xl">All Orders - Expanded</CardTitle>
-                </>
-              )}
+
               {expandedSection === 'scheduler' && (
                 <>
                   <Calendar className="w-5 h-5 text-purple-600" />
@@ -174,7 +148,7 @@ export default function AGTestDashboard() {
           </CardHeader>
           <CardContent className="h-full">
             {expandedSection === 'pipeline' && <PipelineVisualization />}
-            {expandedSection === 'orders' && <AllOrdersList />}
+
             {expandedSection === 'scheduler' && <LayupScheduler />}
           </CardContent>
         </Card>

@@ -526,7 +526,7 @@ export default function OrderEntry() {
   // Business rule: Clear restricted bottom metals when Medium Action Length is selected
   useEffect(() => {
     const isMediumAction = features.action_length === 'medium';
-    const restrictedBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+    const restrictedBottomMetals = ['ag_m5_sa', 'ag_m5_la', 'ag_m5_la_cip', 'ag_bdl_sa', 'ag_bdl_la'];
     const hasRestrictedBottomMetal = features.bottom_metal && 
                                    restrictedBottomMetals.includes(features.bottom_metal);
 
@@ -1561,20 +1561,9 @@ export default function OrderEntry() {
                             
                             // Business rule: Filter out specific bottom metals when Action Length is "Medium"
                             const isMediumAction = features.action_length === 'medium';
-                            const restrictedBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
-                            
-                            // Debug logging
-                            console.log('🔍 Bottom Metal Filter Debug:', {
-                              actionLength: features.action_length,
-                              isMediumAction,
-                              optionValue: option.value,
-                              optionLabel: option.label,
-                              isRestricted: restrictedBottomMetals.includes(option.value),
-                              shouldFilter: isMediumAction && restrictedBottomMetals.includes(option.value)
-                            });
+                            const restrictedBottomMetals = ['ag_m5_sa', 'ag_m5_la', 'ag_m5_la_cip', 'ag_bdl_sa', 'ag_bdl_la'];
                             
                             if (isMediumAction && restrictedBottomMetals.includes(option.value)) {
-                              console.log('🚫 Filtering out bottom metal:', option.value);
                               return false;
                             }
                             

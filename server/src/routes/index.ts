@@ -19,6 +19,7 @@ import bomsRoutes from './boms';
 import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
+import paymentsRoutes from './payments';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -74,6 +75,9 @@ export function registerRoutes(app: Express): Server {
 
   // Nonconformance tracking routes
   app.use('/api/nonconformance', nonconformanceRoutes);
+
+  // Payment processing routes
+  app.use('/api/payments', paymentsRoutes);
 
   // Health check endpoint for deployment debugging
   app.get('/api/health', async (req, res) => {

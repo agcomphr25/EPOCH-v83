@@ -309,6 +309,42 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Credit card transactions table for Authorize.Net integration
+export const creditCardTransactions = pgTable("credit_card_transactions", {
+  id: serial("id").primaryKey(),
+  paymentId: integer("payment_id").references(() => payments.id).notNull(),
+  orderId: text("order_id").notNull(),
+  transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
+  authCode: text("auth_code"), // Authorization code from Authorize.Net
+  responseCode: text("response_code").notNull(), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review
+  responseReasonCode: text("response_reason_code"), // Detailed reason code
+  responseReasonText: text("response_reason_text"), // Human readable response
+  avsResult: text("avs_result"), // Address Verification Service result
+  cvvResult: text("cvv_result"), // Card Verification Value result
+  cardType: text("card_type"), // Visa, MasterCard, etc.
+  lastFourDigits: text("last_four_digits"), // Last 4 digits of card number
+  amount: real("amount").notNull(),
+  taxAmount: real("tax_amount").default(0),
+  shippingAmount: real("shipping_amount").default(0),
+  customerEmail: text("customer_email"),
+  billingFirstName: text("billing_first_name"),
+  billingLastName: text("billing_last_name"),
+  billingAddress: text("billing_address"),
+  billingCity: text("billing_city"),
+  billingState: text("billing_state"),
+  billingZip: text("billing_zip"),
+  billingCountry: text("billing_country").default("US"),
+  isTest: boolean("is_test").default(false), // Track if this was a test transaction
+  rawResponse: jsonb("raw_response"), // Store full Authorize.Net response for debugging
+  status: text("status").default("pending"), // pending, completed, failed, refunded, voided
+  refundedAmount: real("refunded_amount").default(0),
+  voidedAt: timestamp("voided_at"),
+  refundedAt: timestamp("refunded_at"),
+  processedAt: timestamp("processed_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -797,6 +833,26 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   paymentAmount: z.number().min(0.01, "Payment amount must be greater than 0"),
   paymentDate: z.coerce.date(),
   notes: z.string().optional().nullable(),
+});
+
+export const insertCreditCardTransactionSchema = createInsertSchema(creditCardTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  processedAt: true,
+}).extend({
+  paymentId: z.number().min(1, "Payment ID is required"),
+  orderId: z.string().min(1, "Order ID is required"),
+  transactionId: z.string().min(1, "Transaction ID is required"),
+  responseCode: z.string().min(1, "Response code is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  customerEmail: z.string().email().optional().nullable(),
+  billingFirstName: z.string().min(1, "First name is required"),
+  billingLastName: z.string().min(1, "Last name is required"),
+  billingAddress: z.string().min(1, "Address is required"),
+  billingCity: z.string().min(1, "City is required"),
+  billingState: z.string().min(1, "State is required"),
+  billingZip: z.string().min(1, "ZIP code is required"),
 });
 
 export const insertFormSchema = createInsertSchema(forms).omit({

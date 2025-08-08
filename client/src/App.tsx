@@ -76,6 +76,7 @@ import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
+import PaymentManagement from "./pages/PaymentManagement";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -206,6 +207,9 @@ function App() {
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/cogs-report" component={COGSReportPage} />
                   <Route path="/finance/dashboard" component={FinanceDashboardPage} />
+                  
+                  {/* Payment Processing Routes */}
+                  <Route path="/payment-management" component={PaymentManagement} />
 
                   {/* Forms and Reports Routes */}
                   <Route path="/forms" component={AdminFormsPage} />

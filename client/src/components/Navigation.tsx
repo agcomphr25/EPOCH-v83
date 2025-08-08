@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -13,8 +13,6 @@ import {
   navigationMenuTriggerStyle,
   NavigationMenuIndicator,
   NavigationMenuViewport,
-  NavigationMenuSub,
-  NavigationMenuListItem,
 } from "@/components/ui/navigation-menu"
 
 export default function Navigation() {
@@ -242,6 +240,12 @@ export default function Navigation() {
       label: 'Finance Dashboard',
       icon: BarChart,
       description: 'Financial overview and KPIs'
+    },
+    {
+      path: '/payment-management',
+      label: 'Payment Management',
+      icon: CreditCard,
+      description: 'Process credit card payments and view transaction history'
     },
     {
       path: '/finance/ap',

@@ -5,7 +5,7 @@ import {
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
   purchaseOrders, purchaseOrderItems, productionOrders,
   p2Customers, p2PurchaseOrders, p2PurchaseOrderItems, p2ProductionOrders,
-  molds, employeeLayupSettings, layupOrders, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
+  molds, employeeLayupSettings, productionQueue, layupSchedule, bomDefinitions, bomItems, orderIdReservations, purchaseReviewChecklists, manufacturersCertificates,
   // Task tracker table
   taskItems,
   // Kickback tracking table
@@ -64,7 +64,7 @@ import {
   type P2ProductionOrder, type InsertP2ProductionOrder,
   type Mold, type InsertMold,
   type EmployeeLayupSettings, type InsertEmployeeLayupSettings,
-  type LayupOrder, type InsertLayupOrder,
+  type ProductionQueue, type InsertProductionQueue,
   type LayupSchedule, type InsertLayupSchedule,
   type BomDefinition, type InsertBomDefinition,
   type BomItem, type InsertBomItem,
@@ -86,7 +86,6 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { sql } from 'drizzle-orm';
 import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
@@ -437,11 +436,11 @@ export interface IStorage {
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
 
   // Layup Scheduler: Orders CRUD
-  getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]>;
-  getLayupOrder(orderId: string): Promise<LayupOrder | undefined>;
-  createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder>;
-  updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder>;
-  deleteLayupOrder(orderId: string): Promise<void>;
+  getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<ProductionQueue[]>;
+  getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined>;
+  createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue>;
+  updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue>;
+  deleteProductionQueueItem(orderId: string): Promise<void>;
 
   // P1 Purchase Order Integration
   syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }>;
@@ -457,7 +456,7 @@ export interface IStorage {
   deleteLayupScheduleByOrder(orderId: string): Promise<void>;
 
   // Get unified layup orders (combining regular orders and P1 PO items)
-  getUnifiedLayupOrders(): Promise<any[]>;
+  getUnifiedProductionQueue(): Promise<any[]>;
 
   // Department Progression Methods
   getPipelineCounts(): Promise<Record<string, number>>;
@@ -2599,49 +2598,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Layup Scheduler: Orders CRUD
-  async getAllLayupOrders(filters?: { status?: string; department?: string }): Promise<LayupOrder[]> {
-    let query = db.select().from(layupOrders);
+  async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<ProductionQueue[]> {
+    let query = db.select().from(productionQueue);
 
     const conditions = [];
     if (filters?.status) {
-      conditions.push(eq(layupOrders.status, filters.status));
+      conditions.push(eq(productionQueue.status, filters.status));
     }
     if (filters?.department) {
-      conditions.push(eq(layupOrders.department, filters.department));
+      conditions.push(eq(productionQueue.department, filters.department));
     }
 
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
     }
 
-    return await query.orderBy(layupOrders.priorityScore, layupOrders.orderDate);
+    return await query.orderBy(productionQueue.priorityScore, productionQueue.orderDate);
   }
 
-  async getLayupOrder(orderId: string): Promise<LayupOrder | undefined> {
-    const [result] = await db.select().from(layupOrders).where(eq(layupOrders.orderId, orderId));
+  async getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined> {
+    const [result] = await db.select().from(productionQueue).where(eq(productionQueue.orderId, orderId));
     return result || undefined;
   }
 
-  async createLayupOrder(data: InsertLayupOrder): Promise<LayupOrder> {
-    const [result] = await db.insert(layupOrders).values(data).returning();
+  async createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue> {
+    const [result] = await db.insert(productionQueue).values(data).returning();
     return result;
   }
 
-  async updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder> {
+  async updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue> {
     const [result] = await db
-      .update(layupOrders)
+      .update(productionQueue)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(layupOrders.orderId, orderId))
+      .where(eq(productionQueue.orderId, orderId))
       .returning();
     return result;
   }
 
-  async deleteLayupOrder(orderId: string): Promise<void> {
-    await db.delete(layupOrders).where(eq(layupOrders.orderId, orderId));
+  async deleteProductionQueueItem(orderId: string): Promise<void> {
+    await db.delete(productionQueue).where(eq(productionQueue.orderId, orderId));
   }
 
   // Get unified layup orders (combining regular orders and P1 PO items)
-  async getUnifiedLayupOrders(): Promise<any[]> {
+  async getUnifiedProductionQueue(): Promise<any[]> {
     try {
       // Get regular P1 orders (from orderDrafts) that are in Layup department
       const regularOrders = await db
@@ -2718,7 +2717,7 @@ export class DatabaseStorage implements IStorage {
   async syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }> {
     try {
       // Get existing layup order IDs for comparison
-      const existingLayupOrders = await db.select({ orderId: layupOrders.orderId }).from(layupOrders);
+      const existingLayupOrders = await db.select({ orderId: productionQueue.orderId }).from(productionQueue);
       const existingOrderIds = new Set(existingLayupOrders.map(o => o.orderId));
       
       // Get P1 orders that aren't already in layup queue
@@ -2746,7 +2745,7 @@ export class DatabaseStorage implements IStorage {
         const priorityScore = daysUntilDue <= 30 ? 1 : daysUntilDue <= 60 ? 2 : 50;
         
         // Insert P1 order into layup queue
-        await db.insert(layupOrders).values({
+        await db.insert(productionQueue).values({
           orderId: order.orderId,
           orderDate: order.orderDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
           dueDate: order.dueDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
@@ -2779,7 +2778,7 @@ export class DatabaseStorage implements IStorage {
         SELECT 
           id, order_id, order_date, due_date, customer, product, 
           priority_score, department, status, created_at, updated_at
-        FROM layup_orders 
+        FROM production_queue 
         WHERE is_active = true 
         ORDER BY priority_score ASC, due_date ASC
       `);

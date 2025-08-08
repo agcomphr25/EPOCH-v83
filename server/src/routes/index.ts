@@ -444,10 +444,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P1 Layup Queue endpoint - combines regular orders and P1 production orders
-  app.get('/api/p1-layup-queue', async (req, res) => {
+  // P1 Production Queue endpoint - combines regular orders and P1 production orders
+  app.get('/api/p1-production-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting P1 layup queue processing...');
+      console.log('🏭 Starting P1 production queue processing...');
       const { storage } = await import('../../storage');
 
       // Get only finalized orders from draft table that are ready for production
@@ -458,7 +458,7 @@ export function registerRoutes(app: Express): Server {
       );
 
       // Add debug logging for features
-      console.log('Sample P1 layup order features:', {
+      console.log('Sample P1 production queue order features:', {
         orderId: layupOrders[0]?.orderId,
         features: layupOrders[0]?.features,
         modelId: layupOrders[0]?.modelId
@@ -525,20 +525,20 @@ export function registerRoutes(app: Express): Server {
         ...p1LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
-      console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
+      console.log(`🏭 P1 production queue orders count: ${combinedOrders.length}`);
       console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 PO orders: ${p1LayupOrders.length}`);
 
       res.json(combinedOrders);
     } catch (error) {
-      console.error("P1 layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch P1 layup queue" });
+      console.error("P1 production queue error:", error);
+      res.status(500).json({ error: "Failed to fetch P1 production queue" });
     }
   });
 
-  // P2 Layup Queue endpoint - handles P2 production orders only
-  app.get('/api/p2-layup-queue', async (req, res) => {
+  // P2 Production Queue endpoint - handles P2 production orders only
+  app.get('/api/p2-production-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting P2 layup queue processing...');
+      console.log('🏭 Starting P2 production queue processing...');
       const { storage } = await import('../../storage');
 
       // Get production orders from P2 system
@@ -573,13 +573,13 @@ export function registerRoutes(app: Express): Server {
         };
       });
 
-      console.log(`🏭 P2 layup queue orders count: ${p2LayupOrders.length}`);
+      console.log(`🏭 P2 production queue orders count: ${p2LayupOrders.length}`);
       console.log(`🏭 Production orders in P2 result: ${p2LayupOrders.length}`);
 
       res.json(p2LayupOrders);
     } catch (error) {
-      console.error("P2 layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch P2 layup queue" });
+      console.error("P2 production queue error:", error);
+      res.status(500).json({ error: "Failed to fetch P2 production queue" });
     }
   });
 
@@ -797,10 +797,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Legacy unified layup queue endpoint (kept for backward compatibility)
-  app.get('/api/layup-queue', async (req, res) => {
+  // Legacy unified production queue endpoint (kept for backward compatibility)
+  app.get('/api/production-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting unified layup queue processing (legacy)...');
+      console.log('🏭 Starting unified production queue processing (legacy)...');
       const { storage } = await import('../../storage');
 
       // Get only finalized orders from draft table that are ready for production
@@ -876,12 +876,12 @@ export function registerRoutes(app: Express): Server {
         ...p1LayupOrders
       ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
 
-      console.log(`🏭 Legacy layup queue orders count: ${combinedOrders.length}`);
+      console.log(`🏭 Legacy production queue orders count: ${combinedOrders.length}`);
 
       res.json(combinedOrders);
     } catch (error) {
-      console.error("Legacy layup queue error:", error);
-      res.status(500).json({ error: "Failed to fetch layup queue" });
+      console.error("Legacy production queue error:", error);
+      res.status(500).json({ error: "Failed to fetch production queue" });
     }
   });
 

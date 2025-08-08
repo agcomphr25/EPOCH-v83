@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
-// Simple order interface for layup scheduling
-interface LayupOrder {
+// Simple order interface for production queue
+interface ProductionQueueItem {
   orderId: string;
   orderDate: string;
   dueDate?: string;
@@ -12,8 +12,8 @@ interface LayupOrder {
   customerName?: string;
 }
 
-export default function useLayupOrders() {
-  const [orders, setOrders] = useState<LayupOrder[]>([]);
+export default function useProductionQueue() {
+  const [orders, setOrders] = useState<ProductionQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchOrders = async () => {
@@ -23,7 +23,7 @@ export default function useLayupOrders() {
       const data = await apiRequest('/api/orders/all');
       
       // Filter for Layup department and FINALIZED status, map to simplified format
-      const layupOrders = data
+      const productionQueueOrders = data
         .filter((order: any) => 
           order.status === 'FINALIZED' && 
           (order.department === 'Layup' || !order.department) // Include orders without department for now
@@ -38,9 +38,9 @@ export default function useLayupOrders() {
           customerName: order.customerName || order.customer
         }));
         
-      setOrders(layupOrders);
+      setOrders(productionQueueOrders);
     } catch (error) {
-      console.error('Failed to fetch layup orders:', error);
+      console.error('Failed to fetch production queue orders:', error);
     } finally {
       setLoading(false);
     }

@@ -1251,7 +1251,7 @@ export const employeeLayupSettings = pgTable("employee_layup_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const layupOrders = pgTable("layup_orders", {
+export const productionQueue = pgTable("production_queue", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull().unique(),
   orderDate: timestamp("order_date").notNull(),
@@ -1275,7 +1275,7 @@ export const layupOrders = pgTable("layup_orders", {
 
 export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
-  orderId: text("order_id").references(() => layupOrders.orderId).notNull(),
+  orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
@@ -1312,7 +1312,7 @@ export const insertEmployeeLayupSettingsSchema = createInsertSchema(employeeLayu
   isActive: z.boolean().default(true),
 });
 
-export const insertLayupOrderSchema = createInsertSchema(layupOrders).omit({
+export const insertProductionQueueSchema = createInsertSchema(productionQueue).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1356,8 +1356,8 @@ export type InsertMold = z.infer<typeof insertMoldSchema>;
 export type Mold = typeof molds.$inferSelect;
 export type InsertEmployeeLayupSettings = z.infer<typeof insertEmployeeLayupSettingsSchema>;
 export type EmployeeLayupSettings = typeof employeeLayupSettings.$inferSelect;
-export type InsertLayupOrder = z.infer<typeof insertLayupOrderSchema>;
-export type LayupOrder = typeof layupOrders.$inferSelect;
+export type InsertProductionQueue = z.infer<typeof insertProductionQueueSchema>;
+export type ProductionQueue = typeof productionQueue.$inferSelect;
 export type InsertLayupSchedule = z.infer<typeof insertLayupScheduleSchema>;
 export type LayupSchedule = typeof layupSchedule.$inferSelect;
 

@@ -84,8 +84,6 @@ export const allOrders = pgTable("all_orders", {
   notificationSentAt: timestamp("notification_sent_at"),
   deliveryConfirmed: boolean("delivery_confirmed").default(false),
   deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
-  finalizedAt: timestamp("finalized_at").defaultNow(), // When moved from draft to production
-  finalizedBy: text("finalized_by"), // User who finalized the order
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -86,6 +86,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
+import { sql } from 'drizzle-orm';
 import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
@@ -442,6 +443,10 @@ export interface IStorage {
   updateLayupOrder(orderId: string, data: Partial<InsertLayupOrder>): Promise<LayupOrder>;
   deleteLayupOrder(orderId: string): Promise<void>;
 
+  // P1 Purchase Order Integration
+  syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }>;
+  getUnifiedProductionQueue(): Promise<any[]>;
+  
   // Layup Scheduler: Schedule CRUD
   getAllLayupSchedule(): Promise<LayupSchedule[]>;
   getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]>;
@@ -951,7 +956,7 @@ export class DatabaseStorage implements IStorage {
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
-      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
     })) as OrderDraft[];
   }
 
@@ -1130,7 +1135,7 @@ export class DatabaseStorage implements IStorage {
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
-      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
     })) as OrderDraft[];
   }
 
@@ -1153,9 +1158,9 @@ export class DatabaseStorage implements IStorage {
         .select({
           id: orderDrafts.id,
           orderId: orderDrafts.orderId,
-          customer: orderDrafts.customer,
-          po: orderDrafts.po,
-          model: orderDrafts.model,
+          customer: orderDrafts.customerId,
+          po: orderDrafts.customerPO,
+          model: orderDrafts.modelId,
         })
         .from(orderDrafts)
         .where(ilike(orderDrafts.orderId, `%${query}%`))
@@ -1271,15 +1276,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
-    const [item] = await db.insert(inventoryItems).values([data]).returning();
+    const [item] = await db.insert(inventoryItems).values(data).returning();
     return item;
   }
 
   async updateInventoryItem(id: number, data: Partial<InsertInventoryItem>): Promise<InventoryItem> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.orderDate instanceof Date) {
-      updateData.orderDate = updateData.orderDate.toISOString();
+      updateData.orderDate = updateData.orderDate.toISOString().split('T')[0];
     }
 
     const [item] = await db.update(inventoryItems)
@@ -1305,17 +1310,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.expirationDate instanceof Date) {
-      insertData.expirationDate = insertData.expirationDate.toISOString();
+      insertData.expirationDate = insertData.expirationDate.toISOString().split('T')[0];
     }
     if (insertData.manufactureDate instanceof Date) {
-      insertData.manufactureDate = insertData.manufactureDate.toISOString();
+      insertData.manufactureDate = insertData.manufactureDate.toISOString().split('T')[0];
     }
     // Remove scannedAt handling as it's not in the InsertInventoryScan type
 
-    const [scan] = await db.insert(inventoryScans).values([insertData]).returning();
+    const [scan] = await db.insert(inventoryScans).values(insertData).returning();
     // Note: Inventory scans are now for tracking only, not affecting inventory levels
     // since the new inventory schema doesn't track onHand/committed quantities
     return scan;
@@ -1336,7 +1341,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
-    const [request] = await db.insert(partsRequests).values([data]).returning();
+    const [request] = await db.insert(partsRequests).values(data).returning();
     return request;
   }
 
@@ -1344,10 +1349,10 @@ export class DatabaseStorage implements IStorage {
     // Convert Date objects to ISO strings for date fields
     const updateData: any = { ...data };
     if (updateData.expectedDelivery instanceof Date) {
-      updateData.expectedDelivery = updateData.expectedDelivery.toISOString();
+      updateData.expectedDelivery = updateData.expectedDelivery.toISOString().split('T')[0];
     }
     if (updateData.actualDelivery instanceof Date) {
-      updateData.actualDelivery = updateData.actualDelivery.toISOString();
+      updateData.actualDelivery = updateData.actualDelivery.toISOString().split('T')[0];
     }
 
     const [request] = await db.update(partsRequests)
@@ -1390,15 +1395,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values([data]).returning();
+    const [employee] = await db.insert(employees).values(data).returning();
     return employee;
   }
 
   async updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.hireDate instanceof Date) {
-      updateData.hireDate = updateData.hireDate.toISOString();
+      updateData.hireDate = updateData.hireDate.toISOString().split('T')[0];
     }
 
     const [employee] = await db.update(employees)
@@ -1488,7 +1493,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(employeeCertifications.isActive, true));
 
     if (employeeId) {
-      query = query.where(and(
+      query = db.select().from(employeeCertifications).where(and(
         eq(employeeCertifications.isActive, true),
         eq(employeeCertifications.employeeId, employeeId)
       ));
@@ -1504,27 +1509,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployeeCertification(data: InsertEmployeeCertification): Promise<EmployeeCertification> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.dateObtained instanceof Date) {
-      insertData.dateObtained = insertData.dateObtained.toISOString();
+      insertData.dateObtained = insertData.dateObtained.toISOString().split('T')[0];
     }
     if (insertData.expiryDate instanceof Date) {
-      insertData.expiryDate = insertData.expiryDate.toISOString();
+      insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
     }
 
-    const [empCert] = await db.insert(employeeCertifications).values([insertData]).returning();
+    const [empCert] = await db.insert(employeeCertifications).values(insertData).returning();
     return empCert;
   }
 
   async updateEmployeeCertification(id: number, data: Partial<InsertEmployeeCertification>): Promise<EmployeeCertification> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.dateObtained instanceof Date) {
-      updateData.dateObtained = updateData.dateObtained.toISOString();
+      updateData.dateObtained = updateData.dateObtained.toISOString().split('T')[0];
     }
     if (updateData.expiryDate instanceof Date) {
-      updateData.expiryDate = updateData.expiryDate.toISOString();
+      updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
     }
 
     const [empCert] = await db.update(employeeCertifications)
@@ -1547,8 +1552,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeCertifications)
       .where(and(
         eq(employeeCertifications.isActive, true),
-        lte(employeeCertifications.expiryDate, futureDate.toISOString()),
-        gte(employeeCertifications.expiryDate, new Date().toISOString())
+        lte(employeeCertifications.expiryDate, futureDate.toISOString().split('T')[0]),
+        gte(employeeCertifications.expiryDate, new Date().toISOString().split('T')[0])
       ))
       .orderBy(employeeCertifications.expiryDate);
   }
@@ -1578,13 +1583,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const insertData: any = { ...data };
     if (insertData.evaluationPeriodStart instanceof Date) {
-      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString();
+      insertData.evaluationPeriodStart = insertData.evaluationPeriodStart.toISOString().split('T')[0];
     }
     if (insertData.evaluationPeriodEnd instanceof Date) {
-      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString();
+      insertData.evaluationPeriodEnd = insertData.evaluationPeriodEnd.toISOString().split('T')[0];
     }
     if (insertData.submittedAt instanceof Date) {
       insertData.submittedAt = insertData.submittedAt.toISOString();
@@ -1593,18 +1598,18 @@ export class DatabaseStorage implements IStorage {
       insertData.reviewedAt = insertData.reviewedAt.toISOString();
     }
 
-    const [evaluation] = await db.insert(evaluations).values([insertData]).returning();
+    const [evaluation] = await db.insert(evaluations).values(insertData).returning();
     return evaluation;
   }
 
   async updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation> {
-    // Convert Date objects to ISO strings for date fields
+    // Convert Date objects to strings for date fields
     const updateData: any = { ...data };
     if (updateData.evaluationPeriodStart instanceof Date) {
-      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString();
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
     }
     if (updateData.evaluationPeriodEnd instanceof Date) {
-      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString();
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
     }
     if (updateData.submittedAt instanceof Date) {
       updateData.submittedAt = updateData.submittedAt.toISOString();
@@ -1637,9 +1642,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reviewEvaluation(id: number, reviewData: Partial<InsertEvaluation>): Promise<Evaluation> {
+    // Convert Date objects to strings for date fields
+    const updateData: any = { ...reviewData };
+    if (updateData.evaluationPeriodStart instanceof Date) {
+      updateData.evaluationPeriodStart = updateData.evaluationPeriodStart.toISOString().split('T')[0];
+    }
+    if (updateData.evaluationPeriodEnd instanceof Date) {
+      updateData.evaluationPeriodEnd = updateData.evaluationPeriodEnd.toISOString().split('T')[0];
+    }
+    
     const [evaluation] = await db.update(evaluations)
       .set({
-        ...reviewData,
+        ...updateData,
         status: 'REVIEWED',
         reviewedAt: new Date(),
         updatedAt: new Date()
@@ -1717,13 +1731,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDocument(data: InsertEmployeeDocument): Promise<EmployeeDocument> {
-    const [document] = await db.insert(employeeDocuments).values(data).returning();
+    // Convert Date objects to strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expiryDate instanceof Date) {
+      insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
+    }
+    
+    const [document] = await db.insert(employeeDocuments).values(insertData).returning();
     return document;
   }
 
   async updateDocument(id: number, data: Partial<InsertEmployeeDocument>): Promise<EmployeeDocument> {
+    // Convert Date objects to strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.expiryDate instanceof Date) {
+      updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
+    }
+    
     const [document] = await db.update(employeeDocuments)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(employeeDocuments.id, id))
       .returning();
     return document;
@@ -1760,8 +1786,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.isActive, true),
-        lte(employeeDocuments.expiryDate, futureDate),
-        gte(employeeDocuments.expiryDate, new Date())
+        lte(employeeDocuments.expiryDate, futureDate.toISOString().split('T')[0]),
+        gte(employeeDocuments.expiryDate, new Date().toISOString().split('T')[0])
       ))
       .orderBy(employeeDocuments.expiryDate);
   }
@@ -2685,6 +2711,122 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error getting unified layup orders:', error);
       return [];
+    }
+  }
+
+  // P1 Purchase Order Integration - Sync P1 orders into production queue
+  async syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }> {
+    try {
+      // Get existing layup order IDs for comparison
+      const existingLayupOrders = await db.select({ orderId: layupOrders.orderId }).from(layupOrders);
+      const existingOrderIds = new Set(existingLayupOrders.map(o => o.orderId));
+      
+      // Get P1 orders that aren't already in layup queue
+      const p1Orders = await db
+        .select({
+          orderId: productionOrders.orderId,
+          customerName: productionOrders.customerName,
+          itemName: productionOrders.itemName,
+          orderDate: productionOrders.orderDate,
+          dueDate: productionOrders.dueDate
+        })
+        .from(productionOrders)
+        .where(eq(productionOrders.productionStatus, 'PENDING'));
+      
+      // Filter out orders already in layup queue
+      const ordersToSync = p1Orders.filter(order => !existingOrderIds.has(order.orderId));
+      
+      let syncedCount = 0;
+      
+      for (const order of ordersToSync) {
+        // Calculate priority score based on due date (closer = higher priority)
+        const dueDate = new Date(order.dueDate || order.orderDate);
+        const today = new Date();
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const priorityScore = daysUntilDue <= 30 ? 1 : daysUntilDue <= 60 ? 2 : 50;
+        
+        // Insert P1 order into layup queue
+        await db.insert(layupOrders).values({
+          orderId: order.orderId,
+          orderDate: order.orderDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+          dueDate: order.dueDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+          priorityScore: priorityScore,
+          department: 'Layup',
+          status: 'FINALIZED',
+          customer: order.customerName || 'Unknown',
+          product: order.itemName || 'Unknown',
+          isActive: true
+        });
+        
+        syncedCount++;
+      }
+      
+      return {
+        synced: syncedCount,
+        message: `Successfully synced ${syncedCount} P1 purchase orders to production queue`
+      };
+    } catch (error) {
+      console.error('Error syncing P1 orders:', error);
+      throw error;
+    }
+  }
+
+  // Get unified production queue with both regular orders and P1 purchase orders
+  async getUnifiedProductionQueue(): Promise<any[]> {
+    try {
+      // Use raw SQL to get layup orders, avoiding schema issues
+      const layupQuery = await db.execute(sql`
+        SELECT 
+          id, order_id, order_date, due_date, customer, product, 
+          priority_score, department, status, created_at, updated_at
+        FROM layup_orders 
+        WHERE is_active = true 
+        ORDER BY priority_score ASC, due_date ASC
+      `);
+      
+      // Get production orders to identify P1 orders using direct query
+      const productionQuery = await db.execute(sql`
+        SELECT id, order_id, customer_name, item_name 
+        FROM production_orders 
+        WHERE production_status = 'PENDING'
+      `);
+      const productionOrderMap = new Map((productionQuery.rows || []).map((po: any) => [po.order_id, po]));
+      
+      // Process the results
+      const unifiedQueue = (layupQuery.rows || []).map((order: any) => {
+        const today = new Date();
+        const dueDate = new Date(order.due_date || order.order_date);
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        let urgencyStatus = 'NORMAL';
+        if (daysUntilDue < 0) urgencyStatus = 'OVERDUE';
+        else if (daysUntilDue <= 7) urgencyStatus = 'URGENT';
+        else if (daysUntilDue <= 30) urgencyStatus = 'UPCOMING';
+        
+        const isP1Order = productionOrderMap.has(order.order_id);
+        
+        return {
+          id: order.id,
+          orderId: order.order_id,
+          orderDate: order.order_date,
+          dueDate: order.due_date,
+          customer: order.customer,
+          product: order.product,
+          priorityScore: order.priority_score,
+          department: order.department,
+          status: order.status,
+          orderSource: isP1Order ? 'P1_PURCHASE_ORDER' : 'REGULAR_ORDER',
+          urgencyStatus,
+          daysUntilDue,
+          createdAt: order.created_at,
+          updatedAt: order.updated_at
+        };
+      });
+      
+      return unifiedQueue;
+    } catch (error) {
+      console.error('Error getting unified production queue:', error);
+      throw error;
     }
   }
 
@@ -4416,7 +4558,7 @@ export class DatabaseStorage implements IStorage {
     // Enrich orders with customer names
     return orders.map(order => ({
       ...order,
-      customer: customerMap.get(order.customerId) || 'Unknown Customer'
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
     })) as AllOrder[];
   }
 

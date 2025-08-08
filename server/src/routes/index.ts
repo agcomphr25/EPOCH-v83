@@ -583,6 +583,33 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P1 Integration endpoints for production queue database system
+  app.post('/api/production-queue/sync-p1-orders', async (req, res) => {
+    try {
+      console.log('🏭 P1 Production Queue Sync API called');
+      const { storage } = await import('../../storage');
+      const result = await storage.syncP1OrdersToProductionQueue();
+      console.log('🏭 P1 sync result:', result);
+      res.json(result);
+    } catch (error) {
+      console.error('🏭 P1 sync error:', error);
+      res.status(500).json({ error: "Failed to sync P1 orders to production queue" });
+    }
+  });
+
+  app.get('/api/production-queue/unified', async (req, res) => {
+    try {
+      console.log('🏭 Unified Production Queue API called');
+      const { storage } = await import('../../storage');
+      const unifiedQueue = await storage.getUnifiedProductionQueue();
+      console.log('🏭 Unified queue count:', unifiedQueue.length);
+      res.json(unifiedQueue);
+    } catch (error) {
+      console.error('🏭 Unified queue error:', error);
+      res.status(500).json({ error: "Failed to fetch unified production queue" });
+    }
+  });
+
   // P2 Layup Schedule endpoints - separate schedule for P2 production orders
   app.get('/api/p2-layup-schedule', async (req, res) => {
     try {

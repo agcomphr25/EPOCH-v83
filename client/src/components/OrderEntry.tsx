@@ -970,22 +970,6 @@ export default function OrderEntry() {
                 Order Entry
               </CardTitle>
               <p className="text-sm text-muted-foreground">Create new stock order</p>
-              
-              {/* Glenn Test Fork Button */}
-              <div className="mt-4">
-                <Button
-                  type="button"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2"
-                  onClick={() => {
-                    toast({
-                      title: "Glenn Test Fork",
-                      description: "Test button for GitHub fork demonstration",
-                    });
-                  }}
-                >
-                  Glenn Test Fork
-                </Button>
-              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">

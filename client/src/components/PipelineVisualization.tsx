@@ -111,12 +111,12 @@ const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { 
 };
 
 export default function PipelineVisualization() {
-  const { data: pipelineCounts, isLoading: countsLoading } = useQuery({
+  const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
     queryKey: ['/api/orders/pipeline-counts'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
-  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery({
+  const { data: pipelineDetails, isLoading: detailsLoading } = useQuery<Record<string, OrderDetail[]>>({
     queryKey: ['/api/orders/pipeline-details'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });

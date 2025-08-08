@@ -31,6 +31,20 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
 
+  // Helper function to close all dropdowns
+  const closeAllDropdowns = useCallback(() => {
+    setFormsReportsExpanded(false);
+    setInventoryExpanded(false);
+    setQcMaintenanceExpanded(false);
+    setEmployeesExpanded(false);
+    setFinanceExpanded(false);
+    setTestDashboardsExpanded(false);
+    setPurchaseOrdersExpanded(false);
+    setProductionSchedulingExpanded(false);
+    setDepartmentQueueExpanded(false);
+    setVerifiedModulesExpanded(false);
+  }, []);
+
   // Helper function to toggle dropdown
   const toggleDropdown = useCallback((dropdownName: string, isExpanded: boolean, setExpanded: (value: boolean) => void) => {
     setExpanded(!isExpanded);
@@ -401,6 +415,11 @@ export default function Navigation() {
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
 
+  // Close all dropdowns when navigating to a new page
+  useEffect(() => {
+    closeAllDropdowns();
+  }, [location, closeAllDropdowns]);
+
   // Auto-expand dropdowns when on those pages
   useEffect(() => {
     if (isVerifiedModulesActive) {
@@ -510,19 +529,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setFormsReportsExpanded(false);
-                            // Close all other dropdowns too
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -566,19 +573,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setInventoryExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -622,19 +617,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setQcMaintenanceExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -678,19 +661,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setEmployeesExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -734,19 +705,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setFinanceExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -790,19 +749,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setTestDashboardsExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -846,19 +793,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setPurchaseOrdersExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -902,19 +837,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setProductionSchedulingExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -958,19 +881,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setDepartmentQueueExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setVerifiedModulesExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}
@@ -1014,19 +925,7 @@ export default function Navigation() {
                             "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
                             isActive && "bg-primary text-white hover:bg-primary"
                           )}
-                          onClick={() => {
-                            setVerifiedModulesExpanded(false);
-                            // Close all other dropdowns too
-                            setFormsReportsExpanded(false);
-                            setInventoryExpanded(false);
-                            setQcMaintenanceExpanded(false);
-                            setEmployeesExpanded(false);
-                            setFinanceExpanded(false);
-                            setTestDashboardsExpanded(false);
-                            setPurchaseOrdersExpanded(false);
-                            setProductionSchedulingExpanded(false);
-                            setDepartmentQueueExpanded(false);
-                          }}
+                          onClick={closeAllDropdowns}
                         >
                           <Icon className="h-4 w-4" />
                           {item.label}

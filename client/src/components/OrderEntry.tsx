@@ -484,6 +484,25 @@ export default function OrderEntry() {
     }
   }, [modelId, modelOptions, features.action_length, features.length_of_pull, toast]);
 
+  // Business rule: Impact Action Inlet + Long Action Length cannot have Left handedness
+  useEffect(() => {
+    const hasImpactInlet = features.action_inlet && features.action_inlet.toLowerCase().includes('impact');
+    const isLongAction = features.action_length === 'long';
+    const isLeftHanded = features.handedness === 'left';
+    
+    if (hasImpactInlet && isLongAction && isLeftHanded) {
+      setFeatures(prev => ({ 
+        ...prev, 
+        handedness: undefined // Clear the left handedness selection
+      }));
+      toast({
+        title: "Handedness Updated",
+        description: "Left handedness is not available for Impact Action Inlet with Long Action Length.",
+        variant: "default",
+      });
+    }
+  }, [features.action_inlet, features.action_length, features.handedness, toast]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
@@ -1200,19 +1219,33 @@ export default function OrderEntry() {
                   {/* Handedness */}
                   <div>
                     <Label>Handedness</Label>
-                    <Select 
-                      key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
-                      value={features.handedness || undefined} 
-                      onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select handedness..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="right">Right</SelectItem>
-                        <SelectItem value="left">Left</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {(() => {
+                      // Business rule: Impact Action Inlet + Long Action Length cannot have Left handedness
+                      const hasImpactInlet = features.action_inlet && features.action_inlet.toLowerCase().includes('impact');
+                      const isLongAction = features.action_length === 'long';
+                      const shouldRestrictLeft = hasImpactInlet && isLongAction;
+                      
+                      return (
+                        <Select 
+                          key={`handedness-${renderKey}-${features.handedness || 'empty'}`}
+                          value={features.handedness || undefined} 
+                          onValueChange={(value) => setFeatures(prev => ({ ...prev, handedness: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select handedness..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="right">Right</SelectItem>
+                            {!shouldRestrictLeft && <SelectItem value="left">Left</SelectItem>}
+                            {shouldRestrictLeft && (
+                              <div className="px-2 py-1.5 text-sm text-gray-500 italic">
+                                Left not available for Impact Inlet + Long Action
+                              </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
                   </div>
 
                   {/* Action Inlet */}

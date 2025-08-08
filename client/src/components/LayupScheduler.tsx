@@ -773,6 +773,38 @@ export default function LayupScheduler() {
     await pythonSchedulerMutation.mutateAsync();
   };
 
+  // Add API-based layup schedule generation
+  const generateLayupScheduleMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/layup-schedule/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: {}
+      });
+    },
+    onSuccess: (result) => {
+      console.log('🏭 Layup schedule generated:', result);
+      toast({
+        title: "Schedule Generated",
+        description: `Generated ${result.entriesGenerated || 0} schedule entries from production queue`,
+      });
+      // Refresh the schedule data
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+    },
+    onError: (error) => {
+      console.error('❌ Failed to generate schedule:', error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate layup schedule from production queue",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleGenerateSchedule = async () => {
+    await generateLayupScheduleMutation.mutateAsync();
+  };
+
   // Helper function to get current week's orders
   const getOrdersForCurrentWeek = () => {
     const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
@@ -789,6 +821,12 @@ export default function LayupScheduler() {
     });
   };
 
+
+  // Fetch generated layup schedule from API
+  const { data: generatedSchedule = [], isLoading: isLoadingSchedule } = useQuery({
+    queryKey: ['/api/layup-schedule'],
+    enabled: true,
+  });
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
@@ -1166,11 +1204,32 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
-  // Auto-trigger initial scheduling when conditions are met
+  // Load generated schedule into order assignments
   useEffect(() => {
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+    if (generatedSchedule && generatedSchedule.length > 0) {
+      console.log('📋 Loading generated schedule with', generatedSchedule.length, 'entries');
+      
+      const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      generatedSchedule.forEach((entry: any) => {
+        scheduleAssignments[entry.orderId] = {
+          moldId: entry.moldId,
+          date: entry.scheduledDate
+        };
+      });
+      
+      console.log('📋 Generated schedule assignments:', Object.keys(scheduleAssignments).length);
+      setOrderAssignments(scheduleAssignments);
+    }
+  }, [generatedSchedule]);
+
+  // Auto-trigger initial scheduling when conditions are met (fallback if no generated schedule)
+  useEffect(() => {
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && !isLoadingSchedule) {
       const hasAssignments = Object.keys(orderAssignments).length > 0;
-      if (!hasAssignments) {
+      const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
+      
+      if (!hasAssignments && !hasGeneratedSchedule) {
         console.log('🎯 Auto-triggering initial schedule generation...');
         // Delay to allow state to settle
         setTimeout(() => {
@@ -2768,6 +2827,26 @@ export default function LayupScheduler() {
             >
               <Zap className="w-4 h-4 mr-2" />
               Auto Schedule (Mesa Constraints)
+            </Button>
+
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleGenerateSchedule}
+              disabled={generateLayupScheduleMutation.isPending}
+              className="mr-4 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {generateLayupScheduleMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Generate from Production Queue
+                </>
+              )}
             </Button>
 
             <Button

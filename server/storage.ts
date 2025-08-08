@@ -174,7 +174,7 @@ export interface IStorage {
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
-  // getAllOrders(): Promise<OrderDraft[]>; // This method is now overridden below with new functionality
+  getAllOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getOrderById(orderId: string): Promise<OrderDraft | undefined>;
 
   // Order ID generation with atomic reservation system
@@ -1122,20 +1122,22 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Get all orders (drafts)
-  async getAllOrders(): Promise<OrderDraft[]> {
-    // First get all orders
-    const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
+  // Get all finalized orders
+  async getAllOrders(): Promise<AllOrder[]> {
+    // First get all finalized orders from the allOrders table
+    const orders = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select().from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
-    // Enrich orders with customer names
+    // Enrich orders with customer names and add required frontend fields
     return orders.map(order => ({
       ...order,
-      customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
-    })) as OrderDraft[];
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product'
+    })) as AllOrder[];
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {

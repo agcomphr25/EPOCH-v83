@@ -1563,7 +1563,18 @@ export default function OrderEntry() {
                             const isMediumAction = features.action_length === 'medium';
                             const restrictedBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
                             
+                            // Debug logging
+                            console.log('🔍 Bottom Metal Filter Debug:', {
+                              actionLength: features.action_length,
+                              isMediumAction,
+                              optionValue: option.value,
+                              optionLabel: option.label,
+                              isRestricted: restrictedBottomMetals.includes(option.value),
+                              shouldFilter: isMediumAction && restrictedBottomMetals.includes(option.value)
+                            });
+                            
                             if (isMediumAction && restrictedBottomMetals.includes(option.value)) {
+                              console.log('🚫 Filtering out bottom metal:', option.value);
                               return false;
                             }
                             

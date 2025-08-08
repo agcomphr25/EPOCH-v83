@@ -797,7 +797,7 @@ export default function CustomerManagement() {
   // Update customer mutation
   const updateCustomerMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<CustomerFormData> }) => 
-      apiRequest(`/api/customers/${id}`, {
+      apiRequest(`/api/customers/update-bypass/${id}`, {
         method: 'PUT',
         body: data,
       }),

@@ -138,6 +138,25 @@ router.post('/create-bypass', async (req: Request, res: Response) => {
   }
 });
 
+// Customer update without authentication (for Customer Management)
+router.put('/update-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS CUSTOMER UPDATE ROUTE CALLED');
+    console.log('🔧 Customer ID:', req.params.id);
+    console.log('🔧 Request body:', req.body);
+    
+    const customerId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCustomer = await storage.updateCustomer(customerId, updates);
+    
+    console.log('🔧 Customer updated successfully:', updatedCustomer.id);
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Update customer error:', error);
+    res.status(500).json({ error: "Failed to update customer" });
+  }
+});
+
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerData = insertCustomerSchema.parse(req.body);

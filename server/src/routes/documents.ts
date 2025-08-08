@@ -85,6 +85,32 @@ router.get('/type/:type', async (req, res) => {
   }
 });
 
+// Document Tags Routes
+
+// GET /api/documents/tags - Get all tags
+router.get('/tags', async (req, res) => {
+  try {
+    const tags = await storage.getAllTags();
+    res.json(tags);
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Document Collections Routes
+
+// GET /api/documents/collections - Get all collections
+router.get('/collections', async (req, res) => {
+  try {
+    const collections = await storage.getAllCollections();
+    res.json(collections);
+  } catch (error) {
+    console.error('Error fetching collections:', error);
+    res.status(500).json({ error: 'Failed to fetch collections' });
+  }
+});
+
 // GET /api/documents/:id - Get single document
 router.get('/:id', async (req, res) => {
   try {
@@ -243,18 +269,7 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
-// Document Tags Routes
-
-// GET /api/documents/tags - Get all tags
-router.get('/tags', async (req, res) => {
-  try {
-    const tags = await storage.getAllTags();
-    res.json(tags);
-  } catch (error) {
-    console.error('Error fetching tags:', error);
-    res.status(500).json({ error: 'Failed to fetch tags' });
-  }
-});
+// Document Tags Routes (continued from above)
 
 // GET /api/documents/tags/category/:category - Get tags by category
 router.get('/tags/category/:category', async (req, res) => {
@@ -375,18 +390,7 @@ router.delete('/:id/tags/:tagId', async (req, res) => {
   }
 });
 
-// Document Collections Routes
-
-// GET /api/documents/collections - Get all collections
-router.get('/collections', async (req, res) => {
-  try {
-    const collections = await storage.getAllCollections();
-    res.json(collections);
-  } catch (error) {
-    console.error('Error fetching collections:', error);
-    res.status(500).json({ error: 'Failed to fetch collections' });
-  }
-});
+// Document Collections Routes (continued from above)
 
 // GET /api/documents/collections/type/:type - Get collections by type
 router.get('/collections/type/:type', async (req, res) => {

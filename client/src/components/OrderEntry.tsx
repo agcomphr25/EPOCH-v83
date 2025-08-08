@@ -523,6 +523,26 @@ export default function OrderEntry() {
     }
   }, [features.action_length, features.handedness, features.action_inlet, toast]);
 
+  // Business rule: Clear restricted bottom metals when Medium Action Length is selected
+  useEffect(() => {
+    const isMediumAction = features.action_length === 'medium';
+    const restrictedBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+    const hasRestrictedBottomMetal = features.bottom_metal && 
+                                   restrictedBottomMetals.includes(features.bottom_metal);
+
+    if (isMediumAction && hasRestrictedBottomMetal) {
+      setFeatures(prev => ({
+        ...prev,
+        bottom_metal: undefined // Clear the restricted bottom metal selection
+      }));
+      toast({
+        title: "Bottom Metal Updated",
+        description: "The selected bottom metal is not available for Medium Action Length.",
+        variant: "default",
+      });
+    }
+  }, [features.action_length, features.bottom_metal, toast]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
@@ -1535,7 +1555,20 @@ export default function OrderEntry() {
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'bottom_metal' || f.id === 'bottom_metal')
-                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.options?.filter(option => {
+                            // Filter out empty options
+                            if (!option.value || option.value.trim() === '') return false;
+                            
+                            // Business rule: Filter out specific bottom metals when Action Length is "Medium"
+                            const isMediumAction = features.action_length === 'medium';
+                            const restrictedBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+                            
+                            if (isMediumAction && restrictedBottomMetals.includes(option.value)) {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
                           ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}

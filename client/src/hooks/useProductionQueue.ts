@@ -36,7 +36,20 @@ export default function useProductionQueue() {
           status: order.status,
           customer: order.customerName || order.customer,
           customerName: order.customerName || order.customer
-        }));
+        }))
+        .sort((a: ProductionQueueItem, b: ProductionQueueItem) => {
+          // Sort by due date first (most urgent first)
+          const dueDateA = new Date(a.dueDate || a.orderDate);
+          const dueDateB = new Date(b.dueDate || b.orderDate);
+          const dateDiff = dueDateA.getTime() - dueDateB.getTime();
+          
+          // If due dates are the same, sort by priority score (lower = higher priority)
+          if (dateDiff === 0) {
+            return (a.priorityScore || 1) - (b.priorityScore || 1);
+          }
+          
+          return dateDiff;
+        });
         
       setOrders(productionQueueOrders);
     } catch (error) {

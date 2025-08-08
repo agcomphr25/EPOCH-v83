@@ -249,6 +249,28 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Production Orders (must be before :id route)
+router.get('/production-orders', async (req: Request, res: Response) => {
+  try {
+    const productionOrders = await storage.getAllProductionOrders();
+    res.json(productionOrders);
+  } catch (error) {
+    console.error('Get production orders error:', error);
+    res.status(500).json({ error: "Failed to fetch production orders" });
+  }
+});
+
+router.post('/production-orders/generate/:purchaseOrderId', async (req: Request, res: Response) => {
+  try {
+    const purchaseOrderId = parseInt(req.params.purchaseOrderId);
+    const productionOrders = await storage.generateProductionOrders(purchaseOrderId);
+    res.status(201).json(productionOrders);
+  } catch (error) {
+    console.error('Generate production orders error:', error);
+    res.status(500).json({ error: "Failed to generate production orders" });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
@@ -364,27 +386,7 @@ router.post('/purchase-orders', async (req: Request, res: Response) => {
   }
 });
 
-// Production Orders
-router.get('/production-orders', async (req: Request, res: Response) => {
-  try {
-    const productionOrders = await storage.getAllProductionOrders();
-    res.json(productionOrders);
-  } catch (error) {
-    console.error('Get production orders error:', error);
-    res.status(500).json({ error: "Failed to fetch production orders" });
-  }
-});
 
-router.post('/production-orders/generate/:purchaseOrderId', async (req: Request, res: Response) => {
-  try {
-    const purchaseOrderId = parseInt(req.params.purchaseOrderId);
-    const productionOrders = await storage.generateProductionOrdersFromPO(purchaseOrderId);
-    res.status(201).json(productionOrders);
-  } catch (error) {
-    console.error('Generate production orders error:', error);
-    res.status(500).json({ error: "Failed to generate production orders" });
-  }
-});
 
 // Payment Management Routes
 // Get all payments for an order

@@ -86,7 +86,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
@@ -436,7 +436,7 @@ export interface IStorage {
   deleteEmployeeLayupSettings(employeeId: string): Promise<void>;
 
   // Layup Scheduler: Orders CRUD
-  getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<ProductionQueue[]>;
+  getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]>;
   getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined>;
   createProductionQueueItem(data: InsertProductionQueue): Promise<ProductionQueue>;
   updateProductionQueueItem(orderId: string, data: Partial<InsertProductionQueue>): Promise<ProductionQueue>;
@@ -2456,7 +2456,16 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(productionOrders)
-      .orderBy(desc(productionOrders.createdAt));
+      .orderBy(
+        asc(productionOrders.dueDate), // Most urgent due dates first
+        asc(sql`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END`), // Priority score (lower = higher priority)
+        desc(productionOrders.createdAt) // Newest first as tie-breaker
+      );
   }
 
   async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {
@@ -2661,22 +2670,58 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Layup Scheduler: Orders CRUD
-  async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<ProductionQueue[]> {
-    let query = db.select().from(productionQueue);
+  async getAllProductionQueue(filters?: { status?: string; department?: string }): Promise<any[]> {
+    try {
+      // Use production_orders table since production_queue table doesn't exist
+      // This method should return orders sorted by due date (most urgent first) and priority score
+      let query = db.select({
+        id: productionOrders.id,
+        orderId: productionOrders.orderId,
+        orderDate: productionOrders.orderDate,
+        dueDate: productionOrders.dueDate,
+        customer: productionOrders.customerName,
+        product: productionOrders.itemName,
+        status: productionOrders.productionStatus,
+        department: productionOrders.currentDepartment,
+        priorityScore: sql<number>`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END`.as('priority_score'),
+        createdAt: productionOrders.createdAt,
+        updatedAt: productionOrders.updatedAt
+      }).from(productionOrders);
 
-    const conditions = [];
-    if (filters?.status) {
-      conditions.push(eq(productionQueue.status, filters.status));
-    }
-    if (filters?.department) {
-      conditions.push(eq(productionQueue.department, filters.department));
-    }
+      // Apply filters
+      const conditions = [];
+      if (filters?.status) {
+        conditions.push(eq(productionOrders.productionStatus, filters.status));
+      }
+      if (filters?.department) {
+        conditions.push(eq(productionOrders.currentDepartment, filters.department));
+      }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
 
-    return await query.orderBy(productionQueue.priorityScore, productionQueue.orderDate);
+      // Sort by due date (most urgent first), then by calculated priority score
+      const results = await query.orderBy(
+        productionOrders.dueDate, // Ascending - soonest due dates first
+        sql`CASE 
+          WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
+          WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '30 days' THEN 30
+          ELSE 50 
+        END` // Ascending - lower priority scores first (higher priority)
+      );
+
+      return results;
+    } catch (error) {
+      console.error('Error getting production queue:', error);
+      return [];
+    }
   }
 
   async getProductionQueueItem(orderId: string): Promise<ProductionQueue | undefined> {

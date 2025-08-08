@@ -454,6 +454,10 @@ export interface IStorage {
   deleteLayupSchedule(id: number): Promise<void>;
   overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule>;
   deleteLayupScheduleByOrder(orderId: string): Promise<void>;
+  clearLayupSchedule(): Promise<void>;
+  
+  // Employee layup settings
+  getLayupEmployeeSettings(): Promise<any[]>;
 
   // Get unified layup orders (combining regular orders and P1 PO items)
   getUnifiedProductionQueue(): Promise<any[]>;
@@ -2966,6 +2970,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLayupScheduleByOrder(orderId: string): Promise<void> {
     await db.delete(layupSchedule).where(eq(layupSchedule.orderId, orderId));
+  }
+
+  async clearLayupSchedule(): Promise<void> {
+    await db.delete(layupSchedule);
+  }
+
+  async getLayupEmployeeSettings(): Promise<any[]> {
+    return await this.getAllEmployeeLayupSettings();
   }
 
   async overrideOrderSchedule(orderId: string, newDate: Date, moldId: string, overriddenBy?: string): Promise<LayupSchedule> {

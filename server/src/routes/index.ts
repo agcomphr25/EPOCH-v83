@@ -153,6 +153,130 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Generate layup schedule from production queue
+  app.post('/api/layup-schedule/generate', async (req, res) => {
+    try {
+      console.log('🔧 LAYUP SCHEDULE GENERATE CALLED');
+      const { storage } = await import('../../storage');
+      
+      // Get production orders (already sorted by priority)
+      const productionOrders = await storage.getAllProductionOrders();
+      console.log('🔧 Found production orders for scheduling:', productionOrders.length);
+      
+      // Get mold and employee settings
+      const molds = await storage.getAllMolds();
+      const layupEmployees = await storage.getLayupEmployeeSettings();
+      
+      console.log('🔧 Found molds:', molds.length);
+      console.log('🔧 Found layup employees:', layupEmployees.length);
+      console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
+        orderId: o.orderId, 
+        itemName: o.itemName, 
+        stockModelId: o.stockModelId 
+      })));
+      
+      // Get stock models for proper mapping
+      const stockModels = await storage.getAllStockModels();
+      
+      // Transform data for scheduler utility
+      const orders = productionOrders.map(order => {
+        // Map item names to stock model IDs
+        let stockModelId = order.stockModelId;
+        if (!stockModelId && order.itemName) {
+          // Try to find matching stock model by name
+          const matchingModel = stockModels.find(model => 
+            model.displayName === order.itemName || 
+            model.name === order.itemName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+          );
+          if (matchingModel) {
+            stockModelId = matchingModel.id;
+          } else if (order.itemName.includes('Mesa')) {
+            // Default Mesa items to mesa_universal if no exact match
+            stockModelId = 'mesa_universal';
+          } else {
+            stockModelId = 'unknown';
+          }
+        }
+        
+        return {
+          orderId: order.orderId,
+          product: order.itemName || order.product || 'Unknown Product',
+          customer: order.customerName || 'Unknown Customer',
+          stockModelId: stockModelId || 'unknown',
+          dueDate: order.dueDate,
+          orderDate: order.orderDate,
+          priorityScore: order.priorityScore || 50,
+          quantity: 1
+        };
+      });
+      
+      console.log('🔧 Transformed orders with stock models:', orders.slice(0, 3).map(o => ({ 
+        orderId: o.orderId, 
+        product: o.product, 
+        stockModelId: o.stockModelId 
+      })));
+      
+      const moldSettings = molds.map(mold => ({
+        moldId: mold.moldId,
+        enabled: true, // Assume all molds are enabled for now
+        multiplier: 1 // Default multiplier
+      }));
+      
+      const employeeSettings = layupEmployees.map(emp => ({
+        employeeId: emp.employeeId,
+        rate: emp.rate || 1,
+        hours: emp.hours || 8
+      }));
+      
+      // Simple schedule generation - assign orders to first available mold by date
+      console.log('🔧 Creating simple schedule...');
+      
+      // Clear existing schedule
+      await storage.clearLayupSchedule();
+      
+      // Generate simple schedule with current date as starting point
+      const today = new Date();
+      const createdEntries = [];
+      
+      // Take first 20 orders to avoid overwhelming the system
+      const ordersToSchedule = orders.slice(0, 20);
+      const availableMolds = molds.length > 0 ? molds : [{ moldId: 'DEFAULT-1' }];
+      const defaultMoldId = availableMolds[0].moldId;
+      
+      console.log('🔧 Scheduling', ordersToSchedule.length, 'orders using mold:', defaultMoldId);
+      
+      for (let i = 0; i < ordersToSchedule.length; i++) {
+        const order = ordersToSchedule[i];
+        
+        // Schedule orders sequentially, one per day
+        const scheduleDate = new Date(today);
+        scheduleDate.setDate(today.getDate() + i);
+        
+        const scheduleEntry = {
+          orderId: order.orderId,
+          scheduledDate: scheduleDate,
+          moldId: defaultMoldId,
+          employeeAssignments: layupEmployees.slice(0, 2), // Assign first 2 employees
+          isOverride: false
+        };
+        
+        const created = await storage.createLayupSchedule(scheduleEntry);
+        createdEntries.push(created);
+      }
+      
+      console.log('🔧 Created layup schedule entries:', createdEntries.length);
+      res.json({
+        success: true,
+        entriesGenerated: createdEntries.length,
+        schedule: createdEntries
+      });
+      
+    } catch (error) {
+      console.error('❌ Error generating layup schedule:', error);
+      res.status(500).json({ error: 'Failed to generate layup schedule' });
+    }
+  });
+
   // P2 Customer bypass route to avoid monolithic conflicts
   app.get('/api/p2-customers-bypass', async (req, res) => {
     try {

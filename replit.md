@@ -7,6 +7,13 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+**August 8, 2025**: Fixed All Orders page display issue:
+- Resolved critical bug where All Orders page only showed 67 order drafts instead of all 655 finalized orders
+- Updated getAllOrders() method to query the correct allOrders table instead of orderDrafts table
+- Fixed database schema mismatch by removing non-existent columns (finalizedAt, finalizedBy) that were causing SQL errors
+- Enhanced order data enrichment with customer names and product information for frontend compatibility
+- All Orders page now properly displays complete order history with full department progression tracking
+
 **August 8, 2025**: Integrated complete Authorize.Net credit card processing system:
 - Added secure payment processing backend with Authorize.Net API integration
 - Created credit card transactions database table for complete payment tracking

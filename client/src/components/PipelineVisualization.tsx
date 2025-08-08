@@ -6,11 +6,11 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = [
-  { name: 'Layup', color: 'bg-[#7BAFD4]' },
-  { name: 'Plugging', color: 'bg-[#7BAFD4]' },
+  { name: 'Layup/Plugging', color: 'bg-[#7BAFD4]' },
   { name: 'CNC', color: 'bg-[#7BAFD4]' },
-  { name: 'Finish', color: 'bg-[#7BAFD4]' },
   { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
+  { name: 'Finish Assignment', color: 'bg-[#7BAFD4]' },
+  { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
   { name: 'QC', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
@@ -163,9 +163,19 @@ export default function PipelineVisualization() {
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           {departments.map((dept) => {
-            const count = pipelineCounts?.[dept.name] || 0;
+            // Handle combined Layup/Plugging department
+            let count = 0;
+            let orders: any[] = [];
+            
+            if (dept.name === 'Layup/Plugging') {
+              count = (pipelineCounts?.['Layup'] || 0) + (pipelineCounts?.['Plugging'] || 0);
+              orders = [...(pipelineDetails?.['Layup'] || []), ...(pipelineDetails?.['Plugging'] || [])];
+            } else {
+              count = pipelineCounts?.[dept.name] || 0;
+              orders = pipelineDetails?.[dept.name] || [];
+            }
+            
             const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-            const orders = pipelineDetails?.[dept.name] || [];
             
             // Determine if department should be highlighted (more than 25 stocks)
             const isOverloaded = count > 25;

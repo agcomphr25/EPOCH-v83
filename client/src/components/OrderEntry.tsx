@@ -503,6 +503,26 @@ export default function OrderEntry() {
     }
   }, [features.action_inlet, features.action_length, features.handedness, toast]);
 
+  // Business rule: Clear Impact Action Inlet when Long Action Length + Left Handedness is selected
+  useEffect(() => {
+    const isLongAction = features.action_length === 'long';
+    const isLeftHanded = features.handedness === 'left';
+    const hasImpactInlet = features.action_inlet && 
+                          (features.action_inlet.toLowerCase().includes('impact'));
+
+    if (isLongAction && isLeftHanded && hasImpactInlet) {
+      setFeatures(prev => ({
+        ...prev,
+        action_inlet: undefined // Clear the Impact action inlet selection
+      }));
+      toast({
+        title: "Action Inlet Updated",
+        description: "Impact Action Inlet is not available for Long Action Length with Left handedness.",
+        variant: "default",
+      });
+    }
+  }, [features.action_length, features.handedness, features.action_inlet, toast]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
@@ -1262,7 +1282,22 @@ export default function OrderEntry() {
                       <SelectContent>
                         {featureDefs
                           .find(f => f.name === 'action_inlet' || f.id === 'action_inlet')
-                          ?.options?.filter(option => option.value && option.value.trim() !== '')
+                          ?.options?.filter(option => {
+                            // Filter out empty options
+                            if (!option.value || option.value.trim() === '') return false;
+                            
+                            // Business rule: Filter out Impact options when Action Length is "Long" and Handedness is "Left"
+                            const isLongAction = features.action_length === 'long';
+                            const isLeftHanded = features.handedness === 'left';
+                            const isImpactOption = option.value.toLowerCase().includes('impact') || 
+                                                 option.label.toLowerCase().includes('impact');
+                            
+                            if (isLongAction && isLeftHanded && isImpactOption) {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
                           ?.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}

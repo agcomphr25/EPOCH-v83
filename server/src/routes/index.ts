@@ -89,15 +89,29 @@ export function registerRoutes(app: Express): Server {
     try {
       const { storage } = await import('../../storage');
       
-      // Fetch all necessary data
-      const [allOrders, productionOrders, allMolds, employees] = await Promise.all([
+      // Fetch all necessary data including employee production rates
+      const [allOrders, productionOrders, allMolds, employeeSettings] = await Promise.all([
         storage.getAllOrders(),
         storage.getAllProductionOrders(),
         storage.getAllMolds(),
         storage.getLayupEmployeeSettings()
       ]);
       
-      console.log(`📊 Data loaded: ${allOrders.length} total orders, ${allMolds.length} molds, ${employees.length} employees`);
+      console.log(`📊 Data loaded: ${allOrders.length} total orders, ${allMolds.length} molds, ${employeeSettings.length} employee settings`);
+      
+      // Calculate total daily employee capacity
+      const totalDailyCapacity = employeeSettings
+        .filter(emp => emp.isActive && emp.department === 'Layup')
+        .reduce((total, emp) => total + (emp.rate * emp.hours), 0);
+      
+      console.log(`👥 Employee capacity analysis:`);
+      employeeSettings
+        .filter(emp => emp.isActive && emp.department === 'Layup')
+        .forEach(emp => {
+          const dailyCapacity = emp.rate * emp.hours;
+          console.log(`  ${emp.employeeId}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
+        });
+      console.log(`  🎯 Total daily capacity: ${totalDailyCapacity} parts/day`);
       
       // Get unscheduled orders from production queue  
       const unscheduledOrders = allOrders.filter(order => 
@@ -242,8 +256,15 @@ export function registerRoutes(app: Express): Server {
       const workDays = getWorkDays(30);
       const allocations: any[] = [];
       const moldCapacityUsed: {[moldId: string]: {[date: string]: number}} = {};
+      const dailyCapacityUsed: {[date: string]: number} = {};
       
-      console.log(`📅 Scheduling across ${workDays.length} workdays`);
+      console.log(`📅 Scheduling across ${workDays.length} workdays with ${totalDailyCapacity} parts/day employee capacity`);
+      
+      // Initialize daily capacity tracking
+      workDays.forEach(date => {
+        const dateStr = date.toISOString().split('T')[0];
+        dailyCapacityUsed[dateStr] = 0;
+      });
       
       // Debug sample of non-Mesa orders to understand their stockModelIds
       const nonMesaOrders = sortedOrders.filter(order => 
@@ -333,12 +354,17 @@ export function registerRoutes(app: Express): Server {
           
           const dateStr = date.toISOString().split('T')[0];
           
+          // Check if daily employee capacity is available
+          if (dailyCapacityUsed[dateStr] >= totalDailyCapacity) {
+            continue; // Skip this date - employee capacity full
+          }
+          
           // Try each compatible mold for this date
           for (const mold of compatibleMolds) {
             const currentUsage = moldCapacityUsed[mold.moldId][dateStr];
             const maxCapacity = mold.multiplier || 1;
             
-            if (currentUsage < maxCapacity) {
+            if (currentUsage < maxCapacity && dailyCapacityUsed[dateStr] < totalDailyCapacity) {
               // Schedule this order
               allocations.push({
                 orderId: order.orderId,
@@ -350,6 +376,7 @@ export function registerRoutes(app: Express): Server {
               });
               
               moldCapacityUsed[mold.moldId][dateStr]++;
+              dailyCapacityUsed[dateStr]++;
               scheduled = true;
               break;
             }
@@ -357,7 +384,7 @@ export function registerRoutes(app: Express): Server {
         }
         
         if (!scheduled) {
-          console.log(`❌ Could not schedule order ${order.orderId} - no capacity available`);
+          console.log(`❌ Could not schedule order ${order.orderId} - no capacity available (mold or employee limits)`);
         }
       }
       
@@ -373,6 +400,15 @@ export function registerRoutes(app: Express): Server {
       console.log(`📊 Scheduled by stock model:`);
       Object.entries(allocationsByStockModel).forEach(([stockModel, count]) => {
         console.log(`  ${stockModel}: ${count} scheduled`);
+      });
+      
+      // Show daily capacity utilization
+      console.log(`📈 Daily capacity utilization:`);
+      workDays.slice(0, 7).forEach(date => {
+        const dateStr = date.toISOString().split('T')[0];
+        const used = dailyCapacityUsed[dateStr] || 0;
+        const utilization = Math.round((used / totalDailyCapacity) * 100);
+        console.log(`  ${dateStr}: ${used}/${totalDailyCapacity} parts (${utilization}% capacity)`);
       });
       
       // Show Mesa Universal allocation summary
@@ -395,7 +431,7 @@ export function registerRoutes(app: Express): Server {
           mesaUniversalOrders: mesaUniversalOrders.length,
           mesaUniversalScheduled: mesaAllocations.length,
           activeMolds: activeMolds.length,
-          employees: employees.length
+          employees: employeeSettings.length
         },
         allocations
       });

@@ -17,6 +17,10 @@ Preferred communication style: Simple, everyday language.
 - Implemented balanced scheduling algorithm that prevents Mesa Universal orders from dominating capacity
 - Added product name fallback matching for orders with undefined stockModelId
 - System now schedules 148+ orders (60 Mesa Universal + 88 other stock models) vs. previous 60 Mesa-only scheduling
+- Integrated employee production rate constraints from employee_layup_settings table
+- Daily capacity limits: Theresa Flores (10 parts/day) + Jessica Pena (10.25 parts/day) = 20.25 parts/day total
+- Scheduler now respects both mold capacity AND employee capacity constraints for realistic production planning
+- Added daily capacity utilization tracking showing actual vs. maximum capacity per workday
 
 **August 10, 2025**: Implemented comprehensive production flow workflow:
 - Built complete end-to-end production pipeline from order finalization to department progression

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPOs, createPO, updatePO, deletePO, fetchPOItems, type PurchaseOrder, type CreatePurchaseOrderData, type PurchaseOrderItem } from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import POItemsManager from './POItemsManager';
 
@@ -35,12 +37,32 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
+interface Customer {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  customerType: string;
+}
+
+interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
+  price: number;
+  description?: string;
+  isActive: boolean;
+}
+
 export default function POManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPO, setEditingPO] = useState<PurchaseOrder | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED' | 'CANCELED'>('ALL');
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+  const [showOrderEntry, setShowOrderEntry] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const queryClient = useQueryClient();
 
   // Form state
@@ -60,12 +82,28 @@ export default function POManager() {
     queryFn: fetchPOs
   });
 
+  // Fetch customers for dropdown
+  const { data: customers = [] } = useQuery({
+    queryKey: ['/api/customers'],
+    queryFn: () => apiRequest('/api/customers')
+  });
+
+  // Fetch stock models for order entry
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+    queryFn: () => apiRequest('/api/stock-models')
+  });
+
   const createMutation = useMutation({
     mutationFn: createPO,
-    onSuccess: () => {
+    onSuccess: (newPO) => {
       toast.success('Purchase order created successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
       setIsDialogOpen(false);
+      // Show order entry for new POs
+      if (!editingPO && selectedCustomer) {
+        setShowOrderEntry(true);
+      }
     },
     onError: () => {
       toast.error('Failed to create purchase order');
@@ -242,6 +280,17 @@ export default function POManager() {
             customerId={selectedPO.customerId}
           />
         </div>
+      ) : showOrderEntry ? (
+        <POOrderEntry 
+          selectedPO={pos.find(po => po.customerName === formData.customerName) || null}
+          customer={selectedCustomer}
+          stockModels={stockModels}
+          onBack={() => setShowOrderEntry(false)}
+          onOrderCreated={() => {
+            setShowOrderEntry(false);
+            queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+          }}
+        />
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -300,13 +349,29 @@ export default function POManager() {
 
                   <div>
                     <Label htmlFor="customerName">Customer Name</Label>
-                    <Input 
-                      id="customerName" 
-                      name="customerName" 
-                      value={formData.customerName}
-                      onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                      required 
-                    />
+                    <Select 
+                      value={formData.customerName} 
+                      onValueChange={(value) => {
+                        const customer = customers.find((c: Customer) => c.name === value);
+                        setFormData({
+                          ...formData, 
+                          customerName: value,
+                          customerId: customer?.id.toString() || ''
+                        });
+                        setSelectedCustomer(customer || null);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a customer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customers.map((customer: Customer) => (
+                          <SelectItem key={customer.id} value={customer.name}>
+                            {customer.name} {customer.company && `(${customer.company})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
@@ -495,6 +560,223 @@ export default function POManager() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Order Entry Component for Purchase Orders
+interface POOrderEntryProps {
+  selectedPO: PurchaseOrder | null;
+  customer: Customer | null;
+  stockModels: StockModel[];
+  onBack: () => void;
+  onOrderCreated: () => void;
+}
+
+function POOrderEntry({ selectedPO, customer, stockModels, onBack, onOrderCreated }: POOrderEntryProps) {
+  const [selectedModel, setSelectedModel] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+
+  const addOrderItem = () => {
+    if (!selectedModel || quantity <= 0) {
+      toast.error('Please select a model and enter a valid quantity');
+      return;
+    }
+
+    const model = stockModels.find(m => m.id === selectedModel);
+    if (!model) return;
+
+    const newItem = {
+      itemType: 'stock_model',
+      itemId: model.id,
+      itemName: model.displayName,
+      quantity,
+      unitPrice: unitPrice || model.price,
+      totalPrice: quantity * (unitPrice || model.price),
+      notes
+    };
+
+    setOrderItems([...orderItems, newItem]);
+    setSelectedModel('');
+    setQuantity(1);
+    setUnitPrice(0);
+    setNotes('');
+    toast.success('Item added to order');
+  };
+
+  const removeOrderItem = (index: number) => {
+    setOrderItems(orderItems.filter((_, i) => i !== index));
+  };
+
+  const createOrderMutation = useMutation({
+    mutationFn: async (items: any[]) => {
+      if (!selectedPO) throw new Error('No PO selected');
+      
+      // Create PO items for each order item
+      for (const item of items) {
+        await apiRequest(`/api/pos/${selectedPO.id}/items`, {
+          method: 'POST',
+          body: item
+        });
+      }
+    },
+    onSuccess: () => {
+      toast.success('Order items created successfully');
+      setOrderItems([]);
+      onOrderCreated();
+    },
+    onError: () => {
+      toast.error('Failed to create order items');
+    }
+  });
+
+  const handleCreateOrder = () => {
+    if (orderItems.length === 0) {
+      toast.error('Please add at least one item to the order');
+      return;
+    }
+    createOrderMutation.mutate(orderItems);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <Button variant="outline" onClick={onBack} className="mb-4">
+            ← Back to Purchase Orders
+          </Button>
+          <h2 className="text-2xl font-bold">Create Order for PO {selectedPO?.poNumber}</h2>
+          <p className="text-gray-600">Customer: {customer?.name} {customer?.company && `(${customer.company})`}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Add Items Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5" />
+              Add Items to Order
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="stockModel">Stock Model</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a stock model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stockModels.filter(m => m.isActive).map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.displayName} - ${model.price}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input 
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="unitPrice">Unit Price (Optional)</Label>
+                <Input 
+                  id="unitPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
+                  placeholder="Use model price"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea 
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Special instructions or notes..."
+                rows={2}
+              />
+            </div>
+
+            <Button onClick={addOrderItem} className="w-full">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Item
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Order Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Order Summary ({orderItems.length} items)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {orderItems.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No items added yet</p>
+            ) : (
+              <div className="space-y-3">
+                {orderItems.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 border rounded">
+                    <div className="flex-1">
+                      <p className="font-medium">{item.itemName}</p>
+                      <p className="text-sm text-gray-600">
+                        Qty: {item.quantity} × ${item.unitPrice} = ${item.totalPrice.toFixed(2)}
+                      </p>
+                      {item.notes && (
+                        <p className="text-sm text-gray-500 italic">{item.notes}</p>
+                      )}
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => removeOrderItem(index)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                
+                <div className="border-t pt-3 mt-3">
+                  <div className="flex justify-between items-center font-bold">
+                    <span>Total:</span>
+                    <span>${orderItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleCreateOrder} 
+                  className="w-full mt-4"
+                  disabled={createOrderMutation.isPending}
+                >
+                  {createOrderMutation.isPending ? 'Creating...' : 'Create Order Items'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

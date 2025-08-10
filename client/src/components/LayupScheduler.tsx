@@ -1338,7 +1338,7 @@ export default function LayupScheduler() {
     
     try {
       console.log('🏭 PRODUCTION FLOW: Processing production queue with algorithmic scheduler...');
-      const response = await apiRequest('/api/scheduler/generate-algorithmic-schedule', {
+      const response = await apiRequest('/api/algorithmic-schedule', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3261,7 +3261,7 @@ export default function LayupScheduler() {
                     </div>
                     <div className="space-x-2">
                       <Button 
-                        onClick={handleAutoSchedule}
+                        onClick={generateAlgorithmicSchedule}
                         disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
                         className="bg-blue-600 hover:bg-blue-700"
                         size="sm"

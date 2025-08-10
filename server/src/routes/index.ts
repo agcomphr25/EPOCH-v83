@@ -114,6 +114,26 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P1 Layup Queue endpoint - provides production queue orders for layup scheduler
+  app.get('/api/p1-layup-queue', async (req, res) => {
+    try {
+      console.log('🔧 P1 LAYUP QUEUE API CALLED');
+      const { storage } = await import('../../storage');
+      
+      // Get all orders that are in the P1 Production Queue department
+      const allOrders = await storage.getAllOrders();
+      const layupQueueOrders = allOrders.filter(order => 
+        order.currentDepartment === 'P1 Production Queue'
+      );
+      
+      console.log('🔧 Found P1 Production Queue orders:', layupQueueOrders.length);
+      res.json(layupQueueOrders);
+    } catch (error) {
+      console.error('❌ P1 layup queue fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch P1 layup queue" });
+    }
+  });
+
   // Layup Schedule API endpoints - missing route handler
   app.get('/api/layup-schedule', async (req, res) => {
     try {

@@ -307,12 +307,35 @@ export function registerRoutes(app: Express): Server {
       
       console.log('🔧 Scheduling', ordersToSchedule.length, 'orders using mold:', defaultMoldId);
       
+      // Helper function to get next work day (Monday-Thursday only)
+      const getNextWorkDay = (fromDate: Date, dayOffset: number) => {
+        const date = new Date(fromDate);
+        let workDaysAdded = 0;
+        let currentDayOffset = 0;
+        
+        while (workDaysAdded < dayOffset) {
+          currentDayOffset++;
+          const testDate = new Date(fromDate);
+          testDate.setDate(fromDate.getDate() + currentDayOffset);
+          
+          const dayOfWeek = testDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+          
+          // Only count Monday (1) through Thursday (4) as work days
+          if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+            workDaysAdded++;
+          }
+        }
+        
+        const finalDate = new Date(fromDate);
+        finalDate.setDate(fromDate.getDate() + currentDayOffset);
+        return finalDate;
+      };
+
       for (let i = 0; i < ordersToSchedule.length; i++) {
         const order = ordersToSchedule[i];
         
-        // Schedule orders sequentially, one per day
-        const scheduleDate = new Date(today);
-        scheduleDate.setDate(today.getDate() + i);
+        // Schedule orders only on Monday-Thursday, skip weekends and Fridays
+        const scheduleDate = getNextWorkDay(today, i);
         
         const scheduleEntry = {
           orderId: order.orderId,

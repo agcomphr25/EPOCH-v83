@@ -1219,6 +1219,7 @@ export default function LayupScheduler() {
     console.log('🤖 Generating algorithmic schedule...');
     
     try {
+      console.log('🤖 Sending algorithmic schedule request...');
       const response = await apiRequest('/api/scheduler/generate-algorithmic-schedule', {
         method: 'POST',
         headers: {
@@ -1231,8 +1232,11 @@ export default function LayupScheduler() {
         }),
       });
 
+      console.log('🤖 Algorithmic schedule response:', response);
+
       if (response.success && response.allocations) {
         console.log(`✅ Algorithmic schedule generated: ${response.allocations.length} allocations`);
+        console.log('✅ Sample allocations:', response.allocations.slice(0, 5));
         
         // Convert to schedule assignments format
         const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
@@ -1244,8 +1248,14 @@ export default function LayupScheduler() {
           };
         });
         
+        console.log(`📅 Setting ${Object.keys(scheduleAssignments).length} order assignments`);
         setOrderAssignments(scheduleAssignments);
-        console.log(`📅 Set ${Object.keys(scheduleAssignments).length} order assignments`);
+        console.log(`📅 Order assignments state updated with:`, Object.keys(scheduleAssignments).length, 'orders');
+        
+        // Force a re-render
+        setTimeout(() => {
+          console.log('📅 Calendar should now show', Object.keys(scheduleAssignments).length, 'scheduled orders');
+        }, 100);
       } else {
         console.error('❌ Failed to generate algorithmic schedule:', response);
       }
@@ -1293,8 +1303,12 @@ export default function LayupScheduler() {
       
       if (!hasAssignments && !hasGeneratedSchedule) {
         console.log('🎯 Auto-triggering algorithmic schedule generation...');
+        console.log('🎯 Orders:', orders.length, 'Molds:', molds.length, 'Employees:', employees.length);
+        console.log('🎯 Current assignments:', Object.keys(orderAssignments).length);
+        console.log('🎯 Generated schedule:', generatedSchedule?.length || 0);
         // Delay to allow state to settle
         setTimeout(() => {
+          console.log('🤖 Calling generateAlgorithmicSchedule now...');
           generateAlgorithmicSchedule();
         }, 1000);
       }

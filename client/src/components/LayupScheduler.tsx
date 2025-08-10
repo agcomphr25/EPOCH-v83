@@ -2258,15 +2258,17 @@ export default function LayupScheduler() {
     const orderId = active.id as string;
     const dropTargetId = over.id as string;
 
+    console.log('🎯 DRAG END DEBUG:', { orderId, dropTargetId, over: over.id });
+
     // Parse the drop target ID (format: moldId|dateISO)
     const [moldId, dateIso] = dropTargetId.split('|');
 
     if (!moldId || !dateIso) {
-      console.warn('Invalid drop target:', dropTargetId);
+      console.warn('❌ Invalid drop target:', dropTargetId);
       return;
     }
 
-    console.log(`Moving order ${orderId} to mold ${moldId} on ${dateIso}`);
+    console.log(`🎯 Moving order ${orderId} to mold ${moldId} on ${dateIso}`);
 
     // Update local assignment state
     setOrderAssignments(prev => ({
@@ -2276,6 +2278,12 @@ export default function LayupScheduler() {
 
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);
+
+    // Show success toast
+    toast({
+      title: "Order Scheduled",
+      description: `Order ${orderId} scheduled to ${moldId} on ${new Date(dateIso).toLocaleDateString()}`,
+    });
   };
 
   const handleDragStart = (event: any) => {

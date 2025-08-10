@@ -1013,11 +1013,15 @@ export default function LayupScheduler() {
       allWorkDays.push(...weekDays);
     }
 
-    // Sort orders with Mesa Universal priority first, then by due date
+    // Sort orders with intelligent stock model detection
     const sortedOrders = [...orders].sort((a, b) => {
+      // Use intelligent detection for stock model identification
+      const aDetectedModel = getOrderStockModelId(a);
+      const bDetectedModel = getOrderStockModelId(b);
+      
       // Priority 1: Mesa Universal orders get highest priority
-      const aMesaUniversal = (a.stockModelId === 'mesa_universal' || a.product === 'Mesa - Universal');
-      const bMesaUniversal = (b.stockModelId === 'mesa_universal' || b.product === 'Mesa - Universal');
+      const aMesaUniversal = (aDetectedModel === 'mesa_universal' || a.product === 'Mesa - Universal');
+      const bMesaUniversal = (bDetectedModel === 'mesa_universal' || b.product === 'Mesa - Universal');
       
       if (aMesaUniversal && !bMesaUniversal) return -1; // Mesa Universal first
       if (!aMesaUniversal && bMesaUniversal) return 1;  // Mesa Universal first
@@ -1035,20 +1039,84 @@ export default function LayupScheduler() {
       return aDueDate - bDueDate;
     });
     
-    // Count Mesa Universal orders for logging
-    const mesaUniversalOrders = sortedOrders.filter(o => 
-      o.stockModelId === 'mesa_universal' || o.product === 'Mesa - Universal'
-    );
+    // Enhanced intelligent stock model detection (defined first)
+    const getOrderStockModelId = (order: any) => {
+      // If already has stockModelId, use it
+      if (order.stockModelId) return order.stockModelId;
+      if (order.modelId) return order.modelId;
+      
+      // Intelligent detection based on features and action configuration
+      if (order.features) {
+        const actionLength = order.features.action_length;
+        const actionInlet = order.features.action_inlet; 
+        const barrelInlet = order.features.barrel_inlet;
+        
+        // Check for Tikka actions first
+        if (actionInlet && actionInlet.includes('tikka')) {
+          return 'mesa_tikka';
+        }
+        
+        // Check barrel inlet for material type (most important indicator)
+        if (barrelInlet) {
+          if (barrelInlet.includes('carbon')) {
+            // CF models - determine specific type based on action length
+            if (actionLength === 'short' || actionInlet?.includes('short')) return 'cf_sportsman';
+            if (actionLength === 'long' || actionInlet?.includes('long')) return 'cf_hunter';
+            return 'cf_sportsman'; // default CF for carbon barrels
+          } else if (barrelInlet.includes('fiberglass') || barrelInlet.includes('fg')) {
+            // FG models
+            if (actionLength === 'short' || actionInlet?.includes('short')) return 'fg_sportsman';
+            if (actionLength === 'long' || actionInlet?.includes('long')) return 'fg_hunter';
+            return 'fg_sportsman'; // default FG
+          } else {
+            // Standard barrels (steel, aluminum, etc.) - Mesa models
+            if (actionInlet && actionInlet.includes('tikka')) return 'mesa_tikka';
+            return 'mesa_universal';
+          }
+        }
+        
+        // If no barrel inlet but has action length, default to Mesa Universal
+        if (actionLength) {
+          return 'mesa_universal';
+        }
+      }
+      
+      // Try to detect from product name
+      if (order.product) {
+        const product = order.product.toLowerCase();
+        if (product.includes('mesa')) return 'mesa_universal';
+        if (product.includes('cf')) return 'cf_sportsman';
+        if (product.includes('fg')) return 'fg_sportsman';
+        if (product.includes('apr')) return 'apr_hunter';
+      }
+      
+      // Default fallback for orders without clear identification
+      return 'mesa_universal';
+    };
+
+    // Count Mesa Universal orders for logging using intelligent detection
+    const mesaUniversalOrders = sortedOrders.filter(o => {
+      const detectedModel = getOrderStockModelId(o);
+      return detectedModel === 'mesa_universal' || o.product === 'Mesa - Universal';
+    });
     console.log(`🏔️ Found ${mesaUniversalOrders.length} Mesa Universal orders (8/day limit will be enforced)`);
+
+    // Debug order analysis
+    console.log('🔍 ORDER ANALYSIS FOR STOCK MODEL DETECTION:');
+    sortedOrders.slice(0, 10).forEach((order, i) => {
+      const detectedModel = getOrderStockModelId(order);
+      console.log(`Order ${i + 1}: ${order.orderId} → Model: ${detectedModel}`, {
+        originalModelId: order.modelId,
+        originalStockModelId: order.stockModelId,
+        product: order.product,
+        features: order.features ? Object.keys(order.features) : 'no features',
+        detectedModel
+      });
+    });
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
-      let modelId = order.stockModelId || order.modelId;
-
-      // For production orders and P1 purchase orders, try to use the part name as the stock model
-      if ((order.source === 'production_order' || order.source === 'p1_purchase_order') && order.product) {
-        modelId = order.product;
-      }
+      let modelId = getOrderStockModelId(order);
 
       if (!modelId) {
         console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);

@@ -61,9 +61,21 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [showPriceOverride, setShowPriceOverride] = useState(false);
   const [notes, setNotes] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
   const [discountCode, setDiscountCode] = useState('');
   const [discountDetails, setDiscountDetails] = useState<any>(null);
+
+  // Form data state for simple form fields
+  const [formData, setFormData] = useState({
+    itemType: 'stock_model' as 'stock_model' | 'feature_item' | 'custom_model',
+    itemId: '',
+    itemName: '',
+    quantity: 1,
+    unitPrice: 0,
+    totalPrice: 0,
+    notes: ''
+  });
 
   // Data queries
   const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
@@ -88,7 +100,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
         // Load features
         const featuresResponse = await fetchFeatures();
         console.log('🔧 PO: Loaded features:', featuresResponse.length);
-        setFeatureDefs(featuresResponse);
+        setFeatureDefs(featuresResponse as FeatureDefinition[]);
         
         // Load discount options
         await loadDiscountCodes();
@@ -176,8 +188,8 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     return (basePrice + featuresPrice) * quantity;
   }, [basePrice, featuresPrice, quantity]);
 
-  const calculateDiscountAmount = useMemo(() => {
-    if (!discountDetails) return 0;
+  const computedDiscountAmount = useMemo(() => {
+    if (!discountDetails) return discountAmount;
     
     const discountValue = discountDetails.discountValue || 0;
     const discountType = discountDetails.discountType || 'percent';
@@ -195,15 +207,13 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
         (subtotalPrice * discountValue / 100) : 
         Math.min(discountValue, subtotalPrice);
     }
-  }, [discountDetails, basePrice, subtotalPrice, quantity]);
+  }, [discountDetails, basePrice, subtotalPrice, quantity, discountAmount]);
 
-  const discountAmount = useMemo(() => {
-    return calculateDiscountAmount;
-  }, [calculateDiscountAmount]);
+
 
   const totalPrice = useMemo(() => {
-    return Math.max(0, subtotalPrice - discountAmount);
-  }, [subtotalPrice, discountAmount]);
+    return Math.max(0, subtotalPrice - computedDiscountAmount);
+  }, [subtotalPrice, computedDiscountAmount]);
 
   // Helper function to format currency
   const formatCurrency = (amount: number) => {
@@ -213,6 +223,124 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(amount);
+  };
+
+  // Handle item selection for formData
+  const handleItemSelection = (itemType: string, itemId: string) => {
+    if (itemType === 'stock_model') {
+      const selectedModel = stockModels.find(model => model.id === itemId);
+      if (selectedModel) {
+        setFormData(prev => ({
+          ...prev,
+          itemId,
+          itemName: selectedModel.displayName || selectedModel.name,
+          unitPrice: selectedModel.price
+        }));
+        setModelId(itemId);
+      }
+    } else if (itemType === 'feature_item') {
+      const selectedFeature = featuresData.find(feature => feature.id === itemId);
+      if (selectedFeature) {
+        setFormData(prev => ({
+          ...prev,
+          itemId,
+          itemName: selectedFeature.displayName || selectedFeature.name,
+          unitPrice: selectedFeature.price || 0
+        }));
+      }
+    } else if (itemType === 'custom_model') {
+      setFormData(prev => ({
+        ...prev,
+        itemId,
+        itemName: itemId,
+        unitPrice: 0
+      }));
+    }
+  };
+
+  // Handle quantity change
+  const handleQuantityChange = (newQuantity: number) => {
+    setFormData(prev => ({
+      ...prev,
+      quantity: newQuantity,
+      totalPrice: prev.unitPrice * newQuantity
+    }));
+  };
+
+  // Handle unit price change
+  const handleUnitPriceChange = (newPrice: number) => {
+    setFormData(prev => ({
+      ...prev,
+      unitPrice: newPrice,
+      totalPrice: newPrice * prev.quantity
+    }));
+  };
+
+  // Reset form function
+  const resetForm = () => {
+    setFormData({
+      itemType: 'stock_model',
+      itemId: '',
+      itemName: '',
+      quantity: 1,
+      unitPrice: 0,
+      totalPrice: 0,
+      notes: ''
+    });
+    setModelId('');
+    setFeatures({});
+    setQuantity(1);
+    setPriceOverride(null);
+    setShowPriceOverride(false);
+    setNotes('');
+    setDiscountCode('');
+    setDiscountAmount(0);
+    setEditingItem(null);
+  };
+
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (formData.itemType === 'stock_model' && !formData.itemId) {
+      toast({
+        title: "Error",
+        description: "Please select a stock model",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.itemName || formData.quantity <= 0) {
+      toast({
+        title: "Error", 
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const itemData: CreatePurchaseOrderItemData = {
+      itemType: formData.itemType,
+      itemId: formData.itemId,
+      itemName: formData.itemName,
+      quantity: formData.quantity,
+      unitPrice: formData.unitPrice,
+      totalPrice: formData.totalPrice,
+      specifications: {
+        features: features,
+        priceOverride: priceOverride,
+        discountCode: discountCode,
+        discountAmount: discountAmount
+      },
+      notes: formData.notes
+    };
+
+    if (editingItem) {
+      updateItemMutation.mutate({ itemId: editingItem.id, data: itemData });
+    } else {
+      createItemMutation.mutate(itemData);
+    }
   };
 
   // Mutations
@@ -228,7 +356,11 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       resetForm();
     },
     onError: () => {
-      toast.error('Failed to add item');
+      toast({
+        title: "Error",
+        description: "Failed to add item",
+        variant: "destructive"
+      });
     }
   });
 
@@ -236,41 +368,40 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     mutationFn: ({ itemId, data }: { itemId: number; data: Partial<CreatePurchaseOrderItemData> }) => 
       updatePOItem(poId, itemId, data),
     onSuccess: () => {
-      toast.success('Item updated successfully');
+      toast({
+        title: "Success",
+        description: "Item updated successfully",
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
       setIsDialogOpen(false);
       resetForm();
     },
     onError: () => {
-      toast.error('Failed to update item');
+      toast({
+        title: "Error",
+        description: "Failed to update item",
+        variant: "destructive"
+      });
     }
   });
 
   const deleteItemMutation = useMutation({
     mutationFn: (itemId: number) => deletePOItem(poId, itemId),
     onSuccess: () => {
-      toast.success('Item deleted successfully');
+      toast({
+        title: "Success",
+        description: "Item deleted successfully",
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
     },
     onError: () => {
-      toast.error('Failed to delete item');
+      toast({
+        title: "Error",
+        description: "Failed to delete item",
+        variant: "destructive"
+      });
     }
   });
-
-
-
-  const resetForm = () => {
-    setModelId('');
-    setModelOpen(false);
-    setFeatures({});
-    setQuantity(1);
-    setPriceOverride(null);
-    setShowPriceOverride(false);
-    setNotes('');
-    setDiscountCode('');
-    setDiscountDetails(null);
-    setEditingItem(null);
-  };
 
   // Business rules and feature validation - matching OrderEntry
   useEffect(() => {
@@ -341,7 +472,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     return featureDef.options;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitModel = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!modelId) {
@@ -443,7 +574,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                   {editingItem ? 'Edit Item' : 'Add New Item'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmitModel} className="space-y-4">
                 <div>
                   <Label htmlFor="itemType">Item Type</Label>
                   <Select 
@@ -493,9 +624,9 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                         <SelectValue placeholder="Select a feature item" />
                       </SelectTrigger>
                       <SelectContent>
-                        {features.map(feature => (
+                        {featuresData.map((feature: any) => (
                           <SelectItem key={feature.id} value={feature.id}>
-                            {feature.displayName} - ${feature.price}
+                            {feature.displayName} - ${feature.price || 0}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -600,7 +731,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                           {item.itemType === 'custom_model' && <Edit className="w-3 h-3 mr-1" />}
                           {item.itemType.replace('_', ' ').toUpperCase()}
                         </Badge>
-                        {item.orderCount > 0 && (
+                        {item.orderCount && item.orderCount > 0 && (
                           <Badge variant="outline">
                             {item.orderCount} orders generated
                           </Badge>

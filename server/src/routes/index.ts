@@ -175,19 +175,50 @@ export function registerRoutes(app: Express): Server {
       console.log('📊 Data verification: combinedQueue length =', combinedQueue.length);
       console.log('📊 Data verification: activeMolds length =', activeMolds.length);
       
-      // Sort orders by priority (P1 purchase orders first, then by priority score)
+      // Sort orders by priority with stock model balancing
       const sortedOrders = [...combinedQueue].sort((a, b) => {
+        // P1 purchase orders always first
         if (a.source === 'p1_purchase_order' && b.source !== 'p1_purchase_order') return -1;
         if (b.source === 'p1_purchase_order' && a.source !== 'p1_purchase_order') return 1;
         
+        // Then by priority score
         const aPriority = a.priorityScore || 99;
         const bPriority = b.priorityScore || 99;
         if (aPriority !== bPriority) return aPriority - bPriority;
         
+        // Then by due date
         const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
         const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
         return aDueDate - bDueDate;
       });
+      
+      // Create balanced batches to prevent one stock model from dominating
+      const balancedOrders: any[] = [];
+      const ordersByStockModel: {[key: string]: any[]} = {};
+      
+      // Group orders by stock model
+      sortedOrders.forEach(order => {
+        const key = order.stockModelId || 'undefined';
+        if (!ordersByStockModel[key]) ordersByStockModel[key] = [];
+        ordersByStockModel[key].push(order);
+      });
+      
+      console.log(`📊 Orders by stock model:`);
+      Object.entries(ordersByStockModel).forEach(([stockModel, orders]) => {
+        console.log(`  ${stockModel}: ${orders.length} orders`);
+      });
+      
+      // Interleave orders from different stock models
+      const stockModelKeys = Object.keys(ordersByStockModel);
+      let maxIndex = Math.max(...stockModelKeys.map(key => ordersByStockModel[key].length));
+      
+      for (let i = 0; i < maxIndex; i++) {
+        stockModelKeys.forEach(key => {
+          if (ordersByStockModel[key][i]) {
+            balancedOrders.push(ordersByStockModel[key][i]);
+          }
+        });
+      }
       
       // Generate workdays (Monday-Thursday only)
       const getWorkDays = (dayCount: number) => {
@@ -214,6 +245,25 @@ export function registerRoutes(app: Express): Server {
       
       console.log(`📅 Scheduling across ${workDays.length} workdays`);
       
+      // Debug sample of non-Mesa orders to understand their stockModelIds
+      const nonMesaOrders = sortedOrders.filter(order => 
+        order.stockModelId !== 'mesa_universal' && 
+        !(order.product && order.product.toLowerCase().includes('mesa'))
+      ).slice(0, 10);
+      
+      console.log(`🔍 Sample non-Mesa orders (${nonMesaOrders.length} of ${sortedOrders.length - mesaUniversalOrders.length}):`);
+      nonMesaOrders.forEach(order => {
+        console.log(`  ${order.orderId}: stockModelId="${order.stockModelId}", product="${order.product}"`);
+      });
+      
+      // Debug mold capacities
+      const moldCapacities = activeMolds.slice(0, 5).map(mold => ({
+        moldId: mold.moldId,
+        multiplier: mold.multiplier || 1,
+        stockModels: mold.stockModels?.slice(0, 3) || []
+      }));
+      console.log(`🏭 Sample mold capacities:`, moldCapacities);
+      
       // Initialize mold capacity tracking
       activeMolds.forEach(mold => {
         moldCapacityUsed[mold.moldId] = {};
@@ -222,9 +272,17 @@ export function registerRoutes(app: Express): Server {
         });
       });
       
-      // Schedule each order
-      for (const order of sortedOrders) {
+      console.log(`⚖️ Created balanced schedule with ${balancedOrders.length} orders`);
+      
+      // Schedule each order from balanced list
+      for (const order of balancedOrders) {
         let scheduled = false;
+        
+        // Debug non-Mesa orders
+        if (order.stockModelId !== 'mesa_universal' && 
+            !(order.product && order.product.toLowerCase().includes('mesa'))) {
+          console.log(`🔍 Non-Mesa order ${order.orderId}: stockModelId="${order.stockModelId}", product="${order.product}"`);
+        }
         
         // Find compatible molds for this order
         const compatibleMolds = activeMolds.filter(mold => {
@@ -241,6 +299,26 @@ export function registerRoutes(app: Express): Server {
           }
           
           // For other orders, check if stockModelId is in mold's stockModels
+          if (!order.stockModelId || order.stockModelId === 'undefined') {
+            // If no stockModelId, try to match by product name
+            if (order.product && order.product !== 'Unknown Product') {
+              const productLower = order.product.toLowerCase().replace(/\s+/g, '_');
+              
+              // Direct match first
+              if (mold.stockModels.includes(productLower)) {
+                return true;
+              }
+              
+              // Fuzzy matching - check if product matches any stock model
+              return mold.stockModels.some(modelId => {
+                const modelLower = modelId.toLowerCase();
+                // Check if product name contains the model ID or vice versa
+                return productLower.includes(modelLower) || modelLower.includes(productLower);
+              });
+            }
+            return false;
+          }
+          
           return mold.stockModels.includes(order.stockModelId);
         });
         
@@ -283,7 +361,19 @@ export function registerRoutes(app: Express): Server {
         }
       }
       
-      console.log(`✅ Scheduled ${allocations.length}/${sortedOrders.length} orders`);
+      console.log(`✅ Scheduled ${allocations.length}/${balancedOrders.length} orders`);
+      
+      // Show allocation breakdown by stock model
+      const allocationsByStockModel: {[key: string]: number} = {};
+      allocations.forEach(alloc => {
+        const key = alloc.stockModelId || 'undefined';
+        allocationsByStockModel[key] = (allocationsByStockModel[key] || 0) + 1;
+      });
+      
+      console.log(`📊 Scheduled by stock model:`);
+      Object.entries(allocationsByStockModel).forEach(([stockModel, count]) => {
+        console.log(`  ${stockModel}: ${count} scheduled`);
+      });
       
       // Show Mesa Universal allocation summary
       const mesaAllocations = allocations.filter(alloc => 

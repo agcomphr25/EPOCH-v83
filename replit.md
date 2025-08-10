@@ -14,6 +14,9 @@ Preferred communication style: Simple, everyday language.
 - Algorithmic scheduler now properly assigns Mesa Universal orders → ONLY Mesa molds (never APR molds)
 - System processes 1008 orders with 400 Mesa Universal orders correctly constrained to 2 Mesa Universal molds
 - Console shows detailed mold compatibility analysis: "Mesa Universal → APR-1: isMesa=false, isAPR=true" (rejected)
+- Implemented balanced scheduling algorithm that prevents Mesa Universal orders from dominating capacity
+- Added product name fallback matching for orders with undefined stockModelId
+- System now schedules 148+ orders (60 Mesa Universal + 88 other stock models) vs. previous 60 Mesa-only scheduling
 
 **August 10, 2025**: Implemented comprehensive production flow workflow:
 - Built complete end-to-end production pipeline from order finalization to department progression

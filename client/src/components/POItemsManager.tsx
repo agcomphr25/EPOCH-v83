@@ -239,13 +239,16 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
         setModelId(itemId);
       }
     } else if (itemType === 'feature_item') {
-      const selectedFeature = featuresData.find(feature => feature.id === itemId);
+      const selectedFeature = featureDefs.find(feature => feature.id === itemId);
       if (selectedFeature) {
+        // Get the price from the feature (FeatureDefinitions don't have price, but we can fetch it)
+        const featurePrice = (selectedFeature as any).price || 0;
         setFormData(prev => ({
           ...prev,
           itemId,
-          itemName: selectedFeature.displayName || selectedFeature.name,
-          unitPrice: selectedFeature.price || 0
+          itemName: selectedFeature.displayName,
+          unitPrice: featurePrice,
+          totalPrice: featurePrice * prev.quantity
         }));
       }
     } else if (itemType === 'custom_model') {
@@ -299,13 +302,14 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
   };
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (formData.itemType === 'stock_model' && !formData.itemId) {
+    // Validation based on item type
+    if ((formData.itemType === 'stock_model' || formData.itemType === 'feature_item') && !formData.itemId) {
       toast({
         title: "Error",
-        description: "Please select a stock model",
+        description: `Please select a ${formData.itemType === 'stock_model' ? 'stock model' : 'feature item'}`,
         variant: "destructive",
       });
       return;
@@ -327,12 +331,12 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       quantity: formData.quantity,
       unitPrice: formData.unitPrice,
       totalPrice: formData.totalPrice,
-      specifications: {
+      specifications: formData.itemType === 'stock_model' ? {
         features: features,
         priceOverride: priceOverride,
         discountCode: discountCode,
         discountAmount: discountAmount
-      },
+      } : {},
       notes: formData.notes
     };
 
@@ -574,7 +578,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                   {editingItem ? 'Edit Item' : 'Add New Item'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmitModel} className="space-y-4">
+              <form onSubmit={handleFormSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="itemType">Item Type</Label>
                   <Select 
@@ -624,9 +628,9 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                         <SelectValue placeholder="Select a feature item" />
                       </SelectTrigger>
                       <SelectContent>
-                        {featuresData.map((feature: any) => (
+                        {featureDefs.map((feature) => (
                           <SelectItem key={feature.id} value={feature.id}>
-                            {feature.displayName} - ${feature.price || 0}
+                            {feature.displayName} - ${(feature as any).price || 0}
                           </SelectItem>
                         ))}
                       </SelectContent>

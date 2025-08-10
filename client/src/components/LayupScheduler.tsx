@@ -2407,17 +2407,7 @@ export default function LayupScheduler() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Layup Scheduler</h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
-              {/* Debug info */}
-              <div className="text-xs bg-blue-50 dark:bg-blue-900/20 p-2 rounded border mt-2">
-                📊 Debug: Generated Schedule: {generatedSchedule?.length || 0} entries | 
-                Order Assignments: {Object.keys(orderAssignments).length} | 
-                Processed Orders: {processedOrders?.length || 0}
-                {generatedSchedule?.length > 0 && (
-                  <span className="ml-2 text-green-600 dark:text-green-400 font-medium">
-                    ✓ Schedule loaded - Order IDs: {Object.keys(orderAssignments).slice(0, 3).join(', ')}...
-                  </span>
-                )}
-              </div>
+
             </div>
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">

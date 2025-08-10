@@ -207,7 +207,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       }
 
       // Sort orders by priority and due date
-      const sortedOrders = orders.sort((a, b) => {
+      const sortedOrders = orders.sort((a: any, b: any) => {
         const dueDateDiff = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (dueDateDiff === 0) {
           return (a.priorityScore || 1) - (b.priorityScore || 1);

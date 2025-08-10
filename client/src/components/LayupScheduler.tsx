@@ -632,7 +632,7 @@ export default function LayupScheduler() {
         apiRequest('/api/layup-schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: entry
+          body: JSON.stringify(entry)
         })
       );
 
@@ -706,7 +706,7 @@ export default function LayupScheduler() {
       return apiRequest('/api/push-to-layup-plugging', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: { orderIds }
+        body: JSON.stringify({ orderIds })
       });
     },
     onSuccess: (result) => {
@@ -758,7 +758,7 @@ export default function LayupScheduler() {
       return apiRequest('/api/python-scheduler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: schedulerData
+        body: JSON.stringify(schedulerData)
       });
     },
     onSuccess: (result) => {
@@ -812,7 +812,7 @@ export default function LayupScheduler() {
       return apiRequest('/api/layup-schedule/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: {}
+        body: JSON.stringify({})
       });
     },
     onSuccess: (result) => {
@@ -2056,7 +2056,7 @@ export default function LayupScheduler() {
   );
 
   // Generate schedule (exclude P1 purchase orders - they're handled by generateAutoSchedule)
-  const schedule = useMemo(() => {
+  const schedule = useMemo((): any[] => {
     console.log('🔄 Client-side schedule generation disabled - using algorithmic scheduler instead');
     // DISABLED: Client-side scheduling replaced by backend algorithmic scheduler
     // The algorithmic scheduler handles all order types correctly
@@ -2070,7 +2070,7 @@ export default function LayupScheduler() {
       console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
 
       // Debug production orders and P1 purchase orders in schedule
-      const productionScheduleItems = schedule.filter(item => {
+      const productionScheduleItems = schedule.filter((item: any) => {
         const order = orders.find(o => o.orderId === item.orderId);
         return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
       });
@@ -2078,7 +2078,7 @@ export default function LayupScheduler() {
 
       const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
 
-      schedule.forEach(item => {
+      schedule.forEach((item: any) => {
         const order = orders.find(o => o.orderId === item.orderId);
         const isProduction = order?.source === 'production_order' || order?.source === 'p1_purchase_order';
         if (isProduction) {
@@ -2118,7 +2118,7 @@ export default function LayupScheduler() {
       const newAssignments: {[orderId: string]: { moldId: string, date: string }} = { ...orderAssignments };
       
       // Add new assignments for regular orders that aren't already assigned
-      schedule.forEach(item => {
+      schedule.forEach((item: any) => {
         const order = orders.find(o => o.orderId === item.orderId);
         if (order?.source === 'main_orders' && !newAssignments[item.orderId]) {
           newAssignments[item.orderId] = {

@@ -145,44 +145,58 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     for (const [stockModelId, orders] of sortedStockModels) {
       console.log(`🔄 Processing ${stockModelId}: ${orders.length} orders`);
       
-      // Find compatible molds with better matching logic
+      // Find compatible molds with strict matching logic
       const compatibleMolds = activeMolds.filter((mold: any) => {
-        // Direct stock model match
-        if (mold.stockModels && mold.stockModels.includes(stockModelId)) {
-          return true;
-        }
+        console.log(`🔧 Checking mold ${mold.moldId} (${mold.modelName}) for stock model ${stockModelId}`);
         
-        // Universal molds can handle any order
-        if (mold.stockModels && mold.stockModels.includes('universal')) {
-          return true;
-        }
-        
-        // Mesa Universal should use Mesa molds, not APR
+        // MESA UNIVERSAL: Only use Mesa molds, never APR
         if (stockModelId === 'mesa_universal') {
-          return mold.modelName.toLowerCase().includes('mesa') || 
-                 mold.moldId.toLowerCase().includes('mesa');
+          const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
+                            mold.moldId.toLowerCase().includes('mesa');
+          console.log(`🔧 Mesa Universal -> ${mold.moldId}: ${isMesaMold ? 'COMPATIBLE' : 'REJECTED'}`);
+          return isMesaMold;
         }
         
-        // APR orders should use APR molds
+        // UNIVERSAL: Use Mesa molds for universal compatibility
+        if (stockModelId === 'universal') {
+          const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
+                            mold.moldId.toLowerCase().includes('mesa');
+          console.log(`🔧 Universal -> ${mold.moldId}: ${isMesaMold ? 'COMPATIBLE' : 'REJECTED'}`);
+          return isMesaMold;
+        }
+        
+        // APR orders: Only use APR molds
         if (stockModelId.toLowerCase().includes('apr')) {
-          return mold.modelName.toLowerCase().includes('apr') || 
-                 mold.moldId.toLowerCase().includes('apr');
+          const isAPRMold = mold.modelName.toLowerCase().includes('apr') || 
+                           mold.moldId.toLowerCase().includes('apr');
+          console.log(`🔧 APR -> ${mold.moldId}: ${isAPRMold ? 'COMPATIBLE' : 'REJECTED'}`);
+          return isAPRMold;
         }
         
-        // CF orders should use CF molds
+        // CF orders: Only use CF molds
         if (stockModelId.toLowerCase().includes('cf_')) {
-          return mold.modelName.toLowerCase().includes('cf') || 
-                 mold.moldId.toLowerCase().includes('cf');
+          const isCFMold = mold.modelName.toLowerCase().includes('cf') || 
+                          mold.moldId.toLowerCase().includes('cf');
+          console.log(`🔧 CF -> ${mold.moldId}: ${isCFMold ? 'COMPATIBLE' : 'REJECTED'}`);
+          return isCFMold;
         }
         
-        // FG orders should use FG molds  
+        // FG orders: Only use FG molds  
         if (stockModelId.toLowerCase().includes('fg_')) {
-          return mold.modelName.toLowerCase().includes('fg') || 
-                 mold.moldId.toLowerCase().includes('fg');
+          const isFGMold = mold.modelName.toLowerCase().includes('fg') || 
+                          mold.moldId.toLowerCase().includes('fg');
+          console.log(`🔧 FG -> ${mold.moldId}: ${isFGMold ? 'COMPATIBLE' : 'REJECTED'}`);
+          return isFGMold;
         }
         
-        // General model name matching as fallback
-        return mold.modelName.toLowerCase().includes(stockModelId.toLowerCase());
+        // Direct stock model match as fallback
+        if (mold.stockModels && mold.stockModels.includes(stockModelId)) {
+          console.log(`🔧 Direct match -> ${mold.moldId}: COMPATIBLE`);
+          return true;
+        }
+        
+        console.log(`🔧 No match -> ${mold.moldId}: REJECTED`);
+        return false;
       });
 
       console.log(`🔧 ${stockModelId} compatible molds:`, compatibleMolds.map(m => `${m.moldId} (${m.modelName})`));

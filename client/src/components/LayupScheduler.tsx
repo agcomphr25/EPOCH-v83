@@ -2015,45 +2015,16 @@ export default function LayupScheduler() {
 
   // Generate schedule (exclude P1 purchase orders - they're handled by generateAutoSchedule)
   const schedule = useMemo(() => {
-    if (!orders.length || !molds.length || !employees.length) return [];
-
-    // Filter out P1 purchase orders from the memoized schedule to prevent conflicts
-    const regularOrders = orders.filter(order => order.source !== 'p1_purchase_order');
-    
-    const orderData = regularOrders.map(order => ({
-      orderId: order.orderId,
-      orderDate: new Date(order.orderDate),
-      dueDate: order.dueDate ? new Date(order.dueDate) : undefined,
-      priorityScore: order.priorityScore,
-      customer: order.customer,
-      product: order.product,
-      modelId: order.modelId,
-      stockModelId: order.stockModelId,
-      source: order.source, // Include source field for production order detection
-    }));
-
-    const moldData = molds.map(mold => ({
-      moldId: mold.moldId,
-      modelName: mold.modelName,
-      instanceNumber: mold.instanceNumber,
-      enabled: mold.enabled ?? true,
-      multiplier: mold.multiplier,
-      stockModels: mold.stockModels || [], // Include stock model compatibility for P1 purchase orders
-    }));
-
-    const employeeData = employees.map(emp => ({
-      employeeId: emp.employeeId,
-      name: emp.name,
-      rate: emp.rate,
-      hours: emp.hours,
-    }));
-
-    return generateLayupSchedule(orderData, moldData, employeeData);
+    console.log('🔄 Client-side schedule generation disabled - using algorithmic scheduler instead');
+    // DISABLED: Client-side scheduling replaced by backend algorithmic scheduler
+    // The algorithmic scheduler handles all order types correctly
+    return [];
   }, [orders, molds, employees]);
 
   // Apply automatic schedule to orderAssignments when schedule changes
   React.useEffect(() => {
-    if (schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
+    // DISABLED: Client-side auto-assignment replaced by algorithmic scheduler
+    if (false && schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
       console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
 
       // Debug production orders and P1 purchase orders in schedule

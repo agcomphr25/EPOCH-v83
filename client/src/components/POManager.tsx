@@ -12,7 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check } from 'lucide-react';
+// @ts-ignore
+import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
 import POItemsManager from './POItemsManager';
 
@@ -63,6 +67,8 @@ export default function POManager() {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [showOrderEntry, setShowOrderEntry] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [customerSearchValue, setCustomerSearchValue] = useState('');
   const queryClient = useQueryClient();
 
   // Form state
@@ -349,29 +355,61 @@ export default function POManager() {
 
                   <div>
                     <Label htmlFor="customerName">Customer Name</Label>
-                    <Select 
-                      value={formData.customerName} 
-                      onValueChange={(value) => {
-                        const customer = customers.find((c: Customer) => c.name === value);
-                        setFormData({
-                          ...formData, 
-                          customerName: value,
-                          customerId: customer?.id.toString() || ''
-                        });
-                        setSelectedCustomer(customer || null);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a customer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customers.map((customer: Customer) => (
-                          <SelectItem key={customer.id} value={customer.name}>
-                            {customer.name} {customer.company && `(${customer.company})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={customerSearchOpen}
+                          className="w-full justify-between"
+                        >
+                          {formData.customerName || "Search and select customer..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput 
+                            placeholder="Type to search customers..." 
+                            value={customerSearchValue}
+                            onValueChange={setCustomerSearchValue}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No customers found.</CommandEmpty>
+                            <CommandGroup>
+                              {customers
+                                .filter((customer: Customer) => 
+                                  customer.name.toLowerCase().includes(customerSearchValue.toLowerCase()) ||
+                                  (customer.company && customer.company.toLowerCase().includes(customerSearchValue.toLowerCase()))
+                                )
+                                .map((customer: Customer) => (
+                                <CommandItem
+                                  key={customer.id}
+                                  value={customer.name}
+                                  onSelect={() => {
+                                    setFormData({
+                                      ...formData, 
+                                      customerName: customer.name,
+                                      customerId: customer.id.toString()
+                                    });
+                                    setSelectedCustomer(customer);
+                                    setCustomerSearchOpen(false);
+                                    setCustomerSearchValue('');
+                                  }}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${
+                                      formData.customerName === customer.name ? "opacity-100" : "opacity-0"
+                                    }`}
+                                  />
+                                  {customer.name} {customer.company && `(${customer.company})`}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div>

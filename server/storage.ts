@@ -2248,23 +2248,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCustomersWithPurchaseOrders(): Promise<Customer[]> {
+    // Get unique customer names from purchase orders
+    const customerNames = await db
+      .selectDistinct({ customerName: purchaseOrders.customerName })
+      .from(purchaseOrders);
+    
+    const names = customerNames.map(row => row.customerName);
+    
+    if (names.length === 0) {
+      return [];
+    }
+    
+    // Get customers that match those names using IN clause
     return await db
-      .selectDistinct({
-        id: customers.id,
-        name: customers.name,
-        email: customers.email,
-        phone: customers.phone,
-        company: customers.company,
-        customerType: customers.customerType,
-        billingAddress: customers.billingAddress,
-        shippingAddress: customers.shippingAddress,
-        isActive: customers.isActive,
-        createdAt: customers.createdAt,
-        updatedAt: customers.updatedAt
-      })
+      .select()
       .from(customers)
-      .innerJoin(purchaseOrders, eq(customers.name, purchaseOrders.customerName))
-      .where(eq(customers.isActive, true))
+      .where(and(
+        eq(customers.isActive, true),
+        sql`${customers.name} IN (${sql.join(names.map(name => sql`${name}`), sql`, `)})`
+      ))
       .orderBy(customers.name);
   }
 

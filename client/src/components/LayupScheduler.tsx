@@ -2290,6 +2290,132 @@ export default function LayupScheduler() {
     setActiveId(event.active.id);
   };
 
+  // Auto-schedule function to automatically assign orders to molds and dates
+  const handleAutoSchedule = () => {
+    console.log('🤖 Starting automatic scheduling...');
+    
+    const unassignedOrders = processedOrders.filter(order => !orderAssignments[order.orderId]);
+    console.log(`📋 Scheduling ${unassignedOrders.length} unassigned orders`);
+
+    if (unassignedOrders.length === 0) {
+      toast({
+        title: "No Orders to Schedule",
+        description: "All orders are already scheduled",
+      });
+      return;
+    }
+
+    // Get work days for scheduling (Monday through Thursday)
+    const getWorkDays = (startDate: Date, weeksCount: number = 4) => {
+      const workDays: Date[] = [];
+      for (let week = 0; week < weeksCount; week++) {
+        const weekStart = addDays(startOfWeek(startDate, { weekStartsOn: 1 }), week * 7);
+        // Add Mon, Tue, Wed, Thu for each week
+        for (let day = 0; day < 4; day++) {
+          workDays.push(addDays(weekStart, day));
+        }
+      }
+      return workDays;
+    };
+
+    const workDays = getWorkDays(currentDate, 4);
+    const newAssignments = { ...orderAssignments };
+
+    // Sort orders by priority and due date
+    const sortedOrders = [...unassignedOrders].sort((a, b) => {
+      // Priority by source: P1 purchase orders first, then regular orders
+      if (a.source === 'p1_purchase_order' && b.source !== 'p1_purchase_order') return -1;
+      if (b.source === 'p1_purchase_order' && a.source !== 'p1_purchase_order') return 1;
+      
+      // Then by priority score
+      const aPriority = a.priorityScore || 99;
+      const bPriority = b.priorityScore || 99;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      
+      // Then by due date
+      const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+      const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+      return aDueDate - bDueDate;
+    });
+
+    // Get compatible molds for an order
+    const getCompatibleMolds = (order: any) => {
+      const modelId = order.stockModelId || order.modelId;
+      return molds.filter(mold => {
+        if (!mold.enabled) return false;
+        if (!mold.stockModels || mold.stockModels.length === 0) return true;
+        return mold.stockModels.includes(modelId);
+      });
+    };
+
+    // Track mold capacity per day
+    const moldCapacity: {[key: string]: number} = {};
+    
+    let assignedCount = 0;
+    let skippedCount = 0;
+
+    // Schedule each order
+    sortedOrders.forEach(order => {
+      const compatibleMolds = getCompatibleMolds(order);
+      
+      if (compatibleMolds.length === 0) {
+        console.warn(`❌ No compatible molds found for order ${order.orderId}`);
+        skippedCount++;
+        return;
+      }
+
+      let assigned = false;
+
+      // Try to assign to each work day
+      for (const date of workDays) {
+        if (assigned) break;
+
+        const dateString = date.toISOString();
+        
+        // Try each compatible mold
+        for (const mold of compatibleMolds) {
+          const moldCapacityKey = `${mold.moldId}|${dateString}`;
+          const currentCapacity = moldCapacity[moldCapacityKey] || 0;
+          const maxCapacity = mold.multiplier || 2;
+
+          // Check if mold has capacity on this date
+          if (currentCapacity < maxCapacity) {
+            // Assign the order
+            newAssignments[order.orderId] = {
+              moldId: mold.moldId,
+              date: dateString
+            };
+            
+            // Update capacity tracking
+            moldCapacity[moldCapacityKey] = currentCapacity + 1;
+            assignedCount++;
+            assigned = true;
+            
+            console.log(`✅ Assigned ${order.orderId} to ${mold.moldId} on ${format(date, 'MM/dd')}`);
+            break;
+          }
+        }
+      }
+
+      if (!assigned) {
+        console.warn(`❌ Could not assign order ${order.orderId} - no available capacity`);
+        skippedCount++;
+      }
+    });
+
+    // Apply the assignments
+    setOrderAssignments(newAssignments);
+    setHasUnsavedScheduleChanges(true);
+
+    // Show results
+    toast({
+      title: "Auto-Schedule Complete",
+      description: `Scheduled ${assignedCount} orders. ${skippedCount > 0 ? `${skippedCount} orders could not be scheduled.` : ''}`,
+    });
+
+    console.log(`🎯 Auto-schedule results: ${assignedCount} assigned, ${skippedCount} skipped`);
+  };
+
   const handleAddMold = async () => {
     if (!newMold.moldName.trim()) return;
 
@@ -3106,9 +3232,31 @@ export default function LayupScheduler() {
               <div className="space-y-6">
                 {/* Unassigned Orders Queue */}
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
-                    Production Queue ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders)
-                  </h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Production Queue ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders)
+                    </h3>
+                    <div className="space-x-2">
+                      <Button 
+                        onClick={handleAutoSchedule}
+                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
+                        className="bg-blue-600 hover:bg-blue-700"
+                        size="sm"
+                      >
+                        <Zap className="w-4 h-4 mr-1" />
+                        Auto Schedule ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
+                      </Button>
+                      {Object.keys(orderAssignments).length > 0 && (
+                        <Button 
+                          onClick={() => setOrderAssignments({})}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 max-h-96 overflow-y-auto">
                     {processedOrders
                       .filter(order => !orderAssignments[order.orderId])

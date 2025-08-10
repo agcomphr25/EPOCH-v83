@@ -830,12 +830,21 @@ export default function LayupScheduler() {
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Include both main orders and P1 purchase order items for scheduling
+  // Include all orders from the unified production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {
-    return allOrders.filter(order => 
-      order.source === 'main_orders' || order.source === 'p1_purchase_order'
-    );
-  }, [allOrders]);
+    console.log('🔍 LayupScheduler orders debug:', {
+      allOrdersCount: allOrders?.length || 0,
+      loading: ordersLoading,
+      sourceCounts: allOrders?.reduce((acc: any, order) => {
+        acc[order.source] = (acc[order.source] || 0) + 1;
+        return acc;
+      }, {}) || {},
+      sampleOrders: allOrders?.slice(0, 3)?.map(o => ({ id: o.orderId, product: o.product, source: o.source }))
+    });
+    
+    // Return ALL orders from the production queue - no filtering by source
+    return allOrders || [];
+  }, [allOrders, ordersLoading]);
 
   // Auto-run LOP scheduler when orders are loaded to ensure proper scheduling
   const processedOrders = useMemo(() => {

@@ -943,7 +943,10 @@ export default function LayupScheduler() {
       // Auto-trigger scheduling if no assignments exist yet
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
-        console.log('🎯 Auto-triggering initial schedule generation will be available after component initialization');
+        console.log('🎯 Auto-triggering initial schedule generation');
+        setTimeout(() => {
+          handleAutoSchedule();
+        }, 500); // Small delay to ensure component is fully loaded
       }
     } else {
       console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
@@ -3230,12 +3233,17 @@ export default function LayupScheduler() {
           <div className="px-6 pb-6">
             {viewType === 'week' || viewType === 'day' ? (
               <div className="space-y-6">
-                {/* Unassigned Orders Queue */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Production Queue ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders)
-                    </h3>
+                {/* Auto-Schedule Controls */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Layup Schedule
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • {Object.keys(orderAssignments).length} orders currently scheduled
+                      </p>
+                    </div>
                     <div className="space-x-2">
                       <Button 
                         onClick={handleAutoSchedule}
@@ -3257,26 +3265,6 @@ export default function LayupScheduler() {
                       )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 max-h-96 overflow-y-auto">
-                    {processedOrders
-                      .filter(order => !orderAssignments[order.orderId])
-                      .slice(0, 50) // Limit to 50 for performance
-                      .map(order => (
-                        <DraggableOrderItem
-                          key={order.orderId}
-                          order={order}
-                          priority={1}
-                          getModelDisplayName={getModelDisplayName}
-                          features={features}
-                          processedOrders={processedOrders}
-                        />
-                      ))}
-                  </div>
-                  {processedOrders.filter(o => !orderAssignments[o.orderId]).length > 50 && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      Showing first 50 of {processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders
-                    </p>
-                  )}
                 </div>
 
                 {/* Schedule Grid */}

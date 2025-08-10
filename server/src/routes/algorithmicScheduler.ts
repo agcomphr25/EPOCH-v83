@@ -24,18 +24,18 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Fetch all necessary data
     const [unscheduledOrders, allMolds, employees] = await Promise.all([
-      storage.getP1LayupQueue(),
+      storage.getUnifiedProductionQueue(),
       storage.getAllMolds(),
-      storage.getLayupEmployees()
+      storage.getLayupEmployeeSettings()
     ]);
 
     console.log(`📊 Data loaded: ${unscheduledOrders.length} orders, ${allMolds.length} molds, ${employees.length} employees`);
 
     // Filter active molds
-    const activeMolds = allMolds.filter(mold => mold.enabled);
+    const activeMolds = allMolds.filter((mold: any) => mold.enabled);
 
     // Prepare order data with stock model categorization
-    const categorizedOrders = unscheduledOrders.map(order => ({
+    const categorizedOrders = unscheduledOrders.map((order: any) => ({
       orderId: order.orderId,
       stockModelId: order.stockModelId || 'universal',
       stockModelName: order.stockModel?.displayName || order.stockModelId,
@@ -53,7 +53,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Apply stock model filter if specified
     const filteredOrders = stockModelFilter 
-      ? categorizedOrders.filter(order => 
+      ? categorizedOrders.filter((order: any) => 
           order.stockModelId.toLowerCase().includes(stockModelFilter.toLowerCase()) ||
           (order.stockModelName || '').toLowerCase().includes(stockModelFilter.toLowerCase())
         )
@@ -63,7 +63,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Group orders by stock model
     const stockModelGroups = new Map();
-    filteredOrders.forEach(order => {
+    filteredOrders.forEach((order: any) => {
       const key = order.stockModelId;
       if (!stockModelGroups.has(key)) {
         stockModelGroups.set(key, []);
@@ -74,13 +74,13 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Calculate capacity metrics
     const dailyCapacity = maxOrdersPerDay || Math.min(
       activeMolds.length * 8, // 8 orders per mold per day max
-      employees.reduce((sum, emp) => sum + emp.hours, 0) * 0.5 // 0.5 orders per employee hour
+      employees.reduce((sum: any, emp: any) => sum + emp.hours, 0) * 0.5 // 0.5 orders per employee hour
     );
 
     console.log(`📊 Daily capacity: ${dailyCapacity} orders`);
 
     // Generate schedule using simplified algorithm
-    const allocations = [];
+    const allocations: any[] = [];
     const workDates = generateWorkDates(new Date(), scheduleDays || 20);
     
     // Track daily allocations
@@ -93,8 +93,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     const sortedStockModels = Array.from(stockModelGroups.entries())
       .sort(([, ordersA], [, ordersB]) => {
         // Sort by urgency (most urgent orders first)
-        const urgentA = ordersA.filter(o => isUrgent(o.dueDate)).length;
-        const urgentB = ordersB.filter(o => isUrgent(o.dueDate)).length;
+        const urgentA = ordersA.filter((o: any) => isUrgent(o.dueDate)).length;
+        const urgentB = ordersB.filter((o: any) => isUrgent(o.dueDate)).length;
         return urgentB - urgentA;
       });
 
@@ -102,7 +102,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`🔄 Processing ${stockModelId}: ${orders.length} orders`);
       
       // Find compatible molds
-      const compatibleMolds = activeMolds.filter(mold => 
+      const compatibleMolds = activeMolds.filter((mold: any) => 
         mold.stockModels.includes(stockModelId) || 
         mold.stockModels.includes('universal') ||
         mold.modelName.toLowerCase().includes(stockModelId.toLowerCase())
@@ -161,9 +161,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Generate efficiency analysis
     const efficiency = filteredOrders.length > 0 ? (allocations.length / filteredOrders.length) * 100 : 100;
     
-    const moldUtilization = {};
-    activeMolds.forEach(mold => {
-      const usage = allocations.filter(a => a.moldId === mold.moldId).length;
+    const moldUtilization: any = {};
+    activeMolds.forEach((mold: any) => {
+      const usage = allocations.filter((a: any) => a.moldId === mold.moldId).length;
       moldUtilization[mold.moldId] = allocations.length > 0 ? (usage / allocations.length) * 100 : 0;
     });
 
@@ -183,7 +183,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       stockModelGroups: Array.from(stockModelGroups.entries()).map(([id, orders]) => ({
         stockModelId: id,
         orderCount: orders.length,
-        urgentCount: orders.filter(o => isUrgent(o.dueDate)).length
+        urgentCount: orders.filter((o: any) => isUrgent(o.dueDate)).length
       }))
     });
 
@@ -191,7 +191,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.error('🔄 Algorithmic scheduler error:', error);
     res.status(500).json({ 
       error: 'Failed to generate algorithmic schedule',
-      details: error.message 
+      details: (error as Error).message 
     });
   }
 });

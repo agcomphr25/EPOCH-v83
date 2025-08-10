@@ -944,9 +944,10 @@ export default function LayupScheduler() {
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
         console.log('🎯 Auto-triggering initial schedule generation');
+        console.log('🎯 About to auto-schedule:', orders.length, 'orders');
         setTimeout(() => {
           handleAutoSchedule();
-        }, 500); // Small delay to ensure component is fully loaded
+        }, 1000); // Increased delay to ensure component is fully loaded
       }
     } else {
       console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
@@ -2201,11 +2202,6 @@ export default function LayupScheduler() {
       
       setOrderAssignments(newAssignments);
       console.log('✅ Merged assignments:', Object.keys(newAssignments).length);
-    } else {
-      console.log('❌ Not applying auto-schedule:', {
-        scheduleLength: schedule.length,
-        existingAssignments: Object.keys(orderAssignments).length
-      });
     }
   }, [schedule, orderAssignments]);
 

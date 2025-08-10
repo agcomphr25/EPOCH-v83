@@ -22,20 +22,63 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     const { storage } = await import('../../storage');
 
-    // Fetch all necessary data
-    const [unscheduledOrders, allMolds, employees] = await Promise.all([
-      storage.getUnifiedProductionQueue(),
+    // Fetch all necessary data using the same approach as P1 layup queue
+    const [allOrders, productionOrders, allMolds, employees] = await Promise.all([
+      storage.getAllOrders(),
+      storage.getAllProductionOrders(),
       storage.getAllMolds(),
       storage.getLayupEmployeeSettings()
     ]);
 
-    console.log(`📊 Data loaded: ${unscheduledOrders.length} orders, ${allMolds.length} molds, ${employees.length} employees`);
+    // Build unified production queue (same logic as P1 layup queue endpoint)
+    const unscheduledOrders = allOrders.filter(order => 
+      order.currentDepartment === 'P1 Production Queue'
+    );
+    
+    const mesaOrders = productionOrders.filter(order => 
+      order.itemName && order.itemName.includes('Mesa')
+    );
+    
+    // Helper function to calculate priority score
+    const calculatePriorityScore = (dueDate: string | Date | null): number => {
+      if (!dueDate) return 100;
+      const due = new Date(dueDate);
+      const now = new Date();
+      const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntilDue < 0) return 1;
+      if (daysUntilDue <= 7) return 10;
+      return 50;
+    };
+    
+    // Combine both order types into unified production queue
+    const combinedQueue = [
+      ...unscheduledOrders.map((order: any) => ({
+        ...order,
+        source: 'regular_order',
+        priorityScore: calculatePriorityScore(order.dueDate),
+        orderId: order.orderId
+      })),
+      ...mesaOrders.map((order: any) => ({
+        ...order,
+        source: 'mesa_production_order',
+        priorityScore: calculatePriorityScore(order.dueDate),
+        orderId: order.orderId,
+        features: order.specifications || {},
+        product: order.itemName || 'Mesa Universal',
+        stockModelId: order.itemName?.includes('Mesa') ? 'mesa_universal' : 'unknown'
+      }))
+    ];
+    
+    // Use the combined queue as unscheduledOrders
+    const unifiedProductionQueue = combinedQueue;
+
+    console.log(`📊 Data loaded: ${unifiedProductionQueue.length} orders, ${allMolds.length} molds, ${employees.length} employees`);
 
     // Filter active molds
     const activeMolds = allMolds.filter((mold: any) => mold.enabled);
 
     // Prepare order data with stock model categorization
-    const categorizedOrders = unscheduledOrders.map((order: any) => ({
+    const categorizedOrders = unifiedProductionQueue.map((order: any) => ({
       orderId: order.orderId,
       stockModelId: order.stockModelId || 'universal',
       stockModelName: order.stockModel?.displayName || order.stockModelId,
@@ -78,6 +121,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     );
 
     console.log(`📊 Daily capacity: ${dailyCapacity} orders`);
+    console.log(`🔧 Available molds:`, activeMolds.map(m => `${m.moldId} (${m.modelName})`));
 
     // Generate schedule using simplified algorithm
     const allocations: any[] = [];
@@ -101,12 +145,47 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     for (const [stockModelId, orders] of sortedStockModels) {
       console.log(`🔄 Processing ${stockModelId}: ${orders.length} orders`);
       
-      // Find compatible molds
-      const compatibleMolds = activeMolds.filter((mold: any) => 
-        mold.stockModels.includes(stockModelId) || 
-        mold.stockModels.includes('universal') ||
-        mold.modelName.toLowerCase().includes(stockModelId.toLowerCase())
-      );
+      // Find compatible molds with better matching logic
+      const compatibleMolds = activeMolds.filter((mold: any) => {
+        // Direct stock model match
+        if (mold.stockModels && mold.stockModels.includes(stockModelId)) {
+          return true;
+        }
+        
+        // Universal molds can handle any order
+        if (mold.stockModels && mold.stockModels.includes('universal')) {
+          return true;
+        }
+        
+        // Mesa Universal should use Mesa molds, not APR
+        if (stockModelId === 'mesa_universal') {
+          return mold.modelName.toLowerCase().includes('mesa') || 
+                 mold.moldId.toLowerCase().includes('mesa');
+        }
+        
+        // APR orders should use APR molds
+        if (stockModelId.toLowerCase().includes('apr')) {
+          return mold.modelName.toLowerCase().includes('apr') || 
+                 mold.moldId.toLowerCase().includes('apr');
+        }
+        
+        // CF orders should use CF molds
+        if (stockModelId.toLowerCase().includes('cf_')) {
+          return mold.modelName.toLowerCase().includes('cf') || 
+                 mold.moldId.toLowerCase().includes('cf');
+        }
+        
+        // FG orders should use FG molds  
+        if (stockModelId.toLowerCase().includes('fg_')) {
+          return mold.modelName.toLowerCase().includes('fg') || 
+                 mold.moldId.toLowerCase().includes('fg');
+        }
+        
+        // General model name matching as fallback
+        return mold.modelName.toLowerCase().includes(stockModelId.toLowerCase());
+      });
+
+      console.log(`🔧 ${stockModelId} compatible molds:`, compatibleMolds.map(m => `${m.moldId} (${m.modelName})`));
 
       if (compatibleMolds.length === 0) {
         console.log(`⚠️ No compatible molds for ${stockModelId}`);

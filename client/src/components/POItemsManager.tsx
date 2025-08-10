@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   fetchPOItems, 
   createPOItem, 
   updatePOItem, 
   deletePOItem, 
-
   fetchStockModels,
   fetchFeatures,
   type PurchaseOrderItem, 
@@ -13,17 +12,33 @@ import {
   type StockModel,
   type Feature
 } from '@/lib/poUtils';
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Edit, Trash2, Package, Settings } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Edit, Trash2, Package, Settings, ChevronsUpDown, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useToast } from '@/hooks/use-toast';
+import { FEATURE_IDS, findFeature, getFeatureOptionDisplay, getPaintFeatures } from '@/utils/featureMapping';
+
+interface FeatureDefinition {
+  id: string;
+  name: string;
+  displayName: string;
+  type: 'dropdown' | 'search' | 'text' | 'multiselect' | 'checkbox';
+  options?: { value: string; label: string; price?: number }[];
+  category?: string;
+  subcategory?: string;
+}
 
 interface POItemsManagerProps {
   poId: number;
@@ -35,18 +50,20 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PurchaseOrderItem | null>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // Form state
-  const [formData, setFormData] = useState({
-    itemType: 'stock_model' as 'stock_model' | 'custom_model' | 'feature_item',
-    itemId: '',
-    itemName: '',
-    quantity: 1,
-    unitPrice: 0,
-    totalPrice: 0,
-    specifications: {},
-    notes: ''
-  });
+  // Enhanced form state matching OrderEntry
+  const [modelId, setModelId] = useState('');
+  const [modelOpen, setModelOpen] = useState(false);
+  const [features, setFeatures] = useState<Record<string, any>>({});
+  const [featureDefs, setFeatureDefs] = useState<FeatureDefinition[]>([]);
+  const [quantity, setQuantity] = useState(1);
+  const [priceOverride, setPriceOverride] = useState<number | null>(null);
+  const [showPriceOverride, setShowPriceOverride] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountDetails, setDiscountDetails] = useState<any>(null);
 
   // Data queries
   const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
@@ -59,16 +76,153 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     queryFn: fetchStockModels
   });
 
-  const { data: features = [], isLoading: featuresLoading } = useQuery({
+  const { data: featuresData = [], isLoading: featuresLoading } = useQuery({
     queryKey: ['/api/features'],
     queryFn: fetchFeatures
   });
+
+  // Load initial data
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        // Load features
+        const featuresResponse = await fetchFeatures();
+        console.log('🔧 PO: Loaded features:', featuresResponse.length);
+        setFeatureDefs(featuresResponse);
+        
+        // Load discount options
+        await loadDiscountCodes();
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  // Load discount codes function
+  const loadDiscountCodes = async () => {
+    try {
+      const [persistentDiscounts, shortTermSales] = await Promise.all([
+        apiRequest('/api/persistent-discounts'),
+        apiRequest('/api/short-term-sales')
+      ]);
+
+      const discountOptionsMap: Record<string, any> = {};
+      const discounts = [
+        { value: 'none', label: 'No Discount' },
+        ...persistentDiscounts.map((discount: any) => {
+          const key = `persistent_${discount.id}`;
+          discountOptionsMap[key] = discount;
+          return {
+            value: key,
+            label: `${discount.code} - ${discount.description} (${discount.discountType === 'percent' ? `${discount.discountValue}%` : `$${discount.discountValue}`})`
+          };
+        }),
+        ...shortTermSales.map((sale: any) => {
+          const key = `short_term_${sale.id}`;
+          discountOptionsMap[key] = sale;
+          return {
+            value: key,
+            label: `${sale.saleCode} - ${sale.description} (${sale.discountType === 'percent' ? `${sale.discountValue}%` : `$${sale.discountValue}`})`
+          };
+        })
+      ];
+
+      setDiscountOptions(discounts);
+      
+      // Store discount details for appliesTo logic
+      if (discountCode && discountOptionsMap[discountCode]) {
+        setDiscountDetails(discountOptionsMap[discountCode]);
+      }
+    } catch (error) {
+      console.error('Failed to load discount codes:', error);
+    }
+  };
+
+  // Pricing calculations - matching OrderEntry logic
+  const selectedModel = stockModels.find(m => m.id === modelId);
+
+  const basePrice = useMemo(() => {
+    if (!selectedModel) return 0;
+    return priceOverride !== null ? priceOverride : selectedModel.price;
+  }, [selectedModel, priceOverride]);
+
+  const featuresPrice = useMemo(() => {
+    let total = 0;
+    
+    Object.entries(features).forEach(([featureId, value]) => {
+      if (!value) return;
+      
+      const featureDef = featureDefs.find(f => f.id === featureId);
+      if (!featureDef) return;
+
+      if (Array.isArray(value)) {
+        // Multi-select feature
+        value.forEach(optionValue => {
+          const option = featureDef.options?.find(opt => opt.value === optionValue);
+          if (option?.price) total += option.price;
+        });
+      } else if (typeof value === 'string') {
+        const option = featureDef.options?.find(opt => opt.value === value);
+        if (option?.price) total += option.price;
+      }
+    });
+    
+    return total;
+  }, [features, featureDefs]);
+
+  const subtotalPrice = useMemo(() => {
+    return (basePrice + featuresPrice) * quantity;
+  }, [basePrice, featuresPrice, quantity]);
+
+  const calculateDiscountAmount = useMemo(() => {
+    if (!discountDetails) return 0;
+    
+    const discountValue = discountDetails.discountValue || 0;
+    const discountType = discountDetails.discountType || 'percent';
+    const appliesTo = discountDetails.appliesTo || 'total_order';
+    
+    if (appliesTo === 'stock_model') {
+      // Apply discount only to base model price
+      const discountBase = basePrice * quantity;
+      return discountType === 'percent' ? 
+        (discountBase * discountValue / 100) : 
+        Math.min(discountValue, discountBase);
+    } else {
+      // Apply to entire subtotal
+      return discountType === 'percent' ? 
+        (subtotalPrice * discountValue / 100) : 
+        Math.min(discountValue, subtotalPrice);
+    }
+  }, [discountDetails, basePrice, subtotalPrice, quantity]);
+
+  const discountAmount = useMemo(() => {
+    return calculateDiscountAmount;
+  }, [calculateDiscountAmount]);
+
+  const totalPrice = useMemo(() => {
+    return Math.max(0, subtotalPrice - discountAmount);
+  }, [subtotalPrice, discountAmount]);
+
+  // Helper function to format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
 
   // Mutations
   const createItemMutation = useMutation({
     mutationFn: (data: CreatePurchaseOrderItemData) => createPOItem(poId, data),
     onSuccess: () => {
-      toast.success('Item added successfully');
+      toast({
+        title: "Success",
+        description: "Item added successfully",
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/pos', poId, 'items'] });
       setIsDialogOpen(false);
       resetForm();
@@ -106,57 +260,157 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
 
 
   const resetForm = () => {
-    setFormData({
-      itemType: 'stock_model',
-      itemId: '',
-      itemName: '',
-      quantity: 1,
-      unitPrice: 0,
-      totalPrice: 0,
-      specifications: {},
-      notes: ''
-    });
+    setModelId('');
+    setModelOpen(false);
+    setFeatures({});
+    setQuantity(1);
+    setPriceOverride(null);
+    setShowPriceOverride(false);
+    setNotes('');
+    setDiscountCode('');
+    setDiscountDetails(null);
     setEditingItem(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Business rules and feature validation - matching OrderEntry
+  useEffect(() => {
+    if (modelId) {
+      const selectedModel = stockModels.find(m => m.id === modelId);
+      const modelName = selectedModel?.displayName || selectedModel?.name || '';
+      
+      // Handle Medium action length exclusion for Ferrata/Armor models
+      if (features.action_length === 'medium') {
+        const shouldExcludeMedium = modelName.toLowerCase().includes('ferrata') || 
+                                    modelName.toLowerCase().includes('armor');
+        
+        if (shouldExcludeMedium) {
+          setFeatures(prev => ({ 
+            ...prev, 
+            action_length: undefined
+          }));
+          toast({
+            title: "Action Length Updated",
+            description: "Medium action length is not available for this model. Please select Short or Long.",
+            variant: "default",
+          });
+        }
+      }
+      
+      // Handle LOP exclusion for CAT/Visigoth models
+      if (features.length_of_pull) {
+        const shouldExcludeLOP = modelName.toLowerCase().includes('cat') || 
+                                 modelName.toLowerCase().includes('visigoth');
+        
+        if (shouldExcludeLOP) {
+          setFeatures(prev => ({ 
+            ...prev, 
+            length_of_pull: undefined
+          }));
+          toast({
+            title: "LOP Option Removed",
+            description: "Length of Pull options are not available for this model.",
+            variant: "default",
+          });
+        }
+      }
+    }
+  }, [modelId, stockModels, features.action_length, features.length_of_pull, toast]);
+
+  // Conditional feature filtering for Chalk models
+  const getFilteredFeatureOptions = (featureDef: FeatureDefinition) => {
+    if (!selectedModel || !featureDef.options) return featureDef.options;
+    
+    const modelName = selectedModel.displayName || selectedModel.name || '';
+    const isChalkModel = modelName.toLowerCase().includes('chalk');
+    
+    if (!isChalkModel) return featureDef.options;
+    
+    // Filter options for Chalk models
+    if (featureDef.id === 'rail_accessory') {
+      return featureDef.options.filter(option => 
+        ['4" ARCA Rail', 'AG Pic', 'AG Pic w/Int Stud'].includes(option.value)
+      );
+    }
+    
+    if (featureDef.id === 'qd_accessory') {
+      return featureDef.options.filter(option => 
+        ['No QDs', 'QDs - 1 Right (Butt)', 'QDs - 1 Left (Butt)'].includes(option.value)
+      );
+    }
+    
+    return featureDef.options;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.itemId || !formData.itemName || formData.quantity <= 0) {
-      toast.error('Please fill in all required fields');
+    if (!modelId) {
+      toast({
+        title: "Error",
+        description: "Please select a stock model",
+        variant: "destructive",
+      });
       return;
     }
 
-    const data: CreatePurchaseOrderItemData = {
-      itemType: formData.itemType,
-      itemId: formData.itemId,
-      itemName: formData.itemName,
-      quantity: formData.quantity,
-      unitPrice: formData.unitPrice,
-      totalPrice: formData.quantity * formData.unitPrice,
-      specifications: formData.itemType === 'custom_model' ? formData.specifications : undefined,
-      notes: formData.notes || undefined
+    if (quantity <= 0) {
+      toast({
+        title: "Error", 
+        description: "Quantity must be greater than 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedModel = stockModels.find(m => m.id === modelId);
+    if (!selectedModel) {
+      toast({
+        title: "Error",
+        description: "Selected model not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const itemData: CreatePurchaseOrderItemData = {
+      itemType: 'stock_model',
+      itemId: modelId,
+      itemName: selectedModel.displayName || selectedModel.name,
+      quantity: quantity,
+      unitPrice: basePrice + featuresPrice,
+      totalPrice: totalPrice,
+      specifications: {
+        features: features,
+        basePrice: basePrice,
+        featuresPrice: featuresPrice,
+        priceOverride: priceOverride,
+        discountCode: discountCode,
+        discountAmount: discountAmount
+      },
+      notes: notes
     };
 
     if (editingItem) {
-      updateItemMutation.mutate({ itemId: editingItem.id, data });
+      updateItemMutation.mutate({ itemId: editingItem.id, data: itemData });
     } else {
-      createItemMutation.mutate(data);
+      createItemMutation.mutate(itemData);
     }
   };
 
   const handleEdit = (item: PurchaseOrderItem) => {
     setEditingItem(item);
-    setFormData({
-      itemType: item.itemType,
-      itemId: item.itemId,
-      itemName: item.itemName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      specifications: item.specifications || {},
-      notes: item.notes || ''
-    });
+    // Load existing item data
+    if (item.specifications) {
+      const specs = item.specifications as any;
+      setFeatures(specs.features || {});
+      setPriceOverride(specs.priceOverride);
+      setShowPriceOverride(!!specs.priceOverride);
+      setDiscountCode(specs.discountCode || '');
+      setDiscountAmount(specs.discountAmount || 0);
+    }
+    setModelId(item.itemId);
+    setQuantity(item.quantity);
+    setNotes(item.notes || '');
     setIsDialogOpen(true);
   };
 
@@ -164,46 +418,6 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     if (window.confirm('Are you sure you want to delete this item?')) {
       deleteItemMutation.mutate(itemId);
     }
-  };
-
-  const handleItemSelection = (itemType: string, itemId: string) => {
-    let selectedItem = null;
-    let price = 0;
-
-    if (itemType === 'stock_model') {
-      selectedItem = stockModels.find(model => model.id === itemId);
-      price = selectedItem?.price || 0;
-    } else if (itemType === 'feature_item') {
-      selectedItem = features.find(feature => feature.id === itemId);
-      price = selectedItem?.price || 0;
-    }
-
-    if (selectedItem) {
-      setFormData(prev => ({
-        ...prev,
-        itemType: itemType as 'stock_model' | 'custom_model' | 'feature_item',
-        itemId: itemId,
-        itemName: selectedItem.displayName || selectedItem.name,
-        unitPrice: price,
-        totalPrice: prev.quantity * price
-      }));
-    }
-  };
-
-  const handleQuantityChange = (quantity: number) => {
-    setFormData(prev => ({
-      ...prev,
-      quantity,
-      totalPrice: quantity * prev.unitPrice
-    }));
-  };
-
-  const handleUnitPriceChange = (unitPrice: number) => {
-    setFormData(prev => ({
-      ...prev,
-      unitPrice,
-      totalPrice: prev.quantity * unitPrice
-    }));
   };
 
   const totalPOValue = items.reduce((sum, item) => sum + item.totalPrice, 0);

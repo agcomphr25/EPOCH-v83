@@ -18,6 +18,7 @@ import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, C
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
+import POOrderEntry from './POOrderEntry';
 import POItemsManager from './POItemsManager';
 
 // Component to display PO quantity
@@ -76,8 +77,7 @@ export default function POManager() {
     poNumber: '',
     customerId: '',
     customerName: '',
-    itemType: 'single' as 'single' | 'multiple',
-    poDate: '',
+    poDate: new Date().toISOString().split('T')[0],
     expectedDelivery: '',
     status: 'OPEN' as 'OPEN' | 'CLOSED' | 'CANCELED',
     notes: ''
@@ -161,7 +161,7 @@ export default function POManager() {
         poNumber: !formData.poNumber,
         customerId: !formData.customerId,
         customerName: !formData.customerName,
-        itemType: !formData.itemType,
+
         poDate: !formData.poDate,
         expectedDelivery: !formData.expectedDelivery
       });
@@ -195,7 +195,6 @@ export default function POManager() {
         poNumber: '',
         customerId: '',
         customerName: '',
-        itemType: 'single',
         poDate: new Date().toISOString().split('T')[0],
         expectedDelivery: '',
         status: 'OPEN',
@@ -210,7 +209,7 @@ export default function POManager() {
       poNumber: po.poNumber,
       customerId: po.customerId,
       customerName: po.customerName,
-      itemType: (po as any).itemType || 'single', // Default to single if not set
+
       poDate: po.poDate ? new Date(po.poDate).toISOString().split('T')[0] : '',
       expectedDelivery: po.expectedDelivery ? new Date(po.expectedDelivery).toISOString().split('T')[0] : '',
       status: po.status,
@@ -226,7 +225,6 @@ export default function POManager() {
       poNumber: '',
       customerId: '',
       customerName: '',
-      itemType: 'single',
       poDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
       status: 'OPEN',
@@ -280,23 +278,33 @@ export default function POManager() {
               ← Back to POs
             </Button>
           </div>
-          <POItemsManager 
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">Purchase Order Items</h3>
+              <Button onClick={() => setShowOrderEntry(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Order Item
+              </Button>
+            </div>
+            <POItemsManager 
+              poId={selectedPO.id}
+              poNumber={selectedPO.poNumber}
+              customerId={selectedPO.customerId}
+            />
+          </div>
+          
+          {/* Comprehensive Order Entry Dialog */}
+          <POOrderEntry
             poId={selectedPO.id}
-            poNumber={selectedPO.poNumber}
-            customerId={selectedPO.customerId}
+            isOpen={showOrderEntry}
+            onClose={() => setShowOrderEntry(false)}
+            onSuccess={() => {
+              setShowOrderEntry(false);
+              queryClient.invalidateQueries({ queryKey: [`/api/pos/${selectedPO.id}/items`] });
+              queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+            }}
           />
         </div>
-      ) : showOrderEntry ? (
-        <POOrderEntry 
-          selectedPO={pos.find(po => po.customerName === formData.customerName) || null}
-          customer={selectedCustomer}
-          stockModels={stockModels}
-          onBack={() => setShowOrderEntry(false)}
-          onOrderCreated={() => {
-            setShowOrderEntry(false);
-            queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
-          }}
-        />
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -412,18 +420,7 @@ export default function POManager() {
                     </Popover>
                   </div>
 
-                  <div>
-                    <Label htmlFor="itemType">Item Type</Label>
-                    <Select value={formData.itemType} onValueChange={(value) => setFormData({...formData, itemType: value as 'single' | 'multiple'})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="single">Single Item</SelectItem>
-                        <SelectItem value="multiple">Multiple Items</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -602,219 +599,3 @@ export default function POManager() {
   );
 }
 
-// Order Entry Component for Purchase Orders
-interface POOrderEntryProps {
-  selectedPO: PurchaseOrder | null;
-  customer: Customer | null;
-  stockModels: StockModel[];
-  onBack: () => void;
-  onOrderCreated: () => void;
-}
-
-function POOrderEntry({ selectedPO, customer, stockModels, onBack, onOrderCreated }: POOrderEntryProps) {
-  const [selectedModel, setSelectedModel] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0);
-  const [notes, setNotes] = useState('');
-  const [orderItems, setOrderItems] = useState<any[]>([]);
-  const queryClient = useQueryClient();
-
-  const addOrderItem = () => {
-    if (!selectedModel || quantity <= 0) {
-      toast.error('Please select a model and enter a valid quantity');
-      return;
-    }
-
-    const model = stockModels.find(m => m.id === selectedModel);
-    if (!model) return;
-
-    const newItem = {
-      itemType: 'stock_model',
-      itemId: model.id,
-      itemName: model.displayName,
-      quantity,
-      unitPrice: unitPrice || model.price,
-      totalPrice: quantity * (unitPrice || model.price),
-      notes
-    };
-
-    setOrderItems([...orderItems, newItem]);
-    setSelectedModel('');
-    setQuantity(1);
-    setUnitPrice(0);
-    setNotes('');
-    toast.success('Item added to order');
-  };
-
-  const removeOrderItem = (index: number) => {
-    setOrderItems(orderItems.filter((_, i) => i !== index));
-  };
-
-  const createOrderMutation = useMutation({
-    mutationFn: async (items: any[]) => {
-      if (!selectedPO) throw new Error('No PO selected');
-      
-      // Create PO items for each order item
-      for (const item of items) {
-        await apiRequest(`/api/pos/${selectedPO.id}/items`, {
-          method: 'POST',
-          body: item
-        });
-      }
-    },
-    onSuccess: () => {
-      toast.success('Order items created successfully');
-      setOrderItems([]);
-      onOrderCreated();
-    },
-    onError: () => {
-      toast.error('Failed to create order items');
-    }
-  });
-
-  const handleCreateOrder = () => {
-    if (orderItems.length === 0) {
-      toast.error('Please add at least one item to the order');
-      return;
-    }
-    createOrderMutation.mutate(orderItems);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <Button variant="outline" onClick={onBack} className="mb-4">
-            ← Back to Purchase Orders
-          </Button>
-          <h2 className="text-2xl font-bold">Create Order for PO {selectedPO?.poNumber}</h2>
-          <p className="text-gray-600">Customer: {customer?.name} {customer?.company && `(${customer.company})`}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Add Items Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5" />
-              Add Items to Order
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="stockModel">Stock Model</Label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a stock model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {stockModels.filter(m => m.isActive).map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.displayName} - ${model.price}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input 
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="unitPrice">Unit Price (Optional)</Label>
-                <Input 
-                  id="unitPrice"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
-                  placeholder="Use model price"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea 
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Special instructions or notes..."
-                rows={2}
-              />
-            </div>
-
-            <Button onClick={addOrderItem} className="w-full">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Item
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Order Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Order Summary ({orderItems.length} items)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {orderItems.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No items added yet</p>
-            ) : (
-              <div className="space-y-3">
-                {orderItems.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 border rounded">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.itemName}</p>
-                      <p className="text-sm text-gray-600">
-                        Qty: {item.quantity} × ${item.unitPrice} = ${item.totalPrice.toFixed(2)}
-                      </p>
-                      {item.notes && (
-                        <p className="text-sm text-gray-500 italic">{item.notes}</p>
-                      )}
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => removeOrderItem(index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-                
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between items-center font-bold">
-                    <span>Total:</span>
-                    <span>${orderItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={handleCreateOrder} 
-                  className="w-full mt-4"
-                  disabled={createOrderMutation.isPending}
-                >
-                  {createOrderMutation.isPending ? 'Creating...' : 'Create Order Items'}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}

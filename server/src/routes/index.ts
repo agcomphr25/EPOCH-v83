@@ -20,6 +20,7 @@ import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
+import algorithmicSchedulerRoutes from './algorithmicScheduler';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -78,6 +79,11 @@ export function registerRoutes(app: Express): Server {
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
+
+  // Algorithmic scheduler routes
+  app.use('/api/scheduler', algorithmicSchedulerRoutes);
+
+
 
   // Health check endpoint for deployment debugging
   app.get('/api/health', async (req, res) => {

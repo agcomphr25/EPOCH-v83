@@ -5,6 +5,7 @@ import useMoldSettings from '../hooks/useMoldSettings';
 import useEmployeeSettings from '../hooks/useEmployeeSettings';
 import { useUnifiedLayupOrders } from '../hooks/useUnifiedLayupOrders';
 import { apiRequest } from '@/lib/queryClient';
+import AlgorithmicScheduler from './AlgorithmicScheduler';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -549,7 +550,7 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
-  const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
+  const [viewType, setViewType] = useState<'day' | 'week' | 'month' | 'algorithm'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
@@ -581,7 +582,6 @@ export default function LayupScheduler() {
 
   // Update local assignments when schedule data loads
   useEffect(() => {
-    console.log('📅 useEffect triggered - existingSchedule:', existingSchedule);
     if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
       (existingSchedule as any[]).forEach((entry: any) => {
@@ -591,11 +591,7 @@ export default function LayupScheduler() {
         };
       });
 
-      console.log('📅 Created assignments:', Object.keys(assignments).length, 'orders');
-      console.log('📅 First few assignments:', Object.entries(assignments).slice(0, 3));
       setOrderAssignments(assignments);
-    } else {
-      console.log('📅 No schedule data to load');
     }
   }, [existingSchedule]);
 
@@ -1242,7 +1238,7 @@ export default function LayupScheduler() {
         console.log('📋 Calendar should now display orders for assignments:', Object.keys(scheduleAssignments).length);
       }, 100);
     }
-  }, [generatedSchedule, processedOrders]);
+  }, [generatedSchedule]);
 
   // Auto-trigger initial scheduling when conditions are met (fallback if no generated schedule)
   useEffect(() => {
@@ -1258,7 +1254,7 @@ export default function LayupScheduler() {
         }, 1000);
       }
     }
-  }, [orders, molds, employees, orderAssignments, generateAutoSchedule]);
+  }, [orders.length, molds.length, employees.length, isLoadingSchedule]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -2773,6 +2769,15 @@ export default function LayupScheduler() {
             </Dialog>
 
             <Button
+              variant={viewType === 'algorithm' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('algorithm')}
+              className={viewType === 'algorithm' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+            >
+              <Zap className="w-4 h-4 mr-1" />
+              Algorithm
+            </Button>
+            <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewType('day')}
@@ -2852,7 +2857,7 @@ export default function LayupScheduler() {
             </Button>
 
             {/* Jump to Scheduled Week Button */}
-            {Object.keys(orderAssignments).length > 0 ? (
+            {Object.keys(orderAssignments).length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -2870,10 +2875,6 @@ export default function LayupScheduler() {
                 <ArrowRight className="w-4 h-4 mr-2" />
                 View Scheduled Orders ({Object.keys(orderAssignments).length})
               </Button>
-            ) : (
-              <div className="text-sm text-gray-500 mr-4">
-                Loading schedule... ({scheduleLoading ? 'loading' : 'loaded'})
-              </div>
             )}
 
 
@@ -2976,8 +2977,28 @@ export default function LayupScheduler() {
           onDragEnd={handleDragEnd}
         >
           <div className="px-6 pb-6">
-            {/* Week-based Calendar Layout */}
-            {viewType === 'week' || viewType === 'day' ? (
+            {/* Algorithmic Scheduler View */}
+            {viewType === 'algorithm' ? (
+              <AlgorithmicScheduler 
+                onScheduleGenerated={(allocations) => {
+                  // Convert allocations to order assignments format
+                  const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+                  allocations.forEach((allocation: any) => {
+                    newAssignments[allocation.orderId] = {
+                      moldId: allocation.moldId,
+                      date: allocation.scheduledDate
+                    };
+                  });
+                  setOrderAssignments(newAssignments);
+                  setHasUnsavedScheduleChanges(true);
+                  toast({
+                    title: "Algorithmic Schedule Generated",
+                    description: `${allocations.length} orders have been scheduled algorithmically. Remember to save your changes.`,
+                  });
+                }}
+                currentOrderCount={processedOrders.length}
+              />
+            ) : viewType === 'week' || viewType === 'day' ? (
               <div
                 className="grid gap-1"
                 style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}

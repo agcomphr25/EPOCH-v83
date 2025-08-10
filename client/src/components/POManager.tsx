@@ -173,6 +173,7 @@ export default function POManager() {
       poNumber: formData.poNumber,
       customerId: formData.customerId,
       customerName: formData.customerName,
+      itemType: 'multiple', // Default to multiple since we're using the advanced order entry
       poDate: formData.poDate,
       expectedDelivery: formData.expectedDelivery,
       status: formData.status,
@@ -316,7 +317,7 @@ export default function POManager() {
                   poNumber: '',
                   customerId: '',
                   customerName: '',
-                  itemType: 'single',
+
                   poDate: new Date().toISOString().split('T')[0],
                   expectedDelivery: '',
                   status: 'OPEN',

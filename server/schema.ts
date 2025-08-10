@@ -1685,6 +1685,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   poNumber: text('po_number').notNull().unique(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(), // Denormalized for performance
+  itemType: text('item_type').notNull().default('single'), // single, multiple
   poDate: date('po_date').notNull(),
   expectedDelivery: date('expected_delivery').notNull(),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
@@ -1829,6 +1830,7 @@ export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit
   poNumber: z.string().min(1, "PO Number is required"),
   customerId: z.string().min(1, "Customer ID is required"),
   customerName: z.string().min(1, "Customer Name is required"),
+  itemType: z.enum(['single', 'multiple']).default('single'),
   poDate: z.coerce.date(),
   expectedDelivery: z.coerce.date(),
   status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),

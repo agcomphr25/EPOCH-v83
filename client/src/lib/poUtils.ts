@@ -6,6 +6,7 @@ export interface PurchaseOrder {
   poNumber: string;
   customerId: string;
   customerName: string;
+  itemType: 'single' | 'multiple';
   poDate: string;
   expectedDelivery: string;
   status: 'OPEN' | 'CLOSED' | 'CANCELED';
@@ -35,6 +36,7 @@ export interface CreatePurchaseOrderData {
   poNumber: string;
   customerId: string;
   customerName: string;
+  itemType: 'single' | 'multiple';
   poDate: string;
   expectedDelivery: string;
   status: 'OPEN' | 'CLOSED' | 'CANCELED';

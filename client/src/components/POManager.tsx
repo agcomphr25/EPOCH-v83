@@ -48,6 +48,7 @@ export default function POManager() {
     poNumber: '',
     customerId: '',
     customerName: '',
+    itemType: 'single' as 'single' | 'multiple',
     poDate: '',
     expectedDelivery: '',
     status: 'OPEN' as 'OPEN' | 'CLOSED' | 'CANCELED',
@@ -116,6 +117,7 @@ export default function POManager() {
         poNumber: !formData.poNumber,
         customerId: !formData.customerId,
         customerName: !formData.customerName,
+        itemType: !formData.itemType,
         poDate: !formData.poDate,
         expectedDelivery: !formData.expectedDelivery
       });
@@ -149,6 +151,7 @@ export default function POManager() {
         poNumber: '',
         customerId: '',
         customerName: '',
+        itemType: 'single',
         poDate: new Date().toISOString().split('T')[0],
         expectedDelivery: '',
         status: 'OPEN',
@@ -163,6 +166,7 @@ export default function POManager() {
       poNumber: po.poNumber,
       customerId: po.customerId,
       customerName: po.customerName,
+      itemType: (po as any).itemType || 'single', // Default to single if not set
       poDate: po.poDate ? new Date(po.poDate).toISOString().split('T')[0] : '',
       expectedDelivery: po.expectedDelivery ? new Date(po.expectedDelivery).toISOString().split('T')[0] : '',
       status: po.status,
@@ -178,6 +182,7 @@ export default function POManager() {
       poNumber: '',
       customerId: '',
       customerName: '',
+      itemType: 'single',
       poDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
       status: 'OPEN',
@@ -248,6 +253,7 @@ export default function POManager() {
                   poNumber: '',
                   customerId: '',
                   customerName: '',
+                  itemType: 'single',
                   poDate: new Date().toISOString().split('T')[0],
                   expectedDelivery: '',
                   status: 'OPEN',
@@ -301,6 +307,19 @@ export default function POManager() {
                       onChange={(e) => setFormData({...formData, customerName: e.target.value})}
                       required 
                     />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="itemType">Item Type</Label>
+                    <Select value={formData.itemType} onValueChange={(value) => setFormData({...formData, itemType: value as 'single' | 'multiple'})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">Single Item</SelectItem>
+                        <SelectItem value="multiple">Multiple Items</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

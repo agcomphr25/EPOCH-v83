@@ -259,7 +259,51 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       moldUtilization[mold.moldId] = allocations.length > 0 ? (usage / allocations.length) * 100 : 0;
     });
 
+    // Log scheduling results
+    const unscheduledOrdersList = filteredOrders.filter((order: any) => 
+      !allocations.some((allocation: any) => allocation.orderId === order.orderId)
+    );
 
+    console.log(`\n📊 ALGORITHMIC SCHEDULING RESULTS:`);
+    console.log(`📈 Total orders processed: ${filteredOrders.length}`);
+    console.log(`✅ Successfully scheduled: ${allocations.length}`);
+    console.log(`❌ Unable to schedule: ${unscheduledOrdersList.length}`);
+    console.log(`📊 Success rate: ${efficiency.toFixed(1)}%`);
+    console.log(`🏗️ Work days in schedule: ${workDates.length}`);
+    console.log(`👥 Daily capacity: ${dailyCapacity} orders/day`);
+    
+    if (unscheduledOrdersList.length > 0) {
+      console.log(`\n❌ First 10 unscheduled orders:`);
+      unscheduledOrdersList.slice(0, 10).forEach((order: any) => {
+        const stockModel = order.stockModel || order.stockModelId;
+        console.log(`   - ${order.orderId}: ${stockModel} (Due: ${order.dueDate ? new Date(order.dueDate).toDateString() : 'N/A'})`);
+      });
+      
+      // Analyze reasons
+      const moldCompatibilityIssues = unscheduledOrdersList.filter((order: any) => {
+        const stockModelId = order.stockModelId?.toLowerCase() || '';
+        const compatibleMolds = activeMolds.filter((mold: any) => {
+          if (stockModelId.includes('mesa') || stockModelId === 'universal') {
+            return mold.modelName.toLowerCase().includes('mesa') || mold.moldId.toLowerCase().includes('mesa');
+          }
+          if (stockModelId.includes('apr')) {
+            return mold.modelName.toLowerCase().includes('apr') || mold.moldId.toLowerCase().includes('apr');
+          }
+          if (stockModelId.includes('cf_')) {
+            return mold.modelName.toLowerCase().includes('cf') || mold.moldId.toLowerCase().includes('cf');
+          }
+          if (stockModelId.includes('fg_')) {
+            return mold.modelName.toLowerCase().includes('fg') || mold.moldId.toLowerCase().includes('fg');
+          }
+          return mold.stockModels?.includes(order.stockModelId);
+        });
+        return compatibleMolds.length === 0;
+      });
+      
+      console.log(`\n🔍 Analysis of unscheduled orders:`);
+      console.log(`   - No compatible molds: ${moldCompatibilityIssues.length}`);
+      console.log(`   - Other capacity/timing issues: ${unscheduledOrdersList.length - moldCompatibilityIssues.length}`);
+    }
 
     res.json({
       success: true,

@@ -826,7 +826,7 @@ export default function LayupScheduler() {
   const { data: generatedSchedule = [], isLoading: isLoadingSchedule } = useQuery({
     queryKey: ['/api/layup-schedule'],
     enabled: true,
-  });
+  }) as { data: any[]; isLoading: boolean };
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 

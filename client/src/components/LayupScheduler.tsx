@@ -3094,32 +3094,40 @@ export default function LayupScheduler() {
           onDragEnd={handleDragEnd}
         >
           <div className="px-6 pb-6">
-            {/* Algorithmic Scheduler View */}
-            {viewType === 'algorithm' ? (
-              <AlgorithmicScheduler 
-                onScheduleGenerated={(allocations) => {
-                  // Convert allocations to order assignments format
-                  const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-                  allocations.forEach((allocation: any) => {
-                    newAssignments[allocation.orderId] = {
-                      moldId: allocation.moldId,
-                      date: allocation.scheduledDate
-                    };
-                  });
-                  setOrderAssignments(newAssignments);
-                  setHasUnsavedScheduleChanges(true);
-                  toast({
-                    title: "Algorithmic Schedule Generated",
-                    description: `${allocations.length} orders have been scheduled algorithmically. Remember to save your changes.`,
-                  });
-                }}
-                currentOrderCount={processedOrders.length}
-              />
-            ) : viewType === 'week' || viewType === 'day' ? (
-              <div
-                className="grid gap-1"
-                style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-              >
+            {viewType === 'week' || viewType === 'day' ? (
+              <div className="space-y-6">
+                {/* Unassigned Orders Queue */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                    Production Queue ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders)
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 max-h-96 overflow-y-auto">
+                    {processedOrders
+                      .filter(order => !orderAssignments[order.orderId])
+                      .slice(0, 50) // Limit to 50 for performance
+                      .map(order => (
+                        <DraggableOrderItem
+                          key={order.orderId}
+                          order={order}
+                          priority={1}
+                          getModelDisplayName={getModelDisplayName}
+                          features={features}
+                          processedOrders={processedOrders}
+                        />
+                      ))}
+                  </div>
+                  {processedOrders.filter(o => !orderAssignments[o.orderId]).length > 50 && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Showing first 50 of {processedOrders.filter(o => !orderAssignments[o.orderId]).length} unassigned orders
+                    </p>
+                  )}
+                </div>
+
+                {/* Schedule Grid */}
+                <div
+                  className="grid gap-1"
+                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+                >
 
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
@@ -3247,6 +3255,7 @@ export default function LayupScheduler() {
                 </React.Fragment>
                 ));
               })()}
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">

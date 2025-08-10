@@ -3014,6 +3014,10 @@ export default function LayupScheduler() {
                       })
                       .map(([orderId]) => {
                         const order = processedOrders.find(o => o.orderId === orderId);
+                        if (!order) {
+                          console.log(`❌ DEBUG: Could not find order ${orderId} in processedOrders (${processedOrders.length} total)`);
+                          console.log(`❌ DEBUG: Sample processedOrders IDs:`, processedOrders.slice(0, 5).map(o => o.orderId));
+                        }
                         return order;
                       })
                       .filter(order => order !== undefined) as any[];

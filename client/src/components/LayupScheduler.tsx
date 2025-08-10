@@ -2806,36 +2806,6 @@ export default function LayupScheduler() {
             <Button
               variant="default"
               size="sm"
-              onClick={handlePushScheduledToQueue}
-              disabled={pushToLayupPluggingMutation.isPending}
-              className="mr-4 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {pushToLayupPluggingMutation.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Push to Queue
-                </>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={generateAutoSchedule}
-              className="mr-4 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              Auto Schedule (Mesa Constraints)
-            </Button>
-
-            <Button
-              variant="default"
-              size="sm"
               onClick={handleGenerateSchedule}
               disabled={generateLayupScheduleMutation.isPending}
               className="mr-4 bg-blue-600 hover:bg-blue-700 text-white"
@@ -2853,25 +2823,7 @@ export default function LayupScheduler() {
               )}
             </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRunPythonScheduler}
-              disabled={pythonSchedulerMutation.isPending}
-              className="mr-4"
-            >
-              {pythonSchedulerMutation.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 mr-2" />
-                  Python Scheduler
-                </>
-              )}
-            </Button>
+
 
             <Button
               variant="outline"

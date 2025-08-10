@@ -97,12 +97,18 @@ export const orders = pgTable("orders", {
   quantity: integer("quantity").notNull(),
   status: text("status").notNull(),
   date: timestamp("date").notNull(),
+  orderDate: timestamp("order_date"),
   // Department progression fields
   currentDepartment: text("current_department").default("Layup").notNull(),
   isOnSchedule: boolean("is_on_schedule").default(true),
   priorityScore: integer("priority_score").default(50), // Lower = higher priority
   rushTier: text("rush_tier"), // e.g., "STANDARD", "RUSH", "EXPEDITE"
-  poId: text("po_id"), // Reference to purchase order
+  poId: integer("po_id"), // Reference to purchase order
+  itemId: text("item_id"), // Item identifier
+  stockModelId: text("stock_model_id"), // Stock model reference
+  customerId: text("customer_id"), // Customer identifier
+  notes: text("notes"), // Order notes
+  shippedAt: timestamp("shipped_at"), // Shipping timestamp
   dueDate: timestamp("due_date"),
   // Track department completion timestamps
   layupCompletedAt: timestamp("layup_completed_at"),
@@ -794,7 +800,6 @@ export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-  finalizedAt: true,
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   orderDate: z.coerce.date(),

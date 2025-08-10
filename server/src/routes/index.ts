@@ -245,7 +245,7 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
         itemName: o.itemName, 
-        stockModelId: o.stockModelId 
+        itemId: o.itemId 
       })));
       
       // Get stock models for proper mapping
@@ -253,8 +253,8 @@ export function registerRoutes(app: Express): Server {
       
       // Transform data for scheduler utility
       const orders = productionOrders.map(order => {
-        // Map item names to stock model IDs
-        let stockModelId = order.stockModelId;
+        // Map item names to stock model IDs using itemId or itemName
+        let stockModelId = order.itemId;
         if (!stockModelId && order.itemName) {
           // Try to find matching stock model by name
           const matchingModel = stockModels.find(model => 
@@ -273,12 +273,12 @@ export function registerRoutes(app: Express): Server {
         
         return {
           orderId: order.orderId,
-          product: order.itemName || order.product || 'Unknown Product',
+          product: order.itemName || 'Unknown Product',
           customer: order.customerName || 'Unknown Customer',
           stockModelId: stockModelId || 'unknown',
           dueDate: order.dueDate,
           orderDate: order.orderDate,
-          priorityScore: order.priorityScore || 50,
+          priorityScore: 50, // Default priority score since productionOrders doesn't have this field
           quantity: 1,
           features: order.specifications || {}, // Include specifications as features
           source: 'production_order' // Add source for identification

@@ -1343,7 +1343,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
-    const [item] = await db.insert(inventoryItems).values(data).returning();
+    const [item] = await db.insert(inventoryItems).values([data]).returning();
     return item;
   }
 
@@ -1408,7 +1408,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
-    const [request] = await db.insert(partsRequests).values(data).returning();
+    const [request] = await db.insert(partsRequests).values([data]).returning();
     return request;
   }
 
@@ -1462,7 +1462,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values(data).returning();
+    const [employee] = await db.insert(employees).values([data]).returning();
     return employee;
   }
 

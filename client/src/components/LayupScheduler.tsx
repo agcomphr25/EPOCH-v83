@@ -550,7 +550,7 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
-  const [viewType, setViewType] = useState<'day' | 'week' | 'month' | 'algorithm'>('week');
+  const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
@@ -2940,15 +2940,7 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            <Button
-              variant={viewType === 'algorithm' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewType('algorithm')}
-              className={viewType === 'algorithm' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-            >
-              <Zap className="w-4 h-4 mr-1" />
-              Algorithm
-            </Button>
+
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
               size="sm"
@@ -3008,46 +3000,9 @@ export default function LayupScheduler() {
               Print Schedule
             </Button>
 
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleGenerateSchedule}
-              disabled={generateLayupScheduleMutation.isPending}
-              className="mr-4 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {generateLayupScheduleMutation.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 mr-2" />
-                  Generate from Production Queue
-                </>
-              )}
-            </Button>
 
-            {/* Jump to Scheduled Week Button */}
-            {Object.keys(orderAssignments).length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // Find the earliest scheduled date and navigate to that week
-                  const scheduledDates = Object.values(orderAssignments).map(a => new Date(a.date));
-                  if (scheduledDates.length > 0) {
-                    const earliestDate = new Date(Math.min(...scheduledDates.map(d => d.getTime())));
-                    const scheduledWeekStart = startOfWeek(earliestDate, { weekStartsOn: 1 });
-                    setCurrentDate(scheduledWeekStart);
-                  }
-                }}
-                className="mr-4 border-green-500 text-green-700 hover:bg-green-50"
-              >
-                <ArrowRight className="w-4 h-4 mr-2" />
-                View Scheduled Orders ({Object.keys(orderAssignments).length})
-              </Button>
-            )}
+
+
 
 
 

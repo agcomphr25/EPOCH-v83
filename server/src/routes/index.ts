@@ -114,25 +114,67 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P1 Layup Queue endpoint - provides production queue orders for layup scheduler
+  // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
       console.log('🔧 P1 LAYUP QUEUE API CALLED');
       const { storage } = await import('../../storage');
       
-      // Get all orders that are in the P1 Production Queue department
+      // Get all orders that haven't entered production yet (P1 Production Queue)
       const allOrders = await storage.getAllOrders();
-      const layupQueueOrders = allOrders.filter(order => 
+      const unscheduledOrders = allOrders.filter(order => 
         order.currentDepartment === 'P1 Production Queue'
       );
       
-      console.log('🔧 Found P1 Production Queue orders:', layupQueueOrders.length);
-      res.json(layupQueueOrders);
+      // Get Mesa production orders (400 orders)
+      const productionOrders = await storage.getAllProductionOrders();
+      const mesaOrders = productionOrders.filter(order => 
+        order.itemName && order.itemName.includes('Mesa')
+      );
+      
+      // Combine both order types into unified production queue
+      const combinedQueue = [
+        ...unscheduledOrders.map(order => ({
+          ...order,
+          source: 'regular_order',
+          priorityScore: calculatePriorityScore(order.dueDate),
+          orderId: order.orderId
+        })),
+        ...mesaOrders.map(order => ({
+          ...order,
+          source: 'mesa_production_order',
+          priorityScore: calculatePriorityScore(order.dueDate),
+          orderId: order.orderId
+        }))
+      ];
+      
+      // Sort by priority score (lower = higher priority)
+      combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
+      
+      console.log('🔧 Found unscheduled orders:', unscheduledOrders.length);
+      console.log('🔧 Found Mesa production orders:', mesaOrders.length);
+      console.log('🔧 Combined production queue total:', combinedQueue.length);
+      
+      res.json(combinedQueue);
     } catch (error) {
       console.error('❌ P1 layup queue fetch error:', error);
       res.status(500).json({ error: "Failed to fetch P1 layup queue" });
     }
   });
+
+  // Helper function to calculate priority score based on due date
+  function calculatePriorityScore(dueDate: string | Date | null): number {
+    if (!dueDate) return 100; // No due date = lowest priority
+    
+    const due = new Date(dueDate);
+    const now = new Date();
+    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilDue < 0) return 1; // Overdue = highest priority
+    if (daysUntilDue <= 7) return 10; // Due within week
+    if (daysUntilDue <= 30) return 30; // Due within month
+    return 50; // Further out
+  }
 
   // Layup Schedule API endpoints - missing route handler
   app.get('/api/layup-schedule', async (req, res) => {

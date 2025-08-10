@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -3280,13 +3280,53 @@ export default function LayupScheduler() {
                         Auto Schedule ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
                       </Button>
                       {Object.keys(orderAssignments).length > 0 && (
-                        <Button 
-                          onClick={() => setOrderAssignments({})}
-                          variant="outline"
-                          size="sm"
-                        >
-                          Clear All
-                        </Button>
+                        <>
+                          <Button 
+                            onClick={async () => {
+                              try {
+                                // Get all scheduled order IDs
+                                const scheduledOrderIds = Object.keys(orderAssignments);
+                                console.log('🏭 Saving schedule and pushing orders to Layup/Plugging:', scheduledOrderIds);
+                                
+                                // Push orders to layup/plugging department
+                                const response = await fetch('/api/push-to-layup-plugging', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ orderIds: scheduledOrderIds })
+                                });
+                                
+                                const result = await response.json();
+                                
+                                if (result.success) {
+                                  // Clear the schedule after successful save
+                                  setOrderAssignments({});
+                                  console.log('✅ Schedule saved and orders pushed to Layup/Plugging department');
+                                  
+                                  // Show success feedback
+                                  alert(`Successfully saved schedule and moved ${result.updatedOrders.length} orders to Layup/Plugging Department Manager!`);
+                                } else {
+                                  console.error('❌ Failed to push orders:', result.error);
+                                  alert('Failed to save schedule: ' + result.error);
+                                }
+                              } catch (error) {
+                                console.error('❌ Error saving schedule:', error);
+                                alert('Error saving schedule. Please try again.');
+                              }
+                            }}
+                            className="bg-green-600 hover:bg-green-700"
+                            size="sm"
+                          >
+                            <Save className="w-4 h-4 mr-1" />
+                            Save Schedule ({Object.keys(orderAssignments).length} orders)
+                          </Button>
+                          <Button 
+                            onClick={() => setOrderAssignments({})}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Clear All
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>

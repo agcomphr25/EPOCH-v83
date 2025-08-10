@@ -87,6 +87,16 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/with-pos', async (req: Request, res: Response) => {
+  try {
+    const customers = await storage.getCustomersWithPurchaseOrders();
+    res.json(customers);
+  } catch (error) {
+    console.error('Get customers with POs error:', error);
+    res.status(500).json({ error: "Failed to fetch customers with purchase orders" });
+  }
+});
+
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const { query } = req.query;

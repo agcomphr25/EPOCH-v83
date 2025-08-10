@@ -82,10 +82,10 @@ export default function POManager() {
     queryFn: fetchPOs
   });
 
-  // Fetch customers for dropdown
+  // Fetch customers who have had past purchase orders
   const { data: customers = [] } = useQuery({
-    queryKey: ['/api/customers'],
-    queryFn: () => apiRequest('/api/customers')
+    queryKey: ['/api/customers/with-pos'],
+    queryFn: () => apiRequest('/api/customers/with-pos')
   });
 
   // Fetch stock models for order entry

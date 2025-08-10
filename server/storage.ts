@@ -2247,6 +2247,27 @@ export class DatabaseStorage implements IStorage {
       .orderBy(customers.name);
   }
 
+  async getCustomersWithPurchaseOrders(): Promise<Customer[]> {
+    return await db
+      .selectDistinct({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        billingAddress: customers.billingAddress,
+        shippingAddress: customers.shippingAddress,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt
+      })
+      .from(customers)
+      .innerJoin(purchaseOrders, eq(customers.name, purchaseOrders.customerName))
+      .where(eq(customers.isActive, true))
+      .orderBy(customers.name);
+  }
+
   async searchCustomers(query: string): Promise<Customer[]> {
     return await db
       .select()

@@ -71,17 +71,17 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       stockModelGroups.get(key).push(order);
     });
 
-    // Calculate capacity metrics
-    const dailyCapacity = maxOrdersPerDay || Math.min(
-      activeMolds.length * 8, // 8 orders per mold per day max
-      employees.reduce((sum: any, emp: any) => sum + emp.hours, 0) * 0.5 // 0.5 orders per employee hour
+    // Calculate realistic daily capacity - much higher to fill up the schedule
+    const dailyCapacity = maxOrdersPerDay || Math.max(
+      30, // Minimum 30 orders per day
+      activeMolds.length * 15 // 15 orders per mold per day to fill schedule
     );
 
     console.log(`📊 Daily capacity: ${dailyCapacity} orders`);
 
     // Generate schedule using simplified algorithm
     const allocations: any[] = [];
-    const workDates = generateWorkDates(new Date(), scheduleDays || 20);
+    const workDates = generateWorkDates(new Date(), scheduleDays || 60); // More days to spread orders
     
     // Track daily allocations
     const dailyAllocationCount = new Map();
@@ -130,6 +130,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           const dateKey = workDate.toISOString().split('T')[0];
           const currentAllocations = dailyAllocationCount.get(dateKey) || 0;
 
+          // Allow many more orders per day to fill up the schedule
           if (currentAllocations >= dailyCapacity) {
             continue;
           }

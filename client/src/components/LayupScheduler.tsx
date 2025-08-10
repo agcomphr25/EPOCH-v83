@@ -1209,6 +1209,51 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
+  // Function to generate algorithmic schedule automatically
+  const generateAlgorithmicSchedule = useCallback(async () => {
+    if (!orders.length || !molds.length || !employees.length) {
+      console.log('❌ Cannot generate algorithmic schedule: missing data');
+      return;
+    }
+
+    console.log('🤖 Generating algorithmic schedule...');
+    
+    try {
+      const response = await apiRequest('/api/scheduler/generate-algorithmic-schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          maxOrdersPerDay: 50, // Allow many orders per day
+          scheduleDays: 60,    // Schedule over 60 work days
+          priorityWeighting: 'urgent'
+        }),
+      });
+
+      if (response.success && response.allocations) {
+        console.log(`✅ Algorithmic schedule generated: ${response.allocations.length} allocations`);
+        
+        // Convert to schedule assignments format
+        const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+        
+        response.allocations.forEach((allocation: any) => {
+          scheduleAssignments[allocation.orderId] = {
+            moldId: allocation.moldId,
+            date: allocation.scheduledDate
+          };
+        });
+        
+        setOrderAssignments(scheduleAssignments);
+        console.log(`📅 Set ${Object.keys(scheduleAssignments).length} order assignments`);
+      } else {
+        console.error('❌ Failed to generate algorithmic schedule:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error generating algorithmic schedule:', error);
+    }
+  }, [orders, molds, employees]);
+
   // Load generated schedule into order assignments
   useEffect(() => {
     if (generatedSchedule && generatedSchedule.length > 0) {
@@ -1247,10 +1292,10 @@ export default function LayupScheduler() {
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
       
       if (!hasAssignments && !hasGeneratedSchedule) {
-        console.log('🎯 Auto-triggering initial schedule generation...');
+        console.log('🎯 Auto-triggering algorithmic schedule generation...');
         // Delay to allow state to settle
         setTimeout(() => {
-          generateAutoSchedule();
+          generateAlgorithmicSchedule();
         }, 1000);
       }
     }

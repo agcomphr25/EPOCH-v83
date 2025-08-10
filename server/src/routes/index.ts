@@ -90,24 +90,27 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       
       // Fetch all necessary data including employee production rates
-      const [allOrders, productionOrders, allMolds, employeeSettings] = await Promise.all([
+      const [allOrders, productionOrders, allMolds] = await Promise.all([
         storage.getAllOrders(),
         storage.getAllProductionOrders(),
-        storage.getAllMolds(),
-        storage.getLayupEmployeeSettings()
+        storage.getAllMolds()
       ]);
+      
+      // Get employee settings from the same API endpoint the LayupScheduler component uses
+      const employeeSettingsResponse = await fetch('http://localhost:5000/api/layup-employee-settings');
+      const employeeSettings = await employeeSettingsResponse.json();
       
       console.log(`📊 Data loaded: ${allOrders.length} total orders, ${allMolds.length} molds, ${employeeSettings.length} employee settings`);
       
-      // Calculate total daily employee capacity
+      // Calculate total daily employee capacity using LayupScheduler UI settings
       const totalDailyCapacity = employeeSettings
-        .filter(emp => emp.isActive && emp.department === 'Layup')
-        .reduce((total, emp) => total + (emp.rate * emp.hours), 0);
+        .filter((emp: any) => emp.isActive)
+        .reduce((total: number, emp: any) => total + (emp.rate * emp.hours), 0);
       
-      console.log(`👥 Employee capacity analysis:`);
+      console.log(`👥 Employee capacity analysis (from LayupScheduler UI):`);
       employeeSettings
-        .filter(emp => emp.isActive && emp.department === 'Layup')
-        .forEach(emp => {
+        .filter((emp: any) => emp.isActive)
+        .forEach((emp: any) => {
           const dailyCapacity = emp.rate * emp.hours;
           console.log(`  ${emp.employeeId}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
         });
@@ -594,9 +597,10 @@ export function registerRoutes(app: Express): Server {
       const productionOrders = await storage.getAllProductionOrders();
       console.log('🔧 Found production orders for scheduling:', productionOrders.length);
       
-      // Get mold and employee settings
+      // Get mold and employee settings (using same API as LayupScheduler component)
       const molds = await storage.getAllMolds();
-      const layupEmployees = await storage.getLayupEmployeeSettings();
+      const employeeSettingsResponse = await fetch('http://localhost:5000/api/layup-employee-settings');
+      const layupEmployees = await employeeSettingsResponse.json();
       
       console.log('🔧 Found molds:', molds.length);
       console.log('🔧 Found layup employees:', layupEmployees.length);

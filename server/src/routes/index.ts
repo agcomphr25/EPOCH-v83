@@ -296,8 +296,25 @@ export function registerRoutes(app: Express): Server {
       // Clear existing schedule
       await storage.clearLayupSchedule();
       
-      // Generate simple schedule with current date as starting point
+      // Generate simple schedule starting from next Monday (or today if it's already Monday-Thursday)
       const today = new Date();
+      const todayDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      
+      // Calculate days to add to get to next Monday
+      let daysToNextMonday = 0;
+      if (todayDayOfWeek === 0) { // Sunday
+        daysToNextMonday = 1;
+      } else if (todayDayOfWeek === 5) { // Friday
+        daysToNextMonday = 3;
+      } else if (todayDayOfWeek === 6) { // Saturday
+        daysToNextMonday = 2;
+      }
+      
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() + daysToNextMonday);
+      
+      console.log('🔧 DEBUG: Today is', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayDayOfWeek], 'Days to add:', daysToNextMonday);
+      console.log('🔧 DEBUG: Starting schedule from:', startDate.toDateString(), '(' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][startDate.getDay()] + ')');
       const createdEntries = [];
       
       // Take first 20 orders to avoid overwhelming the system
@@ -335,7 +352,7 @@ export function registerRoutes(app: Express): Server {
         const order = ordersToSchedule[i];
         
         // Schedule orders only on Monday-Thursday, skip weekends and Fridays
-        const scheduleDate = getNextWorkDay(today, i);
+        const scheduleDate = getNextWorkDay(startDate, i);
         
         const scheduleEntry = {
           orderId: order.orderId,

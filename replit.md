@@ -7,6 +7,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+**August 10, 2025**: Implemented Monday-Thursday only scheduling constraint:
+- Fixed Layup Scheduler to generate orders only on Monday through Thursday work days
+- Added intelligent start date calculation that skips weekends (starts from next Monday when today is Friday-Sunday)
+- Updated work day filtering logic to automatically skip Fridays, Saturdays, and Sundays
+- Schedule now properly continues to next Monday after Thursday, maintaining 4-day work week pattern
+- Enhanced schedule generation with debug logging showing day calculations and start dates
+- System correctly enforces manufacturing work week constraint as requested
+
 **August 8, 2025**: Fixed All Orders page display issue:
 - Resolved critical bug where All Orders page only showed 67 order drafts instead of all 655 finalized orders
 - Updated getAllOrders() method to query the correct allOrders table instead of orderDrafts table

@@ -1208,10 +1208,12 @@ export default function LayupScheduler() {
   useEffect(() => {
     if (generatedSchedule && generatedSchedule.length > 0) {
       console.log('📋 Loading generated schedule with', generatedSchedule.length, 'entries');
+      console.log('📋 Sample generated schedule entry:', generatedSchedule[0]);
       
       const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
       
       generatedSchedule.forEach((entry: any) => {
+        console.log('📋 Processing schedule entry:', entry.orderId, entry.moldId, entry.scheduledDate);
         scheduleAssignments[entry.orderId] = {
           moldId: entry.moldId,
           date: entry.scheduledDate
@@ -1219,7 +1221,9 @@ export default function LayupScheduler() {
       });
       
       console.log('📋 Generated schedule assignments:', Object.keys(scheduleAssignments).length);
+      console.log('📋 Sample assignment:', Object.entries(scheduleAssignments)[0]);
       setOrderAssignments(scheduleAssignments);
+      console.log('📋 Order assignments state updated');
     }
   }, [generatedSchedule]);
 

@@ -831,12 +831,21 @@ export default function LayupScheduler() {
     console.log('🔍 LayupScheduler orders debug:', {
       allOrdersCount: allOrders?.length || 0,
       loading: ordersLoading,
+      rawData: allOrders ? 'has data' : 'no data',
+      dataType: typeof allOrders,
+      isArray: Array.isArray(allOrders),
       sourceCounts: allOrders?.reduce((acc: any, order) => {
         acc[order.source] = (acc[order.source] || 0) + 1;
         return acc;
       }, {}) || {},
       sampleOrders: allOrders?.slice(0, 3)?.map(o => ({ id: o.orderId, product: o.product, source: o.source }))
     });
+    
+    // If we have no orders but backend shows 1008, there's a data loading issue
+    if (!allOrders || allOrders.length === 0) {
+      console.error('❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders');
+      console.error('❌ Backend shows 1008 orders but frontend received empty array');
+    }
     
     // Return ALL orders from the production queue - no filtering by source
     return allOrders || [];
@@ -1297,6 +1306,22 @@ export default function LayupScheduler() {
 
   // Auto-trigger initial scheduling when conditions are met (fallback if no generated schedule)
   useEffect(() => {
+    console.log('🎯 Auto-schedule check:', {
+      orders: orders.length,
+      molds: molds.length,
+      employees: employees.length,
+      isLoading: isLoadingSchedule,
+      ordersLoading: ordersLoading,
+      hasAssignments: Object.keys(orderAssignments).length > 0,
+      hasGeneratedSchedule: generatedSchedule && generatedSchedule.length > 0
+    });
+
+    // Don't trigger if orders are still loading
+    if (ordersLoading) {
+      console.log('⏳ Orders still loading, waiting...');
+      return;
+    }
+
     if (orders.length > 0 && molds.length > 0 && employees.length > 0 && !isLoadingSchedule) {
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
@@ -1312,8 +1337,15 @@ export default function LayupScheduler() {
           generateAlgorithmicSchedule();
         }, 1000);
       }
+    } else {
+      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+        orders: orders.length,
+        molds: molds.length,
+        employees: employees.length,
+        ordersLoading
+      });
     }
-  }, [orders.length, molds.length, employees.length, isLoadingSchedule]);
+  }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, orderAssignments, generatedSchedule, generateAlgorithmicSchedule]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({

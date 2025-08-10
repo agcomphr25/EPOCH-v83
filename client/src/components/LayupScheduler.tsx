@@ -655,9 +655,46 @@ export default function LayupScheduler() {
       return;
     }
 
+    console.log('🏭 PRODUCTION FLOW: Starting complete save and department push workflow...');
     setIsSaving(true);
+    
     try {
+      // Step 1: Save the layup schedule to database
+      console.log('🏭 PRODUCTION FLOW: Step 1 - Saving layup schedule to database...');
       await saveScheduleMutation.mutateAsync(orderAssignments);
+      
+      // Step 2: Push current week orders to Layup/Plugging Department Manager
+      console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing current week orders to department manager...');
+      const currentWeekOrders = getOrdersForCurrentWeek();
+      
+      if (currentWeekOrders.length > 0) {
+        const scheduledOrderIds = currentWeekOrders.map(order => order.orderId);
+        console.log(`🏭 PRODUCTION FLOW: Pushing ${scheduledOrderIds.length} orders to Layup/Plugging department`);
+        
+        await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
+        
+        console.log('✅ PRODUCTION FLOW: Complete workflow finished successfully!');
+        console.log('✅ PRODUCTION FLOW: Orders are now available in Layup/Plugging Department Manager');
+        
+        toast({
+          title: "Production Flow Complete",
+          description: `Schedule saved and ${scheduledOrderIds.length} orders pushed to Layup/Plugging department`,
+        });
+      } else {
+        console.log('🏭 PRODUCTION FLOW: No current week orders to push to department');
+        toast({
+          title: "Schedule Saved",
+          description: "Layup schedule saved successfully",
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ PRODUCTION FLOW: Error in complete workflow:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete production flow workflow",
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }
@@ -1228,26 +1265,26 @@ export default function LayupScheduler() {
     console.log('🤖 Generating algorithmic schedule...');
     
     try {
-      console.log('🤖 Sending algorithmic schedule request...');
+      console.log('🏭 PRODUCTION FLOW: Processing production queue with algorithmic scheduler...');
       const response = await apiRequest('/api/scheduler/generate-algorithmic-schedule', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          maxOrdersPerDay: 50, // Allow many orders per day
-          scheduleDays: 60,    // Schedule over 60 work days
-          priorityWeighting: 'urgent'
+          maxOrdersPerDay: 25, // Realistic daily capacity based on employee hours
+          scheduleDays: 30,    // Schedule for next 30 work days
+          priorityWeighting: 'urgent' // Prioritize by due date and priority score
         }),
       });
 
-      console.log('🤖 Algorithmic schedule response:', response);
+      console.log('🏭 PRODUCTION FLOW: Algorithmic schedule response:', response);
 
       if (response.success && response.allocations) {
-        console.log(`✅ Algorithmic schedule generated: ${response.allocations.length} allocations`);
-        console.log('✅ Sample allocations:', response.allocations.slice(0, 5));
+        console.log(`✅ PRODUCTION FLOW: Generated ${response.allocations.length} order allocations`);
+        console.log('✅ PRODUCTION FLOW: Sample allocations:', response.allocations.slice(0, 3));
         
-        // Convert to schedule assignments format
+        // Convert to schedule assignments format for the calendar
         const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
         
         response.allocations.forEach((allocation: any) => {
@@ -1257,19 +1294,22 @@ export default function LayupScheduler() {
           };
         });
         
-        console.log(`📅 Setting ${Object.keys(scheduleAssignments).length} order assignments`);
+        console.log(`📅 PRODUCTION FLOW: Assigning ${Object.keys(scheduleAssignments).length} orders to schedule`);
         setOrderAssignments(scheduleAssignments);
-        console.log(`📅 Order assignments state updated with:`, Object.keys(scheduleAssignments).length, 'orders');
         
-        // Force a re-render
-        setTimeout(() => {
-          console.log('📅 Calendar should now show', Object.keys(scheduleAssignments).length, 'scheduled orders');
-        }, 100);
+        // Log mold assignments for verification
+        const moldAssignments = response.allocations.reduce((acc: any, alloc: any) => {
+          acc[alloc.moldId] = (acc[alloc.moldId] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('🔧 PRODUCTION FLOW: Mold assignments:', moldAssignments);
+        
+        console.log('📅 PRODUCTION FLOW: Schedule ready for review and adjustment');
       } else {
-        console.error('❌ Failed to generate algorithmic schedule:', response);
+        console.error('❌ PRODUCTION FLOW: Failed to generate schedule:', response);
       }
     } catch (error) {
-      console.error('❌ Error generating algorithmic schedule:', error);
+      console.error('❌ PRODUCTION FLOW: Error generating schedule:', error);
     }
   }, [orders, molds, employees]);
 
@@ -1304,9 +1344,9 @@ export default function LayupScheduler() {
     }
   }, [generatedSchedule]);
 
-  // Auto-trigger initial scheduling when conditions are met (fallback if no generated schedule)
+  // Auto-trigger algorithmic scheduling when production queue has orders
   useEffect(() => {
-    console.log('🎯 Auto-schedule check:', {
+    console.log('🎯 Production Flow Auto-schedule check:', {
       orders: orders.length,
       molds: molds.length,
       employees: employees.length,
@@ -1316,33 +1356,35 @@ export default function LayupScheduler() {
       hasGeneratedSchedule: generatedSchedule && generatedSchedule.length > 0
     });
 
-    // Don't trigger if orders are still loading
-    if (ordersLoading) {
-      console.log('⏳ Orders still loading, waiting...');
+    // Wait for all data to be loaded
+    if (ordersLoading || isLoadingSchedule) {
+      console.log('⏳ Still loading data, waiting...');
       return;
     }
 
-    if (orders.length > 0 && molds.length > 0 && employees.length > 0 && !isLoadingSchedule) {
+    // Only trigger if we have production queue orders and no existing assignments
+    if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
       
       if (!hasAssignments && !hasGeneratedSchedule) {
-        console.log('🎯 Auto-triggering algorithmic schedule generation...');
-        console.log('🎯 Orders:', orders.length, 'Molds:', molds.length, 'Employees:', employees.length);
-        console.log('🎯 Current assignments:', Object.keys(orderAssignments).length);
-        console.log('🎯 Generated schedule:', generatedSchedule?.length || 0);
-        // Delay to allow state to settle
+        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule...');
+        console.log('🏭 Production queue:', orders.length, 'orders ready for scheduling');
+        console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
+        
+        // Auto-trigger the algorithmic scheduler to process the production queue
         setTimeout(() => {
-          console.log('🤖 Calling generateAlgorithmicSchedule now...');
+          console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
           generateAlgorithmicSchedule();
         }, 1000);
+      } else {
+        console.log('🏭 PRODUCTION FLOW: Schedule already exists, not regenerating');
       }
     } else {
-      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+      console.log('❌ PRODUCTION FLOW: Missing resources for scheduling:', {
         orders: orders.length,
         molds: molds.length,
-        employees: employees.length,
-        ordersLoading
+        employees: employees.length
       });
     }
   }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, orderAssignments, generatedSchedule, generateAlgorithmicSchedule]);

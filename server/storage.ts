@@ -445,6 +445,7 @@ export interface IStorage {
   // P1 Purchase Order Integration
   syncP1OrdersToProductionQueue(): Promise<{ synced: number; message: string }>;
   getUnifiedProductionQueue(): Promise<any[]>;
+  updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }>;
   
   // Layup Scheduler: Schedule CRUD
   getAllLayupSchedule(): Promise<LayupSchedule[]>;
@@ -2879,6 +2880,64 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error syncing P1 orders:', error);
       throw error;
+    }
+  }
+
+  // Production Flow: Update order department and status for layup scheduler workflow
+  async updateOrderDepartment(orderId: string, department: string, status: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log(`🏭 PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${status}`);
+      
+      // Try to update in allOrders table first
+      const allOrdersResult = await db
+        .update(allOrders)
+        .set({
+          currentDepartment: department,
+          status: status,
+          updatedAt: new Date()
+        })
+        .where(eq(allOrders.orderId, orderId))
+        .returning();
+
+      if (allOrdersResult.length > 0) {
+        console.log(`✅ PRODUCTION FLOW: Updated regular order ${orderId} in allOrders table`);
+        return {
+          success: true,
+          message: `Regular order ${orderId} updated to ${department} department`
+        };
+      }
+
+      // Try to update in productionOrders table (for P1 purchase orders)
+      const productionOrdersResult = await db
+        .update(productionOrders)
+        .set({
+          productionStatus: status,
+          updatedAt: new Date()
+        })
+        .where(eq(productionOrders.orderId, orderId))
+        .returning();
+
+      if (productionOrdersResult.length > 0) {
+        console.log(`✅ PRODUCTION FLOW: Updated production order ${orderId} in productionOrders table`);
+        return {
+          success: true,
+          message: `Production order ${orderId} updated to ${status} status`
+        };
+      }
+
+      // If not found in either table, log and return success with warning
+      console.warn(`⚠️ PRODUCTION FLOW: Order ${orderId} not found in allOrders or productionOrders tables`);
+      return {
+        success: false,
+        message: `Order ${orderId} not found in database`
+      };
+
+    } catch (error) {
+      console.error(`❌ PRODUCTION FLOW: Error updating order ${orderId}:`, error);
+      return {
+        success: false,
+        message: `Database error updating order ${orderId}: ${error}`
+      };
     }
   }
 

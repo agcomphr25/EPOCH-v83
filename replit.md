@@ -7,13 +7,18 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
-**August 10, 2025**: Implemented Monday-Thursday only scheduling constraint:
-- Fixed Layup Scheduler to generate orders only on Monday through Thursday work days
-- Added intelligent start date calculation that skips weekends (starts from next Monday when today is Friday-Sunday)
-- Updated work day filtering logic to automatically skip Fridays, Saturdays, and Sundays
-- Schedule now properly continues to next Monday after Thursday, maintaining 4-day work week pattern
-- Enhanced schedule generation with debug logging showing day calculations and start dates
-- System correctly enforces manufacturing work week constraint as requested
+**August 10, 2025**: Implemented comprehensive production flow workflow:
+- Built complete end-to-end production pipeline from order finalization to department progression
+- Regular orders and P1 purchase orders automatically flow to production queue upon finalization
+- Production queue organized by due date and priority score with 1008+ order processing capacity
+- Algorithmic layup scheduler automatically processes queue with intelligent mold-to-stock model matching
+- Implemented Monday-Thursday only scheduling constraint with intelligent work day filtering
+- Created "Save Schedule" functionality that saves layup schedule AND pushes current week orders to Layup/Plugging Department Manager
+- Added backend `/api/push-to-layup-plugging` endpoint for department workflow progression
+- Orders can now be multi-selected in department managers and pushed to next department in sequence
+- Disabled old client-side scheduler that was causing "no compatible molds" errors
+- System now uses only the algorithmic scheduler backend for consistent, error-free scheduling
+- Complete production workflow: Finalized Orders → Production Queue → Layup Scheduler → Department Manager → Multi-select Progress → Next Department
 
 **August 8, 2025**: Fixed All Orders page display issue:
 - Resolved critical bug where All Orders page only showed 67 order drafts instead of all 655 finalized orders

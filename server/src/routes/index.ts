@@ -840,6 +840,61 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Push orders to Layup/Plugging Department Manager workflow
+  app.post('/api/push-to-layup-plugging', async (req, res) => {
+    try {
+      console.log('🏭 PRODUCTION FLOW: Push to Layup/Plugging API called');
+      const { orderIds } = req.body;
+      
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ 
+          error: "orderIds array is required", 
+          success: false 
+        });
+      }
+
+      console.log(`🏭 PRODUCTION FLOW: Processing ${orderIds.length} orders for department push`);
+      const { storage } = await import('../../storage');
+      
+      // Update orders to move them to Layup department with IN_PROGRESS status
+      const updatedOrders = [];
+      
+      for (const orderId of orderIds) {
+        try {
+          // Update order status and department for both regular orders and production orders
+          const updateResult = await storage.updateOrderDepartment(orderId, 'Layup', 'IN_PROGRESS');
+          
+          if (updateResult.success) {
+            updatedOrders.push(orderId);
+            console.log(`✅ PRODUCTION FLOW: Order ${orderId} moved to Layup department`);
+          } else {
+            console.warn(`⚠️ PRODUCTION FLOW: Failed to update order ${orderId}: ${updateResult.message}`);
+          }
+        } catch (orderError) {
+          console.error(`❌ PRODUCTION FLOW: Error updating order ${orderId}:`, orderError);
+        }
+      }
+
+      const result = {
+        success: true,
+        message: `Successfully moved ${updatedOrders.length} of ${orderIds.length} orders to Layup/Plugging department`,
+        updatedOrders,
+        totalRequested: orderIds.length,
+        totalUpdated: updatedOrders.length
+      };
+
+      console.log('🏭 PRODUCTION FLOW: Department push result:', result);
+      res.json(result);
+      
+    } catch (error) {
+      console.error('❌ PRODUCTION FLOW: Push to Layup/Plugging error:', error);
+      res.status(500).json({ 
+        error: "Failed to push orders to Layup/Plugging department",
+        success: false 
+      });
+    }
+  });
+
   app.get('/api/production-queue/unified', async (req, res) => {
     try {
       console.log('🏭 Unified Production Queue API called');

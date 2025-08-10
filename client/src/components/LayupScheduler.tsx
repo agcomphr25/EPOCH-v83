@@ -2260,19 +2260,28 @@ export default function LayupScheduler() {
     console.log('🎯 DRAG END DEBUG:', { orderId, dropTargetId, over: over.id });
 
     // Parse the drop target ID (format: moldId|dateISO)
-    const [moldId, dateIso] = dropTargetId.split('|');
+    const [targetMoldId, dateIso] = dropTargetId.split('|');
 
-    if (!moldId || !dateIso) {
+    if (!targetMoldId || !dateIso) {
       console.warn('❌ Invalid drop target:', dropTargetId);
       return;
     }
 
-    console.log(`🎯 Moving order ${orderId} to mold ${moldId} on ${dateIso}`);
+    // Get the current assignment to preserve the original mold
+    const currentAssignment = orderAssignments[orderId];
+    const originalMoldId = currentAssignment?.moldId;
 
-    // Update local assignment state
+    if (!originalMoldId) {
+      console.warn('❌ No original mold assignment found for order:', orderId);
+      return;
+    }
+
+    console.log(`🎯 Moving order ${orderId} from ${originalMoldId} on ${currentAssignment?.date} to ${originalMoldId} on ${dateIso} (preserving original mold)`);
+
+    // Update only the date, preserving the original mold assignment
     setOrderAssignments(prev => ({
       ...prev,
-      [orderId]: { moldId, date: dateIso }
+      [orderId]: { moldId: originalMoldId, date: dateIso }
     }));
 
     // Mark as having unsaved changes
@@ -2280,8 +2289,8 @@ export default function LayupScheduler() {
 
     // Show success toast
     toast({
-      title: "Order Scheduled",
-      description: `Order ${orderId} scheduled to ${moldId} on ${new Date(dateIso).toLocaleDateString()}`,
+      title: "Order Rescheduled",
+      description: `Order ${orderId} rescheduled to ${new Date(dateIso).toLocaleDateString()} (keeping ${originalMoldId})`,
     });
   };
 

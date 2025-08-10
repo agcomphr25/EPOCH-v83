@@ -505,8 +505,7 @@ function DroppableCell({
     }
   });
 
-  // Debug logging for each cell
-  console.log(`🔍 DroppableCell [${moldId}]: ${orders.length} orders`, orders.map(o => o?.orderId));
+
 
   const isFriday = date.getDay() === 5;
 
@@ -527,7 +526,6 @@ function DroppableCell({
         </div>
       )}
       {orders.map((order, idx) => {
-        console.log(`🎯 Rendering order in cell:`, order);
         return (
           <DraggableOrderItem
             key={order?.orderId || `order-${idx}`}
@@ -551,7 +549,6 @@ function DroppableCell({
 }
 
 export default function LayupScheduler() {
-  console.log("LayupScheduler component rendering...");
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -573,8 +570,7 @@ export default function LayupScheduler() {
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
-  // Debug molds data
-  console.log('🔧 LayupScheduler: Molds data:', { molds, moldsLength: molds.length, moldsLoading });
+
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
   // Load existing schedule data from database
@@ -594,7 +590,7 @@ export default function LayupScheduler() {
         };
       });
 
-      console.log('📅 Loading existing schedule assignments:', Object.keys(assignments).length, 'assignments');
+
       setOrderAssignments(assignments);
     }
   }, [existingSchedule]);
@@ -2851,6 +2847,27 @@ export default function LayupScheduler() {
               )}
             </Button>
 
+            {/* Jump to Scheduled Week Button */}
+            {Object.keys(orderAssignments).length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Find the earliest scheduled date and navigate to that week
+                  const scheduledDates = Object.values(orderAssignments).map(a => new Date(a.date));
+                  if (scheduledDates.length > 0) {
+                    const earliestDate = new Date(Math.min(...scheduledDates.map(d => d.getTime())));
+                    const scheduledWeekStart = startOfWeek(earliestDate, { weekStartsOn: 1 });
+                    setCurrentDate(scheduledWeekStart);
+                  }
+                }}
+                className="mr-4 border-green-500 text-green-700 hover:bg-green-50"
+              >
+                <ArrowRight className="w-4 h-4 mr-2" />
+                View Scheduled Orders ({Object.keys(orderAssignments).length})
+              </Button>
+            )}
+
 
 
             <Button
@@ -2960,11 +2977,6 @@ export default function LayupScheduler() {
 
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
               {(() => {
-                console.log(`📊 DEBUG: Calendar Display Summary`);
-                console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
-                console.log(`  • Orders available for display: ${orders?.length || 0}`);
-                console.log(`  • ProcessedOrders available: ${processedOrders?.length || 0}`);
 
                 // Get molds that either have orders OR are compatible with existing orders in queue
                 const getCompatibleMolds = (order: any) => {

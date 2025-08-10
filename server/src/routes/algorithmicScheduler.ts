@@ -145,13 +145,23 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       
       // Find compatible molds with strict matching logic
       const compatibleMolds = activeMolds.filter((mold: any) => {
-
+        console.log(`🔍 Checking mold compatibility: ${stockModelId} → ${mold.moldId} (${mold.modelName})`);
         
         // MESA UNIVERSAL: Only use Mesa molds, never APR
         if (stockModelId === 'mesa_universal') {
           const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
                             mold.moldId.toLowerCase().includes('mesa');
-
+          const isAPRMold = mold.modelName.toLowerCase().includes('apr') || 
+                           mold.moldId.toLowerCase().includes('apr');
+          
+          console.log(`🎯 Mesa Universal → ${mold.moldId}: isMesa=${isMesaMold}, isAPR=${isAPRMold}`);
+          
+          // Explicitly exclude APR molds for Mesa Universal
+          if (isAPRMold) {
+            console.log(`❌ Rejecting APR mold ${mold.moldId} for Mesa Universal`);
+            return false;
+          }
+          
           return isMesaMold;
         }
         
@@ -163,10 +173,20 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           return isMesaMold;
         }
         
-        // APR orders: Only use APR molds
+        // APR orders: Only use APR molds (never Mesa)
         if (stockModelId.toLowerCase().includes('apr')) {
           const isAPRMold = mold.modelName.toLowerCase().includes('apr') || 
                            mold.moldId.toLowerCase().includes('apr');
+          const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
+                            mold.moldId.toLowerCase().includes('mesa');
+          
+          console.log(`🎯 APR order → ${mold.moldId}: isAPR=${isAPRMold}, isMesa=${isMesaMold}`);
+          
+          // Explicitly exclude Mesa molds for APR orders
+          if (isMesaMold) {
+            console.log(`❌ Rejecting Mesa mold ${mold.moldId} for APR order`);
+            return false;
+          }
 
           return isAPRMold;
         }
@@ -200,9 +220,11 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
 
       if (compatibleMolds.length === 0) {
-
+        console.log(`❌ No compatible molds found for ${stockModelId} (${orders.length} orders)`);
         continue;
       }
+      
+      console.log(`✅ Found ${compatibleMolds.length} compatible molds for ${stockModelId}: ${compatibleMolds.map(m => m.moldId).join(', ')}`);
 
       // Sort orders by priority and due date
       const sortedOrders = orders.sort((a: any, b: any) => {

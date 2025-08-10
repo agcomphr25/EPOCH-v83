@@ -82,6 +82,242 @@ export function registerRoutes(app: Express): Server {
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
+  
+  // Direct algorithmic schedule endpoint for frontend auto-schedule button
+  app.post('/api/algorithmic-schedule', async (req, res) => {
+    console.log('🤖 Direct algorithmic schedule endpoint called');
+    try {
+      const { storage } = await import('../../storage');
+      
+      // Fetch all necessary data
+      const [allOrders, productionOrders, allMolds, employees] = await Promise.all([
+        storage.getAllOrders(),
+        storage.getAllProductionOrders(),
+        storage.getAllMolds(),
+        storage.getLayupEmployeeSettings()
+      ]);
+      
+      console.log(`📊 Data loaded: ${allOrders.length} total orders, ${allMolds.length} molds, ${employees.length} employees`);
+      
+      // Get unscheduled orders from production queue  
+      const unscheduledOrders = allOrders.filter(order => 
+        order.currentDepartment === 'P1 Production Queue'
+      );
+      
+      // Get Mesa production orders
+      const mesaOrders = productionOrders.filter(order => 
+        order.itemName && order.itemName.includes('Mesa')
+      );
+      
+      console.log(`📋 Production queue: ${unscheduledOrders.length} regular orders + ${mesaOrders.length} Mesa orders = ${unscheduledOrders.length + mesaOrders.length} total`);
+      
+      // Calculate priority score helper
+      const calculatePriorityScore = (dueDate: string | Date | null): number => {
+        if (!dueDate) return 100;
+        const due = new Date(dueDate);
+        const now = new Date();
+        const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysUntilDue < 0) return 1;
+        if (daysUntilDue <= 7) return 10;
+        return 50;
+      };
+      
+      // Combine both order types into unified production queue
+      const combinedQueue = [
+        ...unscheduledOrders.map((order: any) => ({
+          ...order,
+          source: 'regular_order',
+          priorityScore: calculatePriorityScore(order.dueDate),
+          orderId: order.orderId
+        })),
+        ...mesaOrders.map((order: any) => ({
+          ...order,
+          source: 'mesa_production_order',
+          priorityScore: calculatePriorityScore(order.dueDate),
+          orderId: order.orderId,
+          features: order.specifications || {},
+          product: order.itemName || 'Mesa Universal',
+          stockModelId: order.itemName?.includes('Mesa') ? 'mesa_universal' : 'unknown'
+        }))
+      ];
+      
+      // Filter active molds
+      const activeMolds = allMolds.filter((mold: any) => mold.enabled);
+      console.log(`🔧 Active molds: ${activeMolds.length}/${allMolds.length}`);
+      
+      // Show Mesa Universal mold assignment constraints
+      const mesaUniversalOrders = combinedQueue.filter(order => 
+        order.stockModelId === 'mesa_universal' || 
+        (order.product && order.product.toLowerCase().includes('mesa'))
+      );
+      
+      console.log(`🏔️ Mesa Universal orders to schedule: ${mesaUniversalOrders.length}`);
+      
+      // Check mold compatibility for Mesa Universal
+      mesaUniversalOrders.slice(0, 3).forEach(order => {
+        const compatibleMolds = activeMolds.filter(mold => {
+          const isMesa = mold.stockModels?.includes('mesa_universal') || 
+                        mold.modelName?.toLowerCase().includes('mesa');
+          const isAPR = mold.stockModels?.includes('apr_hunter') || 
+                       mold.modelName?.toLowerCase().includes('apr');
+          
+          console.log(`🔍 Mesa Universal → ${mold.moldId}: isMesa=${isMesa}, isAPR=${isAPR}, stockModels=${JSON.stringify(mold.stockModels)}`);
+          
+          // Mesa Universal should ONLY use Mesa molds, NEVER APR molds
+          return isMesa && !isAPR;
+        });
+        
+        console.log(`📋 Order ${order.orderId} (Mesa Universal): ${compatibleMolds.length} compatible molds`);
+      });
+      
+      // Now perform actual scheduling
+      console.log('🎯 Starting scheduling algorithm...');
+      console.log('📊 Data verification: combinedQueue length =', combinedQueue.length);
+      console.log('📊 Data verification: activeMolds length =', activeMolds.length);
+      
+      // Sort orders by priority (P1 purchase orders first, then by priority score)
+      const sortedOrders = [...combinedQueue].sort((a, b) => {
+        if (a.source === 'p1_purchase_order' && b.source !== 'p1_purchase_order') return -1;
+        if (b.source === 'p1_purchase_order' && a.source !== 'p1_purchase_order') return 1;
+        
+        const aPriority = a.priorityScore || 99;
+        const bPriority = b.priorityScore || 99;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        
+        const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
+        const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
+        return aDueDate - bDueDate;
+      });
+      
+      // Generate workdays (Monday-Thursday only)
+      const getWorkDays = (dayCount: number) => {
+        const dates: Date[] = [];
+        let currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+        
+        while (dates.length < dayCount) {
+          const dayOfWeek = currentDate.getDay();
+          if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+            dates.push(new Date(currentDate));
+          }
+          currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+          if (dayOfWeek === 4) {
+            currentDate = new Date(currentDate.getTime() + 4 * 24 * 60 * 60 * 1000);
+          }
+        }
+        return dates;
+      };
+      
+      const workDays = getWorkDays(30);
+      const allocations: any[] = [];
+      const moldCapacityUsed: {[moldId: string]: {[date: string]: number}} = {};
+      
+      console.log(`📅 Scheduling across ${workDays.length} workdays`);
+      
+      // Initialize mold capacity tracking
+      activeMolds.forEach(mold => {
+        moldCapacityUsed[mold.moldId] = {};
+        workDays.forEach(date => {
+          moldCapacityUsed[mold.moldId][date.toISOString().split('T')[0]] = 0;
+        });
+      });
+      
+      // Schedule each order
+      for (const order of sortedOrders) {
+        let scheduled = false;
+        
+        // Find compatible molds for this order
+        const compatibleMolds = activeMolds.filter(mold => {
+          if (!mold.stockModels || mold.stockModels.length === 0) return false;
+          
+          // Special logic for Mesa Universal
+          if (order.stockModelId === 'mesa_universal' || 
+              (order.product && order.product.toLowerCase().includes('mesa'))) {
+            const isMesa = mold.stockModels.includes('mesa_universal') || 
+                          mold.modelName?.toLowerCase().includes('mesa');
+            const isAPR = mold.stockModels.includes('apr_hunter') || 
+                         mold.modelName?.toLowerCase().includes('apr');
+            return isMesa && !isAPR;
+          }
+          
+          // For other orders, check if stockModelId is in mold's stockModels
+          return mold.stockModels.includes(order.stockModelId);
+        });
+        
+        if (compatibleMolds.length === 0) {
+          console.log(`⚠️ No compatible molds for order ${order.orderId} (${order.stockModelId})`);
+          continue;
+        }
+        
+        // Try to schedule on the earliest available date
+        for (const date of workDays) {
+          if (scheduled) break;
+          
+          const dateStr = date.toISOString().split('T')[0];
+          
+          // Try each compatible mold for this date
+          for (const mold of compatibleMolds) {
+            const currentUsage = moldCapacityUsed[mold.moldId][dateStr];
+            const maxCapacity = mold.multiplier || 1;
+            
+            if (currentUsage < maxCapacity) {
+              // Schedule this order
+              allocations.push({
+                orderId: order.orderId,
+                moldId: mold.moldId,
+                scheduledDate: dateStr,
+                stockModelId: order.stockModelId,
+                customer: order.customerName || order.customer || 'Unknown',
+                priority: order.priorityScore
+              });
+              
+              moldCapacityUsed[mold.moldId][dateStr]++;
+              scheduled = true;
+              break;
+            }
+          }
+        }
+        
+        if (!scheduled) {
+          console.log(`❌ Could not schedule order ${order.orderId} - no capacity available`);
+        }
+      }
+      
+      console.log(`✅ Scheduled ${allocations.length}/${sortedOrders.length} orders`);
+      
+      // Show Mesa Universal allocation summary
+      const mesaAllocations = allocations.filter(alloc => 
+        alloc.stockModelId === 'mesa_universal' || 
+        alloc.moldId.toLowerCase().includes('mesa')
+      );
+      
+      console.log(`🏔️ Mesa Universal allocations: ${mesaAllocations.length}`);
+      mesaAllocations.slice(0, 3).forEach(alloc => {
+        console.log(`  ${alloc.orderId} → ${alloc.moldId} on ${alloc.scheduledDate}`);
+      });
+      
+      res.json({
+        success: true,
+        message: `Scheduled ${allocations.length} orders with proper Mesa Universal constraints`,
+        stats: {
+          totalOrders: combinedQueue.length,
+          scheduledOrders: allocations.length,
+          mesaUniversalOrders: mesaUniversalOrders.length,
+          mesaUniversalScheduled: mesaAllocations.length,
+          activeMolds: activeMolds.length,
+          employees: employees.length
+        },
+        allocations
+      });
+      
+    } catch (error) {
+      console.error('❌ Algorithmic schedule error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
 
 
 

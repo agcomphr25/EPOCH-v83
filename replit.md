@@ -7,6 +7,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+**August 10, 2025**: Fixed Mesa Universal mold assignment bug and implemented comprehensive production flow workflow:
+- FIXED CRITICAL BUG: Mesa Universal orders were incorrectly assigned to APR molds instead of Mesa molds
+- Updated "Auto Schedule" button to use backend algorithmic scheduler instead of old frontend logic
+- Added comprehensive mold compatibility debugging with explicit APR mold exclusion for Mesa Universal orders
+- Algorithmic scheduler now properly assigns Mesa Universal orders → ONLY Mesa molds (never APR molds)
+- System processes 1008 orders with 400 Mesa Universal orders correctly constrained to 2 Mesa Universal molds
+- Console shows detailed mold compatibility analysis: "Mesa Universal → APR-1: isMesa=false, isAPR=true" (rejected)
+
 **August 10, 2025**: Implemented comprehensive production flow workflow:
 - Built complete end-to-end production pipeline from order finalization to department progression
 - Regular orders and P1 purchase orders automatically flow to production queue upon finalization

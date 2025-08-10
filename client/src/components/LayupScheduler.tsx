@@ -2296,9 +2296,17 @@ export default function LayupScheduler() {
   // Auto-schedule function to automatically assign orders to molds and dates
   const handleAutoSchedule = () => {
     console.log('🤖 Starting automatic scheduling...');
+    console.log('📊 Total processed orders available:', processedOrders.length);
+    console.log('📊 Current order assignments:', Object.keys(orderAssignments).length);
     
     const unassignedOrders = processedOrders.filter(order => !orderAssignments[order.orderId]);
     console.log(`📋 Scheduling ${unassignedOrders.length} unassigned orders`);
+    console.log('📋 First 10 unassigned orders:', unassignedOrders.slice(0, 10).map(o => ({
+      orderId: o.orderId,
+      source: o.source,
+      stockModelId: o.stockModelId || o.modelId,
+      dueDate: o.dueDate
+    })));
 
     if (unassignedOrders.length === 0) {
       toast({
@@ -2309,7 +2317,7 @@ export default function LayupScheduler() {
     }
 
     // Get work days for scheduling (Monday through Thursday)
-    const getWorkDays = (startDate: Date, weeksCount: number = 4) => {
+    const getWorkDays = (startDate: Date, weeksCount: number = 8) => { // Increased from 4 to 8 weeks
       const workDays: Date[] = [];
       for (let week = 0; week < weeksCount; week++) {
         const weekStart = addDays(startOfWeek(startDate, { weekStartsOn: 1 }), week * 7);
@@ -2321,7 +2329,9 @@ export default function LayupScheduler() {
       return workDays;
     };
 
-    const workDays = getWorkDays(currentDate, 4);
+    const workDays = getWorkDays(currentDate, 8); // Increased scheduling window to 8 weeks
+    console.log(`📅 Scheduling across ${workDays.length} work days (8 weeks)`);
+    console.log('📅 Work days range:', format(workDays[0], 'MM/dd'), 'to', format(workDays[workDays.length - 1], 'MM/dd'));
     const newAssignments = { ...orderAssignments };
 
     // Sort orders by priority and due date
@@ -2344,11 +2354,18 @@ export default function LayupScheduler() {
     // Get compatible molds for an order
     const getCompatibleMolds = (order: any) => {
       const modelId = order.stockModelId || order.modelId;
-      return molds.filter(mold => {
+      const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
         if (!mold.stockModels || mold.stockModels.length === 0) return true;
         return mold.stockModels.includes(modelId);
       });
+      
+      if (compatibleMolds.length === 0) {
+        console.warn(`❌ No compatible molds for order ${order.orderId} with model ${modelId}`);
+        console.warn('Available molds:', molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+      }
+      
+      return compatibleMolds;
     };
 
     // Track mold capacity per day
@@ -2358,11 +2375,11 @@ export default function LayupScheduler() {
     let skippedCount = 0;
 
     // Schedule each order
-    sortedOrders.forEach(order => {
+    sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
       
       if (compatibleMolds.length === 0) {
-        console.warn(`❌ No compatible molds found for order ${order.orderId}`);
+        console.warn(`❌ No compatible molds found for order ${order.orderId} (${index + 1}/${sortedOrders.length})`);
         skippedCount++;
         return;
       }
@@ -2394,14 +2411,16 @@ export default function LayupScheduler() {
             assignedCount++;
             assigned = true;
             
-            console.log(`✅ Assigned ${order.orderId} to ${mold.moldId} on ${format(date, 'MM/dd')}`);
+            if (assignedCount <= 5 || assignedCount % 10 === 0) {
+              console.log(`✅ Assigned ${order.orderId} to ${mold.moldId} on ${format(date, 'MM/dd')} (${assignedCount}/${sortedOrders.length})`);
+            }
             break;
           }
         }
       }
 
       if (!assigned) {
-        console.warn(`❌ Could not assign order ${order.orderId} - no available capacity`);
+        console.warn(`❌ Could not assign order ${order.orderId} - no available capacity (${index + 1}/${sortedOrders.length})`);
         skippedCount++;
       }
     });

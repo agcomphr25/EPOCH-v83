@@ -3210,29 +3210,39 @@ export default function LayupScheduler() {
               className="grid gap-1"
               style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
             >
-              {dates.map(date => {
-                const isFriday = date.getDay() === 5;
-                return (
-                  <div
-                    key={date.toISOString()}
-                    className={`p-3 border text-center font-semibold text-sm ${
-                      isFriday 
-                        ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
-                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-                    }`}
-                  >
-                    {format(date, 'MM/dd')}
-                    <div className={`text-xs mt-1 ${
-                      isFriday 
-                        ? 'text-amber-600 dark:text-amber-400' 
-                        : 'text-gray-500'
-                    }`}>
-                      {format(date, 'EEE')}
-                      {isFriday && <div className="text-[10px] font-medium">Backup</div>}
+{(() => {
+                // Only show dates that have order assignments
+                const datesWithOrders = dates.filter(date => {
+                  const dateStr = date.toISOString().split('T')[0];
+                  return Object.values(orderAssignments).some(assignment => 
+                    assignment.date.split('T')[0] === dateStr
+                  );
+                });
+                
+                return datesWithOrders.map(date => {
+                  const isFriday = date.getDay() === 5;
+                  return (
+                    <div
+                      key={date.toISOString()}
+                      className={`p-3 border text-center font-semibold text-sm ${
+                        isFriday 
+                          ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                      }`}
+                    >
+                      {format(date, 'MM/dd')}
+                      <div className={`text-xs mt-1 ${
+                        isFriday 
+                          ? 'text-amber-600 dark:text-amber-400' 
+                          : 'text-gray-500'
+                      }`}>
+                        {format(date, 'EEE')}
+                        {isFriday && <div className="text-[10px] font-medium">Backup</div>}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -3285,7 +3295,16 @@ export default function LayupScheduler() {
                 {/* Schedule Grid */}
                 <div
                   className="grid gap-1"
-                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+                  style={{ gridTemplateColumns: `repeat(${(() => {
+                    // Only show dates that have order assignments
+                    const datesWithOrders = dates.filter(date => {
+                      const dateStr = date.toISOString().split('T')[0];
+                      return Object.values(orderAssignments).some(assignment => 
+                        assignment.date.split('T')[0] === dateStr
+                      );
+                    });
+                    return datesWithOrders.length || 1; // Minimum 1 column to prevent layout break
+                  })()}, 1fr)` }}
                 >
 
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
@@ -3308,17 +3327,13 @@ export default function LayupScheduler() {
                   compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
                 });
 
-                // Get molds that either have assignments OR are compatible with queue orders
+                // Get molds that have actual order assignments only (hide empty molds)
                 const relevantMolds = molds.filter(m => {
                   if (!m.enabled) return false;
 
-                  // Include if mold has orders assigned
+                  // Only include molds that have orders assigned (no empty molds)
                   const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
-                  if (hasAssignments) return true;
-
-                  // Include if mold is compatible with orders in queue (genuinely available)
-                  const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
-                  return isCompatibleWithQueue;
+                  return hasAssignments;
                 });
 
                 // Calculate order counts for relevant molds
@@ -3354,8 +3369,17 @@ export default function LayupScheduler() {
 
                 return activeMolds.map(mold => (
                 <React.Fragment key={mold.moldId}>
-                  {dates.map(date => {
-                    const dateString = date.toISOString();
+                  {(() => {
+                    // Only show dates that have orders assigned to this mold
+                    const datesWithOrders = dates.filter(date => {
+                      const dateStr = date.toISOString().split('T')[0];
+                      return Object.values(orderAssignments).some(assignment => 
+                        assignment.moldId === mold.moldId && assignment.date.split('T')[0] === dateStr
+                      );
+                    });
+                    
+                    return datesWithOrders.map(date => {
+                      const dateString = date.toISOString();
 
                     // Get orders assigned to this mold/date combination
                     const cellOrders = Object.entries(orderAssignments)
@@ -3409,8 +3433,9 @@ export default function LayupScheduler() {
                         features={features}
                         processedOrders={processedOrders}
                       />
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </React.Fragment>
                 ));
               })()}

@@ -132,6 +132,8 @@ export function registerRoutes(app: Express): Server {
         order.itemName && order.itemName.includes('Mesa')
       );
       
+
+      
       // Combine both order types into unified production queue
       const combinedQueue = [
         ...unscheduledOrders.map(order => ({
@@ -144,7 +146,10 @@ export function registerRoutes(app: Express): Server {
           ...order,
           source: 'mesa_production_order',
           priorityScore: calculatePriorityScore(order.dueDate),
-          orderId: order.orderId
+          orderId: order.orderId,
+          features: order.specifications || {}, // Map specifications to features
+          product: order.itemName || 'Mesa Universal',
+          stockModelId: order.itemName?.includes('Mesa') ? 'mesa_universal' : 'unknown'
         }))
       ];
       
@@ -268,7 +273,9 @@ export function registerRoutes(app: Express): Server {
           dueDate: order.dueDate,
           orderDate: order.orderDate,
           priorityScore: order.priorityScore || 50,
-          quantity: 1
+          quantity: 1,
+          features: order.specifications || {}, // Include specifications as features
+          source: 'production_order' // Add source for identification
         };
       });
       

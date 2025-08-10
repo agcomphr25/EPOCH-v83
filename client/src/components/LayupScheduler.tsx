@@ -2944,6 +2944,8 @@ export default function LayupScheduler() {
                 console.log(`📊 DEBUG: Calendar Display Summary`);
                 console.log(`  • Total enabled molds: ${molds.filter(m => m.enabled).length}`);
                 console.log(`  • Total order assignments: ${Object.keys(orderAssignments).length}`);
+                console.log(`  • Orders available for display: ${orders?.length || 0}`);
+                console.log(`  • ProcessedOrders available: ${processedOrders?.length || 0}`);
 
                 // Get molds that either have orders OR are compatible with existing orders in queue
                 const getCompatibleMolds = (order: any) => {

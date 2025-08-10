@@ -123,7 +123,7 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      console.log('🔧 P1 LAYUP QUEUE API CALLED');
+    
       const { storage } = await import('../../storage');
       
       // Get all orders that haven't entered production yet (P1 Production Queue)
@@ -162,9 +162,7 @@ export function registerRoutes(app: Express): Server {
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
       
-      console.log('🔧 Found unscheduled orders:', unscheduledOrders.length);
-      console.log('🔧 Found Mesa production orders:', mesaOrders.length);
-      console.log('🔧 Combined production queue total:', combinedQueue.length);
+
       
       res.json(combinedQueue);
     } catch (error) {
@@ -190,10 +188,8 @@ export function registerRoutes(app: Express): Server {
   // Layup Schedule API endpoints - missing route handler
   app.get('/api/layup-schedule', async (req, res) => {
     try {
-      console.log('🔧 LAYUP SCHEDULE API CALLED');
       const { storage } = await import('../../storage');
       const scheduleData = await storage.getAllLayupSchedule();
-      console.log('🔧 Found layup schedule entries:', scheduleData.length);
       res.json(scheduleData);
     } catch (error) {
       console.error('❌ Layup schedule fetch error:', error);

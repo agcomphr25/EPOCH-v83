@@ -17,8 +17,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       priorityWeighting 
     } = req.body;
 
-    console.log('🔄 Algorithmic schedule generation requested');
-    console.log('📊 Parameters:', { stockModelFilter, maxOrdersPerDay, scheduleDays, priorityWeighting });
+
 
     const { storage } = await import('../../storage');
 
@@ -72,7 +71,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Use the combined queue as unscheduledOrders
     const unifiedProductionQueue = combinedQueue;
 
-    console.log(`📊 Data loaded: ${unifiedProductionQueue.length} orders, ${allMolds.length} molds, ${employees.length} employees`);
+
 
     // Filter active molds
     const activeMolds = allMolds.filter((mold: any) => mold.enabled);
@@ -102,7 +101,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         )
       : categorizedOrders;
 
-    console.log(`📊 Filtered orders: ${filteredOrders.length} (filter: ${stockModelFilter || 'none'})`);
+
 
     // Group orders by stock model
     const stockModelGroups = new Map();
@@ -120,8 +119,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       activeMolds.length * 15 // 15 orders per mold per day to fill schedule
     );
 
-    console.log(`📊 Daily capacity: ${dailyCapacity} orders`);
-    console.log(`🔧 Available molds:`, activeMolds.map(m => `${m.moldId} (${m.modelName})`));
+
 
     // Generate schedule using simplified algorithm
     const allocations: any[] = [];
@@ -143,17 +141,17 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
 
     for (const [stockModelId, orders] of sortedStockModels) {
-      console.log(`🔄 Processing ${stockModelId}: ${orders.length} orders`);
+
       
       // Find compatible molds with strict matching logic
       const compatibleMolds = activeMolds.filter((mold: any) => {
-        console.log(`🔧 Checking mold ${mold.moldId} (${mold.modelName}) for stock model ${stockModelId}`);
+
         
         // MESA UNIVERSAL: Only use Mesa molds, never APR
         if (stockModelId === 'mesa_universal') {
           const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
                             mold.moldId.toLowerCase().includes('mesa');
-          console.log(`🔧 Mesa Universal -> ${mold.moldId}: ${isMesaMold ? 'COMPATIBLE' : 'REJECTED'}`);
+
           return isMesaMold;
         }
         
@@ -161,7 +159,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         if (stockModelId === 'universal') {
           const isMesaMold = mold.modelName.toLowerCase().includes('mesa') || 
                             mold.moldId.toLowerCase().includes('mesa');
-          console.log(`🔧 Universal -> ${mold.moldId}: ${isMesaMold ? 'COMPATIBLE' : 'REJECTED'}`);
+
           return isMesaMold;
         }
         
@@ -169,7 +167,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         if (stockModelId.toLowerCase().includes('apr')) {
           const isAPRMold = mold.modelName.toLowerCase().includes('apr') || 
                            mold.moldId.toLowerCase().includes('apr');
-          console.log(`🔧 APR -> ${mold.moldId}: ${isAPRMold ? 'COMPATIBLE' : 'REJECTED'}`);
+
           return isAPRMold;
         }
         
@@ -177,7 +175,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         if (stockModelId.toLowerCase().includes('cf_')) {
           const isCFMold = mold.modelName.toLowerCase().includes('cf') || 
                           mold.moldId.toLowerCase().includes('cf');
-          console.log(`🔧 CF -> ${mold.moldId}: ${isCFMold ? 'COMPATIBLE' : 'REJECTED'}`);
+
           return isCFMold;
         }
         
@@ -185,24 +183,24 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         if (stockModelId.toLowerCase().includes('fg_')) {
           const isFGMold = mold.modelName.toLowerCase().includes('fg') || 
                           mold.moldId.toLowerCase().includes('fg');
-          console.log(`🔧 FG -> ${mold.moldId}: ${isFGMold ? 'COMPATIBLE' : 'REJECTED'}`);
+
           return isFGMold;
         }
         
         // Direct stock model match as fallback
         if (mold.stockModels && mold.stockModels.includes(stockModelId)) {
-          console.log(`🔧 Direct match -> ${mold.moldId}: COMPATIBLE`);
+
           return true;
         }
         
-        console.log(`🔧 No match -> ${mold.moldId}: REJECTED`);
+
         return false;
       });
 
-      console.log(`🔧 ${stockModelId} compatible molds:`, compatibleMolds.map(m => `${m.moldId} (${m.modelName})`));
+
 
       if (compatibleMolds.length === 0) {
-        console.log(`⚠️ No compatible molds for ${stockModelId}`);
+
         continue;
       }
 
@@ -247,7 +245,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         }
 
         if (!allocated) {
-          console.log(`⚠️ Could not schedule order ${order.orderId}`);
+
         }
       }
     }
@@ -261,7 +259,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       moldUtilization[mold.moldId] = allocations.length > 0 ? (usage / allocations.length) * 100 : 0;
     });
 
-    console.log(`✅ Generated ${allocations.length} allocations with ${efficiency.toFixed(1)}% efficiency`);
+
 
     res.json({
       success: true,

@@ -581,6 +581,7 @@ export default function LayupScheduler() {
 
   // Update local assignments when schedule data loads
   useEffect(() => {
+    console.log('📅 useEffect triggered - existingSchedule:', existingSchedule);
     if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
       (existingSchedule as any[]).forEach((entry: any) => {
@@ -590,8 +591,11 @@ export default function LayupScheduler() {
         };
       });
 
-
+      console.log('📅 Created assignments:', Object.keys(assignments).length, 'orders');
+      console.log('📅 First few assignments:', Object.entries(assignments).slice(0, 3));
       setOrderAssignments(assignments);
+    } else {
+      console.log('📅 No schedule data to load');
     }
   }, [existingSchedule]);
 
@@ -2848,7 +2852,7 @@ export default function LayupScheduler() {
             </Button>
 
             {/* Jump to Scheduled Week Button */}
-            {Object.keys(orderAssignments).length > 0 && (
+            {Object.keys(orderAssignments).length > 0 ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -2866,6 +2870,10 @@ export default function LayupScheduler() {
                 <ArrowRight className="w-4 h-4 mr-2" />
                 View Scheduled Orders ({Object.keys(orderAssignments).length})
               </Button>
+            ) : (
+              <div className="text-sm text-gray-500 mr-4">
+                Loading schedule... ({scheduleLoading ? 'loading' : 'loaded'})
+              </div>
             )}
 
 
@@ -3034,10 +3042,7 @@ export default function LayupScheduler() {
                   return a.mold.moldId.localeCompare(b.mold.moldId);
                 });
 
-                console.log(`  • Relevant molds (with orders or compatible): ${relevantMolds.length}/${molds.filter(m => m.enabled).length}`);
-                console.log(`  • Mold order counts:`, sortedMolds.map(({ mold, orderCount }) => 
-                  `${mold.moldId}: ${orderCount} orders`
-                ));
+
 
                 // Use only relevant molds
                 const activeMolds = sortedMolds.map(({ mold }) => mold);
@@ -3057,13 +3062,11 @@ export default function LayupScheduler() {
                       .map(([orderId]) => {
                         const order = processedOrders.find(o => o.orderId === orderId);
                         if (!order) {
-                          console.log(`❌ DEBUG: Could not find order ${orderId} in processedOrders (${processedOrders.length} total)`);
-                          console.log(`❌ DEBUG: Sample processedOrders IDs:`, processedOrders.slice(0, 5).map(o => o.orderId));
-                          // Return a temporary placeholder to show something is scheduled
+                          // Return a placeholder card that will be visible to show the scheduled order
                           return {
                             orderId: orderId,
-                            product: 'SCHEDULED ORDER',
-                            customer: 'Unknown',
+                            product: `SCHEDULED: ${orderId}`,
+                            customer: 'Mesa Order',
                             quantity: 1,
                             id: orderId,
                             orderDate: new Date().toISOString(),
@@ -3071,7 +3074,9 @@ export default function LayupScheduler() {
                             department: 'layup',
                             currentDepartment: 'layup',
                             priorityScore: 1,
-                            source: 'generated',
+                            source: 'production_order',
+                            stockModelId: 'mesa_universal',
+                            features: { action_length: 'Short' },
                             createdAt: new Date().toISOString(),
                             updatedAt: new Date().toISOString()
                           };

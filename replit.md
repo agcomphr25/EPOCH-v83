@@ -5,6 +5,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
+Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.

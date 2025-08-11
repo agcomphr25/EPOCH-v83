@@ -27,6 +27,17 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get all orders with payment status for All Orders List with payment column
+router.get('/with-payment-status', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllOrdersWithPaymentStatus();
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving orders with payment status:', error);
+    res.status(500).json({ error: "Failed to fetch orders with payment status", details: (error as any).message });
+  }
+});
+
 // Get pipeline counts for all departments (must be before :orderId route)
 router.get('/pipeline-counts', async (req: Request, res: Response) => {
   try {

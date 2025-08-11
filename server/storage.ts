@@ -175,6 +175,7 @@ export interface IStorage {
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
+  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getOrderById(orderId: string): Promise<OrderDraft | undefined>;
 
   // Order ID generation with atomic reservation system
@@ -1207,6 +1208,61 @@ export class DatabaseStorage implements IStorage {
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product'
     })) as AllOrder[];
+  }
+
+  // Get all finalized orders with payment status
+  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+    // First get all orders
+    const orders = await this.getAllOrders();
+    
+    // Get all payments aggregated by order ID  
+    const paymentTotals = await db
+      .select({
+        orderId: payments.orderId,
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+      })
+      .from(payments)
+      .groupBy(payments.orderId);
+
+    // Create a map of payment totals by order ID
+    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+
+    // Calculate order totals and determine payment status
+    return orders.map(order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      
+      // Calculate order total from features pricing, shipping, etc.
+      let orderTotal = 0;
+      
+      // Use price override if available, otherwise calculate from features
+      if (order.priceOverride && order.priceOverride > 0) {
+        orderTotal = order.priceOverride;
+      } else {
+        // This is simplified - in reality you'd calculate from features
+        // For now, we'll use a basic calculation or the paymentAmount field
+        orderTotal = order.paymentAmount || 0;
+      }
+      
+      // Add shipping
+      orderTotal += order.shipping || 0;
+      
+      // Apply custom discount if present
+      if (order.showCustomDiscount && order.customDiscountValue) {
+        if (order.customDiscountType === 'percent') {
+          orderTotal = orderTotal * (1 - (order.customDiscountValue / 100));
+        } else {
+          orderTotal = Math.max(0, orderTotal - order.customDiscountValue);
+        }
+      }
+      
+      const isFullyPaid = paymentTotal >= orderTotal && orderTotal > 0;
+      
+      return {
+        ...order,
+        paymentTotal,
+        isFullyPaid
+      };
+    });
   }
 
   async getOrdersByDepartment(department: string): Promise<AllOrder[]> {

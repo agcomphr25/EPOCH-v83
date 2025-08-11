@@ -12,6 +12,8 @@ interface Order {
   currentDepartment: string;
   status: string;
   fbOrderNumber?: string;
+  paymentTotal?: number;
+  isFullyPaid?: boolean;
 }
 
 interface Kickback {
@@ -57,7 +59,7 @@ export default function AllOrdersList() {
   }, []);
 
   const { data: orders, isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
+    queryKey: ['/api/orders/with-payment-status'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
@@ -296,6 +298,7 @@ export default function AllOrdersList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Order ID</TableHead>
+                <TableHead>Payment Status</TableHead>
                 <TableHead>Order Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Product</TableHead>
@@ -319,6 +322,17 @@ export default function AllOrdersList() {
                           {getDisplayOrderId(order)}
                         </span>
                       </OrderSummaryModal>
+                    </TableCell>
+                    <TableCell>
+                      {order.isFullyPaid ? (
+                        <Badge className="bg-green-600 text-white hover:bg-green-700">
+                          PAID
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-gray-600">
+                          PENDING
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {order.orderDate ? (() => {

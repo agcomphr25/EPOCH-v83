@@ -70,6 +70,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     
     // Use the combined queue as unscheduledOrders
     const unifiedProductionQueue = combinedQueue;
+    
+    console.log(`🔍 Processing ${unifiedProductionQueue.length} total orders for scheduling`);
 
 
 
@@ -79,8 +81,10 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Prepare order data with proper stock model mapping from database
     const categorizedOrders = unifiedProductionQueue.map((order: any) => {
       // Extract stock model from multiple possible sources
-      let stockModelId = 'universal'; // Default fallback
-      let product = 'Unknown Product';
+      let stockModelId = 'UNPROCESSED'; // Will help identify if logic is skipped
+      let product = 'UNPROCESSED PRODUCT';
+      
+      console.log(`🔍 Processing order ${order.orderId}: modelId="${order.modelId}", featuresExists=${!!order.features}, featuresType="${typeof order.features}"`);
       
       // First try the direct stockModelId field
       if (order.stockModelId) {

@@ -30,7 +30,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+const departments = ['Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -159,6 +159,7 @@ export default function AllOrdersList() {
 
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
+      'Production Queue': 'bg-slate-600',
       'Layup': 'bg-blue-500',
       'Plugging': 'bg-orange-500',
       'CNC': 'bg-green-500',
@@ -174,6 +175,10 @@ export default function AllOrdersList() {
   const getNextDepartment = (currentDept: string) => {
     const index = departments.indexOf(currentDept);
     return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+  };
+
+  const handlePushToLayupPlugging = (orderId: string) => {
+    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup' });
   };
   const handleCommunicationOpen = (customer, communicationType) => {
     setSelectedCustomer({
@@ -348,7 +353,19 @@ export default function AllOrdersList() {
                           </Button>
                         </Link>
 
-                        {!isScrapped && !isComplete && nextDept && (
+                        {!isScrapped && !isComplete && order.currentDepartment === 'Production Queue' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handlePushToLayupPlugging(order.orderId)}
+                            disabled={progressOrderMutation.isPending}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <ArrowRight className="w-4 h-4 mr-1" />
+                            Push to Layup
+                          </Button>
+                        )}
+
+                        {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'Production Queue' && (
                           <Button
                             size="sm"
                             onClick={() => handleProgressOrder(order.orderId, nextDept)}

@@ -48,6 +48,13 @@ export function ShippingScreen({ rows }: ShippingScreenProps) {
   // Get shipping statistics
   const { data: shippingStats } = useQuery({
     queryKey: ['/api/shipping/stats'],
+    queryFn: () => fetch('/api/shipping/stats').then(res => res.json())
+  });
+
+  // Get shipping-ready orders
+  const { data: shippingOrders, refetch } = useQuery({
+    queryKey: ['/api/shipping/ready-for-shipping'],
+    queryFn: () => fetch('/api/shipping/ready-for-shipping').then(res => res.json())
   });
 
   // Create UPS labels mutation
@@ -167,8 +174,8 @@ export function ShippingScreen({ rows }: ShippingScreenProps) {
     return <Badge variant="destructive">Ready to Ship</Badge>;
   };
 
-  // Filter orders that are ready for shipping or already shipped
-  const shippingRows = rows.filter(row => 
+  // Use fetched shipping orders or fallback to props
+  const shippingRows = shippingOrders || rows.filter(row => 
     row.status === 'Ready for Shipping' || 
     row.trackingNumber ||
     row.shippedDate

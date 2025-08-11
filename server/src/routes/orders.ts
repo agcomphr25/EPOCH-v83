@@ -90,7 +90,7 @@ router.get('/department/:department', async (req: Request, res: Response) => {
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const { query } = req.query;
-    
+
     if (!query || typeof query !== 'string' || query.length < 2) {
       return res.json([]);
     }
@@ -108,7 +108,7 @@ router.get('/drafts', async (req: Request, res: Response) => {
   try {
     const excludeFinalized = req.query.excludeFinalized === 'true';
     const drafts = await storage.getAllOrderDrafts();
-    
+
     if (excludeFinalized) {
       const filteredDrafts = drafts.filter(draft => draft.status !== 'FINALIZED');
       res.json(filteredDrafts);
@@ -125,7 +125,7 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   try {
     const draftId = req.params.id;
     let draft;
-    
+
     // Check if the ID is a number (database ID) or string (order ID like AG422)
     if (/^\d+$/.test(draftId)) {
       // It's a numeric database ID
@@ -134,11 +134,11 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
       // It's an order ID like AG422
       draft = await storage.getOrderDraft(draftId);
     }
-    
+
     if (!draft) {
       return res.status(404).json({ error: "Order draft not found" });
     }
-    
+
     res.json(draft);
   } catch (error) {
     console.error('Get draft error:', error);
@@ -165,11 +165,11 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     const draftId = req.params.id;
     console.log('Update draft endpoint called for ID:', draftId);
     console.log('Update data received:', req.body);
-    
+
     // Validate the input data using the schema
     const updates = insertOrderDraftSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
-    
+
     const updatedDraft = await storage.updateOrderDraft(draftId, updates);
     console.log('Update successful, returning:', updatedDraft);
     res.json(updatedDraft);
@@ -223,7 +223,7 @@ router.post('/draft/:id/finalize', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
     const { finalizedBy } = req.body;
-    
+
     const finalizedOrder = await storage.finalizeOrder(orderId, finalizedBy);
     res.json({ 
       success: true, 
@@ -244,11 +244,11 @@ router.get('/finalized/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
     const order = await storage.getFinalizedOrderById(orderId);
-    
+
     if (!order) {
       return res.status(404).json({ error: "Finalized order not found" });
     }
-    
+
     res.json(order);
   } catch (error) {
     console.error('Get finalized order error:', error);
@@ -261,7 +261,7 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
     const updates = req.body;
-    
+
     const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
     res.json(updatedOrder);
   } catch (error) {
@@ -299,11 +299,11 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
     const order = await storage.getOrderById(orderId);
-    
+
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
     }
-    
+
     res.json(order);
   } catch (error) {
     console.error('Get order error:', error);
@@ -364,17 +364,18 @@ router.get('/pipeline-details', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/progress', async (req: Request, res: Response) => {
-  try {
-    const orderId = req.params.id;
-    const { nextDepartment } = req.body;
-    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
-    res.json(updatedOrder);
-  } catch (error) {
-    console.error('Progress order error:', error);
-    res.status(500).json({ error: "Failed to progress order" });
-  }
-});
+// This route seems to be duplicated, keeping the first instance.
+// router.post('/:id/progress', async (req: Request, res: Response) => {
+//   try {
+//     const orderId = req.params.id;
+//     const { nextDepartment } = req.body;
+//     const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+//     res.json(updatedOrder);
+//   } catch (error) {
+//     console.error('Progress order error:', error);
+//     res.status(500).json({ error: "Failed to progress order" });
+//   }
+// });
 
 
 
@@ -470,29 +471,64 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { nextDepartment } = req.body;
-    
+
     console.log(`🏭 Progressing order ${orderId} to ${nextDepartment}`);
-    
+
     // Check if order exists in allOrders table first
     const existingOrder = await storage.getFinalizedOrderById(orderId);
-    
+
     if (!existingOrder) {
       console.error(`❌ Order ${orderId} not found in finalized orders`);
       return res.status(404).json({ error: `Order ${orderId} not found` });
     }
-    
+
     console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment}`);
-    
+
     // Update the order's current department and timestamp
     const updatedOrder = await storage.updateFinalizedOrder(orderId, {
       currentDepartment: nextDepartment
     });
-    
+
     console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);
     res.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error('Progress order error:', error);
     res.status(500).json({ error: "Failed to progress order", details: (error as any).message });
+  }
+});
+
+// Complete QC and move to shipping
+router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { qcNotes, qcPassedAll } = req.body;
+
+    const updateData = {
+      currentDepartment: qcPassedAll ? 'Shipping' : 'QC',
+      qcCompletedAt: qcPassedAll ? new Date() : null,
+      qcNotes: qcNotes || null,
+      qcPassed: qcPassedAll,
+      status: qcPassedAll ? 'Ready for Shipping' : 'In QC'
+    };
+
+    // Try to update in finalized orders first
+    let updatedOrder;
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+    } catch (error) {
+      // If not found in finalized orders, try draft orders
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+    }
+
+    res.json({ 
+      success: true, 
+      message: qcPassedAll ? 'Order moved to shipping' : 'QC notes updated',
+      order: updatedOrder 
+    });
+
+  } catch (error) {
+    console.error('Error completing QC:', error);
+    res.status(500).json({ error: 'Failed to complete QC process' });
   }
 });
 

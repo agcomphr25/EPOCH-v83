@@ -76,12 +76,17 @@ router.get('/orders/bulk', async (req: Request, res: Response) => {
 // Get orders ready for shipping
 router.get('/ready-for-shipping', async (req: Request, res: Response) => {
   try {
-    // Get orders that are in QC or Shipping departments
-    const orders = await storage.getAllFinalizedOrders();
-    const shippingOrders = orders.filter((order: any) => 
-      order.currentDepartment === 'QC' || 
+    // Get orders from both finalized and draft tables
+    const finalizedOrders = await storage.getAllFinalizedOrders();
+    const draftOrders = await storage.getAllOrderDrafts();
+    
+    // Combine and filter for shipping-ready orders
+    const allOrders = [...finalizedOrders, ...draftOrders];
+    const shippingOrders = allOrders.filter((order: any) => 
       order.currentDepartment === 'Shipping' ||
-      (order.qcCompletedAt && !order.shippedDate)
+      order.status === 'Ready for Shipping' ||
+      (order.qcCompletedAt && !order.shippedDate) ||
+      (order.currentDepartment === 'QC' && order.qcPassed)
     );
     
     res.json(shippingOrders);

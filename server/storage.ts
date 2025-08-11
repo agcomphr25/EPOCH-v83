@@ -176,7 +176,7 @@ export interface IStorage {
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
-  getOrderById(orderId: string): Promise<OrderDraft | undefined>;
+  getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
   getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
 
   // Order ID generation with atomic reservation system
@@ -1362,30 +1362,44 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Get order by ID (search both drafts and finalized)
-  async getOrderById(orderId: string) {
+  // Get order by ID (check both drafts and finalized)
+  async getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null> {
     try {
       // Try finalized orders first
       const finalizedOrder = await this.getFinalizedOrderById(orderId);
       if (finalizedOrder) {
-        return { ...finalizedOrder, isFinalized: true };
+        return { ...finalizedOrder, isFinalized: true } as any; // Cast to any to satisfy the return type for now
       }
 
       // If not found, try draft orders
       const draftOrder = await this.getOrderDraft(orderId);
       if (draftOrder) {
-        return { ...draftOrder, isFinalized: false };
+        return { ...draftOrder, isFinalized: false } as any; // Cast to any to satisfy the return type for now
       }
 
       return null;
     } catch (error) {
-      console.error("Error getting order by ID:", error);
+      console.error('Error getting order by ID:', error);
       throw error;
     }
   }
 
+  async getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined> {
+    try {
+      const orders = await db.select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId));
+
+      return orders[0] || undefined;
+    } catch (error) {
+      console.error('Error getting finalized order by ID:', error);
+      throw error;
+    }
+  }
+
+
   // Get multiple orders by IDs
-  async getOrdersByIds(orderIds: string[]) {
+  async getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>> {
     try {
       // Get from both finalized and draft orders
       const finalizedOrders = await db.select()
@@ -2678,6 +2692,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Order Items CRUD
+  async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
   async getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]> {
     return await db
       .select()

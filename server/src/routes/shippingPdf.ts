@@ -226,10 +226,9 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     
-    // Get order data from storage
+    // Get order data from storage using the proper method
     const { storage } = await import('../../storage');
-    const orders = await storage.getAllOrderDrafts();
-    const order = orders.find(o => o.orderId === orderId);
+    let order = await storage.getOrderById(orderId);
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -588,13 +587,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Get comprehensive order data from storage
     const { storage } = await import('../../storage');
-    const orders = await storage.getAllOrderDrafts();
+    const order = await storage.getOrderById(orderId);
     const stockModels = await storage.getAllStockModels();
     const customers = await storage.getAllCustomers();
     const features = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
-    
-    const order = orders.find(o => o.orderId === orderId);
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });

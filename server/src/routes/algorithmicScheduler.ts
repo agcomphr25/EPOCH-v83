@@ -155,7 +155,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         for (const mold of compatibleMolds) {
           const moldKey = `${dailyKey}-${mold.mold_id}`;
           const currentUsage = dailyMoldUsage.get(moldKey) || 0;
-          const moldCapacity = mold.multiplier || 1;
+          const moldCapacity = mold.multiplier || 10; // Increased default capacity per mold
 
           if (currentUsage < moldCapacity) {
             // Schedule this order

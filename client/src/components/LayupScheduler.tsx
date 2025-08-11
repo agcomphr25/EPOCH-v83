@@ -1355,8 +1355,8 @@ export default function LayupScheduler() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          maxOrdersPerDay: 25, // Realistic daily capacity based on employee hours
-          scheduleDays: 30,    // Schedule for next 30 work days
+          maxOrdersPerDay: 50, // Increased daily capacity to handle all orders
+          scheduleDays: 60,    // Extended schedule for next 60 work days
           priorityWeighting: 'urgent' // Prioritize by due date and priority score
         }),
       });

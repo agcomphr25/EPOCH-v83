@@ -1562,7 +1562,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest> {
-    const [request] = await db.insert(partsRequests).values([data]).returning();
+    // Convert Date objects to ISO strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.expectedDelivery instanceof Date) {
+      insertData.expectedDelivery = insertData.expectedDelivery.toISOString().split('T')[0];
+    }
+    if (insertData.actualDelivery instanceof Date) {
+      insertData.actualDelivery = insertData.actualDelivery.toISOString().split('T')[0];
+    }
+    
+    const [request] = await db.insert(partsRequests).values(insertData).returning();
     return request;
   }
 
@@ -1600,15 +1609,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Employees CRUD
-  async getAllEmployees(): Promise<Employee[]>;
-  getEmployee(id: number): Promise<Employee | undefined>;
-  getEmployeesByRole(role: string): Promise<Employee[]>;
-  createEmployee(data: InsertEmployee): Promise<Employee>;
-  updateEmployee(id: number, data: Partial<InsertEmployee>): Promise<Employee>;
-  deleteEmployee(id: number): Promise<void>;
-  getEmployeeByToken(token: string): Promise<Employee | undefined>;
-  generateEmployeePortalToken(employeeId: number): Promise<string>;
-  updateEmployeePortalToken(employeeId: number, token: string, expiry: Date): Promise<void>;
 
   async getAllEmployees(): Promise<Employee[]> {
     return await db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.name);
@@ -1626,7 +1626,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values([data]).returning();
+    // Convert Date objects to strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.hireDate instanceof Date) {
+      insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
+    }
+    
+    const [employee] = await db.insert(employees).values(insertData).returning();
     return employee;
   }
 
@@ -2311,10 +2317,10 @@ export class DatabaseStorage implements IStorage {
     // If no items exist for today, create default checklist items
     if (items.length === 0) {
       const defaultItems = [
-        { employeeId, date, label: 'Review safety procedures', type: 'checkbox', required: true },
-        { employeeId, date, label: 'Check equipment status', type: 'dropdown', options: ['Good', 'Needs Attention', 'Broken'], required: true },
-        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown', options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
-        { employeeId, date, label: 'Special notes', type: 'text', required: false }
+        { employeeId, date, label: 'Review safety procedures', type: 'checkbox' as const, required: true },
+        { employeeId, date, label: 'Check equipment status', type: 'dropdown' as const, options: ['Good', 'Needs Attention', 'Broken'], required: true },
+        { employeeId, date, label: 'Work area cleanliness', type: 'dropdown' as const, options: ['Clean', 'Needs Cleaning', 'Deep Clean Required'], required: true },
+        { employeeId, date, label: 'Special notes', type: 'text' as const, required: false }
       ];
 
       const createdItems = [];
@@ -2329,13 +2335,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChecklistItem(data: InsertChecklistItem): Promise<ChecklistItem> {
-    const [item] = await db.insert(checklistItems).values(data).returning();
+    // Convert Date objects to strings for date fields
+    const insertData: any = { ...data };
+    if (insertData.date instanceof Date) {
+      insertData.date = insertData.date.toISOString().split('T')[0];
+    }
+    
+    const [item] = await db.insert(checklistItems).values(insertData).returning();
     return item;
   }
 
   async updateChecklistItem(id: number, data: Partial<InsertChecklistItem>): Promise<ChecklistItem> {
+    // Convert Date objects to strings for date fields
+    const updateData: any = { ...data };
+    if (updateData.date instanceof Date) {
+      updateData.date = updateData.date.toISOString().split('T')[0];
+    }
+    
     const [item] = await db.update(checklistItems)
-      .set(data)
+      .set(updateData)
       .where(eq(checklistItems.id, id))
       .returning();
     return item;

@@ -47,7 +47,7 @@ export default function AllOrdersList() {
   const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
   const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [, setLocation] = useLocation();
 
   // Set up global handler for communication buttons in tooltip
@@ -115,7 +115,7 @@ export default function AllOrdersList() {
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
-        body: { nextDepartment }
+        body: JSON.stringify({ nextDepartment })
       });
     },
     onSuccess: () => {
@@ -354,7 +354,7 @@ export default function AllOrdersList() {
                       })() : '-'}
                     </TableCell>
                     <TableCell>
-                      <CustomerDetailsTooltip customerId={order.customerId}>
+                      <CustomerDetailsTooltip customerId={order.customerId} customerName={order.customer || 'N/A'}>
                         <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
                           {order.customer || 'N/A'}
                         </span>

@@ -5,35 +5,39 @@ import fetch from 'node-fetch';
 const router = Router();
 
 // UPS API Configuration
-const UPS_API_BASE_URL = 'https://wwwcie.ups.com/ship/v1/shipments'; // Sandbox URL
-// const UPS_API_BASE_URL = 'https://onlinetools.ups.com/ship/v1/shipments'; // Production URL
+const UPS_ENV = process.env.UPS_ENV || 'sandbox';
+const UPS_API_BASE_URL = UPS_ENV === 'production' 
+  ? 'https://onlinetools.ups.com/ship/v1/shipments'
+  : 'https://wwwcie.ups.com/ship/v1/shipments';
+
+const UPS_OAUTH_URL = UPS_ENV === 'production'
+  ? 'https://onlinetools.ups.com/security/v1/oauth/token'
+  : 'https://wwwcie.ups.com/security/v1/oauth/token';
 
 // UPS API Helper Functions
 async function getUPSAccessToken() {
   const credentials = {
-    username: process.env.UPS_USER_ID,
-    password: process.env.UPS_PASSWORD,
-    accessKey: process.env.UPS_ACCESS_KEY
+    clientId: process.env.UPS_CLIENT_ID,
+    clientSecret: process.env.UPS_CLIENT_SECRET
   };
 
   // Validate credentials exist
-  if (!credentials.username || !credentials.password || !credentials.accessKey) {
-    throw new Error('UPS credentials missing: username, password, or access key not provided');
+  if (!credentials.clientId || !credentials.clientSecret) {
+    throw new Error('UPS credentials missing: UPS_CLIENT_ID or UPS_CLIENT_SECRET not provided');
   }
 
   console.log('UPS OAuth Request Details:', {
-    url: 'https://wwwcie.ups.com/security/v1/oauth/token',
-    username: credentials.username ? 'PROVIDED' : 'MISSING',
-    password: credentials.password ? 'PROVIDED' : 'MISSING',
-    accessKey: credentials.accessKey ? 'PROVIDED' : 'MISSING'
+    url: UPS_OAUTH_URL,
+    clientId: credentials.clientId ? 'PROVIDED' : 'MISSING',
+    clientSecret: credentials.clientSecret ? 'PROVIDED' : 'MISSING',
+    environment: UPS_ENV
   });
 
-  const response = await fetch('https://wwwcie.ups.com/security/v1/oauth/token', {
+  const response = await fetch(UPS_OAUTH_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'x-merchant-id': credentials.username,
-      'Authorization': `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`
+      'Authorization': `Basic ${Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64')}`
     },
     body: new URLSearchParams({
       grant_type: 'client_credentials'
@@ -66,8 +70,7 @@ async function createUPSShipment(shipmentData: any) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
       'transId': transId,
-      'transactionSrc': 'AG_Composites_ERP',
-      'x-merchant-id': process.env.UPS_USER_ID || ''
+      'transactionSrc': 'AG_Composites_ERP'
     },
     body: JSON.stringify(shipmentData)
   });
@@ -95,18 +98,18 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
       Shipment: {
         Description: `AG Composites Order ${orderData.orderId}`,
         Shipper: {
-          Name: "AG Composites",
-          AttentionName: "Shipping Department",
+          Name: process.env.SHIP_FROM_NAME || "AG Composites",
+          AttentionName: process.env.SHIP_FROM_ATTENTION || "Shipping Department",
           Phone: {
-            Number: "5551234567"
+            Number: process.env.SHIP_FROM_PHONE || "2567238381"
           },
           ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
           Address: {
-            AddressLine: ["123 Manufacturing Way"],
-            City: "Industrial City",
-            StateProvinceCode: "CA",
-            PostalCode: "90210",
-            CountryCode: "US"
+            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
+            City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
+            StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
+            PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
+            CountryCode: process.env.SHIP_FROM_COUNTRY || "US"
           }
         },
         ShipTo: {
@@ -124,17 +127,17 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           }
         },
         ShipFrom: {
-          Name: "AG Composites",
-          AttentionName: "Shipping Department",
+          Name: process.env.SHIP_FROM_NAME || "AG Composites",
+          AttentionName: process.env.SHIP_FROM_ATTENTION || "Shipping Department",
           Phone: {
-            Number: "5551234567"
+            Number: process.env.SHIP_FROM_PHONE || "2567238381"
           },
           Address: {
-            AddressLine: ["123 Manufacturing Way"],
-            City: "Industrial City",
-            StateProvinceCode: "CA",
-            PostalCode: "90210",
-            CountryCode: "US"
+            AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
+            City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
+            StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
+            PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
+            CountryCode: process.env.SHIP_FROM_COUNTRY || "US"
           }
         },
         PaymentInformation: {

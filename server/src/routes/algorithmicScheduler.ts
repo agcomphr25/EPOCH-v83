@@ -241,16 +241,73 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`   - Other capacity/timing issues: ${unscheduledOrders.length - noMoldsCount}`);
     }
 
+    // Save the algorithmic schedule results to the layup_schedule table
+    if (allocations.length > 0) {
+      try {
+        // Clear existing schedule for the current week to replace with new algorithmic schedule
+        const now = new Date();
+        const currentWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 1);
+        const nextWeekEnd = new Date(currentWeekStart.getTime() + (14 * 24 * 60 * 60 * 1000)); // 2 weeks
+        
+        console.log(`🗑️ Clearing existing schedule from ${currentWeekStart.toISOString()} to ${nextWeekEnd.toISOString()}`);
+        
+        await pool.query(`
+          DELETE FROM layup_schedule 
+          WHERE scheduled_date >= $1 AND scheduled_date <= $2
+        `, [currentWeekStart.toISOString(), nextWeekEnd.toISOString()]);
+
+        // Get employee assignments (all active employees for now)
+        const employees = employeeResult || [];
+        const employeeAssignments = employees.map(emp => ({
+          id: emp.id || null,
+          name: emp.employee_id,
+          rate: emp.rate,
+          hours: emp.hours,
+          isActive: emp.is_active,
+          department: emp.department,
+          employeeId: emp.employee_id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }));
+
+        // Insert new algorithmic schedule into layup_schedule table
+        console.log(`📅 Saving ${allocations.length} algorithmic schedule entries to layup_schedule table`);
+        
+        for (const allocation of allocations) {
+          await pool.query(`
+            INSERT INTO layup_schedule (
+              order_id, scheduled_date, mold_id, employee_assignments,
+              is_override, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [
+            allocation.orderId,
+            allocation.scheduledDate,
+            allocation.moldId,
+            JSON.stringify(employeeAssignments),
+            false, // not an override, this is algorithmic
+            new Date().toISOString(),
+            new Date().toISOString()
+          ]);
+        }
+        
+        console.log(`✅ Successfully saved algorithmic schedule to layup_schedule table`);
+      } catch (saveError) {
+        console.error('⚠️ Error saving algorithmic schedule to database:', saveError);
+        // Don't fail the request if save fails, just log it
+      }
+    }
+
     res.json({
       success: true,
       allocations: allocations,
+      scheduledAllocations: allocations, // Add this for compatibility
       analytics: {
         totalOrders: totalProcessed,
         scheduledOrders: totalScheduled,
         unscheduledOrders: totalProcessed - totalScheduled,
         efficiency: successRate,
         workDays: scheduleDays,
-        dailyCapacity: maxOrdersPerDay,
+        dailyCapacity: actualDailyCapacity, // Use actual capacity instead of requested
         materialBreakdown: {
           cf: allocations.filter(a => a.materialPrefix === 'cf').length,
           fg: allocations.filter(a => a.materialPrefix === 'fg').length,

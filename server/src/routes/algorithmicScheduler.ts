@@ -323,36 +323,28 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             return true;
           }
           
-          // Try partial matching for variations
-          const partialMatch = mold.stockModels.some((sm: string) => 
-            sm.toLowerCase().includes(stockModelId.toLowerCase()) ||
-            stockModelId.toLowerCase().includes(sm.toLowerCase())
-          );
-          if (partialMatch) {
-            console.log(`✅ Partial match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+          // STRICT partial matching - only allow if the stock model is a clear subset/superset
+          const strictPartialMatch = mold.stockModels.some((sm: string) => {
+            const smLower = sm.toLowerCase();
+            const stockModelLower = stockModelId.toLowerCase();
+            
+            // Only match if one is clearly contained in the other with word boundaries
+            // This prevents "alpine_hunter" from matching "adj_alpine_tikka"
+            const stockModelInMold = smLower === stockModelLower || 
+                                   (smLower.includes(stockModelLower) && smLower.includes('_' + stockModelLower)) ||
+                                   (stockModelLower.includes(smLower) && stockModelLower.includes('_' + smLower));
+            
+            return stockModelInMold;
+          });
+          
+          if (strictPartialMatch) {
+            console.log(`✅ Strict partial match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
             return true;
           }
         }
         
-        // CF orders: Pattern matching for CF models
-        if (stockModelId.toLowerCase().includes('cf_')) {
-          // Check if any stock models in this mold are CF models
-          const hasCFModel = mold.stockModels?.some((sm: string) => sm.toLowerCase().includes('cf'));
-          if (hasCFModel) {
-            console.log(`✅ CF pattern match: ${stockModelId} → ${mold.moldId} (has CF models)`);
-            return true;
-          }
-        }
-        
-        // FG orders: Pattern matching for FG models
-        if (stockModelId.toLowerCase().includes('fg_')) {
-          // Check if any stock models in this mold are FG models
-          const hasFGModel = mold.stockModels?.some((sm: string) => sm.toLowerCase().includes('fg'));
-          if (hasFGModel) {
-            console.log(`✅ FG pattern match: ${stockModelId} → ${mold.moldId} (has FG models)`);
-            return true;
-          }
-        }
+        // REMOVED: Broad pattern matching that caused incorrect assignments
+        // The CF/FG pattern matching was too broad and caused mismatches
 
         console.log(`❌ No match: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels?.join(', ') || 'none'})`);
         return false;

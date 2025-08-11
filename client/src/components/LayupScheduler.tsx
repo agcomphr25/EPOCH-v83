@@ -1147,14 +1147,35 @@ export default function LayupScheduler() {
           console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
           return true; // No restrictions
         }
-        const isCompatible = mold.stockModels.includes(modelId);
-        if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
-          console.log(`🏭 MOLD CHECK: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (${mold.stockModels?.join(', ')}) = ${isCompatible ? '✅ COMPATIBLE' : '❌ NOT COMPATIBLE'}`);
+        
+        // Direct exact match first
+        const exactMatch = mold.stockModels.includes(modelId);
+        if (exactMatch) {
+          console.log(`🎯 EXACT MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
+          return true;
         }
-        if (!isCompatible && order.source !== 'production_order' && order.source !== 'p1_purchase_order') {
-          console.log(`❌ Order ${order.orderId} (${modelId}) not compatible with mold ${mold.moldId} (has: ${mold.stockModels?.slice(0, 3).join(', ')}...)`);
+        
+        // Strict partial matching - only allow clear subset/superset relationships
+        const strictPartialMatch = mold.stockModels.some((sm: string) => {
+          const smLower = sm.toLowerCase();
+          const modelIdLower = modelId.toLowerCase();
+          
+          // Only match if one is clearly contained in the other with proper word boundaries
+          const isStrictMatch = smLower === modelIdLower || 
+                               (smLower.includes(modelIdLower) && smLower.includes('_' + modelIdLower)) ||
+                               (modelIdLower.includes(smLower) && modelIdLower.includes('_' + smLower));
+          
+          return isStrictMatch;
+        });
+        
+        if (strictPartialMatch) {
+          console.log(`🎯 STRICT PARTIAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
+          return true;
         }
-        return isCompatible;
+        
+        // Log incompatible molds for debugging
+        console.log(`❌ NO MATCH: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+        return false;
       });
 
       console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));

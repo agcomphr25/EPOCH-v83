@@ -2267,21 +2267,14 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Get the current assignment to preserve the original mold
-    const currentAssignment = orderAssignments[orderId];
-    const originalMoldId = currentAssignment?.moldId;
+    // Simple move - just update the assignment to the new position
+    // This leaves the original slot empty and doesn't auto-fill it
+    console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${dateIso}`);
 
-    if (!originalMoldId) {
-      console.warn('❌ No original mold assignment found for order:', orderId);
-      return;
-    }
-
-    console.log(`🎯 Moving order ${orderId} from ${originalMoldId} on ${currentAssignment?.date} to ${originalMoldId} on ${dateIso} (preserving original mold)`);
-
-    // Update only the date, preserving the original mold assignment
+    // Update assignment to new position
     setOrderAssignments(prev => ({
       ...prev,
-      [orderId]: { moldId: originalMoldId, date: dateIso }
+      [orderId]: { moldId: targetMoldId, date: dateIso }
     }));
 
     // Mark as having unsaved changes
@@ -2289,8 +2282,8 @@ export default function LayupScheduler() {
 
     // Show success toast
     toast({
-      title: "Order Rescheduled",
-      description: `Order ${orderId} rescheduled to ${new Date(dateIso).toLocaleDateString()} (keeping ${originalMoldId})`,
+      title: "Order Moved",
+      description: `Order ${orderId} moved to ${targetMoldId} on ${new Date(dateIso).toLocaleDateString()}`,
     });
   };
 

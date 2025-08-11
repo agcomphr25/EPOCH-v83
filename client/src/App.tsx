@@ -77,6 +77,7 @@ import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PaymentManagement from "./pages/PaymentManagement";
+import ProductionQueuePage from "./pages/ProductionQueuePage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -244,6 +245,7 @@ function App() {
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
 
                   {/* Department Queue Management Routes */}
+                  <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
                   <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
                   <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
                   <Route path="/department-queue/cnc" component={CNCQueuePage} />

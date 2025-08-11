@@ -60,6 +60,19 @@ router.get('/outstanding', async (req: Request, res: Response) => {
   }
 });
 
+// Get orders by department (must be before :orderId route)
+router.get('/department/:department', async (req: Request, res: Response) => {
+  try {
+    const { department } = req.params;
+    const decodedDepartment = decodeURIComponent(department);
+    const orders = await storage.getOrdersByDepartment(decodedDepartment);
+    res.json(orders);
+  } catch (error) {
+    console.error("Get orders by department error:", error);
+    res.status(500).json({ error: "Failed to get orders by department" });
+  }
+});
+
 
 
 // Search orders - must be before :orderId route

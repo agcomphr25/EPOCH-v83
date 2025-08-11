@@ -574,6 +574,9 @@ export interface IStorage {
   finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
   updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
+  
+  // Department-based order methods
+  getOrdersByDepartment(department: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1204,6 +1207,99 @@ export class DatabaseStorage implements IStorage {
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product'
     })) as AllOrder[];
+  }
+
+  async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
+    try {
+      console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
+      
+      // Query the allOrders table for orders in the specified department
+      const orders = await db
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          orderDate: allOrders.orderDate,
+          dueDate: allOrders.dueDate,
+          customerId: allOrders.customerId,
+          customerPO: allOrders.customerPO,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          agrOrderDetails: allOrders.agrOrderDetails,
+          isCustomOrder: allOrders.isCustomOrder,
+          modelId: allOrders.modelId,
+          handedness: allOrders.handedness,
+          shankLength: allOrders.shankLength,
+          features: allOrders.features,
+          featureQuantities: allOrders.featureQuantities,
+          discountCode: allOrders.discountCode,
+          notes: allOrders.notes,
+          customDiscountType: allOrders.customDiscountType,
+          customDiscountValue: allOrders.customDiscountValue,
+          showCustomDiscount: allOrders.showCustomDiscount,
+          priceOverride: allOrders.priceOverride,
+          shipping: allOrders.shipping,
+          tikkaOption: allOrders.tikkaOption,
+          status: allOrders.status,
+          barcode: allOrders.barcode,
+          currentDepartment: allOrders.currentDepartment,
+          departmentHistory: allOrders.departmentHistory,
+          scrappedQuantity: allOrders.scrappedQuantity,
+          totalProduced: allOrders.totalProduced,
+          scrapDate: allOrders.scrapDate,
+          scrapReason: allOrders.scrapReason,
+          scrapDisposition: allOrders.scrapDisposition,
+          scrapAuthorization: allOrders.scrapAuthorization,
+          isReplacement: allOrders.isReplacement,
+          replacedOrderId: allOrders.replacedOrderId,
+          isPaid: allOrders.isPaid,
+          paymentType: allOrders.paymentType,
+          paymentAmount: allOrders.paymentAmount,
+          paymentDate: allOrders.paymentDate,
+          paymentTimestamp: allOrders.paymentTimestamp,
+          trackingNumber: allOrders.trackingNumber,
+          shippingCarrier: allOrders.shippingCarrier,
+          shippingMethod: allOrders.shippingMethod,
+          shippedDate: allOrders.shippedDate,
+          estimatedDelivery: allOrders.estimatedDelivery,
+          shippingLabelGenerated: allOrders.shippingLabelGenerated,
+          customerNotified: allOrders.customerNotified,
+          notificationMethod: allOrders.notificationMethod,
+          notificationSentAt: allOrders.notificationSentAt,
+          deliveryConfirmed: allOrders.deliveryConfirmed,
+          deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+          createdAt: allOrders.createdAt,
+          updatedAt: allOrders.updatedAt
+        })
+        .from(allOrders)
+        .where(
+          and(
+            eq(allOrders.currentDepartment, department),
+            ne(allOrders.status, 'SCRAPPED'),
+            isNull(allOrders.scrapDate)
+          )
+        )
+        .orderBy(desc(allOrders.updatedAt));
+
+      console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
+
+      // Get all customers to create a lookup map
+      const allCustomers = await db.select().from(customers);
+      const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+      // Enrich orders with customer names and add required frontend fields
+      const enrichedOrders = orders.map(order => ({
+        ...order,
+        customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+        productName: order.modelId || 'Unknown Product',
+        stockModelId: order.modelId,
+        priority: 50 // Default priority
+      })) as AllOrder[];
+
+      console.log(`✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`);
+      return enrichedOrders;
+    } catch (error) {
+      console.error(`Error in getOrdersByDepartment for "${department}":`, error);
+      throw error;
+    }
   }
 
   async getOrderById(orderId: string): Promise<OrderDraft | undefined> {

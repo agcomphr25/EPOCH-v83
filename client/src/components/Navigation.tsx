@@ -359,6 +359,12 @@ export default function Navigation() {
 
   const departmentQueueItems = [
     {
+      path: '/department-queue/production-queue',
+      label: 'Production Queue',
+      icon: List,
+      description: 'Production queue department manager'
+    },
+    {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,

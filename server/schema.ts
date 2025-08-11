@@ -2318,10 +2318,3 @@ export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) =
   order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
 }));
 
-export const shipmentsRelations = relations(shipments, ({ one }) => ({
-  order: one(orderDrafts, { fields: [shipments.orderId], references: [orderDrafts.orderId] })
-}));
-
-export const orderDraftsShipmentsRelations = relations(orderDrafts, ({ many }) => ({
-  shipments: many(shipments)
-}));

@@ -3531,13 +3531,17 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft> {
+  async progressOrder(orderId: string, nextDepartment?: string): Promise<OrderDraft | AllOrder> {
     try {
-      // Find the current order
-      const [currentOrder] = await db
-        .select()
-        .from(orderDrafts)
-        .where(eq(orderDrafts.orderId, orderId));
+      // Try to find order in finalized orders first
+      let currentOrder = await this.getFinalizedOrderById(orderId);
+      let isFinalized = true;
+
+      if (!currentOrder) {
+        // If not found in finalized orders, try draft orders
+        currentOrder = await this.getOrderDraft(orderId);
+        isFinalized = false;
+      }
 
       if (!currentOrder) {
         throw new Error(`Order ${orderId} not found`);
@@ -3550,7 +3554,7 @@ export class DatabaseStorage implements IStorage {
 
       let nextDept = nextDepartment;
       if (!nextDept) {
-        const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment);
+        const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
         if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
           throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
         }
@@ -3572,16 +3576,20 @@ export class DatabaseStorage implements IStorage {
         case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
       }
 
-      // Update the order
-      const [updatedOrder] = await db
-        .update(orderDrafts)
-        .set({
+      // Update the appropriate table
+      let updatedOrder;
+      if (isFinalized) {
+        updatedOrder = await this.updateFinalizedOrder(orderId, {
+          currentDepartment: nextDept,
+          ...completionUpdates
+        });
+      } else {
+        updatedOrder = await this.updateOrderDraft(orderId, {
           currentDepartment: nextDept,
           ...completionUpdates,
           updatedAt: now
-        })
-        .where(eq(orderDrafts.orderId, orderId))
-        .returning();
+        });
+      }
 
       return updatedOrder;
     } catch (error) {

@@ -352,6 +352,48 @@ router.post('/:id/progress', async (req: Request, res: Response) => {
   }
 });
 
+// Bulk progress multiple orders to next department
+router.post('/bulk-progress', async (req: Request, res: Response) => {
+  try {
+    const { orderIds } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required' });
+    }
+
+    console.log(`🔄 Bulk progress initiated for ${orderIds.length} orders:`, orderIds);
+
+    const results = [];
+    let successful = 0;
+    let failed = 0;
+
+    for (const orderId of orderIds) {
+      try {
+        const updatedOrder = await storage.progressOrder(orderId);
+        results.push({ orderId, status: 'success', newDepartment: updatedOrder.currentDepartment });
+        successful++;
+        console.log(`✅ Order ${orderId} progressed to ${updatedOrder.currentDepartment}`);
+      } catch (error) {
+        results.push({ orderId, status: 'error', error: (error as any).message });
+        failed++;
+        console.log(`❌ Order ${orderId} failed: ${(error as any).message}`);
+      }
+    }
+
+    console.log(`📊 Bulk progress completed: ${successful} successful, ${failed} failed`);
+
+    res.json({
+      processed: successful,
+      failed: failed,
+      total: orderIds.length,
+      results: results
+    });
+  } catch (error) {
+    console.error('Error in bulk progress:', error);
+    res.status(500).json({ error: "Failed to bulk progress orders", details: (error as any).message });
+  }
+});
+
 router.post('/:id/scrap', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;

@@ -41,13 +41,13 @@ export default function InventoryDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Item Code</TableHead>
+                <TableHead>AG Part#</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">On Hand</TableHead>
-                <TableHead className="text-right">Committed</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-                <TableHead className="text-right">Reorder Point</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Supplier Part#</TableHead>
+                <TableHead className="text-right">Cost Per</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Order Date</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -59,35 +59,29 @@ export default function InventoryDashboard() {
                   </TableCell>
                 </TableRow>
               ) : (
-                inventory.map((item) => {
-                  const available = item.onHand - item.committed;
-                  const isLowStock = available <= item.reorderPoint;
-                  const isOutOfStock = available <= 0;
-                  
-                  return (
+                inventory.map((item) => (
                     <TableRow 
-                      key={item.code} 
-                      className={isOutOfStock ? 'bg-red-50' : isLowStock ? 'bg-yellow-50' : ''}
+                      key={item.id} 
+                      className={!item.isActive ? 'bg-gray-50' : ''}
                     >
-                      <TableCell className="font-medium">{item.code}</TableCell>
+                      <TableCell className="font-medium">{item.agPartNumber}</TableCell>
                       <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.category || 'N/A'}</TableCell>
-                      <TableCell className="text-right">{item.onHand}</TableCell>
-                      <TableCell className="text-right">{item.committed}</TableCell>
-                      <TableCell className="text-right font-medium">{available}</TableCell>
-                      <TableCell className="text-right">{item.reorderPoint}</TableCell>
+                      <TableCell>{item.source || 'N/A'}</TableCell>
+                      <TableCell>{item.supplierPartNumber || 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        {item.costPer ? `$${item.costPer.toFixed(2)}` : 'N/A'}
+                      </TableCell>
+                      <TableCell>{item.department || 'N/A'}</TableCell>
                       <TableCell>
-                        {isOutOfStock ? (
-                          <Badge variant="destructive">Out of Stock</Badge>
-                        ) : isLowStock ? (
-                          <Badge variant="secondary">Low Stock</Badge>
-                        ) : (
-                          <Badge variant="default">In Stock</Badge>
-                        )}
+                        {item.orderDate ? new Date(item.orderDate).toLocaleDateString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.isActive ? "default" : "secondary"}>
+                          {item.isActive ? "Active" : "Inactive"}
+                        </Badge>
                       </TableCell>
                     </TableRow>
-                  );
-                })
+                  ))
               )}
             </TableBody>
           </Table>

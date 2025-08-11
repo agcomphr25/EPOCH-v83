@@ -211,7 +211,7 @@ router.post('/import/csv', async (req: Request, res: Response) => {
         }
 
         const itemData: any = {};
-        headers.forEach((header, index) => {
+        headers.forEach((header: string, index: number) => {
           const value = values[index];
           
           switch (header.toLowerCase()) {

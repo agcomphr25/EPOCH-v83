@@ -1226,7 +1226,7 @@ export class DatabaseStorage implements IStorage {
 
     // Create a map of payment totals by order ID
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
-
+    
     // Calculate order totals and determine payment status
     return orders.map(order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
@@ -1234,17 +1234,15 @@ export class DatabaseStorage implements IStorage {
       // Calculate order total from features pricing, shipping, etc.
       let orderTotal = 0;
       
-      // Use price override if available, otherwise calculate from features
+      // Use price override if available, otherwise use paymentAmount
       if (order.priceOverride && order.priceOverride > 0) {
         orderTotal = order.priceOverride;
+        // Add shipping only when using price override (paymentAmount already includes shipping)
+        orderTotal += order.shipping || 0;
       } else {
-        // This is simplified - in reality you'd calculate from features
-        // For now, we'll use a basic calculation or the paymentAmount field
+        // paymentAmount already includes shipping and all costs
         orderTotal = order.paymentAmount || 0;
       }
-      
-      // Add shipping
-      orderTotal += order.shipping || 0;
       
       // Apply custom discount if present
       if (order.showCustomDiscount && order.customDiscountValue) {

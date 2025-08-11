@@ -368,6 +368,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         return dueDateDiff;
       });
 
+      // Track daily usage per mold to respect individual mold capacity
+      const dailyMoldUsage = new Map(); // Key: `${dateKey}-${moldId}`, Value: usage count
+      
       // Allocate orders
       for (const order of sortedOrders) {
         let allocated = false;
@@ -376,31 +379,50 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           const dateKey = workDate.toISOString().split('T')[0];
           const currentAllocations = dailyAllocationCount.get(dateKey) || 0;
 
-          // Allow many more orders per day to fill up the schedule
+          // Check overall daily capacity first
           if (currentAllocations >= dailyCapacity) {
             continue;
           }
 
-          // Select best mold (round-robin for simplicity)
-          const moldIndex = currentAllocations % compatibleMolds.length;
-          const selectedMold = compatibleMolds[moldIndex];
+          // Find a mold with available capacity for this specific day
+          let selectedMold = null;
+          for (const mold of compatibleMolds) {
+            const moldDayKey = `${dateKey}-${mold.moldId}`;
+            const moldDayUsage = dailyMoldUsage.get(moldDayKey) || 0;
+            
+            // Respect individual mold daily capacity (multiplier)
+            if (moldDayUsage < (mold.multiplier || 1)) {
+              selectedMold = mold;
+              break;
+            }
+          }
 
+          // If no mold has capacity on this day, try next day
+          if (!selectedMold) {
+            continue;
+          }
+
+          // Allocate to the selected mold
           allocations.push({
             orderId: order.orderId,
             moldId: selectedMold.moldId,
             scheduledDate: workDate.toISOString(),
             priorityScore: order.priorityScore || 1,
             stockModelId: order.stockModelId,
-            allocationReason: `Auto-scheduled for ${stockModelId}`
+            allocationReason: `Auto-scheduled for ${stockModelId} (mold capacity: ${selectedMold.multiplier || 1})`
           });
 
+          // Update tracking
+          const moldDayKey = `${dateKey}-${selectedMold.moldId}`;
+          dailyMoldUsage.set(moldDayKey, (dailyMoldUsage.get(moldDayKey) || 0) + 1);
           dailyAllocationCount.set(dateKey, currentAllocations + 1);
+          
           allocated = true;
           break;
         }
 
         if (!allocated) {
-
+          console.log(`❌ Could not allocate order ${order.orderId} - no mold capacity available in ${workDates.length} work days`);
         }
       }
     }

@@ -76,22 +76,124 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Filter active molds
     const activeMolds = allMolds.filter((mold: any) => mold.enabled);
 
-    // Prepare order data with stock model categorization
-    const categorizedOrders = unifiedProductionQueue.map((order: any) => ({
-      orderId: order.orderId,
-      stockModelId: order.stockModelId || 'universal',
-      stockModelName: order.stockModel?.displayName || order.stockModelId,
-      dueDate: order.dueDate || order.orderDate,
-      priorityScore: order.priorityScore || 1,
-      customer: order.customerName || order.customer || 'Unknown',
-      orderDate: order.orderDate,
-      features: order.features || {},
-      product: order.product || order.stockModel?.displayName,
-      quantity: order.quantity || 1,
-      department: order.department || 'layup',
-      status: order.status || 'pending',
-      source: order.source || 'production_order'
-    }));
+    // Prepare order data with proper stock model mapping from database
+    const categorizedOrders = unifiedProductionQueue.map((order: any) => {
+      // Extract stock model from multiple possible sources
+      let stockModelId = 'universal'; // Default fallback
+      let product = 'Unknown Product';
+      
+      // First try the direct stockModelId field
+      if (order.stockModelId) {
+        stockModelId = order.stockModelId;
+        product = order.stockModelId;
+      }
+      // Then try model_id from database (this is the main issue!)
+      else if (order.modelId) {
+        stockModelId = order.modelId;
+        product = order.modelId;
+      }
+      // Then check if it's a mesa order from production orders
+      else if (order.source === 'mesa_production_order' && order.itemName?.includes('Mesa')) {
+        stockModelId = 'mesa_universal';
+        product = 'Mesa Universal';
+      }
+      // Try to extract from features object
+      else if (order.features?.stockModel) {
+        stockModelId = order.features.stockModel;
+        product = order.features.stockModel;
+      }
+      // ENHANCED: Infer stock model from features when model_id is NULL
+      else if (order.features && typeof order.features === 'object') {
+        const features = order.features;
+        
+        // Check for specific action inlets that indicate stock model types
+        if (features.action_inlet || features.action) {
+          const action = features.action_inlet || features.action;
+          
+          // CF models typically have modern actions like Terminus, Defiance, etc.
+          if (action && typeof action === 'string') {
+            const actionLower = action.toLowerCase();
+            
+            if (actionLower.includes('terminus') || actionLower.includes('defiance') || 
+                actionLower.includes('impact') || actionLower.includes('big_horn')) {
+              stockModelId = 'cf_alpine_hunter'; // Most common CF model
+              product = 'CF Alpine Hunter';
+            }
+            // Traditional Remington 700 actions often go with FG or wood stocks
+            else if (actionLower.includes('remington') || actionLower.includes('rem')) {
+              stockModelId = 'fg_alpine_hunter'; // Most common FG model
+              product = 'FG Alpine Hunter';
+            }
+            // Defiance actions with specific features
+            else if (actionLower.includes('def_dev_hunter_rem')) {
+              stockModelId = 'fg_alpine_hunter';
+              product = 'FG Alpine Hunter';
+            }
+          }
+        }
+        
+        // Check for barrel inlets that might indicate specific models
+        if (!stockModelId || stockModelId === 'universal') {
+          const barrel = features.barrel_inlet;
+          if (barrel && typeof barrel === 'string') {
+            const barrelLower = barrel.toLowerCase();
+            
+            // Heavy barrels often go with tactical/precision stocks
+            if (barrelLower.includes('sendero') || barrelLower.includes('heavy') || barrelLower.includes('varmint')) {
+              stockModelId = 'cf_alpine_hunter';
+              product = 'CF Alpine Hunter';
+            }
+            // Standard/sporter barrels
+            else if (barrelLower.includes('sporter') || barrelLower.includes('standard')) {
+              stockModelId = 'fg_alpine_hunter';
+              product = 'FG Alpine Hunter';
+            }
+          }
+        }
+        
+        // Final fallback based on other features
+        if (!stockModelId || stockModelId === 'universal') {
+          // If it has modern features like QDs, rails, etc., likely CF
+          if (features.qd_accessory || features.rail_accessory || features.bottom_metal) {
+            stockModelId = 'cf_alpine_hunter';
+            product = 'CF Alpine Hunter';
+          }
+          // Otherwise default to FG
+          else {
+            stockModelId = 'fg_alpine_hunter';
+            product = 'FG Alpine Hunter';
+          }
+        }
+      }
+      // Try to extract from item name or product name
+      else if (order.itemName) {
+        stockModelId = order.itemName.toLowerCase().replace(/\s+/g, '_');
+        product = order.itemName;
+      }
+      else if (order.product) {
+        stockModelId = order.product.toLowerCase().replace(/\s+/g, '_');
+        product = order.product;
+      }
+
+      console.log(`🔍 Order mapping: ${order.orderId} → modelId="${order.modelId}", stockModelId="${stockModelId}", product="${product}", featuresType="${typeof order.features}", featuresKeys="${Object.keys(order.features || {}).join(',')}"${order.features?.action_inlet ? ', action_inlet="' + order.features.action_inlet + '"' : ''}${order.features?.action ? ', action="' + order.features.action + '"' : ''}`);
+
+      return {
+        orderId: order.orderId,
+        stockModelId: stockModelId,
+        stockModelName: product,
+        dueDate: order.dueDate || order.orderDate,
+        priorityScore: order.priorityScore || 1,
+        customer: order.customerName || order.customer || 'Unknown',
+        orderDate: order.orderDate,
+        features: order.features || {},
+        product: product,
+        quantity: order.quantity || 1,
+        department: order.department || 'layup',
+        status: order.status || 'pending',
+        source: order.source || 'production_order',
+        modelId: order.modelId // Keep original for debugging
+      };
+    });
 
     // Apply stock model filter if specified
     const filteredOrders = stockModelFilter 
@@ -191,29 +293,47 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           return isAPRMold;
         }
         
-        // CF orders: Only use CF molds
+        // ENHANCED DIRECT STOCK MODEL MATCHING (Primary method)
+        // This should catch most cases including cf_cat, cf_sportsman, fg_alpine_hunter, etc.
+        if (mold.stockModels && Array.isArray(mold.stockModels)) {
+          const exactMatch = mold.stockModels.includes(stockModelId);
+          if (exactMatch) {
+            console.log(`✅ Direct match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+            return true;
+          }
+          
+          // Try partial matching for variations
+          const partialMatch = mold.stockModels.some(sm => 
+            sm.toLowerCase().includes(stockModelId.toLowerCase()) ||
+            stockModelId.toLowerCase().includes(sm.toLowerCase())
+          );
+          if (partialMatch) {
+            console.log(`✅ Partial match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+            return true;
+          }
+        }
+        
+        // CF orders: Pattern matching for CF models
         if (stockModelId.toLowerCase().includes('cf_')) {
-          const isCFMold = mold.modelName.toLowerCase().includes('cf') || 
-                          mold.moldId.toLowerCase().includes('cf');
-
-          return isCFMold;
+          // Check if any stock models in this mold are CF models
+          const hasCFModel = mold.stockModels?.some(sm => sm.toLowerCase().includes('cf'));
+          if (hasCFModel) {
+            console.log(`✅ CF pattern match: ${stockModelId} → ${mold.moldId} (has CF models)`);
+            return true;
+          }
         }
         
-        // FG orders: Only use FG molds  
+        // FG orders: Pattern matching for FG models
         if (stockModelId.toLowerCase().includes('fg_')) {
-          const isFGMold = mold.modelName.toLowerCase().includes('fg') || 
-                          mold.moldId.toLowerCase().includes('fg');
-
-          return isFGMold;
+          // Check if any stock models in this mold are FG models
+          const hasFGModel = mold.stockModels?.some(sm => sm.toLowerCase().includes('fg'));
+          if (hasFGModel) {
+            console.log(`✅ FG pattern match: ${stockModelId} → ${mold.moldId} (has FG models)`);
+            return true;
+          }
         }
-        
-        // Direct stock model match as fallback
-        if (mold.stockModels && mold.stockModels.includes(stockModelId)) {
 
-          return true;
-        }
-        
-
+        console.log(`❌ No match: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels?.join(', ') || 'none'})`);
         return false;
       });
 

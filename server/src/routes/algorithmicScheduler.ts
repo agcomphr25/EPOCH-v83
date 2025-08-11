@@ -9,24 +9,22 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     
     console.log(`🚀 Starting algorithmic scheduler with ${maxOrdersPerDay} orders/day over ${scheduleDays} days`);
 
-    // Fetch production orders sorted by due date and priority  
-    const ordersResult = await pool.query(`
-      SELECT 
-        order_id as "orderId",
-        item_id as "stockModelId",
-        item_name as "modelName",
-        customer_name as "customerName", 
-        due_date as "dueDate",
-        order_date as "orderDate",
-        specifications as "features"
-      FROM production_orders 
-      WHERE current_department IN ('Production Queue', 'Barcode', 'Layup')
-      ORDER BY 
-        CASE WHEN due_date IS NOT NULL THEN due_date ELSE order_date END ASC
-    `);
-
-    const ordersToProcess = ordersResult || [];
-    console.log(`📋 Found ${ordersToProcess.length} orders in production queue`);
+    // Get unified P1 layup queue including all orders from all_orders + production_orders
+    const fetch = (await import('node-fetch')).default;
+    const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
+    const p1QueueData = await p1QueueResponse.json();
+    
+    // Filter out orders that are already scheduled or in later departments
+    const ordersToProcess = p1QueueData.filter((order: any) => {
+      // Only include orders that need to be scheduled for layup
+      const needsScheduling = !order.currentDepartment || 
+                            order.currentDepartment === 'Production Queue' ||
+                            order.currentDepartment === 'P1 Production Queue';
+      return needsScheduling;
+    });
+    
+    console.log(`📋 Found ${p1QueueData.length} total orders in unified P1 production queue`);
+    console.log(`📋 Found ${ordersToProcess.length} orders needing scheduling`);
 
     // Fetch active molds with capacity and stock models
     const moldsResult = await pool.query(`

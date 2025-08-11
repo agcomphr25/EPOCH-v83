@@ -153,9 +153,15 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         </div>
         {/* Show stock model display name with material type */}
         {(() => {
-          if (!getModelDisplayName || !modelId) return null;
+          console.log(`🎨 CARD DEBUG: order=${order.orderId}, modelId="${modelId}", materialType="${materialType}", getModelDisplayName=${!!getModelDisplayName}`);
+          
+          if (!getModelDisplayName || !modelId) {
+            console.log(`🎨 CARD DEBUG: Early return - getModelDisplayName=${!!getModelDisplayName}, modelId="${modelId}"`);
+            return null;
+          }
 
           const displayName = getModelDisplayName(modelId);
+          console.log(`🎨 CARD DEBUG: displayName="${displayName}"`);
 
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">

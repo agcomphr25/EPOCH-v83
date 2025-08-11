@@ -76,6 +76,68 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
     };
 
+    // Sort orders by priority score and due date before scheduling
+    const sortOrdersByPriority = (orders: any[]) => {
+      const now = new Date();
+      
+      return orders.sort((a, b) => {
+        // Calculate dynamic priority scores based on business rules
+        const calculatePriority = (order: any) => {
+          const dueDate = new Date(order.dueDate || order.due_date || order.orderDate || '2099-12-31');
+          const daysDiff = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          let priority = 0;
+          
+          // Mesa Universal orders get highest priority (business requirement)
+          const stockModelId = order.stockModelId || order.modelId || '';
+          if (stockModelId.toLowerCase().includes('mesa_universal') || 
+              stockModelId.toLowerCase().includes('mesa universal')) {
+            priority += 1000; // Very high priority
+          }
+          
+          // Due date urgency scoring (closer due dates = higher priority)
+          if (daysDiff < 0) priority += 500; // Overdue orders
+          else if (daysDiff <= 7) priority += 300; // Due within a week
+          else if (daysDiff <= 14) priority += 200; // Due within 2 weeks
+          else if (daysDiff <= 30) priority += 100; // Due within a month
+          
+          // Existing priority score from database (if available)
+          const dbPriority = order.priorityScore || order.priority_score || 0;
+          priority += dbPriority;
+          
+          return priority;
+        };
+        
+        const priorityA = calculatePriority(a);
+        const priorityB = calculatePriority(b);
+        
+        // If priority scores are different, prioritize higher score
+        if (priorityA !== priorityB) {
+          return priorityB - priorityA; // Higher priority first
+        }
+        
+        // If priority scores are equal, sort by due date (earlier first)
+        const dueDateA = new Date(a.dueDate || a.due_date || a.orderDate || '2099-12-31');
+        const dueDateB = new Date(b.dueDate || b.due_date || b.orderDate || '2099-12-31');
+        
+        return dueDateA.getTime() - dueDateB.getTime(); // Earlier due date first
+      });
+    };
+
+    // Apply priority-based sorting to orders
+    const prioritizedOrders = sortOrdersByPriority([...ordersToProcess]);
+    console.log(`🎯 Sorted ${prioritizedOrders.length} orders by priority score and due date`);
+    
+    // Show top priority orders with calculated priorities
+    console.log(`📈 Top 10 priority orders:`);
+    prioritizedOrders.slice(0, 10).forEach((order, index) => {
+      const dueDate = new Date(order.dueDate || order.due_date || order.orderDate || '2099-12-31');
+      const stockModelId = order.stockModelId || order.modelId || 'unknown';
+      const isMesaUniversal = stockModelId.toLowerCase().includes('mesa_universal') || 
+                              stockModelId.toLowerCase().includes('mesa universal');
+      console.log(`   ${index + 1}. ${order.orderId}: ${stockModelId}, Due ${dueDate.toDateString()}${isMesaUniversal ? ' [MESA UNIVERSAL - HIGH PRIORITY]' : ''}`);
+    });
+
     // Generate work dates (Monday-Thursday only)
     const generateWorkDates = (startDate: Date, days: number): Date[] => {
       const workDates: Date[] = [];
@@ -118,8 +180,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
     });
 
-    // Process each order
-    for (const order of ordersToProcess) {
+    // Process each order (now prioritized by score and due date)
+    for (const order of prioritizedOrders) {
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       
       // Extract material prefix (CF/FG)
@@ -210,7 +272,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     }
 
     // Calculate success metrics and return results
-    const totalProcessed = ordersToProcess.length;
+    const totalProcessed = prioritizedOrders.length;
     const totalScheduled = allocations.length;
     const successRate = totalProcessed > 0 ? (totalScheduled / totalProcessed) * 100 : 0;
     
@@ -223,7 +285,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (requested: ${maxOrdersPerDay})`);
 
     // Analyze failed orders
-    const unscheduledOrders = ordersToProcess.slice(totalScheduled);
+    const unscheduledOrders = prioritizedOrders.slice(totalScheduled);
     if (unscheduledOrders.length > 0) {
       console.log(`❌ First 10 unscheduled orders:`);
       unscheduledOrders.slice(0, 10).forEach(order => {

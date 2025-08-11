@@ -153,15 +153,9 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
         </div>
         {/* Show stock model display name with material type */}
         {(() => {
-          console.log(`🎨 CARD DEBUG: order=${order.orderId}, modelId="${modelId}", materialType="${materialType}", getModelDisplayName=${!!getModelDisplayName}`);
-          
-          if (!getModelDisplayName || !modelId) {
-            console.log(`🎨 CARD DEBUG: Early return - getModelDisplayName=${!!getModelDisplayName}, modelId="${modelId}"`);
-            return null;
-          }
+          if (!getModelDisplayName || !modelId) return null;
 
           const displayName = getModelDisplayName(modelId);
-          console.log(`🎨 CARD DEBUG: displayName="${displayName}"`);
 
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
@@ -1440,14 +1434,24 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Only trigger if we have production queue orders and no existing assignments
+    // Only trigger if we have production queue orders and they significantly outnumber scheduled orders
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
+      const scheduledOrderCount = generatedSchedule ? generatedSchedule.length : 0;
+      const unscheduledOrderCount = orders.length - scheduledOrderCount;
       
-      if (!hasAssignments && !hasGeneratedSchedule) {
-        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule...');
-        console.log('🏭 Production queue:', orders.length, 'orders ready for scheduling');
+      console.log('📊 SCHEDULE ANALYSIS:', {
+        totalOrders: orders.length,
+        scheduledOrders: scheduledOrderCount,
+        unscheduledOrders: unscheduledOrderCount,
+        needsScheduling: unscheduledOrderCount > 50
+      });
+      
+      // Auto-trigger if we have many unscheduled orders (threshold: 50+ orders)
+      if (unscheduledOrderCount > 50) {
+        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders...');
+        console.log('🏭 Production queue:', orders.length, 'total orders,', scheduledOrderCount, 'already scheduled');
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
         
         // Auto-trigger the algorithmic scheduler to process the production queue
@@ -1456,7 +1460,7 @@ export default function LayupScheduler() {
           generateAlgorithmicSchedule();
         }, 1000);
       } else {
-        console.log('🏭 PRODUCTION FLOW: Schedule already exists, not regenerating');
+        console.log('🏭 PRODUCTION FLOW: Schedule looks complete -', scheduledOrderCount, 'scheduled,', unscheduledOrderCount, 'remaining');
       }
     } else {
       console.log('❌ PRODUCTION FLOW: Missing resources for scheduling:', {

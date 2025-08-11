@@ -21,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', authenticateToken, async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const itemData = insertInventoryItemSchema.parse(req.body);
     const newItem = await storage.createInventoryItem(itemData);
@@ -36,7 +36,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const updates = req.body;
@@ -49,7 +49,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // DELETE route for deleting inventory items at the root level
-router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     await storage.deleteInventoryItem(itemId);
@@ -181,7 +181,7 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
 });
 
 // CSV Import endpoint
-router.post('/import/csv', authenticateToken, async (req: Request, res: Response) => {
+router.post('/import/csv', async (req: Request, res: Response) => {
   try {
     const { csvData } = req.body;
     

@@ -5,7 +5,7 @@ const router = Router();
 
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
-    const { maxOrdersPerDay = 20, scheduleDays = 25 } = req.body;
+    const { maxOrdersPerDay = 50, scheduleDays = 60 } = req.body;
     
     console.log(`🚀 Starting algorithmic scheduler with ${maxOrdersPerDay} orders/day over ${scheduleDays} days`);
 
@@ -20,7 +20,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         order_date as "orderDate",
         specifications as "features"
       FROM production_orders 
-      WHERE current_department = 'Barcode'
+      WHERE current_department IN ('Production Queue', 'Barcode', 'Layup')
       ORDER BY 
         CASE WHEN due_date IS NOT NULL THEN due_date ELSE order_date END ASC
     `);

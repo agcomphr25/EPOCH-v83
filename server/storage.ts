@@ -86,7 +86,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, getTableColumns } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
@@ -177,6 +177,7 @@ export interface IStorage {
   getAllOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getOrderById(orderId: string): Promise<OrderDraft | undefined>;
+  getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
 
   // Order ID generation with atomic reservation system
   generateNextOrderId(): Promise<string>;
@@ -347,6 +348,7 @@ export interface IStorage {
 
   // Module 8: Customers CRUD
   getAllCustomers(): Promise<Customer[]>;
+  getCustomersWithPurchaseOrders(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(data: InsertCustomer): Promise<Customer>;
@@ -1360,9 +1362,58 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getOrderById(orderId: string): Promise<OrderDraft | undefined> {
-    const [order] = await db.select().from(orderDrafts).where(eq(orderDrafts.orderId, orderId));
-    return order || undefined;
+  // Get order by ID (search both drafts and finalized)
+  async getOrderById(orderId: string) {
+    try {
+      // Try finalized orders first
+      const finalizedOrder = await this.getFinalizedOrderById(orderId);
+      if (finalizedOrder) {
+        return { ...finalizedOrder, isFinalized: true };
+      }
+
+      // If not found, try draft orders
+      const draftOrder = await this.getOrderDraft(orderId);
+      if (draftOrder) {
+        return { ...draftOrder, isFinalized: false };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error getting order by ID:", error);
+      throw error;
+    }
+  }
+
+  // Get multiple orders by IDs
+  async getOrdersByIds(orderIds: string[]) {
+    try {
+      // Get from both finalized and draft orders
+      const finalizedOrders = await db.select()
+        .from(allOrders)
+        .where(inArray(allOrders.orderId, orderIds));
+
+      const draftOrders = await db.select()
+        .from(orderDrafts)
+        .where(inArray(orderDrafts.orderId, orderIds));
+
+      // Combine and deduplicate (prioritize finalized over draft)
+      const orderMap = new Map();
+
+      // Add draft orders first
+      draftOrders.forEach(order => {
+        orderMap.set(order.orderId, { ...order, isFinalized: false });
+      });
+
+      // Add finalized orders (will overwrite drafts if same ID)
+      finalizedOrders.forEach(order => {
+        orderMap.set(order.orderId, { ...order, isFinalized: true });
+      });
+
+      return Array.from(orderMap.values());
+    } catch (error) {
+      console.error("Error getting orders by IDs:", error);
+      throw error;
+    }
   }
 
   async searchOrders(query: string): Promise<{
@@ -1570,7 +1621,7 @@ export class DatabaseStorage implements IStorage {
     if (insertData.actualDelivery instanceof Date) {
       insertData.actualDelivery = insertData.actualDelivery.toISOString().split('T')[0];
     }
-    
+
     const [request] = await db.insert(partsRequests).values(insertData).returning();
     return request;
   }
@@ -1631,7 +1682,7 @@ export class DatabaseStorage implements IStorage {
     if (insertData.hireDate instanceof Date) {
       insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
     }
-    
+
     const [employee] = await db.insert(employees).values(insertData).returning();
     return employee;
   }
@@ -2340,7 +2391,7 @@ export class DatabaseStorage implements IStorage {
     if (insertData.date instanceof Date) {
       insertData.date = insertData.date.toISOString().split('T')[0];
     }
-    
+
     const [item] = await db.insert(checklistItems).values(insertData).returning();
     return item;
   }
@@ -2351,7 +2402,7 @@ export class DatabaseStorage implements IStorage {
     if (updateData.date instanceof Date) {
       updateData.date = updateData.date.toISOString().split('T')[0];
     }
-    
+
     const [item] = await db.update(checklistItems)
       .set(updateData)
       .where(eq(checklistItems.id, id))

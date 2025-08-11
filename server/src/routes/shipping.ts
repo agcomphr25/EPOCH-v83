@@ -1,355 +1,233 @@
 
-import path from "path";
-import fs from "fs";
-import { Router } from "express";
-import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { Router, Request, Response } from 'express';
+import { storage } from '../../storage';
+import { db } from '../../db';
+import { eq, inArray } from 'drizzle-orm';
+import { allOrders, orderDrafts } from '../../schema';
 
-// Import existing utilities and schemas
-import { createShipment } from "../utils/upsShipping";
-import { storage } from "../../storage";
-import { orderDrafts, customers, customerAddresses } from "../../schema";
+const router = Router();
 
-// Validation schemas
-export const CreateLabelInput = z.object({
-  orderId: z.number().int().positive(),
-  serviceCode: z.string().default("03"),
+// Get order by ID (checks both draft and finalized orders)
+router.get('/order/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Try finalized orders first
+    let order = await storage.getFinalizedOrderById(orderId);
+    
+    // If not found, try draft orders
+    if (!order) {
+      order = await storage.getOrderDraft(orderId);
+    }
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json(order);
+  } catch (error) {
+    console.error('Error getting order:', error);
+    res.status(500).json({ error: 'Failed to get order' });
+  }
 });
 
-export const CreateLabelsInput = z.object({
-  orderIds: z.array(z.number().int().positive()).min(1),
-  serviceCode: z.string().default("03"),
-});
-
-type Ctx = { db: NodePgDatabase; projectRoot: string };
-
-export default function shippingRoutes({ db, projectRoot }: Ctx) {
-  const router = Router();
-
-  // Prepare file storage dirs (for Replit FS). For prod, switch to S3/GCS.
-  const filesDir = path.join(projectRoot, "files");
-  const labelsDir = path.join(filesDir, "labels");
-  const invoicesDir = path.join(filesDir, "invoices");
-  for (const d of [filesDir, labelsDir, invoicesDir]) {
-    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-  }
-
-  // Enhanced helpers using existing storage methods
-  async function getOrderById(orderId: number) {
-    try {
-      const order = await storage.getFinalizedOrderById(orderId.toString());
-      if (!order) {
-        // Try draft orders as fallback
-        const draft = await storage.getOrderDraft(orderId.toString());
-        return draft;
-      }
-      return order;
-    } catch (error) {
-      console.error(`Error fetching order ${orderId}:`, error);
-      throw new Error(`Order ${orderId} not found`);
+// Get multiple orders by IDs
+router.get('/orders/bulk', async (req: Request, res: Response) => {
+  try {
+    const { orderIds } = req.query;
+    
+    if (!orderIds || typeof orderIds !== 'string') {
+      return res.status(400).json({ error: 'orderIds query parameter is required' });
     }
-  }
-
-  async function getOrdersByIds(orderIds: number[]) {
-    const orders = [];
-    for (const id of orderIds) {
-      try {
-        const order = await getOrderById(id);
-        if (order) orders.push(order);
-      } catch (error) {
-        console.warn(`Skipping order ${id}: ${error.message}`);
-      }
-    }
-    return orders;
-  }
-
-  async function getCustomerAndAddress(customerId: string) {
-    const customerResult = await db.select({
-      customer: customers,
-      address: customerAddresses
-    })
-    .from(customers)
-    .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id))
-    .where(eq(customers.id, parseInt(customerId)));
-
-    if (!customerResult || customerResult.length === 0) {
-      throw new Error(`Customer ${customerId} not found`);
-    }
-
-    return customerResult[0];
-  }
-
-  async function insertShipment(row: {
-    orderId: number;
-    trackingNumber: string;
-    labelUrl: string;
-    status: string;
-    labelFormat?: string;
-    serviceCode?: string;
-    packageWeightOz?: number;
-  }) {
-    // Update the order with shipping information
-    await storage.updateFinalizedOrder(row.orderId.toString(), {
-      trackingNumber: row.trackingNumber,
-      shippingCarrier: 'UPS',
-      shippingMethod: row.serviceCode || '03',
-      shippedDate: new Date().toISOString(),
-      shippingLabelGenerated: true,
-      customerNotified: false
+    
+    const ids = orderIds.split(',').map(id => id.trim());
+    
+    // Get from both finalized and draft orders
+    const finalizedOrders = await db.select()
+      .from(allOrders)
+      .where(inArray(allOrders.orderId, ids));
+    
+    const draftOrders = await db.select()
+      .from(orderDrafts)
+      .where(inArray(orderDrafts.orderId, ids));
+    
+    // Combine and deduplicate (prioritize finalized over draft)
+    const orderMap = new Map();
+    
+    // Add draft orders first
+    draftOrders.forEach(order => {
+      orderMap.set(order.orderId, { ...order, isFinalized: false });
     });
-  }
-
-  // Build packing slip PDF (placeholder - integrate your existing PDF generation)
-  async function buildPackingSlipPDF(orders: any[]) {
-    // This would use your existing PDF generation logic
-    // For now, return a placeholder path
-    const filename = `packing-slip-${Date.now()}.pdf`;
-    const filepath = path.join(invoicesDir, filename);
     
-    // TODO: Integrate your existing PDF generation from shippingPdf.ts
-    // For now, create a simple text file as placeholder
-    const orderSummary = orders.map(o => `Order ${o.orderId}: ${o.customer || 'N/A'}`).join('\n');
-    fs.writeFileSync(filepath, `Packing Slip\n\n${orderSummary}`, 'utf8');
+    // Add finalized orders (will overwrite drafts if same ID)
+    finalizedOrders.forEach(order => {
+      orderMap.set(order.orderId, { ...order, isFinalized: true });
+    });
     
-    return `/files/invoices/${filename}`;
+    const orders = Array.from(orderMap.values());
+    
+    res.json(orders);
+  } catch (error) {
+    console.error('Error getting orders in bulk:', error);
+    res.status(500).json({ error: 'Failed to get orders' });
   }
+});
 
-  // Single order → label (enhanced with better error handling)
-  router.post("/ups/label", async (req, res) => {
-    try {
-      const input = CreateLabelInput.parse(req.body);
-      const { orderId, serviceCode } = input;
+// Get orders ready for shipping
+router.get('/ready-for-shipping', async (req: Request, res: Response) => {
+  try {
+    // Get orders that are in QC or Shipping departments
+    const orders = await storage.getAllFinalizedOrders();
+    const shippingOrders = orders.filter((order: any) => 
+      order.currentDepartment === 'QC' || 
+      order.currentDepartment === 'Shipping' ||
+      (order.qcCompletedAt && !order.shippedDate)
+    );
+    
+    res.json(shippingOrders);
+  } catch (error) {
+    console.error('Error getting shipping-ready orders:', error);
+    res.status(500).json({ error: 'Failed to get shipping-ready orders' });
+  }
+});
 
-      const order = await getOrderById(orderId);
-      if (!order) {
-        return res.status(404).json({ error: `Order ${orderId} not found` });
-      }
+// Mark order as shipped
+router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { 
+      trackingNumber, 
+      shippingCarrier = 'UPS', 
+      shippingMethod = 'Ground',
+      estimatedDelivery,
+      sendNotification = true,
+      notificationMethod = 'email'
+    } = req.body;
 
-      // Get customer and address information
-      const { customer, address } = await getCustomerAndAddress(order.customerId || '0');
-      
-      if (!customer) {
-        return res.status(404).json({ error: 'Customer not found for this order' });
-      }
-
-      // Prepare shipping data
-      const shippingAddress = address ? {
-        name: `${customer.firstName} ${customer.lastName}`,
-        street: address.street,
-        city: address.city,
-        state: address.state,
-        zip: address.zip
-      } : null;
-
-      if (!shippingAddress) {
-        return res.status(400).json({ error: 'No shipping address found for customer' });
-      }
-
-      // Create UPS shipment using existing utility
-      const shipmentResult = await createShipment({
-        orderId: orderId.toString(),
-        serviceCode,
-        shippingAddress,
-        packageDetails: {
-          weight: '1', // Default weight, should come from order
-          length: '12',
-          width: '9',
-          height: '6'
-        }
-      });
-
-      if (!shipmentResult.success) {
-        throw new Error(shipmentResult.error || 'UPS shipment creation failed');
-      }
-
-      // Save label to file system
-      const labelFilename = `ups-label-${orderId}-${shipmentResult.trackingNumber}.pdf`;
-      const labelPath = path.join(labelsDir, labelFilename);
-      
-      // Save the label (assuming shipmentResult contains label data)
-      if (shipmentResult.labelData) {
-        fs.writeFileSync(labelPath, shipmentResult.labelData);
-      }
-
-      const labelUrl = `/files/labels/${labelFilename}`;
-
-      // Record shipment in database
-      await insertShipment({
-        orderId,
-        trackingNumber: shipmentResult.trackingNumber,
-        labelUrl,
-        status: 'shipped',
-        serviceCode,
-        packageWeightOz: 16 // Default 1 lb
-      });
-
-      res.json({
-        ok: true,
-        trackingNumber: shipmentResult.trackingNumber,
-        labelUrl
-      });
-
-    } catch (error) {
-      console.error('UPS label creation error:', error);
-      res.status(500).json({ 
-        error: "Failed to create UPS label", 
-        details: error.message 
-      });
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'Tracking number is required' });
     }
-  });
 
-  // Batch orders → multiple labels + combined packing slip
-  router.post("/ups/labels", async (req, res) => {
+    // Update order with shipping information
+    const updateData = {
+      currentDepartment: 'Shipped',
+      trackingNumber,
+      shippingCarrier,
+      shippingMethod,
+      shippedDate: new Date(),
+      shippingCompletedAt: new Date(),
+      estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : null,
+      customerNotified: sendNotification,
+      notificationMethod: sendNotification ? notificationMethod : null,
+      notificationSentAt: sendNotification ? new Date() : null,
+    };
+
+    // Try to update in finalized orders first
+    let updatedOrder;
     try {
-      const input = CreateLabelsInput.parse(req.body);
-      const { orderIds, serviceCode } = input;
-
-      const orders = await getOrdersByIds(orderIds);
-      if (orders.length === 0) {
-        return res.status(400).json({ error: "No valid orders found" });
-      }
-
-      const results = [];
-      const errors = [];
-
-      // Process each order
-      for (const order of orders) {
-        try {
-          // Get customer and address
-          const { customer, address } = await getCustomerAndAddress(order.customerId || '0');
-          
-          if (!customer || !address) {
-            errors.push(`Order ${order.orderId}: Missing customer or address`);
-            continue;
-          }
-
-          const shippingAddress = {
-            name: `${customer.firstName} ${customer.lastName}`,
-            street: address.street,
-            city: address.city,
-            state: address.state,
-            zip: address.zip
-          };
-
-          // Create UPS shipment
-          const shipmentResult = await createShipment({
-            orderId: order.orderId,
-            serviceCode,
-            shippingAddress,
-            packageDetails: {
-              weight: '1',
-              length: '12',
-              width: '9', 
-              height: '6'
-            }
-          });
-
-          if (!shipmentResult.success) {
-            errors.push(`Order ${order.orderId}: ${shipmentResult.error}`);
-            continue;
-          }
-
-          // Save label
-          const labelFilename = `ups-label-${order.orderId}-${shipmentResult.trackingNumber}.pdf`;
-          const labelPath = path.join(labelsDir, labelFilename);
-          
-          if (shipmentResult.labelData) {
-            fs.writeFileSync(labelPath, shipmentResult.labelData);
-          }
-
-          const labelUrl = `/files/labels/${labelFilename}`;
-
-          // Record shipment
-          await insertShipment({
-            orderId: parseInt(order.orderId),
-            trackingNumber: shipmentResult.trackingNumber,
-            labelUrl,
-            status: 'shipped',
-            serviceCode
-          });
-
-          results.push({
-            orderId: parseInt(order.orderId),
-            trackingNumber: shipmentResult.trackingNumber,
-            labelUrl
-          });
-
-        } catch (orderError) {
-          errors.push(`Order ${order.orderId}: ${orderError.message}`);
-        }
-      }
-
-      // Generate combined packing slip
-      const invoiceUrl = await buildPackingSlipPDF(orders);
-
-      res.json({
-        ok: true,
-        labels: results,
-        invoiceUrl,
-        errors: errors.length > 0 ? errors : undefined
-      });
-
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
     } catch (error) {
-      console.error('Batch UPS labels creation error:', error);
-      res.status(500).json({ 
-        error: "Failed to create UPS labels batch", 
-        details: error.message 
-      });
+      // If not found in finalized orders, try draft orders
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
     }
-  });
 
-  // Get shipping status for order(s)
-  router.get("/status/:orderId", async (req, res) => {
+    // Send customer notification if requested
+    if (sendNotification) {
+      try {
+        const { sendCustomerNotification } = await import('../../utils/notifications');
+        await sendCustomerNotification({
+          orderId,
+          trackingNumber,
+          carrier: shippingCarrier,
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined
+        });
+      } catch (notificationError) {
+        console.error('Failed to send customer notification:', notificationError);
+        // Don't fail the entire request if notification fails
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Order marked as shipped',
+      order: updatedOrder 
+    });
+
+  } catch (error) {
+    console.error('Error marking order as shipped:', error);
+    res.status(500).json({ error: 'Failed to mark order as shipped' });
+  }
+});
+
+// Update tracking information
+router.put('/tracking/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { 
+      trackingNumber,
+      shippingCarrier,
+      shippingMethod,
+      estimatedDelivery,
+      deliveryConfirmed,
+      customerNotified,
+      notificationMethod 
+    } = req.body;
+
+    const updateData: any = {};
+    
+    if (trackingNumber !== undefined) updateData.trackingNumber = trackingNumber;
+    if (shippingCarrier !== undefined) updateData.shippingCarrier = shippingCarrier;
+    if (shippingMethod !== undefined) updateData.shippingMethod = shippingMethod;
+    if (estimatedDelivery !== undefined) updateData.estimatedDelivery = estimatedDelivery ? new Date(estimatedDelivery) : null;
+    if (deliveryConfirmed !== undefined) {
+      updateData.deliveryConfirmed = deliveryConfirmed;
+      if (deliveryConfirmed) {
+        updateData.deliveryConfirmedAt = new Date();
+      }
+    }
+    if (customerNotified !== undefined) updateData.customerNotified = customerNotified;
+    if (notificationMethod !== undefined) updateData.notificationMethod = notificationMethod;
+
+    // Try to update in finalized orders first
+    let updatedOrder;
     try {
-      const orderId = req.params.orderId;
-      const order = await getOrderById(parseInt(orderId));
-      
-      if (!order) {
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      res.json({
-        orderId,
-        trackingNumber: order.trackingNumber,
-        shippingCarrier: order.shippingCarrier,
-        shippedDate: order.shippedDate,
-        estimatedDelivery: order.estimatedDelivery,
-        customerNotified: order.customerNotified
-      });
-
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
     } catch (error) {
-      console.error('Get shipping status error:', error);
-      res.status(500).json({ error: "Failed to get shipping status" });
+      // If not found in finalized orders, try draft orders
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
     }
-  });
 
-  // Notify customer of shipment
-  router.post("/notify/:orderId", async (req, res) => {
-    try {
-      const orderId = req.params.orderId;
-      const { method = 'email' } = req.body; // 'email' or 'sms'
+    res.json({ 
+      success: true, 
+      message: 'Tracking information updated',
+      order: updatedOrder 
+    });
 
-      const order = await getOrderById(parseInt(orderId));
-      if (!order || !order.trackingNumber) {
-        return res.status(400).json({ error: "Order not shipped yet" });
-      }
+  } catch (error) {
+    console.error('Error updating tracking information:', error);
+    res.status(500).json({ error: 'Failed to update tracking information' });
+  }
+});
 
-      // TODO: Integrate with your communication system
-      // For now, just mark as notified
-      await storage.updateFinalizedOrder(orderId, {
-        customerNotified: true,
-        notificationMethod: method,
-        notificationSentAt: new Date().toISOString()
-      });
+// Get shipping statistics
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllFinalizedOrders();
+    
+    const stats = {
+      readyForShipping: orders.filter((o: any) => 
+        (o.currentDepartment === 'QC' || o.currentDepartment === 'Shipping') && !o.shippedDate
+      ).length,
+      shipped: orders.filter((o: any) => o.shippedDate).length,
+      delivered: orders.filter((o: any) => o.deliveryConfirmed).length,
+      pending: orders.filter((o: any) => o.shippedDate && !o.deliveryConfirmed).length
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting shipping stats:', error);
+    res.status(500).json({ error: 'Failed to get shipping statistics' });
+  }
+});
 
-      res.json({ success: true, message: "Customer notified" });
-
-    } catch (error) {
-      console.error('Customer notification error:', error);
-      res.status(500).json({ error: "Failed to notify customer" });
-    }
-  });
-
-  return router;
-}
+export default router;

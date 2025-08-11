@@ -151,7 +151,36 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
         Service: {
           Code: "03"
         },
-        Package: {
+        Package: Array.isArray(packageDetails.packages) ? packageDetails.packages.map((pkg: any, index: number) => ({
+          Description: `Composite Parts - Order ${orderData.orderId} - Package ${index + 1}`,
+          Packaging: {
+            Code: "02"
+          },
+          Dimensions: {
+            UnitOfMeasurement: {
+              Code: "IN"
+            },
+            Length: pkg.length || "12",
+            Width: pkg.width || "12", 
+            Height: pkg.height || "12"
+          },
+          PackageWeight: {
+            UnitOfMeasurement: {
+              Code: "LBS"
+            },
+            Weight: pkg.weight || "10"
+          },
+          InsuredValue: {
+            CurrencyCode: "USD",
+            MonetaryValue: (pkg.value || packageValue || 0).toFixed(2)
+          },
+          PackageServiceOptions: {
+            DeclaredValue: {
+              CurrencyCode: "USD",
+              MonetaryValue: (pkg.value || packageValue || 0).toFixed(2)
+            }
+          }
+        })) : {
           Description: `Composite Parts - Order ${orderData.orderId}`,
           Packaging: {
             Code: "02"

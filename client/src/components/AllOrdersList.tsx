@@ -30,7 +30,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -42,9 +42,9 @@ export default function AllOrdersList() {
 
   // Set up global handler for communication buttons in tooltip
   React.useEffect(() => {
-    window.handleCommunicationOpen = handleCommunicationOpen;
+    (window as any).handleCommunicationOpen = handleCommunicationOpen;
     return () => {
-      delete window.handleCommunicationOpen;
+      delete (window as any).handleCommunicationOpen;
     };
   }, []);
 
@@ -69,7 +69,7 @@ export default function AllOrdersList() {
   };
 
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
+    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
         body: { nextDepartment }
@@ -144,7 +144,7 @@ export default function AllOrdersList() {
     return departmentMatch && searchMatch;
   }) || [];
 
-  const handleProgressOrder = (orderId: string, nextDepartment: string) => {
+  const handleProgressOrder = (orderId: string, nextDepartment?: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
@@ -159,7 +159,7 @@ export default function AllOrdersList() {
 
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
-      'Production Queue': 'bg-slate-600',
+      'P1 Production Queue': 'bg-slate-600',
       'Layup': 'bg-blue-500',
       'Plugging': 'bg-orange-500',
       'CNC': 'bg-green-500',
@@ -180,7 +180,7 @@ export default function AllOrdersList() {
   const handlePushToLayupPlugging = (orderId: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup' });
   };
-  const handleCommunicationOpen = (customer, communicationType) => {
+  const handleCommunicationOpen = (customer: any, communicationType: string) => {
     setSelectedCustomer({
       ...customer,
       preferredCommunication: communicationType
@@ -299,9 +299,9 @@ export default function AllOrdersList() {
                       })() : '-'}
                     </TableCell>
                     <TableCell>
-                      <CustomerDetailsTooltip customer={order.customer}>
+                      <CustomerDetailsTooltip customerId={order.customerId}>
                         <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
-                          {order.customer?.name || 'N/A'}
+                          {order.customer || 'N/A'}
                         </span>
                       </CustomerDetailsTooltip>
                     </TableCell>
@@ -353,7 +353,7 @@ export default function AllOrdersList() {
                           </Button>
                         </Link>
 
-                        {!isScrapped && !isComplete && order.currentDepartment === 'Production Queue' && (
+                        {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
                           <Button
                             size="sm"
                             onClick={() => handlePushToLayupPlugging(order.orderId)}
@@ -365,7 +365,7 @@ export default function AllOrdersList() {
                           </Button>
                         )}
 
-                        {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'Production Queue' && (
+                        {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
                             onClick={() => handleProgressOrder(order.orderId, nextDept)}
@@ -425,6 +425,7 @@ export default function AllOrdersList() {
 
       {communicationModalOpen && selectedCustomer && (
         <CommunicationCompose
+          isOpen={communicationModalOpen}
           customer={selectedCustomer}
           onClose={handleCommunicationClose}
           defaultType={selectedCustomer.preferredCommunication}

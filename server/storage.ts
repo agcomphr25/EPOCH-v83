@@ -2636,6 +2636,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(molds).where(eq(molds.moldId, moldId));
   }
 
+  async clearMoldFromSchedule(moldId: string): Promise<void> {
+    await db.delete(layupSchedule).where(eq(layupSchedule.moldId, moldId));
+  }
+
   // Layup Scheduler: Employee Settings CRUD
   async getAllEmployeeLayupSettings(): Promise<(EmployeeLayupSettings & { name: string })[]> {
     const result = await db

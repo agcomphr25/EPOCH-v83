@@ -1538,7 +1538,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Update order department endpoint
+  // Update order department endpoint with progress logic
   app.post('/api/orders/update-department', async (req, res) => {
     try {
       const { orderIds, department, status } = req.body;
@@ -1552,22 +1552,72 @@ export function registerRoutes(app: Express): Server {
       }
 
       const { storage } = await import('../../storage');
+      const updatedOrders = [];
 
-      // Update orders in the main orders table
+      // Update each order individually with proper completion timestamps
       for (const orderId of orderIds) {
-        // Using updateOrderDraft method instead of direct query
-        await storage.updateOrderDraft(orderId, {
-          currentDepartment: department,
-          status: status || 'IN_PROGRESS'
-        });
+        try {
+          // Get current order to determine its current department
+          let currentOrder = await storage.getFinalizedOrderById(orderId);
+          let isFinalized = true;
+
+          if (!currentOrder) {
+            currentOrder = await storage.getOrderDraft(orderId);
+            isFinalized = false;
+          }
+
+          if (!currentOrder) {
+            console.warn(`Order ${orderId} not found, skipping`);
+            continue;
+          }
+
+          // Prepare completion timestamp update based on current department
+          const completionUpdates: any = {};
+          const now = new Date();
+
+          // Set completion timestamp for the department we're leaving
+          switch (currentOrder.currentDepartment) {
+            case 'Layup': completionUpdates.layupCompletedAt = now; break;
+            case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
+            case 'CNC': completionUpdates.cncCompletedAt = now; break;
+            case 'Finish': completionUpdates.finishCompletedAt = now; break;
+            case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+            case 'Paint': completionUpdates.paintCompletedAt = now; break;
+            case 'QC': completionUpdates.qcCompletedAt = now; break;
+            case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
+          }
+
+          // Update the appropriate table
+          let updatedOrder;
+          if (isFinalized) {
+            updatedOrder = await storage.updateFinalizedOrder(orderId, {
+              currentDepartment: department,
+              status: status || 'IN_PROGRESS',
+              ...completionUpdates
+            });
+          } else {
+            updatedOrder = await storage.updateOrderDraft(orderId, {
+              currentDepartment: department,
+              status: status || 'IN_PROGRESS',
+              ...completionUpdates,
+              updatedAt: now
+            });
+          }
+
+          updatedOrders.push(updatedOrder);
+          console.log(`✅ Progressed order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
+        } catch (orderError) {
+          console.error(`Error updating order ${orderId}:`, orderError);
+        }
       }
 
-      console.log(`✅ Updated ${orderIds.length} orders to department: ${department}`);
+      console.log(`✅ Updated ${updatedOrders.length}/${orderIds.length} orders to department: ${department}`);
 
       res.json({ 
         success: true, 
-        message: `Updated ${orderIds.length} orders to ${department} department`,
-        updatedOrders: orderIds.length
+        message: `Updated ${updatedOrders.length} orders to ${department} department`,
+        updatedOrders: updatedOrders.length,
+        totalRequested: orderIds.length
       });
     } catch (error) {
       console.error('❌ Update department error:', error);

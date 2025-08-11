@@ -148,8 +148,8 @@ export function registerRoutes(app: Express): Server {
   // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-    
       const { storage } = await import('../../storage');
+      const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
       // Get all orders that haven't entered production yet (P1 Production Queue)
       const allOrders = await storage.getAllOrders();
@@ -163,31 +163,47 @@ export function registerRoutes(app: Express): Server {
         order.itemName && order.itemName.includes('Mesa')
       );
       
-
-      
-      // Combine both order types into unified production queue
+      // Combine both order types into unified production queue with enhanced stock model inference
       const combinedQueue = [
-        ...unscheduledOrders.map(order => ({
-          ...order,
-          source: 'regular_order',
-          priorityScore: calculatePriorityScore(order.dueDate),
-          orderId: order.orderId
-        })),
-        ...mesaOrders.map(order => ({
-          ...order,
-          source: 'mesa_production_order',
-          priorityScore: calculatePriorityScore(order.dueDate),
-          orderId: order.orderId,
-          features: order.specifications || {}, // Map specifications to features
-          product: order.itemName || 'Mesa Universal',
-          stockModelId: order.itemName?.includes('Mesa') ? 'mesa_universal' : 'unknown'
-        }))
+        ...unscheduledOrders.map(order => {
+          const { stockModelId, product } = inferStockModelFromFeatures({
+            ...order,
+            source: 'regular_order'
+          });
+          
+          return {
+            ...order,
+            source: 'regular_order',
+            priorityScore: calculatePriorityScore(order.dueDate),
+            orderId: order.orderId,
+            stockModelId,
+            product,
+            stockModelName: product
+          };
+        }),
+        ...mesaOrders.map(order => {
+          const { stockModelId, product } = inferStockModelFromFeatures({
+            ...order,
+            source: 'mesa_production_order',
+            features: order.specifications || {},
+            itemName: order.itemName
+          });
+          
+          return {
+            ...order,
+            source: 'mesa_production_order',
+            priorityScore: calculatePriorityScore(order.dueDate),
+            orderId: order.orderId,
+            features: order.specifications || {},
+            stockModelId,
+            product,
+            stockModelName: product
+          };
+        })
       ];
       
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
-      
-
       
       res.json(combinedQueue);
     } catch (error) {

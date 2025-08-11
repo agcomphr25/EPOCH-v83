@@ -624,7 +624,7 @@ export function registerRoutes(app: Express): Server {
       const transformedModels = stockModels.map(model => ({
         id: model.id,
         name: model.name,
-        displayName: model.displayName,
+        displayName: model.displayName || (model as any).display_name || model.name,
         price: model.price,
         description: model.description,
         isActive: model.isActive,

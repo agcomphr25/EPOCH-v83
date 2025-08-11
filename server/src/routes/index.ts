@@ -328,6 +328,11 @@ export function registerRoutes(app: Express): Server {
         
         // Find compatible molds for this order
         const compatibleMolds = activeMolds.filter(mold => {
+          // Debug logging for specific problematic products
+          if (order.product === 'cf_cat' || order.product === 'cf_k2' || order.product === 'cf_adj_chalk_branch') {
+            console.log(`🔍 Debug matching for ${order.orderId} (${order.product}):`);
+            console.log(`   Checking mold ${mold.moldId}: stockModels=${JSON.stringify(mold.stockModels)}`);
+          }
           if (!mold.stockModels || mold.stockModels.length === 0) return false;
           
           // Special logic for Mesa Universal
@@ -351,10 +356,51 @@ export function registerRoutes(app: Express): Server {
                 return true;
               }
               
-              // Fuzzy matching - check if product matches any stock model
+              // Enhanced product matching for common patterns
               return mold.stockModels.some(modelId => {
                 const modelLower = modelId.toLowerCase();
-                // Check if product name contains the model ID or vice versa
+                
+                // Handle specific product patterns
+                // cf_adj_chalk_branch -> adj_chalk_branch, chalk_branch
+                if (productLower.includes('cf_adj_chalk_branch') && 
+                    (modelLower.includes('adj_chalk_branch') || modelLower.includes('chalk_branch'))) {
+                  return true;
+                }
+                
+                // cf_adj_alp_hunter -> adj_alp_hunter, alp_hunter  
+                if (productLower.includes('cf_adj_alp_hunter') && 
+                    (modelLower.includes('adj_alp_hunter') || modelLower.includes('alp_hunter'))) {
+                  return true;
+                }
+                
+                // cf_cat -> cat
+                if (productLower.includes('cf_cat') && modelLower.includes('cat')) {
+                  return true;
+                }
+                
+                // cf_k2 -> k2
+                if (productLower.includes('cf_k2') && modelLower.includes('k2')) {
+                  return true;
+                }
+                
+                // fg_armor -> armor
+                if (productLower.includes('fg_armor') && modelLower.includes('armor')) {
+                  return true;
+                }
+                
+                // fg_adj_alp_hunter -> adj_alp_hunter, alp_hunter
+                if (productLower.includes('fg_adj_alp_hunter') && 
+                    (modelLower.includes('adj_alp_hunter') || modelLower.includes('alp_hunter'))) {
+                  return true;
+                }
+                
+                // cf_visigoth_tikka -> visigoth, tikka
+                if (productLower.includes('cf_visigoth_tikka') && 
+                    (modelLower.includes('visigoth') || modelLower.includes('tikka'))) {
+                  return true;
+                }
+                
+                // Generic fallback - check if product name contains the model ID or vice versa
                 return productLower.includes(modelLower) || modelLower.includes(productLower);
               });
             }
@@ -365,7 +411,15 @@ export function registerRoutes(app: Express): Server {
         });
         
         if (compatibleMolds.length === 0) {
-          console.log(`⚠️ No compatible molds for order ${order.orderId} (${order.stockModelId})`);
+          console.log(`⚠️ No compatible molds for order ${order.orderId} (${order.stockModelId}), product: ${order.product}`);
+          // Debug: show available mold stockModels for this failed match
+          if (!order.stockModelId || order.stockModelId === 'undefined') {
+            const sampleMolds = activeMolds.slice(0, 3).map(m => ({
+              moldId: m.moldId, 
+              stockModels: m.stockModels
+            }));
+            console.log(`   Available mold samples:`, JSON.stringify(sampleMolds, null, 2));
+          }
           continue;
         }
         

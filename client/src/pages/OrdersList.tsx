@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,6 +100,7 @@ export default function OrdersList() {
     orderId?: string;
   } | null>(null);
   const { toast: showToast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -202,6 +203,10 @@ export default function OrdersList() {
 
   const handleCloseCommunication = () => {
     setCommunicationModal(null);
+  };
+
+  const handleKickbackClick = () => {
+    setLocation('/kickback-tracking');
   };
   
   const handleExportCSV = async () => {
@@ -697,8 +702,9 @@ export default function OrdersList() {
                         </OrderSummaryTooltip>
                         {hasUnresolvedKickback(order.orderId) && (
                           <Badge 
-                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0"
-                            title="This order has unresolved kickbacks"
+                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
+                            title="This order has unresolved kickbacks - Click to view Kickback Tracking"
+                            onClick={handleKickbackClick}
                           >
                             KICKBACK
                           </Badge>

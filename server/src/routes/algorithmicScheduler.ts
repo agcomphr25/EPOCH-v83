@@ -26,6 +26,29 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`📋 Found ${p1QueueData.length} total orders in unified P1 production queue`);
     console.log(`📋 Found ${ordersToProcess.length} orders needing scheduling`);
 
+    // Fetch layup employee production rates
+    const employeeResult = await pool.query(`
+      SELECT employee_id, rate, hours, is_active 
+      FROM employee_layup_settings 
+      WHERE is_active = true AND department = 'Layup'
+    `);
+
+    // Calculate actual daily employee capacity
+    const employees = employeeResult || [];
+    const totalDailyCapacity = employees.reduce((total: number, emp: any) => {
+      return total + (emp.rate * emp.hours);
+    }, 0);
+    
+    console.log(`👥 Found ${employees.length} layup employees with total capacity: ${totalDailyCapacity} parts/day`);
+    employees.forEach((emp: any) => {
+      const dailyCapacity = emp.rate * emp.hours;
+      console.log(`  ${emp.employee_id}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
+    });
+
+    // Use actual employee capacity instead of arbitrary maxOrdersPerDay
+    const actualDailyCapacity = Math.floor(totalDailyCapacity) || 1;
+    console.log(`🎯 Using realistic daily capacity: ${actualDailyCapacity} orders/day (was ${maxOrdersPerDay})`);
+
     // Fetch active molds with capacity and stock models
     const moldsResult = await pool.query(`
       SELECT 
@@ -144,8 +167,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         const dailyKey = workDate.toISOString().split('T')[0];
         const currentDailyCount = dailyAllocationCount.get(dailyKey) || 0;
         
-        // Check daily capacity
-        if (currentDailyCount >= maxOrdersPerDay) {
+        // Check daily capacity based on actual employee production rates
+        if (currentDailyCount >= actualDailyCapacity) {
           continue;
         }
 
@@ -197,7 +220,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`❌ Unable to schedule: ${totalProcessed - totalScheduled}`);
     console.log(`📊 Success rate: ${successRate.toFixed(1)}%`);
     console.log(`🏗️ Work days in schedule: ${scheduleDays}`);
-    console.log(`👥 Daily capacity: ${maxOrdersPerDay} orders/day`);
+    console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (requested: ${maxOrdersPerDay})`);
 
     // Analyze failed orders
     const unscheduledOrders = ordersToProcess.slice(totalScheduled);

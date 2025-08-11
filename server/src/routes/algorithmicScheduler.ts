@@ -11,103 +11,100 @@ const router = Router();
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
     const { 
-      stockModelFilter, 
-      maxOrdersPerDay, 
-      scheduleDays,
-      priorityWeighting 
+      maxOrdersPerDay = 20, 
+      scheduleDays = 25
     } = req.body;
-
-
 
     const { storage } = await import('../../storage');
 
-    // Fetch all necessary data using the same approach as P1 layup queue
-    const [allOrders, productionOrders, allMolds, employees] = await Promise.all([
-      storage.getAllOrders(),
-      storage.getAllProductionOrders(),
-      storage.getAllMolds(),
-      storage.getLayupEmployeeSettings()
-    ]);
-
-    // Build unified production queue (same logic as P1 layup queue endpoint)
-    const unscheduledOrders = allOrders.filter(order => 
-      order.currentDepartment === 'P1 Production Queue'
-    );
+    // *** CORRECT WORKFLOW: Consume from existing production queue endpoint ***
+    console.log(`📋 LAYUP SCHEDULER: Reading from production queue (due date/priority sorted)`);
     
-    const mesaOrders = productionOrders.filter(order => 
-      order.itemName && order.itemName.includes('Mesa')
-    );
+    // Fetch the production queue using the existing endpoint logic
+    const productionQueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
+    if (!productionQueueResponse.ok) {
+      throw new Error('Failed to fetch production queue');
+    }
+    const productionQueue = await productionQueueResponse.json();
     
-    // Helper function to calculate priority score
-    const calculatePriorityScore = (dueDate: string | Date | null): number => {
-      if (!dueDate) return 100;
-      const due = new Date(dueDate);
-      const now = new Date();
-      const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysUntilDue < 0) return 1;
-      if (daysUntilDue <= 7) return 10;
-      return 50;
-    };
-    
-    // Combine both order types into unified production queue
-    const combinedQueue = [
-      ...unscheduledOrders.map((order: any) => ({
-        ...order,
-        source: 'regular_order',
-        priorityScore: calculatePriorityScore(order.dueDate),
-        orderId: order.orderId
-      })),
-      ...mesaOrders.map((order: any) => ({
-        ...order,
-        source: 'mesa_production_order',
-        priorityScore: calculatePriorityScore(order.dueDate),
-        orderId: order.orderId,
-        features: order.specifications || {},
-        product: order.itemName || 'Mesa Universal',
-        stockModelId: order.itemName?.includes('Mesa') ? 'mesa_universal' : 'unknown'
-      }))
-    ];
-    
-    // Use the combined queue as unscheduledOrders
-    const unifiedProductionQueue = combinedQueue;
-    
-    console.log(`🔍 Processing ${unifiedProductionQueue.length} total orders for scheduling`);
-
-
-
-    // Filter active molds
+    // Get molds for exact matching
+    const allMolds = await storage.getAllMolds();
     const activeMolds = allMolds.filter((mold: any) => mold.enabled);
+    
+    console.log(`📊 PRODUCTION QUEUE: ${productionQueue.length} orders to process`);
+    console.log(`🏭 ACTIVE MOLDS: ${activeMolds.length} molds available`);
 
-    // Prepare order data with proper stock model mapping from database
-    const categorizedOrders = unifiedProductionQueue.map((order: any) => {
-      // Extract stock model from multiple possible sources
-      let stockModelId = 'UNPROCESSED'; // Will help identify if logic is skipped
-      let product = 'UNPROCESSED PRODUCT';
+    // *** EXACT STOCK MODEL MATCHING FUNCTION ***
+    const findExactMatchingMolds = (stockModelId: string) => {
+      const compatibleMolds = activeMolds.filter((mold: any) => {
+        // STRICT: Only exact matches in stockModels array
+        const hasExactMatch = mold.stockModels.includes(stockModelId);
+        
+        if (hasExactMatch) {
+          console.log(`✅ EXACT MATCH: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+        }
+        
+        return hasExactMatch;
+      });
       
-      console.log(`🔍 Processing order ${order.orderId}: modelId="${order.modelId}", featuresExists=${!!order.features}, featuresType="${typeof order.features}"`);
+      console.log(`🔍 EXACT MATCHING: ${stockModelId} → Found ${compatibleMolds.length} compatible molds`);
+      return compatibleMolds;
+    };
+
+    // *** PRODUCTION CAPACITY CALCULATION ***
+    const generateWorkDates = (days: number) => {
+      const dates = [];
+      let currentDate = new Date();
+      let addedDays = 0;
       
-      // First try the direct stockModelId field
-      if (order.stockModelId) {
-        stockModelId = order.stockModelId;
-        product = order.stockModelId;
+      while (addedDays < days) {
+        const dayOfWeek = currentDate.getDay();
+        // Monday (1) to Thursday (4) work schedule
+        if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+          dates.push(new Date(currentDate));
+          addedDays++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
       }
-      // Then try model_id from database (this is the main issue!)
-      else if (order.modelId) {
-        stockModelId = order.modelId;
-        product = order.modelId;
+      return dates;
+    };
+
+    const workDates = generateWorkDates(scheduleDays);
+    const totalCapacity = workDates.length * maxOrdersPerDay;
+    
+    console.log(`📅 WORK SCHEDULE: ${workDates.length} work days (Mon-Thu)`);
+    console.log(`🏭 DAILY CAPACITY: ${maxOrdersPerDay} orders/day`);
+    console.log(`📊 TOTAL CAPACITY: ${totalCapacity} orders max`);
+
+    // *** LAYUP SCHEDULER: Pull from production queue by priority/due date ***
+    const allocations: any[] = [];
+    const dailyMoldUsage = new Map<string, number>();
+    const dailyAllocationCount = new Map<string, number>();
+    
+    // Process orders from production queue in priority order (already sorted)
+    const ordersToProcess = productionQueue.slice(0, totalCapacity); // Respect capacity limits
+    
+    console.log(`🎯 PROCESSING: Taking top ${ordersToProcess.length} orders from production queue`);
+
+    for (const order of ordersToProcess) {
+      // *** DIRECT STOCK MODEL EXTRACTION FROM PRODUCTION QUEUE ***
+      let stockModelId = order.stockModelId || order.modelId || 'unknown';
+      let product = order.product || stockModelId;
+      
+      // Extract CF/FG material prefix for layup requirements
+      const materialPrefix = stockModelId.startsWith('cf_') ? 'cf' : 
+                           stockModelId.startsWith('fg_') ? 'fg' : 'unknown';
+      
+      // Extract Heavy Fill and LOP adjustment from features
+      const heavyFill = order.features?.heavy_fill ? 'Heavy Fill Required' : '';
+      const lopAdjustment = order.features?.lop_adjustment ? `LOP: ${order.features.lop_adjustment}` : '';
+      
+      console.log(`🎯 ORDER: ${order.orderId} → Stock: ${stockModelId} | Material: ${materialPrefix} | ${heavyFill} ${lopAdjustment}`.trim());
+      
+      if (stockModelId === 'unknown' || !stockModelId) {
+        console.log(`❌ SKIPPING: Order ${order.orderId} - no valid stock model`);
+        continue;
       }
-      // Then check if it's a mesa order from production orders
-      else if (order.source === 'mesa_production_order' && order.itemName?.includes('Mesa')) {
-        stockModelId = 'mesa_universal';
-        product = 'Mesa Universal';
-      }
-      // Try to extract from features object
-      else if (order.features?.stockModel) {
-        stockModelId = order.features.stockModel;
-        product = order.features.stockModel;
-      }
-      // ENHANCED: Infer stock model from features when model_id is NULL
-      else if (order.features && typeof order.features === 'object') {
         const features = order.features;
         
         // More diverse stock model inference to prevent Alpine Hunter over-scheduling

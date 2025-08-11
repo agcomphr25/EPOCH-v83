@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -2312,3 +2313,15 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
   // This depends on how customerCommunications is intended to be used alongside communicationLogs
   // For now, assuming it augments communicationLogs with customer-specific context
 });
+
+export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
+  order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
+}));
+
+export const shipmentsRelations = relations(shipments, ({ one }) => ({
+  order: one(orderDrafts, { fields: [shipments.orderId], references: [orderDrafts.orderId] })
+}));
+
+export const orderDraftsShipmentsRelations = relations(orderDrafts, ({ many }) => ({
+  shipments: many(shipments)
+}));

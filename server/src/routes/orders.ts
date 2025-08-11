@@ -454,4 +454,35 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
+// Progress order to next department
+router.post('/:orderId/progress', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { nextDepartment } = req.body;
+    
+    console.log(`🏭 Progressing order ${orderId} to ${nextDepartment}`);
+    
+    // Check if order exists in allOrders table first
+    const existingOrder = await storage.getFinalizedOrderById(orderId);
+    
+    if (!existingOrder) {
+      console.error(`❌ Order ${orderId} not found in finalized orders`);
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+    
+    console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment}`);
+    
+    // Update the order's current department and timestamp
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, {
+      currentDepartment: nextDepartment
+    });
+    
+    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+    res.json({ success: true, order: updatedOrder });
+  } catch (error) {
+    console.error('Progress order error:', error);
+    res.status(500).json({ error: "Failed to progress order", details: (error as any).message });
+  }
+});
+
 export default router;

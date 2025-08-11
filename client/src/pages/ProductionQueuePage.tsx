@@ -26,7 +26,10 @@ export default function ProductionQueuePage() {
       const promises = orderIds.map(orderId => 
         apiRequest(`/api/orders/${orderId}/progress`, {
           method: 'POST',
-          body: { nextDepartment: 'Layup' }
+          body: JSON.stringify({ nextDepartment: 'Layup' }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
         })
       );
       return Promise.all(promises);
@@ -72,10 +75,11 @@ export default function ProductionQueuePage() {
   };
 
   // Filter orders based on search
-  const filteredOrders = orders.filter((order: any) => {
+  const filteredOrders = orders.filter((order: { orderId?: string; fbOrderNumber?: string; customer?: string; productName?: string; }) => {
     const searchLower = searchTerm.toLowerCase();
     return (
       order.orderId?.toLowerCase().includes(searchLower) ||
+      order.fbOrderNumber?.toLowerCase().includes(searchLower) ||
       order.customer?.toLowerCase().includes(searchLower) ||
       order.productName?.toLowerCase().includes(searchLower)
     );
@@ -124,7 +128,7 @@ export default function ProductionQueuePage() {
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <Input
-              placeholder="Search by Order ID, Customer, or Product..."
+              placeholder="Search by Order ID, FB Order Number, Customer, or Product..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -168,7 +172,9 @@ export default function ProductionQueuePage() {
                         className="rounded"
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{order.orderId}</TableCell>
+                    <TableCell className="font-medium">
+                      {order.fbOrderNumber || order.orderId}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-gray-400" />

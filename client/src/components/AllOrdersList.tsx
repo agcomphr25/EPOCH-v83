@@ -20,8 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowRight, AlertTriangle, Package2, Edit, Search, X, Mail, MessageSquare, ArrowRightCircle } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Package2, Edit, Search, X, Mail, MessageSquare } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
@@ -37,7 +36,6 @@ export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -120,23 +118,7 @@ export default function AllOrdersList() {
     }
   });
 
-  const bulkProgressMutation = useMutation({
-    mutationFn: async (orderIds: string[]) => {
-      return apiRequest('/api/orders/bulk-progress', {
-        method: 'POST',
-        body: { orderIds }
-      });
-    },
-    onSuccess: (result) => {
-      toast.success(`Successfully progressed ${result.processed} orders to next department`);
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      setSelectedOrders(new Set());
-    },
-    onError: (error) => {
-      toast.error(`Failed to progress orders: ${error.message}`);
-    }
-  });
+
 
   const filteredOrders = orders?.filter(order => {
     // Department filter
@@ -206,43 +188,7 @@ export default function AllOrdersList() {
     setSelectedCustomer(null);
   };
 
-  const handleSelectOrder = (orderId: string, checked: boolean) => {
-    const newSelected = new Set(selectedOrders);
-    if (checked) {
-      newSelected.add(orderId);
-    } else {
-      newSelected.delete(orderId);
-    }
-    setSelectedOrders(newSelected);
-  };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const eligibleOrders = filteredOrders
-        .filter(order => !order.status || order.status !== 'SCRAPPED')
-        .filter(order => order.currentDepartment !== 'Shipping')
-        .map(order => order.orderId);
-      setSelectedOrders(new Set(eligibleOrders));
-    } else {
-      setSelectedOrders(new Set());
-    }
-  };
-
-  const handleBulkProgress = () => {
-    if (selectedOrders.size === 0) {
-      toast.error('Please select orders to progress');
-      return;
-    }
-    bulkProgressMutation.mutate(Array.from(selectedOrders));
-  };
-
-  const getEligibleOrdersForBulk = () => {
-    return filteredOrders.filter(order => 
-      selectedOrders.has(order.orderId) && 
-      (!order.status || order.status !== 'SCRAPPED') &&
-      order.currentDepartment !== 'Shipping'
-    );
-  };
 
   if (isLoading) {
     return (
@@ -264,17 +210,6 @@ export default function AllOrdersList() {
           <CardTitle className="flex items-center justify-between">
             All Orders ({filteredOrders.length})
             <div className="flex items-center gap-4">
-              {/* Bulk Progress Button */}
-              {selectedOrders.size > 0 && (
-                <Button
-                  onClick={handleBulkProgress}
-                  disabled={bulkProgressMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <ArrowRightCircle className="w-4 h-4 mr-2" />
-                  Progress {selectedOrders.size} Orders
-                </Button>
-              )}
               {/* Search Input */}
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -315,15 +250,6 @@ export default function AllOrdersList() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedOrders.size > 0 && selectedOrders.size === filteredOrders.filter(order => 
-                      (!order.status || order.status !== 'SCRAPPED') &&
-                      order.currentDepartment !== 'Shipping'
-                    ).length}
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
                 <TableHead>Order ID</TableHead>
                 <TableHead>Order Date</TableHead>
                 <TableHead>Customer</TableHead>
@@ -342,13 +268,6 @@ export default function AllOrdersList() {
 
                 return (
                   <TableRow key={order.orderId}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedOrders.has(order.orderId)}
-                        onCheckedChange={(checked) => handleSelectOrder(order.orderId, checked as boolean)}
-                        disabled={isScrapped || isComplete}
-                      />
-                    </TableCell>
                     <TableCell className="font-medium">
                       <OrderSummaryModal orderId={order.orderId}>
                         <span className="font-medium">

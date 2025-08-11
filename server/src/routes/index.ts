@@ -335,7 +335,7 @@ export function registerRoutes(app: Express): Server {
         multiplier: 1 // Default multiplier
       }));
       
-      const employeeSettings = layupEmployees.map(emp => ({
+      const employeeSettings = layupEmployees.map((emp: any) => ({
         employeeId: emp.employeeId,
         rate: emp.rate || 1,
         hours: emp.hours || 8

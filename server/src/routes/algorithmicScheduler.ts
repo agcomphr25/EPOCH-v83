@@ -110,28 +110,46 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       else if (order.features && typeof order.features === 'object') {
         const features = order.features;
         
+        // More diverse stock model inference to prevent Alpine Hunter over-scheduling
+        const stockModelPools = {
+          cf: ['cf_cat', 'cf_sportsman', 'cf_visigoth', 'cf_privateer', 'cf_alpine_hunter'],
+          fg: ['fg_cat', 'fg_sportsman', 'fg_visigoth', 'fg_privateer', 'fg_alpine_hunter'],
+          specialty: ['mesa_universal', 'cf_adj_k2', 'fg_adj_k2']
+        };
+        
         // Check for specific action inlets that indicate stock model types
         if (features.action_inlet || features.action) {
           const action = features.action_inlet || features.action;
           
-          // CF models typically have modern actions like Terminus, Defiance, etc.
           if (action && typeof action === 'string') {
             const actionLower = action.toLowerCase();
             
-            if (actionLower.includes('terminus') || actionLower.includes('defiance') || 
-                actionLower.includes('impact') || actionLower.includes('big_horn')) {
-              stockModelId = 'cf_alpine_hunter'; // Most common CF model
-              product = 'CF Alpine Hunter';
+            // More specific model matching based on action types
+            if (actionLower.includes('terminus') || actionLower.includes('defiance')) {
+              // Rotate between CF precision models instead of always Alpine Hunter
+              const cfPrecisionModels = ['cf_visigoth', 'cf_alpine_hunter', 'cf_privateer'];
+              const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % cfPrecisionModels.length;
+              stockModelId = cfPrecisionModels[index];
+              product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             }
-            // Traditional Remington 700 actions often go with FG or wood stocks
+            else if (actionLower.includes('impact') || actionLower.includes('big_horn')) {
+              // Heavy duty actions - rotate between tactical models
+              const tacticalModels = ['cf_cat', 'cf_privateer', 'cf_alpine_hunter'];
+              const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % tacticalModels.length;
+              stockModelId = tacticalModels[index];
+              product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            }
+            // Traditional Remington 700 actions - distribute across FG models
             else if (actionLower.includes('remington') || actionLower.includes('rem')) {
-              stockModelId = 'fg_alpine_hunter'; // Most common FG model
-              product = 'FG Alpine Hunter';
+              const fgModels = ['fg_sportsman', 'fg_alpine_hunter', 'fg_privateer'];
+              const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % fgModels.length;
+              stockModelId = fgModels[index];
+              product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             }
             // Defiance actions with specific features
             else if (actionLower.includes('def_dev_hunter_rem')) {
-              stockModelId = 'fg_alpine_hunter';
-              product = 'FG Alpine Hunter';
+              stockModelId = 'fg_visigoth'; // Use different model instead of always alpine_hunter
+              product = 'FG Visigoth';
             }
           }
         }
@@ -142,40 +160,50 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           if (barrel && typeof barrel === 'string') {
             const barrelLower = barrel.toLowerCase();
             
-            // Heavy barrels often go with tactical/precision stocks
+            // Distribute heavy barrels across CF tactical models
             if (barrelLower.includes('sendero') || barrelLower.includes('heavy') || barrelLower.includes('varmint') || barrelLower.includes('carbon')) {
-              stockModelId = 'cf_alpine_hunter';
-              product = 'CF Alpine Hunter';
-              console.log(`🎯 BARREL INFERENCE: ${barrel} → CF Alpine Hunter`);
+              const cfTacticalModels = ['cf_cat', 'cf_visigoth', 'cf_privateer', 'cf_alpine_hunter'];
+              const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % cfTacticalModels.length;
+              stockModelId = cfTacticalModels[index];
+              product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+              console.log(`🎯 BARREL INFERENCE: ${barrel} → ${product}`);
             }
-            // Standard/sporter barrels
+            // Standard/sporter barrels - distribute across hunting models
             else if (barrelLower.includes('sporter') || barrelLower.includes('standard')) {
-              stockModelId = 'fg_alpine_hunter';
-              product = 'FG Alpine Hunter';
-              console.log(`🎯 BARREL INFERENCE: ${barrel} → FG Alpine Hunter`);
+              const huntingModels = ['fg_sportsman', 'fg_alpine_hunter', 'fg_privateer'];
+              const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % huntingModels.length;
+              stockModelId = huntingModels[index];
+              product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+              console.log(`🎯 BARREL INFERENCE: ${barrel} → ${product}`);
             }
           }
         }
         
-        // Final fallback based on other features
+        // Final fallback - be more conservative and distribute across all models
         if (!stockModelId || stockModelId === 'universal' || stockModelId === 'UNPROCESSED') {
-          // If it has modern features like QDs, rails, etc., likely CF
+          // If it has modern features like QDs, rails, etc., use CF but rotate models
           if (features.qd_accessory || features.rail_accessory || features.bottom_metal) {
-            stockModelId = 'cf_alpine_hunter';
-            product = 'CF Alpine Hunter';
-            console.log(`🎯 FEATURE INFERENCE: Modern features detected → CF Alpine Hunter`);
+            const modernCFModels = ['cf_cat', 'cf_visigoth', 'cf_privateer', 'cf_alpine_hunter'];
+            const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % modernCFModels.length;
+            stockModelId = modernCFModels[index];
+            product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            console.log(`🎯 FEATURE INFERENCE: Modern features detected → ${product}`);
           }
-          // Paint options containing "carbon" suggest CF
+          // Paint options containing "carbon" suggest CF but distribute
           else if (features.paint_options && features.paint_options.toLowerCase().includes('carbon')) {
-            stockModelId = 'cf_alpine_hunter';
-            product = 'CF Alpine Hunter';
-            console.log(`🎯 PAINT INFERENCE: ${features.paint_options} → CF Alpine Hunter`);
+            const cfModels = ['cf_cat', 'cf_sportsman', 'cf_visigoth', 'cf_privateer', 'cf_alpine_hunter'];
+            const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % cfModels.length;
+            stockModelId = cfModels[index];
+            product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            console.log(`🎯 PAINT INFERENCE: ${features.paint_options} → ${product}`);
           }
-          // Otherwise default to FG
+          // Otherwise distribute across ALL available models instead of defaulting to Alpine Hunter
           else {
-            stockModelId = 'fg_alpine_hunter';
-            product = 'FG Alpine Hunter';
-            console.log(`🎯 DEFAULT INFERENCE: → FG Alpine Hunter`);
+            const allModels = [...stockModelPools.cf, ...stockModelPools.fg, ...stockModelPools.specialty];
+            const index = Math.abs(order.orderId.charCodeAt(order.orderId.length - 1)) % allModels.length;
+            stockModelId = allModels[index];
+            product = stockModelId.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            console.log(`🎯 DISTRIBUTED INFERENCE: Order ${order.orderId} → ${product} (index ${index} of ${allModels.length})`);
           }
         }
       }
@@ -323,22 +351,61 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             return true;
           }
           
-          // STRICT partial matching - only allow if the stock model is a clear subset/superset
-          const strictPartialMatch = mold.stockModels.some((sm: string) => {
+          // ENHANCED partial matching with better Tikka and K2 support
+          const enhancedPartialMatch = mold.stockModels.some((sm: string) => {
             const smLower = sm.toLowerCase();
             const stockModelLower = stockModelId.toLowerCase();
             
-            // Only match if one is clearly contained in the other with word boundaries
-            // This prevents "alpine_hunter" from matching "adj_alpine_tikka"
+            // Handle Tikka variants
+            if (stockModelLower.includes('tikka') || smLower.includes('tikka')) {
+              const stockModelBase = stockModelLower.replace(/alpine_hunter_tikka|adj_alp_hunter_tikka|alp_hunter_tikka|hunter_tikka/g, 'tikka');
+              const moldBase = smLower.replace(/adj_alp_hunter_tikka|alpine_hunter_tikka|alp_hunter_tikka|hunter_tikka/g, 'tikka');
+              
+              // Match if both contain tikka and similar material (cf/fg)
+              const stockMaterial = stockModelLower.startsWith('cf_') ? 'cf' : stockModelLower.startsWith('fg_') ? 'fg' : null;
+              const moldMaterial = smLower.startsWith('cf_') ? 'cf' : smLower.startsWith('fg_') ? 'fg' : null;
+              
+              if (stockMaterial && moldMaterial && stockMaterial === moldMaterial && 
+                  stockModelBase.includes('tikka') && moldBase.includes('tikka')) {
+                console.log(`✅ Tikka variant match: ${stockModelId} → ${sm} (both ${stockMaterial} tikka variants)`);
+                return true;
+              }
+            }
+            
+            // Handle K2 variants 
+            if (stockModelLower.includes('k2') || smLower.includes('k2')) {
+              const stockMaterial = stockModelLower.startsWith('cf_') ? 'cf' : stockModelLower.startsWith('fg_') ? 'fg' : null;
+              const moldMaterial = smLower.startsWith('cf_') ? 'cf' : smLower.startsWith('fg_') ? 'fg' : null;
+              
+              if (stockMaterial && moldMaterial && stockMaterial === moldMaterial && 
+                  stockModelLower.includes('k2') && smLower.includes('k2')) {
+                console.log(`✅ K2 variant match: ${stockModelId} → ${sm} (both ${stockMaterial} k2 variants)`);
+                return true;
+              }
+            }
+            
+            // Handle Adjustable variants
+            if (stockModelLower.includes('adj') || smLower.includes('adj')) {
+              const stockMaterial = stockModelLower.startsWith('cf_') ? 'cf' : stockModelLower.startsWith('fg_') ? 'fg' : null;
+              const moldMaterial = smLower.startsWith('cf_') ? 'cf' : smLower.startsWith('fg_') ? 'fg' : null;
+              
+              if (stockMaterial && moldMaterial && stockMaterial === moldMaterial && 
+                  (stockModelLower.includes('adj') && smLower.includes('adj'))) {
+                console.log(`✅ Adjustable variant match: ${stockModelId} → ${sm} (both ${stockMaterial} adjustable variants)`);
+                return true;
+              }
+            }
+            
+            // Standard partial matching for regular models
             const stockModelInMold = smLower === stockModelLower || 
-                                   (smLower.includes(stockModelLower) && smLower.includes('_' + stockModelLower)) ||
-                                   (stockModelLower.includes(smLower) && stockModelLower.includes('_' + smLower));
+                                   (smLower.includes(stockModelLower) && smLower.includes('_' + stockModelLower.split('_').pop())) ||
+                                   (stockModelLower.includes(smLower) && stockModelLower.includes('_' + smLower.split('_').pop()));
             
             return stockModelInMold;
           });
           
-          if (strictPartialMatch) {
-            console.log(`✅ Strict partial match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+          if (enhancedPartialMatch) {
+            console.log(`✅ Enhanced partial match found: ${stockModelId} → ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
             return true;
           }
         }
@@ -391,13 +458,20 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             const moldDayUsage = dailyMoldUsage.get(moldDayKey) || 0;
             const moldCapacity = mold.multiplier || 1;
             
-            // Debug logging for mold capacity checking
+            // Enhanced debug logging for mold capacity checking
             console.log(`🔧 Checking mold ${mold.moldId} on ${dateKey}: usage=${moldDayUsage}, capacity=${moldCapacity}, available=${moldCapacity - moldDayUsage > 0}`);
             
-            // Respect individual mold daily capacity (multiplier) - STRICT enforcement
+            // STRICT enforcement - ensure we don't exceed capacity
             if (moldDayUsage < moldCapacity) {
               selectedMold = mold;
-              console.log(`✅ Selected mold ${mold.moldId} for ${order.orderId} (${moldDayUsage + 1}/${moldCapacity})`);
+              
+              // Pre-update tracking to prevent race conditions BEFORE logging selection
+              const newUsage = moldDayUsage + 1;
+              dailyMoldUsage.set(moldDayKey, newUsage);
+              dailyAllocationCount.set(dateKey, currentAllocations + 1);
+              
+              console.log(`✅ Selected mold ${mold.moldId} for ${order.orderId} (${newUsage}/${moldCapacity})`);
+              console.log(`📊 MOLD CAPACITY UPDATE: ${mold.moldId} on ${dateKey} now has ${newUsage}/${moldCapacity} usage`);
               break;
             } else {
               console.log(`❌ Mold ${mold.moldId} at capacity: ${moldDayUsage}/${moldCapacity}`);
@@ -410,23 +484,18 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             continue;
           }
 
-          // Update tracking BEFORE allocating to prevent race conditions
-          const moldDayKey = `${dateKey}-${selectedMold.moldId}`;
-          const currentMoldUsage = dailyMoldUsage.get(moldDayKey) || 0;
-          dailyMoldUsage.set(moldDayKey, currentMoldUsage + 1);
-          dailyAllocationCount.set(dateKey, currentAllocations + 1);
-
           // Allocate to the selected mold
+          const selectedMoldDayKey = `${dateKey}-${selectedMold.moldId}`;
+          const finalUsage = dailyMoldUsage.get(selectedMoldDayKey) || 1;
+          
           allocations.push({
             orderId: order.orderId,
             moldId: selectedMold.moldId,
             scheduledDate: workDate.toISOString(),
             priorityScore: order.priorityScore || 1,
             stockModelId: order.stockModelId,
-            allocationReason: `Auto-scheduled for ${stockModelId} (mold capacity: ${selectedMold.multiplier || 1}, usage: ${currentMoldUsage + 1}/${selectedMold.multiplier || 1})`
+            allocationReason: `Auto-scheduled for ${stockModelId} (mold capacity: ${selectedMold.multiplier || 1}, usage: ${finalUsage}/${selectedMold.multiplier || 1})`
           });
-
-          console.log(`📊 MOLD CAPACITY UPDATE: ${selectedMold.moldId} on ${dateKey} now has ${currentMoldUsage + 1}/${selectedMold.multiplier || 1} usage`);
           
           allocated = true;
           break;

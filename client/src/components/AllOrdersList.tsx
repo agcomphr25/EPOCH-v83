@@ -13,6 +13,13 @@ interface Order {
   status: string;
   fbOrderNumber?: string;
 }
+
+interface Kickback {
+  id: number;
+  orderId: string;
+  status: string;
+  priority: string;
+}
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +32,7 @@ import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
 import toast from 'react-hot-toast';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
@@ -39,6 +46,7 @@ export default function AllOrdersList() {
   const queryClient = useQueryClient();
   const [communicationModalOpen, setCommunicationModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [, setLocation] = useLocation();
 
   // Set up global handler for communication buttons in tooltip
   React.useEffect(() => {
@@ -59,6 +67,12 @@ export default function AllOrdersList() {
     queryFn: () => apiRequest('/api/stock-models'),
   });
 
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery<Kickback[]>({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
   // Helper function to get model display name
   const getModelDisplayName = (modelId: string) => {
     if (!modelId || !stockModels || stockModels.length === 0) {
@@ -66,6 +80,32 @@ export default function AllOrdersList() {
     }
     const model = (stockModels as any[]).find((m: any) => m && m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return allKickbacks.some(kickback => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = allKickbacks.filter(kickback => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+    
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest, kickback) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+    
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
   };
 
   const progressOrderMutation = useMutation({
@@ -335,9 +375,26 @@ export default function AllOrdersList() {
                       })() : '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={isScrapped ? 'destructive' : 'default'}>
-                        {order.status || 'ACTIVE'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={isScrapped ? 'destructive' : 'default'}>
+                          {order.status || 'ACTIVE'}
+                        </Badge>
+                        {hasKickbacks(order.orderId) && (
+                          <Badge
+                            variant="destructive"
+                            className={`cursor-pointer hover:opacity-80 transition-opacity ${
+                              getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                              getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                              getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                              'bg-gray-600 hover:bg-gray-700'
+                            }`}
+                            onClick={() => handleKickbackClick(order.orderId)}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Kickback
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">

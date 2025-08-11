@@ -238,15 +238,15 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Calculate realistic daily capacity - much higher to fill up the schedule
     const dailyCapacity = maxOrdersPerDay || Math.max(
-      30, // Minimum 30 orders per day
-      activeMolds.length * 15 // 15 orders per mold per day to fill schedule
+      50, // Increased minimum from 30 to 50 orders per day
+      activeMolds.length * 25 // Increased from 15 to 25 orders per mold per day to handle all orders
     );
 
 
 
     // Generate schedule using simplified algorithm
     const allocations: any[] = [];
-    const workDates = generateWorkDates(new Date(), scheduleDays || 60); // More days to spread orders
+    const workDates = generateWorkDates(new Date(), scheduleDays || 90); // Increased from 60 to 90 days to accommodate all orders
     
     // Track daily allocations
     const dailyAllocationCount = new Map();

@@ -1017,6 +1017,51 @@ export default function LayupScheduler() {
       allWorkDays.push(...weekDays);
     }
 
+    // Enhanced intelligent stock model detection (define before usage)
+    const getOrderStockModelId = (order: any) => {
+      // If already has stockModelId, use it
+      if (order.stockModelId) return order.stockModelId;
+      if (order.modelId) return order.modelId;
+      
+      // Intelligent detection based on features and action configuration
+      if (order.features) {
+        const actionLength = order.features.action_length;
+        const actionInlet = order.features.action_inlet;
+        
+        // Mesa Universal - Remington 700 actions
+        if (actionInlet?.includes('rem_700') || actionInlet?.includes('remington_700')) {
+          return 'mesa_universal';
+        }
+        
+        // K2 variants - based on action length
+        if (actionLength === 'medium' || actionInlet?.includes('k2')) {
+          return 'fg_k2';
+        }
+        
+        // Alpine Hunter variants - precision actions
+        if (actionInlet?.includes('terminus') || actionInlet?.includes('defiance')) {
+          return 'cf_alpine_hunter';
+        }
+        
+        // Privateer - tactical configurations
+        if (order.features.rail_accessory || order.features.qd_accessory) {
+          return 'cf_privateer';
+        }
+        
+        // Sportsman - traditional configurations
+        return 'fg_sportsman';
+      }
+      
+      // Fallback based on product name
+      if (order.product?.includes('Mesa')) return 'mesa_universal';
+      if (order.product?.includes('K2')) return 'fg_k2';
+      if (order.product?.includes('Alpine')) return 'cf_alpine_hunter';
+      if (order.product?.includes('Privateer')) return 'cf_privateer';
+      if (order.product?.includes('Sportsman')) return 'fg_sportsman';
+      
+      return 'unknown';
+    };
+
     // Sort orders with intelligent stock model detection
     const sortedOrders = [...orders].sort((a, b) => {
       // Use intelligent detection for stock model identification
@@ -1042,61 +1087,6 @@ export default function LayupScheduler() {
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
       return aDueDate - bDueDate;
     });
-    
-    // Enhanced intelligent stock model detection (defined first)
-    const getOrderStockModelId = (order: any) => {
-      // If already has stockModelId, use it
-      if (order.stockModelId) return order.stockModelId;
-      if (order.modelId) return order.modelId;
-      
-      // Intelligent detection based on features and action configuration
-      if (order.features) {
-        const actionLength = order.features.action_length;
-        const actionInlet = order.features.action_inlet; 
-        const barrelInlet = order.features.barrel_inlet;
-        
-        // Check for Tikka actions first
-        if (actionInlet && actionInlet.includes('tikka')) {
-          return 'mesa_tikka';
-        }
-        
-        // Check barrel inlet for material type (most important indicator)
-        if (barrelInlet) {
-          if (barrelInlet.includes('carbon')) {
-            // CF models - determine specific type based on action length
-            if (actionLength === 'short' || actionInlet?.includes('short')) return 'cf_sportsman';
-            if (actionLength === 'long' || actionInlet?.includes('long')) return 'cf_hunter';
-            return 'cf_sportsman'; // default CF for carbon barrels
-          } else if (barrelInlet.includes('fiberglass') || barrelInlet.includes('fg')) {
-            // FG models
-            if (actionLength === 'short' || actionInlet?.includes('short')) return 'fg_sportsman';
-            if (actionLength === 'long' || actionInlet?.includes('long')) return 'fg_hunter';
-            return 'fg_sportsman'; // default FG
-          } else {
-            // Standard barrels (steel, aluminum, etc.) - Mesa models
-            if (actionInlet && actionInlet.includes('tikka')) return 'mesa_tikka';
-            return 'mesa_universal';
-          }
-        }
-        
-        // If no barrel inlet but has action length, default to Mesa Universal
-        if (actionLength) {
-          return 'mesa_universal';
-        }
-      }
-      
-      // Try to detect from product name
-      if (order.product) {
-        const product = order.product.toLowerCase();
-        if (product.includes('mesa')) return 'mesa_universal';
-        if (product.includes('cf')) return 'cf_sportsman';
-        if (product.includes('fg')) return 'fg_sportsman';
-        if (product.includes('apr')) return 'apr_hunter';
-      }
-      
-      // Default fallback for orders without clear identification
-      return 'mesa_universal';
-    };
 
     // Count Mesa Universal orders for logging using intelligent detection
     const mesaUniversalOrders = sortedOrders.filter(o => {

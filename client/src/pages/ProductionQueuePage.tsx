@@ -56,7 +56,7 @@ export default function ProductionQueuePage() {
     if (selectedOrders.length === filteredOrders.length) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(filteredOrders.map(order => order.orderId));
+      setSelectedOrders(filteredOrders.map((order: any) => order.orderId));
     }
   };
 

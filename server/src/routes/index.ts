@@ -192,11 +192,29 @@ export function registerRoutes(app: Express): Server {
       console.log('📊 Data verification: combinedQueue length =', combinedQueue.length);
       console.log('📊 Data verification: activeMolds length =', activeMolds.length);
       
-      // Sort orders by priority with stock model balancing
+      // Helper function to identify LOP orders
+      const needsLOPAdjustment = (order: any): boolean => {
+        const features = order.features || {};
+        const lopValue = features.length_of_pull || features['length-of-pull'];
+        return lopValue && lopValue !== 'no_lop_change' && lopValue !== 'standard' && lopValue !== 'No Change';
+      };
+
+      // Add LOP flags to orders
+      combinedQueue.forEach(order => {
+        order.needsLOPAdjustment = needsLOPAdjustment(order);
+        if (order.needsLOPAdjustment) {
+          console.log(`🔧 Order ${order.orderId} needs LOP adjustment: ${order.features?.length_of_pull || order.features?.['length-of-pull']}`);
+        }
+      });
+
+      // Sort orders by priority with LOP Monday scheduling and stock model balancing
       const sortedOrders = [...combinedQueue].sort((a, b) => {
         // P1 purchase orders always first
         if (a.source === 'p1_purchase_order' && b.source !== 'p1_purchase_order') return -1;
         if (b.source === 'p1_purchase_order' && a.source !== 'p1_purchase_order') return 1;
+        
+        // LOP adjustments get priority for Monday scheduling (handled in scheduling loop)
+        // But we don't change the sort order here - we handle LOP Monday preference in the scheduling loop
         
         // Then by priority score
         const aPriority = a.priorityScore || 99;
@@ -351,8 +369,18 @@ export function registerRoutes(app: Express): Server {
           continue;
         }
         
-        // Try to schedule on the earliest available date
-        for (const date of workDays) {
+        // Try to schedule on the earliest available date, prioritizing Mondays for LOP adjustments
+        const datesToTry = [...workDays];
+        
+        // If this order needs LOP adjustment, prioritize Mondays
+        if (order.needsLOPAdjustment) {
+          const mondays = workDays.filter(date => date.getDay() === 1); // Monday = 1
+          const nonMondays = workDays.filter(date => date.getDay() !== 1);
+          datesToTry.splice(0, datesToTry.length, ...mondays, ...nonMondays);
+          console.log(`🔧 Prioritizing Mondays for LOP order ${order.orderId} (${mondays.length} Mondays available)`);
+        }
+        
+        for (const date of datesToTry) {
           if (scheduled) break;
           
           const dateStr = date.toISOString().split('T')[0];

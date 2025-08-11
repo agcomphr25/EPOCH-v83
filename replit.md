@@ -7,6 +7,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+**August 11, 2025**: Enhanced LOP adjustments scheduling with Monday prioritization:
+- Added automatic LOP (Length of Pull) adjustment detection in algorithmic scheduler
+- LOP orders are now automatically prioritized for Monday scheduling to optimize production workflow
+- System detects orders requiring LOP adjustments by checking features.length_of_pull values
+- Modified scheduling algorithm to prioritize Mondays for LOP orders before considering other weekdays
+- Console logging shows "Prioritizing Mondays for LOP order [ID]" for transparent scheduling decisions
+- Maintains existing Monday-Thursday work week constraints while optimizing LOP scheduling efficiency
+
 **August 10, 2025**: Fixed Mesa Universal mold assignment bug and implemented comprehensive production flow workflow:
 - FIXED CRITICAL BUG: Mesa Universal orders were incorrectly assigned to APR molds instead of Mesa molds
 - Updated "Auto Schedule" button to use backend algorithmic scheduler instead of old frontend logic

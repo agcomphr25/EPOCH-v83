@@ -2241,40 +2241,11 @@ export default function LayupScheduler() {
     return key;
   }, [processedOrders]);
 
-  // Clean up any remaining Friday assignments (should be none with new logic)
-  useEffect(() => {
-    const fridayCount = Object.entries(orderAssignments).filter(([key, assignment]) => {
-      return new Date(assignment.date).getDay() === 5;
-    }).length;
-    
-    if (fridayCount > 0) {
-      const cleanedAssignments = Object.fromEntries(
-        Object.entries(orderAssignments).filter(([key, assignment]) => {
-          return new Date(assignment.date).getDay() !== 5;
-        })
-      );
-      setOrderAssignments(cleanedAssignments);
-    }
-  }, [JSON.stringify(orderAssignments)]);
+  // Friday cleanup disabled to allow manual drag-and-drop placement on Friday
+  // This was causing drag-and-drop to fail by removing Friday assignments immediately
 
-  // Auto-generate schedule when data is loaded OR when production/P1 orders are present
-  useEffect(() => {
-    const productionOrders = orders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
-    const unassignedProductionOrders = productionOrders.filter(o => !orderAssignments[o.orderId]);
-
-    const shouldRunAutoSchedule = orders.length > 0 && molds.length > 0 && employees.length > 0 && (
-      Object.keys(orderAssignments).length === 0 || // Initial run
-      unassignedProductionOrders.length > 0 // New production orders need assignment
-    );
-
-    if (shouldRunAutoSchedule) {
-      console.log("🚀 Auto-running schedule generation");
-      console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
-      console.log("🏭 Production orders in data:", productionOrders.length);
-      console.log("🏭 Unassigned production orders:", unassignedProductionOrders.length);
-      setTimeout(() => generateAutoSchedule(), 1000); // Delay to let UI render
-    }
-  }, [orders.length,molds.length, employees.length, orderAssignments, generateAutoSchedule]);
+  // Auto-generation disabled to prevent interference with drag-and-drop
+  // This was causing manual assignments to be overwritten by auto-scheduling
 
 
 
@@ -2520,9 +2491,8 @@ export default function LayupScheduler() {
       [normalizedOrderId]: { moldId: targetMoldId, date: dateIso }
     };
     
-    // Apply Friday validation - allow manual Friday assignments for drag-and-drop
-    const validatedAssignments = validateNoFridayAssignments(newAssignments, true);
-    setOrderAssignments(validatedAssignments);
+    // Set assignments directly - no Friday validation needed for manual drag-and-drop
+    setOrderAssignments(newAssignments);
 
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);

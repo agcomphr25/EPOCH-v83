@@ -614,7 +614,15 @@ export default function LayupScheduler() {
         const dayOfWeek = schedDate.getDay();
         const dateStr = entry.scheduledDate;
         
-        console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
+        // MESA DEBUG: Extra logging for Mesa orders
+        const isMesaOrder = entry.moldId && entry.moldId.includes('Mesa');
+        if (isMesaOrder) {
+          console.log(`🏔️ MESA ORDER LOADING: ${entry.orderId} → ${entry.moldId}`);
+          console.log(`   Raw date: ${entry.scheduledDate}`);
+          console.log(`   Parsed date: ${schedDate.toDateString()} (day ${dayOfWeek})`);
+        } else {
+          console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
+        }
         
         // SPECIAL DEBUG: Extra logging for AI141
         if (entry.orderId === 'AI141') {
@@ -638,17 +646,30 @@ export default function LayupScheduler() {
           moldId: entry.moldId,
           date: entry.scheduledDate
         };
+        
+        // MESA DEBUG: Confirm Mesa order was added to assignments
+        if (entry.moldId && entry.moldId.includes('Mesa')) {
+          console.log(`✅ MESA ORDER ADDED TO ASSIGNMENTS: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
+        }
       });
 
       console.log('📦 Total assignments loaded:', Object.keys(assignments).length);
       
+      // COUNT Mesa orders specifically
+      const mesaAssignments = Object.entries(assignments).filter(([_, assignment]) => assignment.moldId.includes('Mesa'));
+      console.log(`🏔️ MESA ASSIGNMENTS LOADED: ${mesaAssignments.length} Mesa orders in assignments`);
+      mesaAssignments.slice(0, 5).forEach(([orderId, assignment]) => {
+        console.log(`   🏔️ ${orderId} → ${assignment.moldId} on ${assignment.date}`);
+      });
+      
       // DEBUG: Show what's actually in orderAssignments
-      console.log('🔍 DEBUGGING orderAssignments contents:');
-      Object.entries(assignments).forEach(([orderId, assignment]) => {
+      console.log('🔍 DEBUGGING orderAssignments contents (first 10):');
+      Object.entries(assignments).slice(0, 10).forEach(([orderId, assignment]) => {
         const assignmentDate = new Date(assignment.date);
         const dayOfWeek = assignmentDate.getDay();
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+        const isMesa = assignment.moldId.includes('Mesa') ? '🏔️ MESA' : '📅';
+        console.log(`   ${isMesa} ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
         
         if (dayOfWeek === 5) {
           const errorMsg = `❌ FRIDAY FROM DATABASE: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`;

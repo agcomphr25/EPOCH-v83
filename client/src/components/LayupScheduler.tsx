@@ -582,33 +582,6 @@ export default function LayupScheduler() {
   const { data: existingSchedule, isLoading: scheduleLoading } = useQuery({
     queryKey: ['/api/layup-schedule'],
     enabled: true,
-    select: (data) => {
-      // CRITICAL: Filter out any Friday records at database load level
-      if (!data || !Array.isArray(data)) return data;
-      
-      const fridayRecords = data.filter(assignment => {
-        const date = new Date(assignment.scheduledDate);
-        return date.getDay() === 5;
-      });
-      
-      if (fridayRecords.length > 0) {
-        console.error(`🚨 DATABASE FRIDAY FILTER: Found ${fridayRecords.length} Friday records in database`);
-        fridayRecords.forEach(record => {
-          console.error(`   - DB Record: ${record.orderId} on ${record.scheduledDate} (${new Date(record.scheduledDate).toDateString()})`);
-        });
-        
-        const cleanData = data.filter(assignment => {
-          const date = new Date(assignment.scheduledDate);
-          return date.getDay() !== 5; // Remove Friday assignments
-        });
-        
-        console.error(`🧹 DATABASE FILTER: Removed ${fridayRecords.length} Friday records, keeping ${cleanData.length} Monday-Thursday records`);
-        return cleanData;
-      }
-      
-      console.log(`✅ DATABASE CLEAN: All ${data.length} records are Monday-Thursday`);
-      return data;
-    }
   });
 
   // Update local assignments when schedule data loads
@@ -2268,24 +2241,21 @@ export default function LayupScheduler() {
     return key;
   }, [processedOrders]);
 
-  // FRIDAY MONITORING: Log any Friday assignments that still appear (should be none now)
+  // Clean up any remaining Friday assignments (should be none with new logic)
   useEffect(() => {
-    if (Object.keys(orderAssignments).length > 0) {
-      const fridayAssignments = Object.entries(orderAssignments).filter(([key, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        return assignmentDate.getDay() === 5; // Friday
-      });
-      
-      if (fridayAssignments.length > 0) {
-        console.error(`🚨 FRIDAY MONITORING: Still found ${fridayAssignments.length} Friday assignments despite blocking:`);
-        fridayAssignments.forEach(([key, assignment]) => {
-          console.error(`   - ${key}: ${assignment.date} (${new Date(assignment.date).toDateString()})`);
-        });
-      } else if (Object.keys(orderAssignments).length > 0) {
-        console.log(`✅ FRIDAY MONITORING: All ${Object.keys(orderAssignments).length} assignments are Monday-Thursday only`);
-      }
+    const fridayCount = Object.entries(orderAssignments).filter(([key, assignment]) => {
+      return new Date(assignment.date).getDay() === 5;
+    }).length;
+    
+    if (fridayCount > 0) {
+      const cleanedAssignments = Object.fromEntries(
+        Object.entries(orderAssignments).filter(([key, assignment]) => {
+          return new Date(assignment.date).getDay() !== 5;
+        })
+      );
+      setOrderAssignments(cleanedAssignments);
     }
-  }, [Object.keys(orderAssignments).length]); // Only run when assignment count changes
+  }, [JSON.stringify(orderAssignments)]);
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
@@ -2649,54 +2619,17 @@ export default function LayupScheduler() {
         const weekStart = startOfWeek(startDate, { weekStartsOn: 1 }); // Get Monday of current week
         const actualWeekStart = addDays(weekStart, week * 7); // Add weeks
         
-        // Generate Monday (1), Tuesday (2), Wednesday (3), Thursday (4) for each week
+        // Generate ONLY Monday (1), Tuesday (2), Wednesday (3), Thursday (4) - NEVER Friday
         for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
           const workDay = addDays(actualWeekStart, dayOffset);
-          const dayOfWeek = workDay.getDay();
-          
-          // Strict validation: Only allow Monday (1) through Thursday (4)
-          if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-            workDays.push(workDay);
-          } else {
-            console.error(`❌ CRITICAL: Generated invalid day ${workDay.toDateString()} (Day: ${dayOfWeek})`);
-          }
+          workDays.push(workDay);
         }
       }
       
-      // Final validation: Ensure absolutely no Fridays (5), Saturdays (6), or Sundays (0)
-      const invalidDays = workDays.filter(date => {
-        const day = date.getDay();
-        return day === 0 || day === 5 || day === 6; // Sunday, Friday, Saturday
-      });
-      
-      if (invalidDays.length > 0) {
-        console.error(`❌ CRITICAL: Found ${invalidDays.length} invalid days!`, 
-          invalidDays.map(d => `${d.toDateString()} (Day: ${d.getDay()})`));
-        
-        // Remove invalid days and return cleaned list
-        const cleanDays = workDays.filter(date => {
-          const day = date.getDay();
-          return day >= 1 && day <= 4; // Only Monday-Thursday
-        });
-        
-        console.log(`✅ Cleaned work days: ${cleanDays.length} valid days (Mon-Thu only)`);
-        return cleanDays;
-      }
-      
-      console.log(`✅ Generated ${workDays.length} work days (Mon-Thu only) across ${weeksCount} weeks`);
       return workDays;
     };
 
-    const workDays = getWorkDays(currentDate, 8); // Increased scheduling window to 8 weeks
-    console.log(`📅 Scheduling across ${workDays.length} work days (8 weeks)`);
-    console.log('📅 Work days range:', format(workDays[0], 'MM/dd'), 'to', format(workDays[workDays.length - 1], 'MM/dd'));
-    
-    // CRITICAL DEBUG: Show every single date the scheduler will use
-    console.log('🔍 AUTO-SCHEDULER DATES LIST:');
-    workDays.forEach((date, index) => {
-      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
-      console.log(`   ${index}: ${date.toDateString()} (${dayName}, day ${date.getDay()}) -> ISO: ${date.toISOString()}`);
-    });
+    const workDays = getWorkDays(currentDate, 8);
     const newAssignments = { ...orderAssignments };
 
     // Sort orders by priority and due date
@@ -2751,19 +2684,11 @@ export default function LayupScheduler() {
 
       let assigned = false;
 
-      // Try to assign to each work day (STRICT FRIDAY EXCLUSION)
+      // Try to assign to each work day (Monday-Thursday only)
       for (const date of workDays) {
         if (assigned) break;
 
-        // CRITICAL: Never schedule on Friday (day 5)
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek === 5) {
-          console.error(`❌ SCHEDULER BLOCKED FRIDAY: Date ${date.toDateString()} is Friday - SKIPPING`);
-          continue; // Skip this date entirely
-        }
-
         const dateString = date.toISOString();
-        console.log(`📅 SCHEDULER: Trying to schedule ${order.orderId} on ${date.toDateString()} (Day: ${dayOfWeek})`);
         
         // Try each compatible mold
         for (const mold of compatibleMolds) {
@@ -2773,17 +2698,7 @@ export default function LayupScheduler() {
 
           // Check if mold has capacity on this date
           if (currentCapacity < maxCapacity) {
-            // FINAL FRIDAY CHECK before assignment
-            const finalDate = new Date(dateString);
-            if (finalDate.getDay() === 5) {
-              console.error(`❌ CRITICAL: Almost assigned ${order.orderId} to FRIDAY ${finalDate.toDateString()} - BLOCKING`);
-              continue; // Skip this mold/date combination
-            }
-            
-            // Assign the order (guaranteed non-Friday)
-            const assignDate = new Date(dateString);
-            console.log(`✅ AUTO-SCHEDULER ASSIGNING: ${order.orderId} → ${mold.moldId} on ${assignDate.toDateString()} (day ${assignDate.getDay()})`);
-            
+            // Assign the order
             newAssignments[order.orderId] = {
               moldId: mold.moldId,
               date: dateString

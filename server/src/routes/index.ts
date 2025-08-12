@@ -192,7 +192,7 @@ export function registerRoutes(app: Express): Server {
             customerId: mesaOrder.customerId,
             customerPO: mesaOrder.poNumber,
             currentDepartment: 'P1 Production Queue', // Start in Production Queue
-            features: { itemName: mesaOrder.itemName, ...mesaOrder.specifications },
+            features: { itemName: mesaOrder.itemName, ...(mesaOrder.specifications || {}) },
             status: 'FINALIZED'
           };
           

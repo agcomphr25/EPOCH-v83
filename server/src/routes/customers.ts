@@ -352,17 +352,17 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
           
           if (streetData && streetData.length > 0) {
             const result = streetData[0];
-            const suggestion = {
-              text: `${result.delivery_line_1}, ${result.components.city_name}, ${result.components.state_abbreviation} ${result.components.zipcode}`,
-              streetLine: result.delivery_line_1,
-              city: result.components.city_name,
-              state: result.components.state_abbreviation,
-              zipCode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : ''),
-              entries: 1
+            const fullAddress = {
+              delivery_line_1: result.delivery_line_1,
+              components: {
+                city_name: result.components.city_name,
+                state_abbreviation: result.components.state_abbreviation,
+                zipcode: result.components.zipcode + (result.components.plus4_code ? '-' + result.components.plus4_code : '')
+              }
             };
             
-            console.log('🔧 Street API suggestion with ZIP:', suggestion);
-            return res.json({ suggestions: [suggestion] });
+            console.log('🔧 Returning full address with ZIP:', fullAddress);
+            return res.json({ fullAddress: fullAddress });
           }
         }
       }

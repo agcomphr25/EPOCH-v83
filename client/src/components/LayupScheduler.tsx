@@ -1532,13 +1532,16 @@ export default function LayupScheduler() {
 
     // Only trigger if we have production queue orders and they significantly outnumber scheduled orders
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
+      // BLOCK AI141 from algorithmic scheduling
+      const filteredOrders = orders.filter(o => o.orderId !== 'AI141');
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
       const scheduledOrderCount = generatedSchedule ? generatedSchedule.length : 0;
-      const unscheduledOrderCount = orders.length - scheduledOrderCount;
+      const unscheduledOrderCount = filteredOrders.length - scheduledOrderCount;
       
-      console.log('📊 SCHEDULE ANALYSIS:', {
+      console.log('📊 SCHEDULE ANALYSIS (AI141 blocked):', {
         totalOrders: orders.length,
+        filteredOrders: filteredOrders.length,
         scheduledOrders: scheduledOrderCount,
         unscheduledOrders: unscheduledOrderCount,
         needsScheduling: unscheduledOrderCount > 50
@@ -1546,8 +1549,8 @@ export default function LayupScheduler() {
       
       // Auto-trigger if we have many unscheduled orders (threshold: 50+ orders)
       if (unscheduledOrderCount > 50) {
-        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders...');
-        console.log('🏭 Production queue:', orders.length, 'total orders,', scheduledOrderCount, 'already scheduled');
+        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders (AI141 blocked)...');
+        console.log('🏭 Production queue:', filteredOrders.length, 'filtered orders,', scheduledOrderCount, 'already scheduled');
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
         
         // Auto-trigger the algorithmic scheduler to process the production queue
@@ -2165,40 +2168,23 @@ export default function LayupScheduler() {
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
   
-  // NUCLEAR DEBUGGING: Show all state and force immediate logging
-  console.error('💥 LAYUP SCHEDULER RENDER - COMPLETE STATE DUMP:');
-  console.error('💥 Current date:', new Date().toDateString());
-  console.error('💥 OrderAssignments count:', Object.keys(orderAssignments).length);
-  
+  // SUCCESS TESTING: Verify AI141 is completely blocked
   if (Object.keys(orderAssignments).length > 0) {
-    console.error('🚨 COMPLETE ORDERASSIGNMENTS DUMP:');
-    Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+    const hasAI141 = Object.keys(orderAssignments).includes('AI141');
+    const fridayAssignments = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
-      const dayOfWeek = assignmentDate.getDay();
-      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-      console.error(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
-      console.error(`      Raw date: ${assignment.date}`);
-      console.error(`      Parsed UTC: ${assignmentDate.toISOString()}`);
-      
-      if (orderId === 'AI141') {
-        console.error(`💥💥💥 AI141 DETECTED IN STATE! 💥💥💥`);
-        console.error(`💥 Assignment object:`, assignment);
-        console.error(`💥 Date string: ${assignment.date}`);
-        console.error(`💥 Parsed date: ${assignmentDate.toDateString()}`);
-        console.error(`💥 Day of week: ${dayOfWeek}`);
-        console.error(`💥 Is Friday: ${dayOfWeek === 5}`);
-      }
-      
-      if (dayOfWeek === 5) {
-        console.error(`🔥🔥🔥 FRIDAY ASSIGNMENT FOUND: ${orderId} 🔥🔥🔥`);
-        console.error(`🔥 This should NEVER happen!`);
-        console.error(`🔥 Clearing state in 1 second...`);
-        setTimeout(() => {
-          setOrderAssignments({});
-          console.error(`💥 FRIDAY STATE CLEARED`);
-        }, 1000);
-      }
+      return assignmentDate.getDay() === 5;
     });
+    
+    if (hasAI141) {
+      console.error(`🚨 AI141 STILL PRESENT! This should not happen!`);
+    }
+    
+    if (fridayAssignments.length > 0) {
+      console.error(`🚨 FRIDAY ASSIGNMENTS DETECTED:`, fridayAssignments.map(([id]) => id));
+    }
+    
+    console.log(`✅ STATE VALIDATION: ${Object.keys(orderAssignments).length} assignments, AI141=${hasAI141}, Friday=${fridayAssignments.length}`);
   }
 
   // Debug production orders and P1 purchase orders specifically
@@ -2332,7 +2318,8 @@ export default function LayupScheduler() {
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
-    const productionOrders = orders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
+    const productionOrders = orders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order')
+      .filter(o => o.orderId !== 'AI141'); // BLOCK AI141 from auto-scheduling
     const unassignedProductionOrders = productionOrders.filter(o => !orderAssignments[o.orderId]);
 
     const shouldRunAutoSchedule = orders.length > 0 && molds.length > 0 && employees.length > 0 && (
@@ -2341,7 +2328,7 @@ export default function LayupScheduler() {
     );
 
     if (shouldRunAutoSchedule) {
-      console.log("🚀 Auto-running schedule generation");
+      console.log("🚀 Auto-running schedule generation (AI141 blocked)");
       console.log("📊 Data available:", { orders: orders.length, molds: molds.length, employees: employees.length });
       console.log("🏭 Production orders in data:", productionOrders.length);
       console.log("🏭 Unassigned production orders:", unassignedProductionOrders.length);

@@ -183,8 +183,17 @@ export function generateScheduleAllocations(
   employees: EmployeeCapacity[],
   targetScheduleDays: number = 20 // 4 weeks of Mon-Thu
 ): ScheduleAllocation[] {
+  // BLOCK AI141 from algorithmic scheduling
+  const filteredOrders = orders.filter(order => order.orderId !== 'AI141');
+  if (filteredOrders.length !== orders.length) {
+    console.log(`🚫 CLIENT ALGORITHM: Blocked AI141. Processing ${filteredOrders.length}/${orders.length} orders`);
+  }
+  
   console.log('🔄 Starting algorithmic schedule generation...');
-  console.log(`📊 Input: ${orders.length} orders, ${molds.length} molds, ${employees.length} employees`);
+  console.log(`📊 Input: ${filteredOrders.length} orders, ${molds.length} molds, ${employees.length} employees`);
+  
+  // Use filtered orders for all processing
+  orders = filteredOrders;
   
   const allocations: ScheduleAllocation[] = [];
   const stockModelGroups = categorizeOrdersByStockModel(orders);

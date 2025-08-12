@@ -582,6 +582,33 @@ export default function LayupScheduler() {
   const { data: existingSchedule, isLoading: scheduleLoading } = useQuery({
     queryKey: ['/api/layup-schedule'],
     enabled: true,
+    select: (data) => {
+      // CRITICAL: Filter out any Friday records at database load level
+      if (!data || !Array.isArray(data)) return data;
+      
+      const fridayRecords = data.filter(assignment => {
+        const date = new Date(assignment.scheduledDate);
+        return date.getDay() === 5;
+      });
+      
+      if (fridayRecords.length > 0) {
+        console.error(`🚨 DATABASE FRIDAY FILTER: Found ${fridayRecords.length} Friday records in database`);
+        fridayRecords.forEach(record => {
+          console.error(`   - DB Record: ${record.orderId} on ${record.scheduledDate} (${new Date(record.scheduledDate).toDateString()})`);
+        });
+        
+        const cleanData = data.filter(assignment => {
+          const date = new Date(assignment.scheduledDate);
+          return date.getDay() !== 5; // Remove Friday assignments
+        });
+        
+        console.error(`🧹 DATABASE FILTER: Removed ${fridayRecords.length} Friday records, keeping ${cleanData.length} Monday-Thursday records`);
+        return cleanData;
+      }
+      
+      console.log(`✅ DATABASE CLEAN: All ${data.length} records are Monday-Thursday`);
+      return data;
+    }
   });
 
   // Update local assignments when schedule data loads
@@ -2663,6 +2690,13 @@ export default function LayupScheduler() {
     const workDays = getWorkDays(currentDate, 8); // Increased scheduling window to 8 weeks
     console.log(`📅 Scheduling across ${workDays.length} work days (8 weeks)`);
     console.log('📅 Work days range:', format(workDays[0], 'MM/dd'), 'to', format(workDays[workDays.length - 1], 'MM/dd'));
+    
+    // CRITICAL DEBUG: Show every single date the scheduler will use
+    console.log('🔍 AUTO-SCHEDULER DATES LIST:');
+    workDays.forEach((date, index) => {
+      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+      console.log(`   ${index}: ${date.toDateString()} (${dayName}, day ${date.getDay()}) -> ISO: ${date.toISOString()}`);
+    });
     const newAssignments = { ...orderAssignments };
 
     // Sort orders by priority and due date
@@ -2747,6 +2781,9 @@ export default function LayupScheduler() {
             }
             
             // Assign the order (guaranteed non-Friday)
+            const assignDate = new Date(dateString);
+            console.log(`✅ AUTO-SCHEDULER ASSIGNING: ${order.orderId} → ${mold.moldId} on ${assignDate.toDateString()} (day ${assignDate.getDay()})`);
+            
             newAssignments[order.orderId] = {
               moldId: mold.moldId,
               date: dateString

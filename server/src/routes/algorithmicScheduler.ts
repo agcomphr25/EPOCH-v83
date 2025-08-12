@@ -16,11 +16,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     
     // Filter out orders that are already scheduled or in later departments
     const ordersToProcess = p1QueueData.filter((order: any) => {
-      // BLOCK AI141 from algorithmic scheduling
-      if (order.orderId === 'AI141') {
-        console.log(`🚫 SERVER: Blocking AI141 from algorithmic scheduling`);
-        return false;
-      }
+
       
       // Only include orders that need to be scheduled for layup
       const needsScheduling = !order.currentDepartment || 

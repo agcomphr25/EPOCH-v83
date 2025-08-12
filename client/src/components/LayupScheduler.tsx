@@ -578,10 +578,29 @@ export default function LayupScheduler() {
 
   const { employees, saveEmployee, deleteEmployee, toggleEmployeeStatus, loading: employeesLoading, refetch: refetchEmployees } = useEmployeeSettings();
 
-  // Load existing schedule data from database
+  // Load existing schedule data from database, filtering out Friday assignments
   const { data: existingSchedule, isLoading: scheduleLoading } = useQuery({
     queryKey: ['/api/layup-schedule'],
     enabled: true,
+    select: (data) => {
+      if (!data || !Array.isArray(data)) return data;
+      
+      // Filter out any Friday assignments from database
+      const filteredData = data.filter(assignment => {
+        const date = new Date(assignment.scheduledDate);
+        const isNotFriday = date.getDay() !== 5;
+        if (!isNotFriday) {
+          console.log(`🗑️ DATABASE FILTER: Removing Friday assignment - ${assignment.orderId} on ${date.toDateString()}`);
+        }
+        return isNotFriday;
+      });
+      
+      if (filteredData.length !== data.length) {
+        console.log(`📋 Database filter: Removed ${data.length - filteredData.length} Friday assignments from database, kept ${filteredData.length} Monday-Thursday assignments`);
+      }
+      
+      return filteredData;
+    }
   });
 
   // Update local assignments when schedule data loads
@@ -2508,45 +2527,31 @@ export default function LayupScheduler() {
     setActiveId(event.active.id);
   };
 
-  // Critical validation function: NEVER allow Friday assignments (defined early for use in effects)
+  // Friday validation function: Remove Friday assignments from automatic scheduling only
   const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }, allowManualFriday: boolean = false) => {
     const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       return assignmentDate.getDay() === 5; // Friday check
     });
     
-    if (fridayAssignments.length > 0 && !allowManualFriday) {
-      console.error(`❌ CRITICAL VALIDATION FAILURE: Found ${fridayAssignments.length} Friday assignments!`);
-      console.error(`🔍 STACK TRACE FOR FRIDAY ASSIGNMENT:`);
-      console.trace();
+    if (fridayAssignments.length > 0) {
+      console.log(`🔧 AUTO-SCHEDULER FRIDAY FILTER: Found ${fridayAssignments.length} Friday assignments from automatic scheduling`);
       fridayAssignments.forEach(([orderId, assignment]) => {
-        console.error(`   - Order ${orderId} assigned to Friday ${new Date(assignment.date).toDateString()}`);
-        console.error(`   - Raw date string: ${assignment.date}`);
-        console.error(`   - Parsed date day: ${new Date(assignment.date).getDay()}`);
+        console.log(`   - Removing auto-scheduled Friday: ${orderId} on ${new Date(assignment.date).toDateString()}`);
       });
       
-      // Remove Friday assignments
+      // Remove Friday assignments from automatic scheduling
       const cleanedAssignments = { ...assignments };
       fridayAssignments.forEach(([orderId]) => {
         delete cleanedAssignments[orderId];
       });
       
-      toast({
-        title: "Friday Assignment Blocked",
-        description: `Prevented ${fridayAssignments.length} orders from being assigned to Friday. Orders must be manually placed on Friday if needed.`,
-        variant: "destructive",
-      });
-      
+      console.log(`✅ Friday filter: Removed ${fridayAssignments.length} auto-scheduled Friday assignments, kept ${Object.keys(cleanedAssignments).length} Monday-Thursday assignments`);
       return cleanedAssignments;
-    } else if (fridayAssignments.length > 0 && allowManualFriday) {
-      console.log(`⚠️ Manual Friday placement allowed: ${fridayAssignments.length} orders placed on Friday`);
-      fridayAssignments.forEach(([orderId, assignment]) => {
-        console.log(`   - Order ${orderId} manually placed on Friday ${new Date(assignment.date).toDateString()}`);
-      });
     }
     
     return assignments;
-  }, [toast]);
+  }, []);
 
   // Initial Friday cleanup effect - run once when orderAssignments are first loaded (disabled to prevent cycles)
   React.useEffect(() => {

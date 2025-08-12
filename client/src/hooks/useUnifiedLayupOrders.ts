@@ -29,16 +29,32 @@ export function useUnifiedLayupOrders() {
   // P2 orders are now handled separately in P2LayupScheduler
   const { data: p1Orders = [], isLoading: p1Loading, error } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
-    select: (data: UnifiedLayupOrder[]) => {
-      console.log('🔧 useUnifiedLayupOrders select function:', {
+    select: (data: any) => {
+      console.log('🔧 RAW API RESPONSE:', {
         dataType: typeof data,
         isArray: Array.isArray(data),
         length: data?.length || 0,
-        hasData: !!data
+        hasData: !!data,
+        firstItem: data?.[0],
+        keys: data ? Object.keys(data) : 'no data'
       });
-      return data || [];
+      
+      if (!data) {
+        console.error('❌ No data received from API');
+        return [];
+      }
+      
+      if (!Array.isArray(data)) {
+        console.error('❌ Data is not an array:', typeof data, data);
+        return [];
+      }
+      
+      console.log(`✅ Successfully loaded ${data.length} orders from API`);
+      return data;
     },
+    retry: 3,
     refetchInterval: 30000,
+    staleTime: 10000, // Consider data fresh for 10 seconds
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {

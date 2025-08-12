@@ -44,7 +44,7 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
     credentials: 'include', // Include cookies for session-based auth
   };
 
-  if (options.body && typeof options.body === 'object' && !options.headers?.['Content-Type']?.includes('multipart/form-data')) {
+  if (options.body && typeof options.body === 'object' && !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')) {
     config.body = JSON.stringify(options.body);
   }
 
@@ -105,8 +105,8 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      staleTime: 60000, // 1 minute instead of Infinity for better data freshness
+      retry: 1, // Allow 1 retry instead of false
     },
     mutations: {
       retry: false,

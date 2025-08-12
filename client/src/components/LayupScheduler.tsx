@@ -2185,7 +2185,7 @@ export default function LayupScheduler() {
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
-  // FRIDAY STATE CLEANER: Remove any Friday assignments from orderAssignments on component mount
+  // FRIDAY STATE CLEANER: Remove any Friday assignments from orderAssignments - run IMMEDIATELY when assignments load
   useEffect(() => {
     if (Object.keys(orderAssignments).length > 0) {
       const cleanedAssignments = Object.fromEntries(
@@ -2201,10 +2201,11 @@ export default function LayupScheduler() {
       
       if (Object.keys(cleanedAssignments).length !== Object.keys(orderAssignments).length) {
         console.log(`🧹 FRIDAY CLEANER: Cleaned ${Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length} Friday assignments`);
-        setOrderAssignments(cleanedAssignments);
+        // Use setTimeout to ensure this runs after render cycle
+        setTimeout(() => setOrderAssignments(cleanedAssignments), 0);
       }
     }
-  }, [orderAssignments]); // Run when orderAssignments changes
+  }, [JSON.stringify(orderAssignments)]); // Run when assignments change (serialized to prevent infinite loop)
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {

@@ -3233,16 +3233,7 @@ export default function LayupScheduler() {
               className="grid gap-1"
               style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
             >
-{(() => {
-                // Only show dates that have order assignments
-                const datesWithOrders = dates.filter(date => {
-                  const dateStr = date.toISOString().split('T')[0];
-                  return Object.values(orderAssignments).some(assignment => 
-                    assignment.date.split('T')[0] === dateStr
-                  );
-                });
-                
-                return datesWithOrders.map(date => {
+              {dates.map(date => {
                   const isFriday = date.getDay() === 5;
                   return (
                     <div
@@ -3264,8 +3255,7 @@ export default function LayupScheduler() {
                       </div>
                     </div>
                   );
-                });
-              })()}
+              })}
             </div>
           </div>
         )}
@@ -3278,8 +3268,9 @@ export default function LayupScheduler() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="px-6 pb-6">
-            {viewType === 'week' || viewType === 'day' ? (
+          <>
+            <div className="px-6 pb-6">
+              {viewType === 'week' || viewType === 'day' ? (
               <div className="space-y-6">
                 {/* Auto-Schedule Controls */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -3358,16 +3349,7 @@ export default function LayupScheduler() {
                 {/* Schedule Grid */}
                 <div
                   className="grid gap-1"
-                  style={{ gridTemplateColumns: `repeat(${(() => {
-                    // Only show dates that have order assignments
-                    const datesWithOrders = dates.filter(date => {
-                      const dateStr = date.toISOString().split('T')[0];
-                      return Object.values(orderAssignments).some(assignment => 
-                        assignment.date.split('T')[0] === dateStr
-                      );
-                    });
-                    return datesWithOrders.length || 1; // Minimum 1 column to prevent layout break
-                  })()}, 1fr)` }}
+                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
                 >
 
               {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
@@ -3503,21 +3485,21 @@ export default function LayupScheduler() {
                 ));
               })()}
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                Month view not yet implemented
-              </div>
-            )}
-          </div>
-
-          <DragOverlay>
-            {activeId ? (
-              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-                {activeId}
-              </div>
-            ) : null}
-          </DragOverlay>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Month view not yet implemented
+                </div>
+              )}
+            </div>
+            
+            <DragOverlay>
+              {activeId ? (
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
+                  {activeId}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </>
         </DndContext>
       </div>
     </div>

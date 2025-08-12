@@ -145,164 +145,49 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P1 Layup Queue endpoint - provides orders ready for layup scheduling
+  // P1 Layup Queue endpoint - provides unified production queue for layup scheduler
   app.get('/api/p1-layup-queue', async (req, res) => {
     try {
-      console.log('🏭 Starting P1 layup queue processing...');
       const { storage } = await import('../../storage');
-
-      // Get only finalized orders from draft table that are ready for layup
-      const allOrders = await storage.getAllOrderDrafts();
-      const layupOrders = allOrders.filter(order => 
-        order.status === 'FINALIZED' && 
-        (order.currentDepartment === 'Layup' || !order.currentDepartment)
+      const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
+      
+      // Get all orders that haven't entered production yet (P1 Production Queue)
+      const allOrders = await storage.getAllOrders();
+      const unscheduledOrders = allOrders.filter(order => 
+        order.currentDepartment === 'P1 Production Queue'
       );
-
-      // Get P1 Production Orders that have been approved for layup (moved from Production Queue)
-      const productionOrders = await storage.getAllProductionOrders();
-      const approvedForLayup = productionOrders.filter(po => 
-        po.productionStatus === 'APPROVED_FOR_LAYUP'
-      );
-
-      const p1LayupOrders = approvedForLayup.map(po => {
-        // Calculate priority score based on due date urgency
-        const dueDate = new Date(po.dueDate || po.orderDate);
-        const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
-
-        return {
-          id: `p1-prod-${po.id}`,
-          orderId: po.orderId,
-          orderDate: po.orderDate,
-          customer: po.customerName,
-          product: po.itemName,
-          quantity: 1, // Each production order is for 1 unit
-          status: po.productionStatus,
-          department: 'Layup',
-          currentDepartment: 'Layup',
-          priorityScore: priorityScore,
-          dueDate: po.dueDate,
-          source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin
-          poId: po.poId,
-          poItemId: po.poItemId,
-          productionOrderId: po.id,
-          stockModelId: po.itemId, // Use item ID as stock model for mold matching
-          specifications: po.specifications,
-          createdAt: po.createdAt,
-          updatedAt: po.updatedAt
-        };
-      });
-
-      // Convert regular orders to unified format
-      const regularLayupOrders = layupOrders.map(order => ({
-        id: order.id?.toString() || order.orderId,
-        orderId: order.orderId,
-        orderDate: order.orderDate,
-        customer: order.customerId || 'Unknown',
-        product: order.modelId || 'Unknown',
-        quantity: 1,
-        status: order.status,
-        department: 'Layup',
-        currentDepartment: 'Layup',
-        priorityScore: 50, // Regular orders have lower priority
-        dueDate: order.dueDate,
-        source: 'main_orders' as const,
-        stockModelId: order.modelId,
-        modelId: order.modelId,
-        features: order.features,
-        createdAt: order.orderDate,
-        updatedAt: order.updatedAt || order.orderDate
-      }));
-
-      // Combine both order types for layup queue
-      const combinedOrders = [
-        ...regularLayupOrders,
-        ...p1LayupOrders
-      ].sort((a, b) => ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50));
-
-      console.log(`🏭 P1 layup queue orders count: ${combinedOrders.length}`);
-      console.log(`🏭 Regular orders: ${regularLayupOrders.length}, P1 approved orders: ${p1LayupOrders.length}`);
-
-      res.json(combinedOrders);
+      
+      // Combine both order types into unified production queue with enhanced stock model inference
+      const combinedQueue = [
+        ...unscheduledOrders.map(order => {
+          const { stockModelId, product } = inferStockModelFromFeatures({
+            ...order,
+            source: 'p1_purchase_order'
+          });
+          
+          return {
+            ...order,
+            source: 'p1_purchase_order',
+            priorityScore: calculatePriorityScore(order.dueDate),
+            orderId: order.orderId,
+            stockModelId,
+            product,
+            stockModelName: product
+          };
+        })
+      ];
+      
+      // Sort by priority score (lower = higher priority)
+      combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);
+      
+      res.json(combinedQueue);
     } catch (error) {
-      console.error("P1 layup queue error:", error);
+      console.error('❌ P1 layup queue fetch error:', error);
       res.status(500).json({ error: "Failed to fetch P1 layup queue" });
     }
   });
 
-  // P1 Production Queue endpoint - shows P1 production orders awaiting approval for layup
-  app.get('/api/p1-production-queue', async (req, res) => {
-    try {
-      console.log('🏭 Starting P1 production queue processing...');
-      const { storage } = await import('../../storage');
 
-      // Get P1 Production Orders that are pending (haven't been approved for layup yet)
-      const productionOrders = await storage.getAllProductionOrders();
-      const pendingProductionOrders = productionOrders.filter(po => 
-        po.productionStatus === 'PENDING'
-      );
-
-      const p1ProductionQueue = pendingProductionOrders.map(po => {
-        // Calculate priority score based on due date urgency
-        const dueDate = new Date(po.dueDate || po.orderDate);
-        const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 30))); // 20-35 range
-
-        return {
-          id: `p1-prod-${po.id}`,
-          orderId: po.orderId,
-          orderDate: po.orderDate,
-          customer: po.customerName,
-          product: po.itemName,
-          quantity: 1, // Each production order is for 1 unit
-          status: po.productionStatus,
-          department: 'Production Queue',
-          currentDepartment: 'Production Queue',
-          priorityScore: priorityScore,
-          dueDate: po.dueDate,
-          source: 'p1_purchase_order' as const,
-          poId: po.poId,
-          poItemId: po.poItemId,
-          productionOrderId: po.id,
-          stockModelId: po.itemId,
-          specifications: po.specifications,
-          createdAt: po.createdAt,
-          updatedAt: po.updatedAt
-        };
-      });
-
-      // Sort by priority score (lower = higher priority)
-      p1ProductionQueue.sort((a, b) => a.priorityScore - b.priorityScore);
-
-      console.log(`🏭 P1 production queue orders count: ${p1ProductionQueue.length}`);
-
-      res.json(p1ProductionQueue);
-    } catch (error) {
-      console.error("P1 production queue error:", error);
-      res.status(500).json({ error: "Failed to fetch P1 production queue" });
-    }
-  });
-
-  // Endpoint to approve P1 production orders for layup
-  app.post('/api/p1-production-orders/:id/approve-for-layup', async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const productionOrderId = parseInt(req.params.id);
-      
-      // Update the production order status to approved for layup
-      await storage.updateProductionOrder(productionOrderId, { 
-        productionStatus: 'APPROVED_FOR_LAYUP' 
-      });
-      
-      console.log(`✅ P1 production order ${productionOrderId} approved for layup`);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error approving P1 production order for layup:", error);
-      res.status(500).json({ error: "Failed to approve production order for layup" });
-    }
-  });
 
   // Helper function to calculate priority score based on due date
   function calculatePriorityScore(dueDate: string | Date | null): number {

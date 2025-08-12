@@ -586,14 +586,28 @@ export default function LayupScheduler() {
   // Update local assignments when schedule data loads
   useEffect(() => {
     if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
+      console.log('🔍 DEBUG: Loading existing schedule from database:', existingSchedule.length, 'entries');
+      
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
       (existingSchedule as any[]).forEach((entry: any) => {
+        const schedDate = new Date(entry.scheduledDate);
+        const dayOfWeek = schedDate.getDay();
+        const dateStr = entry.scheduledDate;
+        
+        console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
+        
+        // CRITICAL: Validate no Friday assignments from database
+        if (dayOfWeek === 5) {
+          console.error(`❌ FOUND FRIDAY ASSIGNMENT FROM DATABASE: Order ${entry.orderId} on ${schedDate.toDateString()}`);
+        }
+        
         assignments[entry.orderId] = {
           moldId: entry.moldId,
           date: entry.scheduledDate
         };
       });
 
+      console.log('📦 Total assignments loaded:', Object.keys(assignments).length);
       setOrderAssignments(assignments);
     }
   }, [existingSchedule]);

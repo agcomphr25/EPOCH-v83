@@ -886,7 +886,7 @@ export default function OrderEntry() {
         // Update existing order
         response = await apiRequest(`/api/orders/draft/${editingOrderId}`, {
           method: 'PUT',
-          body: orderData
+          body: JSON.stringify(orderData)
         });
 
         toast({
@@ -897,7 +897,7 @@ export default function OrderEntry() {
         // Create new order
         response = await apiRequest('/api/orders/draft', {
           method: 'POST',
-          body: orderData
+          body: JSON.stringify(orderData)
         });
 
         toast({

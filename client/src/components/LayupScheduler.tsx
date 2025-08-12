@@ -2241,59 +2241,24 @@ export default function LayupScheduler() {
     return key;
   }, [processedOrders]);
 
-  // FRIDAY DELETION: Remove Friday assignments from database and state
+  // FRIDAY MONITORING: Log any Friday assignments that still appear (should be none now)
   useEffect(() => {
-    const deleteFridayRecords = async () => {
-      if (Object.keys(orderAssignments).length > 0) {
-        const fridayAssignments = Object.entries(orderAssignments).filter(([key, assignment]) => {
-          const assignmentDate = new Date(assignment.date);
-          return assignmentDate.getDay() === 5; // Friday
+    if (Object.keys(orderAssignments).length > 0) {
+      const fridayAssignments = Object.entries(orderAssignments).filter(([key, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        return assignmentDate.getDay() === 5; // Friday
+      });
+      
+      if (fridayAssignments.length > 0) {
+        console.error(`🚨 FRIDAY MONITORING: Still found ${fridayAssignments.length} Friday assignments despite blocking:`);
+        fridayAssignments.forEach(([key, assignment]) => {
+          console.error(`   - ${key}: ${assignment.date} (${new Date(assignment.date).toDateString()})`);
         });
-        
-        if (fridayAssignments.length > 0) {
-          console.error(`🚨 FRIDAY DELETION: Found ${fridayAssignments.length} Friday assignments to remove`);
-          
-          // Delete from database first
-          for (const [orderKey, assignment] of fridayAssignments) {
-            const normalizedKey = normalizeOrderKey(orderKey);
-            console.error(`🗑️ DELETING Friday record: ${normalizedKey} scheduled for ${assignment.date}`);
-            
-            try {
-              const response = await fetch('/api/layup-schedule', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId: normalizedKey })
-              });
-              
-              if (response.ok) {
-                console.log(`✅ Deleted Friday record for ${normalizedKey}`);
-              } else {
-                console.error(`❌ Failed to delete Friday record for ${normalizedKey}`);
-              }
-            } catch (error) {
-              console.error(`❌ Error deleting Friday record for ${normalizedKey}:`, error);
-            }
-          }
-          
-          // Remove from state
-          const cleanedAssignments = { ...orderAssignments };
-          fridayAssignments.forEach(([key]) => {
-            delete cleanedAssignments[key];
-          });
-          
-          console.error(`🧹 STATE CLEANUP: Removed ${fridayAssignments.length} Friday assignments from state`);
-          setOrderAssignments(cleanedAssignments);
-          
-          // Force refetch of schedule data
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
-        }
+      } else if (Object.keys(orderAssignments).length > 0) {
+        console.log(`✅ FRIDAY MONITORING: All ${Object.keys(orderAssignments).length} assignments are Monday-Thursday only`);
       }
-    };
-    
-    deleteFridayRecords();
-  }, [JSON.stringify(orderAssignments), normalizeOrderKey]); // Run when assignments change
+    }
+  }, [Object.keys(orderAssignments).length]); // Only run when assignment count changes
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
@@ -2752,11 +2717,19 @@ export default function LayupScheduler() {
 
       let assigned = false;
 
-      // Try to assign to each work day
+      // Try to assign to each work day (STRICT FRIDAY EXCLUSION)
       for (const date of workDays) {
         if (assigned) break;
 
+        // CRITICAL: Never schedule on Friday (day 5)
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 5) {
+          console.error(`❌ SCHEDULER BLOCKED FRIDAY: Date ${date.toDateString()} is Friday - SKIPPING`);
+          continue; // Skip this date entirely
+        }
+
         const dateString = date.toISOString();
+        console.log(`📅 SCHEDULER: Trying to schedule ${order.orderId} on ${date.toDateString()} (Day: ${dayOfWeek})`);
         
         // Try each compatible mold
         for (const mold of compatibleMolds) {
@@ -2766,7 +2739,14 @@ export default function LayupScheduler() {
 
           // Check if mold has capacity on this date
           if (currentCapacity < maxCapacity) {
-            // Assign the order
+            // FINAL FRIDAY CHECK before assignment
+            const finalDate = new Date(dateString);
+            if (finalDate.getDay() === 5) {
+              console.error(`❌ CRITICAL: Almost assigned ${order.orderId} to FRIDAY ${finalDate.toDateString()} - BLOCKING`);
+              continue; // Skip this mold/date combination
+            }
+            
+            // Assign the order (guaranteed non-Friday)
             newAssignments[order.orderId] = {
               moldId: mold.moldId,
               date: dateString

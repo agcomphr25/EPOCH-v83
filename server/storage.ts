@@ -966,7 +966,19 @@ export class DatabaseStorage implements IStorage {
     const orders = await db.select().from(orderDrafts).orderBy(desc(orderDrafts.updatedAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select().from(customers);
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
     // Enrich orders with customer names
@@ -1205,8 +1217,20 @@ export class DatabaseStorage implements IStorage {
       updatedAt: allOrders.updatedAt
     }).from(allOrders).orderBy(desc(allOrders.updatedAt));
 
-    // Get all customers to create a lookup map
-    const allCustomers = await db.select().from(customers);
+    // Get all customers to create a lookup map - select only existing columns
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
     // Enrich orders with customer names and add required frontend fields
@@ -1344,7 +1368,19 @@ export class DatabaseStorage implements IStorage {
       console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
 
       // Get all customers to create a lookup map
-      const allCustomers = await db.select().from(customers);
+      const allCustomers = await db.select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      }).from(customers);
       const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
       // Get all stock models to create a lookup map for display names
@@ -2495,7 +2531,19 @@ export class DatabaseStorage implements IStorage {
   // Module 8: Customers CRUD
   async getAllCustomers(): Promise<Customer[]> {
     return await db
-      .select()
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
       .from(customers)
       .where(eq(customers.isActive, true))
       .orderBy(customers.name);
@@ -2515,7 +2563,19 @@ export class DatabaseStorage implements IStorage {
 
     // Get customers that match those names using IN clause
     return await db
-      .select()
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
       .from(customers)
       .where(and(
         eq(customers.isActive, true),
@@ -2526,7 +2586,19 @@ export class DatabaseStorage implements IStorage {
 
   async searchCustomers(query: string): Promise<Customer[]> {
     return await db
-      .select()
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
       .from(customers)
       .where(and(
         eq(customers.isActive, true),
@@ -5023,7 +5095,19 @@ export class DatabaseStorage implements IStorage {
     const orders = await db.select().from(allOrders).orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
-    const allCustomers = await db.select().from(customers);
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
     // Enrich orders with customer names

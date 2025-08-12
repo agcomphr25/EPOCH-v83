@@ -3352,136 +3352,134 @@ export default function LayupScheduler() {
                 >
                   {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
                   {(() => {
+                    // Get molds that either have orders OR are compatible with existing orders in queue
+                    const getCompatibleMolds = (order: any) => {
+                      const modelId = order.stockModelId || order.modelId;
+                      return molds.filter(mold => {
+                        if (!mold.enabled) return false;
+                        if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
+                        return mold.stockModels.includes(modelId);
+                      });
+                    };
 
-                // Get molds that either have orders OR are compatible with existing orders in queue
-                const getCompatibleMolds = (order: any) => {
-                  const modelId = order.stockModelId || order.modelId;
-                  return molds.filter(mold => {
-                    if (!mold.enabled) return false;
-                    if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
-                    return mold.stockModels.includes(modelId);
-                  });
-                };
-
-                // Find molds that are compatible with any order in the current queue
-                const compatibleMoldIds = new Set<string>();
-                orders.forEach(order => {
-                  const compatible = getCompatibleMolds(order);
-                  compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
-                });
-
-                // Get molds that have actual order assignments only (hide empty molds)
-                const relevantMolds = molds.filter(m => {
-                  if (!m.enabled) return false;
-
-                  // Only include molds that have orders assigned (no empty molds)
-                  const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
-                  return hasAssignments;
-                });
-
-                // Calculate order counts for relevant molds
-                const moldOrderCounts = relevantMolds.map(mold => {
-                  const totalOrdersForMold = dates.reduce((count, date) => {
-                    const dateString = date.toISOString();
-                    const cellDateOnly = dateString.split('T')[0];
-
-                    const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-                      const assignmentDateOnly = assignment.date.split('T')[0];
-                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                    }).length;
-
-                    return count + ordersForThisMoldDate;
-                  }, 0);
-
-                  return { mold, orderCount: totalOrdersForMold };
-                });
-
-                // Sort molds by order count (descending) - molds with most orders at top, available molds at bottom
-                const sortedMolds = moldOrderCounts.sort((a, b) => {
-                  if (b.orderCount !== a.orderCount) {
-                    return b.orderCount - a.orderCount; // Primary sort: more orders first
-                  }
-                  // Secondary sort: alphabetical by mold ID for consistent ordering
-                  return a.mold.moldId.localeCompare(b.mold.moldId);
-                });
-
-
-
-                // Use only relevant molds
-                const activeMolds = sortedMolds.map(({ mold }) => mold);
-
-                return activeMolds.map(mold => (
-                <React.Fragment key={mold.moldId}>
-                  {(() => {
-                    // Only show dates that have orders assigned to this mold
-                    const datesWithOrders = dates.filter(date => {
-                      const dateStr = date.toISOString().split('T')[0];
-                      return Object.values(orderAssignments).some(assignment => 
-                        assignment.moldId === mold.moldId && assignment.date.split('T')[0] === dateStr
-                      );
+                    // Find molds that are compatible with any order in the current queue
+                    const compatibleMoldIds = new Set<string>();
+                    orders.forEach(order => {
+                      const compatible = getCompatibleMolds(order);
+                      compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
                     });
-                    
-                    return datesWithOrders.map(date => {
-                      const dateString = date.toISOString();
 
-                    // Get orders assigned to this mold/date combination
-                    const cellOrders = Object.entries(orderAssignments)
-                      .filter(([orderId, assignment]) => {
-                        const assignmentDateOnly = assignment.date.split('T')[0];
+                    // Get molds that have actual order assignments only (hide empty molds)
+                    const relevantMolds = molds.filter(m => {
+                      if (!m.enabled) return false;
+
+                      // Only include molds that have orders assigned (no empty molds)
+                      const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+                      return hasAssignments;
+                    });
+
+                    // Calculate order counts for relevant molds
+                    const moldOrderCounts = relevantMolds.map(mold => {
+                      const totalOrdersForMold = dates.reduce((count, date) => {
+                        const dateString = date.toISOString();
                         const cellDateOnly = dateString.split('T')[0];
-                        return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                      })
-                      .map(([orderId]) => {
-                        const order = processedOrders.find(o => o.orderId === orderId);
-                        if (!order) {
-                          // Return a placeholder card that will be visible to show the scheduled order
-                          return {
-                            orderId: orderId,
-                            product: `SCHEDULED: ${orderId}`,
-                            customer: 'Mesa Order',
-                            quantity: 1,
-                            id: orderId,
-                            orderDate: new Date().toISOString(),
-                            status: 'scheduled',
-                            department: 'layup',
-                            currentDepartment: 'layup',
-                            priorityScore: 1,
-                            source: 'production_order',
-                            stockModelId: 'mesa_universal',
-                            features: { action_length: 'Short' },
-                            createdAt: new Date().toISOString(),
-                            updatedAt: new Date().toISOString()
-                          };
-                        }
-                        return order;
-                      })
-                      .filter(order => order !== undefined) as any[];
 
-                    const dropId = `${mold.moldId}|${dateString}`;
+                        const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+                          const assignmentDateOnly = assignment.date.split('T')[0];
+                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                        }).length;
 
-                    return (
-                      <DroppableCell
-                        key={dropId}
-                        moldId={mold.moldId}
-                        date={date}
-                        orders={cellOrders}
-                        onDrop={(orderId, moldId, date) => {
-                          // Handle drop (this is handled by DndContext now)
-                        }}
-                        moldInfo={{
-                          moldId: mold.moldId,
-                          instanceNumber: mold.instanceNumber
-                        }}
-                        getModelDisplayName={getModelDisplayName}
-                        features={features}
-                        processedOrders={processedOrders}
-                      />
-                    );
+                        return count + ordersForThisMoldDate;
+                      }, 0);
+
+                      return { mold, orderCount: totalOrdersForMold };
                     });
+
+                    // Sort molds by order count (descending) - molds with most orders at top, available molds at bottom
+                    const sortedMolds = moldOrderCounts.sort((a, b) => {
+                      if (b.orderCount !== a.orderCount) {
+                        return b.orderCount - a.orderCount; // Primary sort: more orders first
+                      }
+                      // Secondary sort: alphabetical by mold ID for consistent ordering
+                      return a.mold.moldId.localeCompare(b.mold.moldId);
+                    });
+
+                    // Use only relevant molds
+                    const activeMolds = sortedMolds.map(({ mold }) => mold);
+
+                    return activeMolds.map(mold => (
+                      <React.Fragment key={mold.moldId}>
+                        {(() => {
+                          // Only show dates that have orders assigned to this mold
+                          const datesWithOrders = dates.filter(date => {
+                            const dateStr = date.toISOString().split('T')[0];
+                            return Object.values(orderAssignments).some(assignment => 
+                              assignment.moldId === mold.moldId && assignment.date.split('T')[0] === dateStr
+                            );
+                          });
+                          
+                          return datesWithOrders.map(date => {
+                            const dateString = date.toISOString();
+
+                            // Get orders assigned to this mold/date combination
+                            const cellOrders = Object.entries(orderAssignments)
+                              .filter(([orderId, assignment]) => {
+                                const assignmentDateOnly = assignment.date.split('T')[0];
+                                const cellDateOnly = dateString.split('T')[0];
+                                return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                              })
+                              .map(([orderId]) => {
+                                const order = processedOrders.find(o => o.orderId === orderId);
+                                if (!order) {
+                                  // Return a placeholder card that will be visible to show the scheduled order
+                                  return {
+                                    orderId: orderId,
+                                    product: `SCHEDULED: ${orderId}`,
+                                    customer: 'Mesa Order',
+                                    quantity: 1,
+                                    id: orderId,
+                                    orderDate: new Date().toISOString(),
+                                    status: 'scheduled',
+                                    department: 'layup',
+                                    currentDepartment: 'layup',
+                                    priorityScore: 1,
+                                    source: 'production_order',
+                                    stockModelId: 'mesa_universal',
+                                    features: { action_length: 'Short' },
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString()
+                                  };
+                                }
+                                return order;
+                              })
+                              .filter(order => order !== undefined) as any[];
+
+                            const dropId = `${mold.moldId}|${dateString}`;
+
+                            return (
+                              <DroppableCell
+                                key={dropId}
+                                moldId={mold.moldId}
+                                date={date}
+                                orders={cellOrders}
+                                onDrop={(orderId, moldId, date) => {
+                                  // Handle drop (this is handled by DndContext now)
+                                }}
+                                moldInfo={{
+                                  moldId: mold.moldId,
+                                  instanceNumber: mold.instanceNumber
+                                }}
+                                getModelDisplayName={getModelDisplayName}
+                                features={features}
+                                processedOrders={processedOrders}
+                              />
+                            );
+                          });
+                        })()}
+                      </React.Fragment>
+                    ));
                   })()}
-                </React.Fragment>
-                  ));
-                  })()}
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">

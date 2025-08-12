@@ -562,6 +562,7 @@ export default function LayupScheduler() {
   const [editingMoldId, setEditingMoldId] = useState<string | null>(null);
   const [editingMoldStockModels, setEditingMoldStockModels] = useState<string[]>([]);
   const [editingMoldName, setEditingMoldName] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -2242,10 +2243,13 @@ export default function LayupScheduler() {
         const dayOfWeek = scheduleDate.getDay();
         
         if (dayOfWeek === 5) {
-          console.error(`❌ FRIDAY ASSIGNMENT DETECTED IN SCHEDULE: ${item.orderId} on ${scheduleDate.toDateString()}`);
+          const errorMsg = `❌ FRIDAY ASSIGNMENT DETECTED: ${item.orderId} on ${scheduleDate.toDateString()} (Source: ${order?.source})`;
+          console.error(errorMsg);
           console.error(`   🔍 Schedule item details:`, item);
           console.error(`   🔍 Order source:`, order?.source);
           console.trace(`🚨 FRIDAY CREATION TRACE for ${item.orderId}:`);
+          
+          setDebugInfo(prev => [...prev, errorMsg]);
           return; // SKIP Friday assignments completely
         }
         
@@ -2343,10 +2347,11 @@ export default function LayupScheduler() {
         console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
         
         if (dayOfWeek === 5) {
-          console.error(`   ❌ FRIDAY ASSIGNMENT IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`);
-          
-          // Show stack trace to find where this Friday assignment came from
+          const errorMsg = `❌ FRIDAY IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`;
+          console.error(errorMsg);
           console.trace(`🔍 FRIDAY ASSIGNMENT ORIGIN for ${orderId}:`);
+          
+          setDebugInfo(prev => [...prev, errorMsg]);
         }
       });
     }
@@ -2762,6 +2767,24 @@ export default function LayupScheduler() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
 
             </div>
+            
+            {/* Debug Information Panel */}
+            {debugInfo.length > 0 && (
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 rounded">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">⚠️ Friday Assignment Issues Found:</h3>
+                <div className="text-xs font-mono text-red-700 dark:text-red-300 space-y-1">
+                  {debugInfo.map((info, idx) => (
+                    <div key={idx}>{info}</div>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => setDebugInfo([])}
+                  className="mt-2 text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+                >
+                  Clear Debug Info
+                </button>
+              </div>
+            )}
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
                 <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>

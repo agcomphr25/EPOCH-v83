@@ -2183,6 +2183,27 @@ export default function LayupScheduler() {
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
+  // FRIDAY STATE CLEANER: Remove any Friday assignments from orderAssignments on component mount
+  useEffect(() => {
+    if (Object.keys(orderAssignments).length > 0) {
+      const cleanedAssignments = Object.fromEntries(
+        Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+          const assignmentDate = new Date(assignment.date);
+          const isFriday = assignmentDate.getDay() === 5;
+          if (isFriday) {
+            console.warn(`🧹 FRIDAY CLEANER: Removing Friday assignment for ${orderId} from ${assignmentDate.toDateString()}`);
+          }
+          return !isFriday; // Keep non-Friday assignments
+        })
+      );
+      
+      if (Object.keys(cleanedAssignments).length !== Object.keys(orderAssignments).length) {
+        console.log(`🧹 FRIDAY CLEANER: Cleaned ${Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length} Friday assignments`);
+        setOrderAssignments(cleanedAssignments);
+      }
+    }
+  }, [orderAssignments]); // Run when orderAssignments changes
+
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
     const productionOrders = orders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
@@ -2352,6 +2373,11 @@ export default function LayupScheduler() {
           const errorMsg = `❌ FRIDAY IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`;
           console.error(errorMsg);
           console.trace(`🔍 FRIDAY ASSIGNMENT ORIGIN for ${orderId}:`);
+          console.error(`🔍 FRIDAY ASSIGNMENT DEBUG - Source analysis:`);
+          console.error(`   Assignment object:`, assignment);
+          console.error(`   Raw date string:`, assignment.date);
+          console.error(`   Parsed date:`, assignmentDate);
+          console.error(`   Assignment source: Check if this came from database, drag-drop, or algorithm`);
           
           setDebugInfo(prev => [...prev, errorMsg]);
         }

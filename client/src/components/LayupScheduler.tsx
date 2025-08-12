@@ -2236,6 +2236,19 @@ export default function LayupScheduler() {
       schedule.forEach((item: any) => {
         const order = orders.find(o => o.orderId === item.orderId);
         const isProduction = order?.source === 'production_order' || order?.source === 'p1_purchase_order';
+        
+        // CRITICAL DEBUG: Check for Friday assignments being created
+        const scheduleDate = new Date(item.scheduledDate);
+        const dayOfWeek = scheduleDate.getDay();
+        
+        if (dayOfWeek === 5) {
+          console.error(`❌ FRIDAY ASSIGNMENT DETECTED IN SCHEDULE: ${item.orderId} on ${scheduleDate.toDateString()}`);
+          console.error(`   🔍 Schedule item details:`, item);
+          console.error(`   🔍 Order source:`, order?.source);
+          console.trace(`🚨 FRIDAY CREATION TRACE for ${item.orderId}:`);
+          return; // SKIP Friday assignments completely
+        }
+        
         if (isProduction) {
           console.log(`🏭 PRODUCTION/P1 ORDER ASSIGNMENT: ${item.orderId} (${order?.source}) → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
         }
@@ -2275,6 +2288,17 @@ export default function LayupScheduler() {
       // Add new assignments for regular orders that aren't already assigned
       schedule.forEach((item: any) => {
         const order = orders.find(o => o.orderId === item.orderId);
+        
+        // CRITICAL DEBUG: Check for Friday assignments during merge
+        const scheduleDate = new Date(item.scheduledDate);
+        const dayOfWeek = scheduleDate.getDay();
+        
+        if (dayOfWeek === 5) {
+          console.error(`❌ FRIDAY ASSIGNMENT IN MERGE: ${item.orderId} on ${scheduleDate.toDateString()}`);
+          console.error(`   🔍 Merge item details:`, item);
+          return; // SKIP Friday assignments completely
+        }
+        
         if (order?.source === 'main_orders' && !newAssignments[item.orderId]) {
           newAssignments[item.orderId] = {
             moldId: item.moldId,
@@ -2320,6 +2344,9 @@ export default function LayupScheduler() {
         
         if (dayOfWeek === 5) {
           console.error(`   ❌ FRIDAY ASSIGNMENT IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`);
+          
+          // Show stack trace to find where this Friday assignment came from
+          console.trace(`🔍 FRIDAY ASSIGNMENT ORIGIN for ${orderId}:`);
         }
       });
     }

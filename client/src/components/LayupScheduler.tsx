@@ -1447,7 +1447,10 @@ export default function LayupScheduler() {
         });
         
         console.log(`📅 PRODUCTION FLOW: Assigning ${Object.keys(scheduleAssignments).length} orders to schedule`);
-        setOrderAssignments(scheduleAssignments);
+        
+        // Apply Friday validation to algorithmic schedule (never allow Friday)
+        const validatedAssignments = validateNoFridayAssignments(scheduleAssignments);
+        setOrderAssignments(validatedAssignments);
         
         // Log mold assignments for verification
         const moldAssignments = response.allocations.reduce((acc: any, alloc: any) => {

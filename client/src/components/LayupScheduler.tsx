@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { getDisplayOrderId } from '@/lib/orderUtils';
+import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -815,7 +815,9 @@ export default function LayupScheduler() {
           };
         });
         
-        setOrderAssignments(newAssignments);
+        // Apply Friday validation to algorithmic schedule (never allow Friday)
+        const validatedAssignments = validateNoFridayAssignments(newAssignments, false);
+        setOrderAssignments(validatedAssignments);
         setHasUnsavedScheduleChanges(true);
       }
     },
@@ -1484,7 +1486,9 @@ export default function LayupScheduler() {
       console.log('📋 Current processedOrders count:', processedOrders?.length || 0);
       console.log('📋 Sample processedOrders IDs:', processedOrders?.slice(0, 5)?.map(o => o.orderId) || []);
       
-      setOrderAssignments(scheduleAssignments);
+      // Apply Friday validation to auto-generated schedule (never allow Friday)
+      const validatedAssignments = validateNoFridayAssignments(scheduleAssignments, false);
+      setOrderAssignments(validatedAssignments);
       console.log('📋 Order assignments state updated');
       
       // Force calendar re-render by triggering a state change
@@ -2491,14 +2495,18 @@ export default function LayupScheduler() {
     // This leaves the original slot empty and doesn't auto-fill it
     console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${dateIso}`);
 
-    // Update assignment to new position (manual placements bypass Friday validation)
+    // Update assignment to new position
     // Apply key normalization to ensure we use Order ID, not FB Order Number
     const normalizedOrderId = normalizeOrderKey(orderId);
     
-    setOrderAssignments(prev => ({
-      ...prev,
+    const newAssignments = {
+      ...orderAssignments,
       [normalizedOrderId]: { moldId: targetMoldId, date: dateIso }
-    }));
+    };
+    
+    // Apply Friday validation - allow manual Friday assignments for drag-and-drop
+    const validatedAssignments = validateNoFridayAssignments(newAssignments, true);
+    setOrderAssignments(validatedAssignments);
 
     // Mark as having unsaved changes
     setHasUnsavedScheduleChanges(true);

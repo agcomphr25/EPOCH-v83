@@ -56,6 +56,7 @@ type CustomerAddress = {
   id: number;
   customerId: string;
   street: string;
+  street2?: string;
   city: string;
   state: string;
   zipCode: string;
@@ -79,6 +80,7 @@ type CustomerFormData = {
   isActive: boolean;
   // Address fields
   street: string;
+  street2: string;
   city: string;
   state: string;
   zipCode: string;
@@ -89,6 +91,7 @@ type CustomerFormData = {
 type AddressFormData = {
   customerId: string;
   street: string;
+  street2: string;
   city: string;
   state: string;
   zipCode: string;
@@ -109,6 +112,7 @@ const initialFormData: CustomerFormData = {
   isActive: true,
   // Address defaults
   street: '',
+  street2: '',
   city: '',
   state: '',
   zipCode: '',
@@ -389,6 +393,16 @@ const CustomerFormFields = ({
         {formErrors.street && (
           <p className="text-sm text-red-500">{formErrors.street}</p>
         )}
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="street2" className="text-sm font-medium">Suite/Apt/Unit #</Label>
+        <Input
+          id="street2"
+          value={formData.street2}
+          onChange={(e) => setFormData(prev => ({ ...prev, street2: e.target.value }))}
+          placeholder="Suite 100, Apt 2B, Unit 5"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -767,6 +781,7 @@ export default function CustomerManagement() {
           body: {
             customerId: customer.id.toString(),
             street: data.street,
+            street2: data.street2,
             city: data.city,
             state: data.state,
             zipCode: data.zipCode || '',
@@ -969,7 +984,7 @@ export default function CustomerManagement() {
       });
       
       // Also handle address update if address fields are filled
-      if (formData.street || formData.city || formData.state || formData.zipCode) {
+      if (formData.street || formData.street2 || formData.city || formData.state || formData.zipCode) {
         try {
           // Find existing address for this customer
           const customerAddresses = addressesData?.filter(addr => {
@@ -982,6 +997,7 @@ export default function CustomerManagement() {
           const addressData = {
             customerId: selectedCustomer.id.toString(),
             street: formData.street,
+            street2: formData.street2,
             city: formData.city,
             state: formData.state,
             zipCode: formData.zipCode,
@@ -1036,6 +1052,7 @@ export default function CustomerManagement() {
       isActive: customer.isActive,
       // Load existing address if available
       street: defaultAddress?.street || '',  
+      street2: defaultAddress?.street2 || '',
       city: defaultAddress?.city || '',
       state: defaultAddress?.state || '',
       zipCode: defaultAddress?.zipCode || '',
@@ -1081,6 +1098,7 @@ export default function CustomerManagement() {
     setAddressFormData({
       customerId: '',
       street: '',
+      street2: '',
       city: '',
       state: '',
       zipCode: '',

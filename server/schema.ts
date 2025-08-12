@@ -1441,6 +1441,7 @@ export const customerAddresses = pgTable("customer_addresses", {
   id: serial("id").primaryKey(),
   customerId: text("customer_id").notNull(),
   street: text("street").notNull(),
+  street2: text("street2"), // Suite, Apt, Unit number
   city: text("city").notNull(),
   state: text("state").notNull(),
   zipCode: text("zip_code").notNull(),

@@ -43,6 +43,7 @@ type Customer = {
   email?: string;
   phone?: string;
   company?: string;
+  contact?: string;
   customerType: string;
   preferredCommunicationMethod?: string[]; // Array of "email" and/or "sms"
   notes?: string;
@@ -71,6 +72,7 @@ type CustomerFormData = {
   email: string;
   phone: string;
   company: string;
+  contact: string;
   customerType: string;
   preferredCommunicationMethod: string[]; // Array of "email" and/or "sms"
   notes: string;
@@ -100,6 +102,7 @@ const initialFormData: CustomerFormData = {
   email: '',
   phone: '',
   company: '',
+  contact: '',
   customerType: 'standard',
   preferredCommunicationMethod: [],
   notes: '',
@@ -749,6 +752,7 @@ export default function CustomerManagement() {
           email: data.email,
           phone: data.phone,
           company: data.company,
+          contact: data.contact,
           customerType: data.customerType,
           preferredCommunicationMethod: data.preferredCommunicationMethod,
           notes: data.notes,
@@ -1024,6 +1028,7 @@ export default function CustomerManagement() {
       email: customer.email || '',
       phone: customer.phone || '',
       company: customer.company || '',
+      contact: customer.contact || '',
       customerType: customer.customerType,
       preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
       notes: customer.notes || '',
@@ -1673,6 +1678,15 @@ export default function CustomerManagement() {
                     id="edit-company"
                     value={formData.company}
                     onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-contact">Contact</Label>
+                  <Input
+                    id="edit-contact"
+                    value={formData.contact}
+                    onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
                   />
                 </div>
 

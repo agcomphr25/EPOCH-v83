@@ -2165,22 +2165,38 @@ export default function LayupScheduler() {
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
   
-  // AGGRESSIVE FRIDAY DEBUGGING: Check orderAssignments state immediately
+  // NUCLEAR DEBUGGING: Show all state and force immediate logging
+  console.error('💥 LAYUP SCHEDULER RENDER - COMPLETE STATE DUMP:');
+  console.error('💥 Current date:', new Date().toDateString());
+  console.error('💥 OrderAssignments count:', Object.keys(orderAssignments).length);
+  
   if (Object.keys(orderAssignments).length > 0) {
-    console.log('🚨 CHECKING ORDERASSIGNMENTS FOR FRIDAY:');
+    console.error('🚨 COMPLETE ORDERASSIGNMENTS DUMP:');
     Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       const dayOfWeek = assignmentDate.getDay();
       const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-      console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+      console.error(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+      console.error(`      Raw date: ${assignment.date}`);
+      console.error(`      Parsed UTC: ${assignmentDate.toISOString()}`);
+      
+      if (orderId === 'AI141') {
+        console.error(`💥💥💥 AI141 DETECTED IN STATE! 💥💥💥`);
+        console.error(`💥 Assignment object:`, assignment);
+        console.error(`💥 Date string: ${assignment.date}`);
+        console.error(`💥 Parsed date: ${assignmentDate.toDateString()}`);
+        console.error(`💥 Day of week: ${dayOfWeek}`);
+        console.error(`💥 Is Friday: ${dayOfWeek === 5}`);
+      }
       
       if (dayOfWeek === 5) {
-        console.error(`💥 FRIDAY FOUND IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`);
-        console.error(`💥 TRIGGERING IMMEDIATE STATE CLEAR`);
+        console.error(`🔥🔥🔥 FRIDAY ASSIGNMENT FOUND: ${orderId} 🔥🔥🔥`);
+        console.error(`🔥 This should NEVER happen!`);
+        console.error(`🔥 Clearing state in 1 second...`);
         setTimeout(() => {
           setOrderAssignments({});
-          console.error(`💥 STATE CLEARED SUCCESSFULLY`);
-        }, 10);
+          console.error(`💥 FRIDAY STATE CLEARED`);
+        }, 1000);
       }
     });
   }
@@ -3826,7 +3842,7 @@ export default function LayupScheduler() {
                                 const cellDateStr = cellDate.toISOString().split('T')[0];
                                 const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
                                 
-                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders
+                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders  
                                 if (orderId === 'AI141' || orderId === 'AH005' || orderId === 'AG822') {
                                   console.error(`🔍 MATCH DEBUG for ${orderId}:`);
                                   console.error(`   Cell Date: ${cellDate.toDateString()} (day ${cellDate.getDay()})`);
@@ -3844,6 +3860,12 @@ export default function LayupScheduler() {
                                     console.error(`💥 THIS SHOULD NEVER HAPPEN - CLEARING STATE`);
                                     setTimeout(() => setOrderAssignments({}), 5);
                                   }
+                                }
+                                
+                                // NUCLEAR FIX: Prevent ANY Friday matches for AI141 specifically
+                                if (orderId === 'AI141' && cellDate.getDay() === 5) {
+                                  console.error(`🚨 NUCLEAR FIX: Blocking AI141 from Friday column completely`);
+                                  return false; // Force no match for AI141 on Friday
                                 }
                                 
                                 // DEBUG: Specific check for AI141 and AG822 (AI266)

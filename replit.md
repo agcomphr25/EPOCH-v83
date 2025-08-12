@@ -7,6 +7,17 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 
+## Recent Changes (August 12, 2025)
+### P1 Production Orders Flow Correction
+- **Issue Fixed**: Previous agent incorrectly implemented P1 Production Orders by inserting them directly into the main orders table with "P1 Production Queue" department
+- **Correct Flow Implemented**: P1 Production Orders → Production Queue → Layup Queue (when approved)
+- **Data Cleanup**: Removed 768 incorrectly placed orders from main orders table
+- **New Endpoints**: 
+  - `/api/p1-production-queue` - Shows pending P1 production orders awaiting approval
+  - `/api/p1-production-orders/:id/approve-for-layup` - Approves orders for layup
+- **Updated**: `/api/p1-layup-queue` - Now only shows orders approved for layup (status: APPROVED_FOR_LAYUP)
+- **Verified**: 400 P1 production orders remain in proper production_orders table
+
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
 

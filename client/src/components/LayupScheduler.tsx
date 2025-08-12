@@ -608,6 +608,20 @@ export default function LayupScheduler() {
       });
 
       console.log('📦 Total assignments loaded:', Object.keys(assignments).length);
+      
+      // DEBUG: Show what's actually in orderAssignments
+      console.log('🔍 DEBUGGING orderAssignments contents:');
+      Object.entries(assignments).forEach(([orderId, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        const dayOfWeek = assignmentDate.getDay();
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+        
+        if (dayOfWeek === 5) {
+          console.error(`   ❌ FRIDAY DETECTED: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`);
+        }
+      });
+      
       setOrderAssignments(assignments);
     }
   }, [existingSchedule]);
@@ -2279,17 +2293,39 @@ export default function LayupScheduler() {
   // Build date columns
   // Generate date ranges based on view type - Mon-Thu primary with Fri as backup
   const dates = useMemo(() => {
-    if (viewType === 'day') return [currentDate];
-    if (viewType === 'week') {
+    let calculatedDates;
+    if (viewType === 'day') calculatedDates = [currentDate];
+    else if (viewType === 'week') {
       // Show work week: Monday through Friday (with Friday as backup)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      return eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
+      calculatedDates = eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
+    } else {
+      // month - organize by weeks
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
+      calculatedDates = eachDayOfInterval({ start, end });
     }
-    // month - organize by weeks
-    const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
-    return eachDayOfInterval({ start, end });
-  }, [viewType, currentDate]);
+    
+    // DEBUG: Show what dates we're displaying and what assignments exist
+    console.log('📅 DATES BEING DISPLAYED:', calculatedDates.map(d => `${d.toDateString()} (day ${d.getDay()})`));
+    
+    // Show orderAssignments when we're rendering
+    if (Object.keys(orderAssignments).length > 0) {
+      console.log('📋 CURRENT orderAssignments STATE:');
+      Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        const dayOfWeek = assignmentDate.getDay();
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+        
+        if (dayOfWeek === 5) {
+          console.error(`   ❌ FRIDAY ASSIGNMENT IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`);
+        }
+      });
+    }
+    
+    return calculatedDates;
+  }, [viewType, currentDate, orderAssignments]);
 
   // For week-based organization, group dates into work week sections (Mon-Fri only)
   const weekGroups = useMemo(() => {
@@ -3541,7 +3577,16 @@ export default function LayupScheduler() {
                               .filter(([orderId, assignment]) => {
                                 const assignmentDateOnly = assignment.date.split('T')[0];
                                 const cellDateOnly = dateString.split('T')[0];
-                                return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                                const isMatch = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                                
+                                // DEBUG: Log Friday assignments being displayed
+                                if (isMatch && date.getDay() === 5) {
+                                  console.error(`🚨 DISPLAYING FRIDAY ORDER: ${orderId} on ${date.toDateString()}`);
+                                  console.error(`   Assignment date: ${assignment.date}`);
+                                  console.error(`   Mold: ${assignment.moldId}`);
+                                }
+                                
+                                return isMatch;
                               })
                               .map(([orderId]) => {
                                 const order = processedOrders.find(o => o.orderId === orderId);

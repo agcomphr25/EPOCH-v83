@@ -547,7 +547,33 @@ export default function OrderEntry() {
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
       console.log('Loading existing order:', orderIdToEdit);
-      const order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+      
+      // First try to load as draft order
+      let order = null;
+      try {
+        order = await apiRequest(`/api/orders/draft/${orderIdToEdit}`);
+        console.log('Found draft order:', order);
+      } catch (draftError) {
+        console.log('Order not found in drafts, trying finalized orders...');
+        
+        // If not found as draft, try to load as finalized order
+        try {
+          const allOrders = await apiRequest('/api/orders/all');
+          order = allOrders.find((o: any) => o.orderId === orderIdToEdit);
+          if (order) {
+            console.log('Found finalized order:', order);
+            toast({
+              title: "Notice",
+              description: `Loading finalized order ${orderIdToEdit} for reference. Changes will create a new draft.`,
+              variant: "default",
+            });
+          }
+        } catch (finalizedError) {
+          console.log('Order not found in finalized orders either');
+          throw new Error(`Order ${orderIdToEdit} not found in drafts or finalized orders`);
+        }
+      }
+      
       console.log('Received order data:', order);
       if (order) {
         // Populate form with existing order data

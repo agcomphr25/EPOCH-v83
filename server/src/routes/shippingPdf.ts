@@ -6,7 +6,7 @@ const router = Router();
 
 // UPS API Configuration
 const UPS_ENV = process.env.UPS_ENV || 'sandbox';
-const UPS_API_BASE_URL = UPS_ENV === 'production' 
+const UPS_API_BASE_URL = UPS_ENV === 'production'
   ? 'https://onlinetools.ups.com/ship/v1/shipments'
   : 'https://wwwcie.ups.com/ship/v1/shipments';
 
@@ -61,9 +61,9 @@ async function getUPSAccessToken() {
 
 async function createUPSShipment(shipmentData: any) {
   const accessToken = await getUPSAccessToken();
-  
+
   const transId = Math.random().toString(36).substring(7);
-  
+
   const response = await fetch(UPS_API_BASE_URL, {
     method: 'POST',
     headers: {
@@ -161,7 +161,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
               Code: "IN"
             },
             Length: pkg.length || "12",
-            Width: pkg.width || "12", 
+            Width: pkg.width || "12",
             Height: pkg.height || "12"
           },
           PackageWeight: {
@@ -205,7 +205,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           },
           PackageServiceOptions: {
             DeclaredValue: {
-              CurrencyCode: "USD", 
+              CurrencyCode: "USD",
               MonetaryValue: (packageValue || 0).toFixed(2)
             }
           }
@@ -225,29 +225,29 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
 router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    
+
     // Get order data from storage using the proper method
     const { storage } = await import('../../storage');
     let order = await storage.getOrderById(orderId);
-    
+
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     // Create a new PDF document optimized for printing
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([612, 792]); // Standard US Letter size (8.5" x 11")
     const { width, height } = page.getSize();
-    
+
     // Define print-friendly margins
     const margin = 50;
     const printableWidth = width - (margin * 2);
     const printableHeight = height - (margin * 2);
-    
+
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
     // Header with company branding - optimized for printing
     let currentY = height - margin;
     page.drawText('AG COMPOSITES', {
@@ -257,7 +257,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     currentY -= 25;
     page.drawText('Quality Control Inspection Report', {
       x: margin,
@@ -266,7 +266,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     // Document control box - positioned for better printing
     const docBoxX = width - margin - 200;
     page.drawRectangle({
@@ -277,56 +277,56 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     page.drawText('Document No:', {
       x: docBoxX + 5,
       y: currentY + 50,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(`QC-${orderId}`, {
       x: docBoxX + 80,
       y: currentY + 50,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('Revision:', {
       x: docBoxX + 5,
       y: currentY + 35,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText('Rev. A', {
       x: docBoxX + 80,
       y: currentY + 35,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('Date:', {
       x: docBoxX + 5,
       y: currentY + 20,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(new Date().toLocaleDateString(), {
       x: docBoxX + 80,
       y: currentY + 20,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('Page 1 of 1', {
       x: docBoxX + 5,
       y: currentY + 5,
       size: 9,
       font: font,
     });
-    
+
     // Order information section - simplified for shipping
     currentY -= 100;
     page.drawText('ORDER INFORMATION', {
@@ -335,7 +335,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     // Draw a border around order info - simplified layout
     page.drawRectangle({
       x: margin,
@@ -345,7 +345,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     currentY -= 25;
     page.drawText(`Order ID: ${orderId}`, {
       x: margin + 5,
@@ -353,142 +353,63 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(`Order Date: ${order.orderDate || new Date().toLocaleDateString()}`, {
       x: margin + 250,
       y: currentY,
       size: 10,
       font: boldFont,
     });
-    
+
     // QC Checklist items
-    currentY -= 50;
-    page.drawText('QUALITY CONTROL CHECKLIST', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: boldFont,
-    });
-    
-    const checklistSections = [
-      {
-        title: 'SHIPPING QUALITY CONTROL CHECKLIST',
-        items: [
-          'Correct items included for this order',
-          'Package properly sealed and labeled',
-          'Shipping address verified as correct',
-          'Customer information matches order',
-          'All items meet quality standards for shipping'
-        ]
-      }
+    currentY -= 40;
+    const checklistItems = [
+      'The proper stock(s) is being shipped:\n(e.g. Alpine Hunter, CAT, etc.)',
+      'Stock(s) is inletted according to the work order:\n(action, barrel, bottom metal, right or left hand)',
+      'Stock(s) is the proper color:',
+      'Custom options are present and completed:\n(QD Cups, rail, LOP, tri-pod option, etc)',
+      'Swivel studs are installed correctly:',
+      'Stock(s) is being shipped to the correct address:',
+      'Buttpad and overall stock finish meet QC standards:'
     ];
-    
-    currentY -= 30;
-    
-    checklistSections.forEach((section, sectionIndex) => {
-      currentY -= 20;
-      
-      // Section items - clean layout with word wrapping
-      section.items.forEach((item, itemIndex) => {
-        const itemNumber = itemIndex + 1;
-        
-        // Calculate text wrapping for long items
-        const maxTextWidth = printableWidth - 200; // Leave space for checkboxes
-        const words = item.split(' ');
-        const lines = [];
-        let currentLine = '';
-        
-        words.forEach(word => {
-          const testLine = currentLine ? `${currentLine} ${word}` : word;
-          // Approximate text width calculation (simple estimate)
-          if (testLine.length * 6 > maxTextWidth && currentLine) {
-            lines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
-          }
-        });
-        if (currentLine) lines.push(currentLine);
-        
-        // Calculate row height based on number of lines
-        const lineHeight = 15;
-        const rowHeight = Math.max(30, lines.length * lineHeight + 10);
-        
-        // Create a clean row with borders for each item
-        page.drawRectangle({
-          x: margin,
-          y: currentY - rowHeight,
-          width: printableWidth,
-          height: rowHeight,
-          borderColor: rgb(0.8, 0.8, 0.8),
-          borderWidth: 0.5,
-        });
-        
-        // Item number - positioned properly within the row
-        page.drawText(`${itemNumber}.`, {
-          x: margin + 8,
-          y: currentY - 15,
-          size: 11,
-          font: boldFont,
-        });
-        
-        // Checklist item text - with word wrapping
-        lines.forEach((line, lineIndex) => {
-          page.drawText(line, {
-            x: margin + 30,
-            y: currentY - 15 - (lineIndex * lineHeight),
-            size: 10,
-            font: font,
-          });
-        });
-        
-        // Pass/Fail checkboxes - centered in row
-        const checkboxY = currentY - (rowHeight / 2) - 6;
-        const passX = width - margin - 140;
-        const failX = width - margin - 70;
-        
-        // Pass checkbox
-        page.drawRectangle({
-          x: passX,
-          y: checkboxY,
-          width: 12,
-          height: 12,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
-        });
-        page.drawText('Pass', {
-          x: passX + 18,
-          y: checkboxY + 3,
-          size: 9,
-          font: font,
-        });
-        
-        // Fail checkbox  
-        page.drawRectangle({
-          x: failX,
-          y: checkboxY,
-          width: 12,
-          height: 12,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: 1,
-        });
-        page.drawText('Fail', {
-          x: failX + 18,
-          y: checkboxY + 3,
-          size: 9,
-          font: font,
-        });
-        
-        currentY -= rowHeight + 5;
+
+    checklistItems.forEach((item, index) => {
+      // Checkbox
+      page.drawRectangle({
+        x: margin,
+        y: currentY - 12,
+        width: 12,
+        height: 12,
+        borderColor: rgb(0, 0, 0),
+        borderWidth: 1,
       });
+
+      // Item text - handle multi-line items
+      const itemLines = item.split('\n');
+      let lineY = currentY - 8;
+
+      itemLines.forEach((line, lineIndex) => {
+        const prefix = lineIndex === 0 ? `${index + 1}) ` : '    ';
+        page.drawText(prefix + line, {
+          x: margin + 20,
+          y: lineY,
+          size: 10,
+          font: lineIndex === 0 ? font : font,
+          color: rgb(0, 0, 0),
+        });
+        lineY -= 14;
+      });
+
+      currentY -= (itemLines.length * 14) + 15;
     });
-    
+
+
     // Clean spacing before signature section
     currentY -= 50;
-    
+
     // Simple clean signature section
     currentY -= 70;
-    
+
     // Single signature and date section - clean and simple
     page.drawText('INSPECTOR SIGNATURE:', {
       x: margin,
@@ -496,7 +417,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     // Signature line
     page.drawLine({
       start: { x: margin + 150, y: currentY - 5 },
@@ -504,7 +425,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       thickness: 1.5,
       color: rgb(0, 0, 0),
     });
-    
+
     // Date field
     page.drawText('DATE:', {
       x: margin + 380,
@@ -512,14 +433,14 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     page.drawLine({
       start: { x: margin + 420, y: currentY - 5 },
       end: { x: width - margin, y: currentY - 5 },
       thickness: 1.5,
       color: rgb(0, 0, 0),
     });
-    
+
     // Digital signature section - print optimized
     currentY -= 60;
     page.drawText('DIGITAL CERTIFICATION', {
@@ -529,7 +450,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     currentY -= 25;
     page.drawRectangle({
       x: margin,
@@ -539,7 +460,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0.5, 0.5, 0.5),
       borderWidth: 1,
     });
-    
+
     currentY -= 15;
     page.drawText('This document has been digitally certified by:', {
       x: margin + 5,
@@ -547,7 +468,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     currentY -= 18;
     page.drawText('AG.QC.INSPECTOR', {
       x: margin + 5,
@@ -555,25 +476,25 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       size: 11,
       font: boldFont,
     });
-    
+
     page.drawText(`Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
       x: margin + 250,
       y: currentY,
       size: 10,
       font: font,
     });
-    
+
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-    
+
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="QC-Checklist-${orderId}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
-    
+
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-    
+
   } catch (error) {
     console.error('Error generating QC checklist PDF:', error);
     res.status(500).json({ error: 'Failed to generate QC checklist PDF' });
@@ -584,7 +505,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    
+
     // Get comprehensive order data from storage
     const { storage } = await import('../../storage');
     const order = await storage.getOrderById(orderId);
@@ -592,29 +513,29 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const customers = await storage.getAllCustomers();
     const features = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
-    
+
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
     const customer = customers.find(c => c.id?.toString() === order.customerId?.toString());
     const customerAddresses = addresses.filter(a => a.customerId === order.customerId);
-    
+
     // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([612, 792]); // Standard US Letter size
     const { width, height } = page.getSize();
-    
+
     // Define margins and layout
     const margin = 50;
     const printableWidth = width - (margin * 2);
-    
+
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
     // Header section with company branding
     let currentY = height - margin;
     page.drawText('AG COMPOSITES', {
@@ -624,7 +545,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     // Sales Order title
     currentY -= 30;
     page.drawText('SALES ORDER', {
@@ -634,7 +555,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     // Order number and date box
     const orderBoxX = width - margin - 200;
     page.drawRectangle({
@@ -645,49 +566,49 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     page.drawText('Order Number:', {
       x: orderBoxX + 5,
       y: currentY + 30,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(orderId, {
       x: orderBoxX + 90,
       y: currentY + 30,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('Date:', {
       x: orderBoxX + 5,
       y: currentY + 15,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(new Date().toLocaleDateString(), {
       x: orderBoxX + 90,
       y: currentY + 15,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('Due Date:', {
       x: orderBoxX + 5,
       y: currentY,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
       x: orderBoxX + 90,
       y: currentY,
       size: 10,
       font: font,
     });
-    
+
     // Customer Information Section
     currentY -= 80;
     page.drawText('BILL TO:', {
@@ -696,7 +617,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     // Bill to address
     currentY -= 20;
     if (customer) {
@@ -706,7 +627,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       currentY -= 15;
       if (customer.email) {
         page.drawText(customer.email, {
@@ -717,7 +638,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         });
         currentY -= 15;
       }
-      
+
       if (customer.phone) {
         page.drawText(customer.phone, {
           x: margin,
@@ -728,7 +649,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         currentY -= 15;
       }
     }
-    
+
     // Ship to address (if different)
     const shipToY = currentY + 75;
     page.drawText('SHIP TO:', {
@@ -737,7 +658,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     let shipCurrentY = shipToY - 20;
     if (customerAddresses.length > 0) {
       const primaryAddress = customerAddresses[0];
@@ -747,7 +668,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       shipCurrentY -= 15;
       page.drawText(primaryAddress.street || '', {
         x: margin + 250,
@@ -755,7 +676,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       shipCurrentY -= 15;
       const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
       if (cityStateZip !== ', ') {
@@ -767,7 +688,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         });
       }
     }
-    
+
     // Order Details Section
     currentY -= 70;
     page.drawText('ORDER DETAILS', {
@@ -776,10 +697,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 14,
       font: boldFont,
     });
-    
+
     // Create order details table
     currentY -= 30;
-    
+
     // Table border
     page.drawRectangle({
       x: margin,
@@ -789,7 +710,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     // Table headers
     page.drawRectangle({
       x: margin,
@@ -800,42 +721,42 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     page.drawText('Item Description', {
       x: margin + 5,
       y: currentY - 15,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText('Model/SKU', {
       x: margin + 200,
       y: currentY - 15,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText('Qty', {
       x: margin + 320,
       y: currentY - 15,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText('Unit Price', {
       x: margin + 380,
       y: currentY - 15,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawText('Total', {
       x: margin + 460,
       y: currentY - 15,
       size: 10,
       font: boldFont,
     });
-    
+
     // Main product line
     currentY -= 45;
     const productName = model?.displayName || model?.name || 'Custom Stock';
@@ -845,21 +766,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     page.drawText(order.modelId || 'CUSTOM', {
       x: margin + 200,
       y: currentY,
       size: 10,
       font: font,
     });
-    
+
     page.drawText('1', {
       x: margin + 320,
       y: currentY,
       size: 10,
       font: font,
     });
-    
+
     const basePrice = model?.price || 0;
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + 380,
@@ -867,14 +788,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + 460,
       y: currentY,
       size: 10,
       font: font,
     });
-    
+
     // Features and Customizations Section
     currentY -= 140;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
@@ -883,11 +804,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 14,
       font: boldFont,
     });
-    
+
     currentY -= 25;
     let featureTotal = 0;
     let featureLineCount = 0;
-    
+
     if (order.features && Object.keys(order.features).length > 0) {
       Object.entries(order.features).forEach(([featureKey, featureValue]) => {
         if (featureValue && featureValue !== false && featureValue !== '') {
@@ -895,7 +816,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           const featureDetail = features.find(f => f.id === featureKey);
           const featureName = featureDetail ? (featureDetail.displayName || featureDetail.name) : featureKey;
           const featurePrice = featureDetail ? featureDetail.price || 0 : 0;
-          
+
           // Display feature line
           page.drawText(`• ${featureName}`, {
             x: margin + 5,
@@ -903,7 +824,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             size: 10,
             font: font,
           });
-          
+
           if (typeof featureValue === 'string' && featureValue !== 'true') {
             page.drawText(`(${featureValue})`, {
               x: margin + 200,
@@ -912,7 +833,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
               font: font,
             });
           }
-          
+
           if (featurePrice > 0) {
             page.drawText(`+$${featurePrice.toFixed(2)}`, {
               x: margin + 400,
@@ -922,13 +843,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
             });
             featureTotal += featurePrice;
           }
-          
+
           currentY -= 18;
           featureLineCount++;
         }
       });
     }
-    
+
     if (featureLineCount === 0) {
       page.drawText('Standard configuration - no additional features', {
         x: margin + 5,
@@ -938,7 +859,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
       currentY -= 18;
     }
-    
+
     // Order Notes/Special Instructions
     if (order.notes) {
       currentY -= 15;
@@ -948,13 +869,13 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         size: 12,
         font: boldFont,
       });
-      
+
       currentY -= 20;
       // Word wrap the notes
       const noteWords = order.notes.split(' ');
       let currentLine = '';
       const maxLineLength = 70;
-      
+
       noteWords.forEach(word => {
         if ((currentLine + ' ' + word).length > maxLineLength) {
           page.drawText(currentLine, {
@@ -969,7 +890,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
           currentLine += (currentLine ? ' ' : '') + word;
         }
       });
-      
+
       if (currentLine) {
         page.drawText(currentLine, {
           x: margin + 5,
@@ -980,10 +901,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         currentY -= 15;
       }
     }
-    
+
     // Totals Section
     currentY -= 40;
-    
+
     // Create totals box
     const totalsBoxX = width - margin - 200;
     page.drawRectangle({
@@ -994,7 +915,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     // Subtotal
     page.drawText('Subtotal:', {
       x: totalsBoxX + 10,
@@ -1002,14 +923,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 11,
       font: boldFont,
     });
-    
+
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: totalsBoxX + 120,
       y: currentY - 20,
       size: 11,
       font: font,
     });
-    
+
     // Features total
     if (featureTotal > 0) {
       currentY -= 18;
@@ -1019,7 +940,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         size: 11,
         font: boldFont,
       });
-      
+
       page.drawText(`$${featureTotal.toFixed(2)}`, {
         x: totalsBoxX + 120,
         y: currentY - 20,
@@ -1027,7 +948,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: font,
       });
     }
-    
+
     // Separator line
     page.drawLine({
       start: { x: totalsBoxX + 10, y: currentY - 30 },
@@ -1035,7 +956,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       thickness: 1,
       color: rgb(0, 0, 0),
     });
-    
+
     // Total
     const finalTotal = basePrice + featureTotal;
     page.drawText('TOTAL:', {
@@ -1044,14 +965,14 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     page.drawText(`$${finalTotal.toFixed(2)}`, {
       x: totalsBoxX + 120,
       y: currentY - 50,
       size: 12,
       font: boldFont,
     });
-    
+
     // Terms and Conditions Section
     currentY -= 120;
     page.drawText('TERMS AND CONDITIONS', {
@@ -1060,7 +981,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     currentY -= 20;
     const terms = [
       '• Payment: 50% deposit required to begin production, balance due upon completion',
@@ -1069,7 +990,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       '• Shipping costs additional - calculated at time of shipment',
       '• Prices valid for 30 days from quote date'
     ];
-    
+
     terms.forEach(term => {
       page.drawText(term, {
         x: margin,
@@ -1079,7 +1000,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
       currentY -= 15;
     });
-    
+
     // Acceptance signature area
     currentY -= 30;
     page.drawText('CUSTOMER APPROVAL', {
@@ -1088,7 +1009,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     currentY -= 25;
     page.drawText('Customer Signature:', {
       x: margin,
@@ -1096,28 +1017,28 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawLine({
       start: { x: margin + 120, y: currentY - 5 },
       end: { x: margin + 300, y: currentY - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
-    
+
     page.drawText('Date:', {
       x: margin + 320,
       y: currentY,
       size: 10,
       font: boldFont,
     });
-    
+
     page.drawLine({
       start: { x: margin + 350, y: currentY - 5 },
       end: { x: margin + 450, y: currentY - 5 },
       thickness: 1,
       color: rgb(0, 0, 0),
     });
-    
+
     // Company footer
     currentY -= 40;
     page.drawText('Thank you for your business!', {
@@ -1126,7 +1047,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 11,
       font: boldFont,
     });
-    
+
     currentY -= 20;
     page.drawText('Questions? Contact us at sales@agatcomposite.com or (XXX) XXX-XXXX', {
       x: margin,
@@ -1134,18 +1055,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       size: 9,
       font: font,
     });
-    
+
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-    
+
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Sales-Order-${orderId}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
-    
+
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-    
+
   } catch (error) {
     console.error('Error generating sales order PDF:', error);
     res.status(500).json({ error: 'Failed to generate sales order PDF' });
@@ -1157,12 +1078,12 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
   try {
     const { orderId } = req.params;
     const { packageDetails, shippingAddress: providedShippingAddress, packageValue } = req.body;
-    
+
     // Get order, customer, and address data directly from database
     const { db } = await import('../../db');
     const { eq } = await import('drizzle-orm');
     const { orderDrafts, customers, customerAddresses } = await import('../../schema');
-    
+
     // First get the order
     const orders = await db.select()
       .from(orderDrafts)
@@ -1188,13 +1109,13 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     }
 
     const customer = orderResult[0].customer;
-    
+
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found for this order' });
     }
 
     // Find the default address or use the first available address
-    const customerAddress = orderResult.find(r => r.address?.isDefault)?.address || 
+    const customerAddress = orderResult.find(r => r.address?.isDefault)?.address ||
                            orderResult.find(r => r.address)?.address;
 
     // Auto-populate shipping address from customer data, allow override from request
@@ -1214,7 +1135,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 
     // Validate required fields
     if (!shippingAddress || !shippingAddress.name || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Complete shipping address is required. Please provide shipping address in the request body.',
         customerInfo: {
           name: customer.name,
@@ -1245,12 +1166,12 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       // Create UPS shipment using real API
       const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails, calculatedPackageValue);
       const upsResponse = await createUPSShipment(shipmentRequest);
-      
+
       // Extract tracking number and label from UPS response
       const upsData = upsResponse as any;
       const trackingNumber = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.TrackingNumber;
       const labelImage = upsData.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-      
+
       if (!trackingNumber || !labelImage) {
         throw new Error('UPS API response missing tracking number or label image');
       }
@@ -1279,19 +1200,19 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 
       // Convert base64 label image to PDF
       const labelBuffer = Buffer.from(labelImage, 'base64');
-      
+
       // Create PDF document with the UPS label
       const pdfDoc = await PDFDocument.create();
       const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
-      
+
       // Embed the UPS label image
       const labelImageObj = await pdfDoc.embedPng(labelBuffer);
       const { width, height } = page.getSize();
-      
+
       // Scale image to fit page
       const imgDims = labelImageObj.scale(1);
       const scaleFactor = Math.min(width / imgDims.width, height / imgDims.height);
-      
+
       page.drawImage(labelImageObj, {
         x: (width - imgDims.width * scaleFactor) / 2,
         y: (height - imgDims.height * scaleFactor) / 2,
@@ -1301,30 +1222,30 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 
       // Generate PDF bytes
       const pdfBytes = await pdfDoc.save();
-      
+
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`);
       res.setHeader('Content-Length', pdfBytes.length);
-      
+
       // Send PDF
       res.send(Buffer.from(pdfBytes));
-      
+
     } catch (upsError) {
       console.error('UPS API Error:', upsError);
-      
+
       // Fallback to placeholder label if UPS API fails
       console.log('Falling back to placeholder label due to UPS API error');
-      
+
       // Create a placeholder shipping label PDF with error information
       const placeholderPdfDoc = await PDFDocument.create();
       const placeholderPage = placeholderPdfDoc.addPage([432, 648]); // 6x9 inch shipping label
       const { width: placeholderWidth, height: placeholderHeight } = placeholderPage.getSize();
-      
+
       // Load fonts
       const placeholderFont = await placeholderPdfDoc.embedFont(StandardFonts.Helvetica);
       const placeholderBoldFont = await placeholderPdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
       // Header
       let currentY = placeholderHeight - 40;
       placeholderPage.drawText('UPS SHIPPING LABEL (FALLBACK)', {
@@ -1334,7 +1255,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         font: placeholderBoldFont,
         color: rgb(0, 0, 0),
       });
-      
+
       // UPS API Error message
       currentY -= 30;
       placeholderPage.drawText('UPS API Error - Using Placeholder Label', {
@@ -1344,10 +1265,10 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         font: placeholderBoldFont,
         color: rgb(0.8, 0, 0),
       });
-      
+
       // Generate placeholder tracking number
       const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
-      
+
       // Save placeholder tracking information to database
       const { updateTrackingInfo } = await import('../../utils/notifications');
       await updateTrackingInfo(orderId, {
@@ -1365,7 +1286,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 12,
         font: placeholderBoldFont,
       });
-      
+
       // From address
       currentY -= 40;
       placeholderPage.drawText('FROM:', {
@@ -1374,7 +1295,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderBoldFont,
       });
-      
+
       currentY -= 20;
       placeholderPage.drawText('AG Composites', {
         x: 50,
@@ -1382,7 +1303,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderFont,
       });
-      
+
       currentY -= 15;
       placeholderPage.drawText('123 Manufacturing Way', {
         x: 50,
@@ -1390,7 +1311,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderFont,
       });
-      
+
       currentY -= 15;
       placeholderPage.drawText('Industrial City, ST 12345', {
         x: 50,
@@ -1398,7 +1319,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderFont,
       });
-      
+
       // To address
       currentY -= 40;
       placeholderPage.drawText('TO:', {
@@ -1407,7 +1328,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderBoldFont,
       });
-      
+
       if (shippingAddress) {
         currentY -= 20;
         placeholderPage.drawText(shippingAddress.name || 'Customer Name', {
@@ -1416,7 +1337,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           size: 10,
           font: placeholderFont,
         });
-        
+
         currentY -= 15;
         placeholderPage.drawText(shippingAddress.street || 'Customer Address', {
           x: 50,
@@ -1424,7 +1345,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           size: 10,
           font: placeholderFont,
         });
-        
+
         currentY -= 15;
         placeholderPage.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
           x: 50,
@@ -1441,7 +1362,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           font: placeholderFont,
         });
       }
-      
+
       // Service info
       currentY -= 40;
       placeholderPage.drawText('Service: UPS Ground', {
@@ -1450,7 +1371,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderFont,
       });
-      
+
       currentY -= 15;
       placeholderPage.drawText(`Order: ${orderId}`, {
         x: 50,
@@ -1458,7 +1379,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderFont,
       });
-      
+
       if (packageDetails) {
         currentY -= 15;
         placeholderPage.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
@@ -1467,7 +1388,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           size: 10,
           font: placeholderFont,
         });
-        
+
         currentY -= 15;
         placeholderPage.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
           x: 50,
@@ -1476,7 +1397,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
           font: placeholderFont,
         });
       }
-      
+
       // Package value information
       currentY -= 20;
       placeholderPage.drawText(`Declared Value: $${calculatedPackageValue?.toFixed(2) || '0.00'}`, {
@@ -1485,7 +1406,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         size: 10,
         font: placeholderBoldFont,
       });
-      
+
       // Note about UPS API integration
       currentY -= 40;
       placeholderPage.drawText('Note: UPS API credentials may need verification.', {
@@ -1495,7 +1416,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         font: placeholderFont,
         color: rgb(0.5, 0.5, 0.5),
       });
-      
+
       currentY -= 12;
       placeholderPage.drawText('Contact administrator to configure UPS integration.', {
         x: 50,
@@ -1504,19 +1425,19 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         font: placeholderFont,
         color: rgb(0.5, 0.5, 0.5),
       });
-      
+
       // Generate PDF bytes
       const fallbackPdfBytes = await placeholderPdfDoc.save();
-      
+
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="Shipping-Label-Fallback-${orderId}.pdf"`);
       res.setHeader('Content-Length', fallbackPdfBytes.length);
-      
+
       // Send PDF
       res.send(Buffer.from(fallbackPdfBytes));
     }
-    
+
   } catch (error) {
     console.error('Error generating shipping label PDF:', error);
     res.status(500).json({ error: 'Failed to generate shipping label PDF' });
@@ -1527,29 +1448,29 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
   try {
     const { orderIds, shippingAddress, packageDetails, trackingNumber } = req.body;
-    
+
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return res.status(400).json({ error: 'Order IDs array is required' });
     }
-    
+
     // Get order data from storage
     const { storage } = await import('../../storage');
     const orders = await storage.getAllOrderDrafts();
     const selectedOrders = orders.filter(o => orderIds.includes(o.orderId));
-    
+
     if (selectedOrders.length === 0) {
       return res.status(404).json({ error: 'No matching orders found' });
     }
-    
+
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
     const { width, height } = page.getSize();
-    
+
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
     // Header
     let currentY = height - 40;
     page.drawText('UPS BULK SHIPPING LABEL', {
@@ -1559,7 +1480,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    
+
     // Tracking number
     currentY -= 40;
     page.drawText(`Tracking #: ${trackingNumber || '1Z999AA1234567890'}`, {
@@ -1568,7 +1489,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 12,
       font: boldFont,
     });
-    
+
     // From address
     currentY -= 40;
     page.drawText('FROM:', {
@@ -1577,7 +1498,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: boldFont,
     });
-    
+
     currentY -= 20;
     page.drawText('AG Composites', {
       x: 50,
@@ -1585,7 +1506,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     currentY -= 15;
     page.drawText('123 Manufacturing Way', {
       x: 50,
@@ -1593,7 +1514,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     currentY -= 15;
     page.drawText('Industrial City, ST 12345', {
       x: 50,
@@ -1601,7 +1522,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     // To address
     currentY -= 40;
     page.drawText('TO:', {
@@ -1610,7 +1531,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: boldFont,
     });
-    
+
     if (shippingAddress) {
       currentY -= 20;
       page.drawText(shippingAddress.name || 'Customer Name', {
@@ -1619,7 +1540,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       currentY -= 15;
       page.drawText(shippingAddress.street || 'Customer Address', {
         x: 50,
@@ -1627,7 +1548,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       currentY -= 15;
       page.drawText(`${shippingAddress.city || 'City'}, ${shippingAddress.state || 'ST'} ${shippingAddress.zip || '12345'}`, {
         x: 50,
@@ -1636,7 +1557,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         font: font,
       });
     }
-    
+
     // Service info
     currentY -= 40;
     page.drawText('Service: UPS Ground', {
@@ -1645,7 +1566,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: font,
     });
-    
+
     currentY -= 15;
     page.drawText(`Orders (${orderIds.length}): ${orderIds.join(', ')}`, {
       x: 50,
@@ -1653,7 +1574,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 9,
       font: font,
     });
-    
+
     if (packageDetails) {
       currentY -= 15;
       page.drawText(`Weight: ${packageDetails.weight || 'N/A'} lbs`, {
@@ -1662,7 +1583,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         size: 10,
         font: font,
       });
-      
+
       currentY -= 15;
       page.drawText(`Dimensions: ${packageDetails.length || 'N/A'}" x ${packageDetails.width || 'N/A'}" x ${packageDetails.height || 'N/A'}"`, {
         x: 50,
@@ -1671,7 +1592,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         font: font,
       });
     }
-    
+
     // Order details section
     currentY -= 30;
     page.drawText('CONTENTS:', {
@@ -1680,7 +1601,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       size: 10,
       font: boldFont,
     });
-    
+
     currentY -= 15;
     selectedOrders.forEach((order, index) => {
       if (currentY > 100) { // Only show if there's space
@@ -1693,7 +1614,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
         currentY -= 12;
       }
     });
-    
+
     // Placeholder barcode area
     currentY -= 20;
     page.drawRectangle({
@@ -1704,25 +1625,25 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
-    
+
     page.drawText('BARCODE PLACEHOLDER', {
       x: 150,
       y: currentY - 25,
       size: 10,
       font: font,
     });
-    
+
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-    
+
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Bulk-Shipping-Label-${trackingNumber || 'BULK'}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
-    
+
     // Send PDF
     res.send(Buffer.from(pdfBytes));
-    
+
   } catch (error) {
     console.error('Error generating bulk shipping label PDF:', error);
     res.status(500).json({ error: 'Failed to generate bulk shipping label PDF' });
@@ -1734,7 +1655,7 @@ router.get('/test-ups-credentials', async (req: Request, res: Response) => {
   try {
     console.log('Testing UPS credentials...');
     const accessToken = await getUPSAccessToken();
-    
+
     res.json({
       success: true,
       message: 'UPS credentials are valid',
@@ -1800,11 +1721,11 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
 router.get('/tracking/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    
+
     const { storage } = await import('../../storage');
     const orders = await storage.getAllOrderDrafts();
     const order = orders.find(o => o.orderId === orderId);
-    
+
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }

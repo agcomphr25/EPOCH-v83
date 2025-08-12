@@ -2215,11 +2215,13 @@ export default function LayupScheduler() {
     return key;
   }, [processedOrders]);
 
-  // COMPREHENSIVE STATE CLEANER: Remove Friday assignments, phantom orders, AND fix FB Order Number keys
+  // AGGRESSIVE FRIDAY CLEANER: Clear state completely and rebuild
   useEffect(() => {
     if (Object.keys(orderAssignments).length > 0) {
       let hasChanges = false;
       const cleanedAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      console.log(`🧹 AGGRESSIVE CLEANER: Analyzing ${Object.keys(orderAssignments).length} assignments`);
       
       Object.entries(orderAssignments).forEach(([key, assignment]) => {
         const assignmentDate = new Date(assignment.date);
@@ -2234,11 +2236,28 @@ export default function LayupScheduler() {
         // Step 2: Check if this is a phantom order (not in processedOrders)
         const orderExists = processedOrders.some(order => order.orderId === normalizedKey);
         
-        // Step 3: Remove Friday assignments
+        // Step 3: NUCLEAR OPTION - Clear all assignments when Friday is detected
         if (isFriday) {
-          console.warn(`🧹 CLEANER: Removing Friday assignment for ${key}/${normalizedKey} from ${assignmentDate.toDateString()}`);
-          hasChanges = true;
-          return; // Skip this assignment
+          console.error(`💥 NUCLEAR OPTION: FRIDAY DETECTED - CLEARING ALL ASSIGNMENTS!`);
+          console.error(`   Key: ${key} / Normalized: ${normalizedKey}`);
+          console.error(`   Date: ${assignment.date}`);
+          console.error(`   Parsed Date: ${assignmentDate.toDateString()}`);
+          console.error(`   Day of Week: ${assignmentDate.getDay()} (5=Friday)`);
+          console.trace(`🔍 FRIDAY ASSIGNMENT STACK TRACE:`);
+          
+          // Nuclear option: Clear ALL assignments and force reload
+          toast({
+            title: "Friday Assignment Detected - Clearing All",
+            description: "Detected illegal Friday assignment. Clearing all assignments and forcing fresh generation.",
+            variant: "destructive",
+          });
+          
+          setTimeout(() => {
+            setOrderAssignments({});
+            console.error(`💥 NUCLEAR: All assignments cleared. Fresh generation will occur.`);
+          }, 100);
+          
+          return; // Exit immediately
         }
         
         // Step 4: Remove phantom orders
@@ -2254,9 +2273,12 @@ export default function LayupScheduler() {
       
       if (hasChanges) {
         const removedCount = Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length;
-        console.log(`🧹 COMPREHENSIVE CLEANER: Fixed ${removedCount} invalid assignments and normalized keys`);
-        // Use setTimeout to ensure this runs after render cycle
-        setTimeout(() => setOrderAssignments(cleanedAssignments), 0);
+        console.error(`🧹 AGGRESSIVE CLEANER: Fixed ${removedCount} invalid assignments and normalized keys`);
+        console.error(`🧹 BEFORE: ${Object.keys(orderAssignments).length} assignments`);
+        console.error(`🧹 AFTER: ${Object.keys(cleanedAssignments).length} assignments`);
+        
+        // Force immediate state update
+        setOrderAssignments(cleanedAssignments);
       }
     }
   }, [JSON.stringify(orderAssignments), processedOrders.length, normalizeOrderKey]); // Run when assignments or orders change
@@ -2538,8 +2560,12 @@ export default function LayupScheduler() {
     
     if (fridayAssignments.length > 0 && !allowManualFriday) {
       console.error(`❌ CRITICAL VALIDATION FAILURE: Found ${fridayAssignments.length} Friday assignments!`);
+      console.error(`🔍 STACK TRACE FOR FRIDAY ASSIGNMENT:`);
+      console.trace();
       fridayAssignments.forEach(([orderId, assignment]) => {
         console.error(`   - Order ${orderId} assigned to Friday ${new Date(assignment.date).toDateString()}`);
+        console.error(`   - Raw date string: ${assignment.date}`);
+        console.error(`   - Parsed date day: ${new Date(assignment.date).getDay()}`);
       });
       
       // Remove Friday assignments

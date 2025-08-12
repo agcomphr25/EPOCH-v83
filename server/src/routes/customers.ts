@@ -332,12 +332,25 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
       
       // Parse the complete address for Street API
       const addressParts = search.split(', ');
-      if (addressParts.length >= 3) {
+      if (addressParts.length >= 2) {
         const street = addressParts[0];
-        const city = addressParts[1];
-        const state = addressParts[2];
+        let city, state;
+        
+        if (addressParts.length >= 3) {
+          city = addressParts[1];
+          state = addressParts[2];
+        } else {
+          // Handle "City State" format
+          const cityStateParts = addressParts[1].split(' ');
+          state = cityStateParts.pop(); // Last part is state
+          city = cityStateParts.join(' '); // Rest is city
+        }
+        
+        console.log('🔧 Street API params:', { street, city, state });
         
         const streetUrl = `https://us-street.api.smartystreets.com/street-address?auth-id=${authId}&auth-token=${authToken}&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}`;
+        
+        console.log('🔧 Street API URL:', streetUrl);
         
         const streetResponse = await fetch(streetUrl, {
           method: 'GET',
@@ -345,6 +358,8 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
             'Content-Type': 'application/json',
           }
         });
+        
+        console.log('🔧 Street API response status:', streetResponse.status);
         
         if (streetResponse.ok) {
           const streetData = await streetResponse.json();
@@ -363,7 +378,12 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
             
             console.log('🔧 Returning full address with ZIP:', fullAddress);
             return res.json({ fullAddress: fullAddress });
+          } else {
+            console.log('🔧 Street API returned empty results, falling back to autocomplete');
           }
+        } else {
+          const errorText = await streetResponse.text();
+          console.log('🔧 Street API error:', streetResponse.status, errorText);
         }
       }
     }

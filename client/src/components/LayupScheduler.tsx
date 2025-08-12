@@ -597,9 +597,11 @@ export default function LayupScheduler() {
         
         console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
         
-        // CRITICAL: Validate no Friday assignments from database
+        // CRITICAL: Skip any Friday assignments from database - they should never exist
         if (dayOfWeek === 5) {
-          console.error(`❌ FOUND FRIDAY ASSIGNMENT FROM DATABASE: Order ${entry.orderId} on ${schedDate.toDateString()}`);
+          console.error(`🚨 CRITICAL: Skipping Friday assignment for ${entry.orderId} on ${schedDate.toDateString()}`);
+          console.error(`   Database entry that should be cleaned:`, entry);
+          return; // Skip Friday assignments completely
         }
         
         assignments[entry.orderId] = {

@@ -2614,17 +2614,14 @@ export default function LayupScheduler() {
     return assignments;
   }, [toast]);
 
-  // Initial Friday cleanup effect - run once when orderAssignments are first loaded
+  // Initial Friday cleanup effect - run once when orderAssignments are first loaded (disabled to prevent cycles)
   React.useEffect(() => {
     if (!initialFridayCleanup && Object.keys(orderAssignments).length > 0) {
-      const cleanedAssignments = validateNoFridayAssignments(orderAssignments);
-      if (Object.keys(cleanedAssignments).length !== Object.keys(orderAssignments).length) {
-        console.log('🔧 Initial Friday cleanup: removed existing Friday assignments');
-        setOrderAssignments(cleanedAssignments);
-      }
+      console.log('🔧 Initial Friday cleanup: DISABLED to prevent scheduling cycles');
+      console.log(`📊 Loaded ${Object.keys(orderAssignments).length} existing assignments`);
       setInitialFridayCleanup(true);
     }
-  }, [orderAssignments, initialFridayCleanup, validateNoFridayAssignments]);
+  }, [orderAssignments, initialFridayCleanup]);
 
   // Auto-schedule function to automatically assign orders to molds and dates
   const handleAutoSchedule = () => {
@@ -2650,29 +2647,49 @@ export default function LayupScheduler() {
     }
 
     // Get work days for scheduling (Monday through Thursday ONLY - Never Friday)
-    const getWorkDays = (startDate: Date, weeksCount: number = 8) => { // Increased from 4 to 8 weeks
+    const getWorkDays = (startDate: Date, weeksCount: number = 8) => {
       const workDays: Date[] = [];
+      console.log(`📅 Generating work days starting from: ${startDate.toDateString()} (Day: ${startDate.getDay()})`);
+      
       for (let week = 0; week < weeksCount; week++) {
-        const weekStart = addDays(startOfWeek(startDate, { weekStartsOn: 1 }), week * 7);
-        // Add Mon, Tue, Wed, Thu for each week - EXPLICITLY exclude Friday
-        for (let day = 0; day < 4; day++) {
-          const workDay = addDays(weekStart, day);
-          // Double-check: ensure we never include Friday
-          if (workDay.getDay() === 5) {
-            console.error(`❌ CRITICAL: getWorkDays attempted to include a Friday! Date: ${workDay.toDateString()}`);
-            continue; // Skip this day
+        const weekStart = startOfWeek(startDate, { weekStartsOn: 1 }); // Get Monday of current week
+        const actualWeekStart = addDays(weekStart, week * 7); // Add weeks
+        
+        // Generate Monday (1), Tuesday (2), Wednesday (3), Thursday (4) for each week
+        for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
+          const workDay = addDays(actualWeekStart, dayOffset);
+          const dayOfWeek = workDay.getDay();
+          
+          // Strict validation: Only allow Monday (1) through Thursday (4)
+          if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+            workDays.push(workDay);
+          } else {
+            console.error(`❌ CRITICAL: Generated invalid day ${workDay.toDateString()} (Day: ${dayOfWeek})`);
           }
-          workDays.push(workDay);
         }
       }
       
-      // Final validation: ensure no Fridays made it into the work days
-      const fridayCheck = workDays.filter(date => date.getDay() === 5);
-      if (fridayCheck.length > 0) {
-        console.error(`❌ CRITICAL: Found ${fridayCheck.length} Friday dates in work days!`, fridayCheck.map(d => d.toDateString()));
-        return workDays.filter(date => date.getDay() !== 5); // Remove any Fridays
+      // Final validation: Ensure absolutely no Fridays (5), Saturdays (6), or Sundays (0)
+      const invalidDays = workDays.filter(date => {
+        const day = date.getDay();
+        return day === 0 || day === 5 || day === 6; // Sunday, Friday, Saturday
+      });
+      
+      if (invalidDays.length > 0) {
+        console.error(`❌ CRITICAL: Found ${invalidDays.length} invalid days!`, 
+          invalidDays.map(d => `${d.toDateString()} (Day: ${d.getDay()})`));
+        
+        // Remove invalid days and return cleaned list
+        const cleanDays = workDays.filter(date => {
+          const day = date.getDay();
+          return day >= 1 && day <= 4; // Only Monday-Thursday
+        });
+        
+        console.log(`✅ Cleaned work days: ${cleanDays.length} valid days (Mon-Thu only)`);
+        return cleanDays;
       }
       
+      console.log(`✅ Generated ${workDays.length} work days (Mon-Thu only) across ${weeksCount} weeks`);
       return workDays;
     };
 
@@ -2772,9 +2789,10 @@ export default function LayupScheduler() {
       }
     });
 
-    // Apply Friday validation before setting assignments
-    const validatedAssignments = validateNoFridayAssignments(newAssignments);
-    setOrderAssignments(validatedAssignments);
+    // Since getWorkDays() only generates Monday-Thursday, no Friday validation needed
+    // Just set assignments directly - they're guaranteed to be valid workdays
+    console.log(`🔒 Setting ${Object.keys(newAssignments).length} assignments (all pre-validated Mon-Thu only)`);
+    setOrderAssignments(newAssignments);
     setHasUnsavedScheduleChanges(true);
 
     // Show results

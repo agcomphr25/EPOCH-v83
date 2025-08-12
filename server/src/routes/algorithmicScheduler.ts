@@ -154,15 +154,27 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       while (totalDays < days) {
         const dayOfWeek = currentDate.getDay();
         
-        // Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4
+        // CRITICAL: Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4 - NEVER Friday (5)
         if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-          workDates.push(new Date(currentDate));
+          const workDate = new Date(currentDate);
+          
+          // CRITICAL VALIDATION: Double-check this is not Friday
+          if (workDate.getDay() === 5) {
+            console.error(`❌ CRITICAL ERROR: Attempted to add Friday ${workDate.toDateString()} to work schedule`);
+            console.error(`   Current date: ${currentDate.toDateString()}`);
+            console.error(`   Day of week: ${workDate.getDay()} (5=Friday)`);
+            throw new Error(`Friday assignment prevented in backend scheduler`);
+          }
+          
+          workDates.push(workDate);
+          console.log(`✅ Added work date: ${workDate.toDateString()} (Day ${workDate.getDay()})`);
           totalDays++;
         }
         
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
+      console.log(`📅 Generated ${workDates.length} work dates (Monday-Thursday only)`);
       return workDates;
     };
 
@@ -243,6 +255,16 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           const moldCapacity = mold.multiplier || 1; // Use realistic mold capacity per day
 
           if (currentUsage < moldCapacity) {
+            // CRITICAL VALIDATION: Never allow Friday assignments
+            const scheduleDate = new Date(workDate);
+            if (scheduleDate.getDay() === 5) {
+              console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on Friday ${scheduleDate.toDateString()}`);
+              console.error(`   Work date: ${workDate.toDateString()}`);
+              console.error(`   Schedule date: ${scheduleDate.toDateString()}`);
+              console.error(`   Day of week: ${scheduleDate.getDay()}`);
+              throw new Error(`Friday assignment blocked for order ${order.orderId}`);
+            }
+            
             // Schedule this order
             allocations.push({
               orderId: order.orderId,

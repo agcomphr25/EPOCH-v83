@@ -1347,11 +1347,15 @@ export class DatabaseStorage implements IStorage {
       const allCustomers = await db.select().from(customers);
       const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
-      // Enrich orders with customer names and add required frontend fields
+      // Get all stock models to create a lookup map for display names
+      const allStockModels = await db.select().from(stockModels);
+      const stockModelMap = new Map(allStockModels.map(sm => [sm.id, sm.displayName || sm.name]));
+
+      // Enrich orders with customer names and stock model display names
       const enrichedOrders = orders.map(order => ({
         ...order,
         customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
-        productName: order.modelId || 'Unknown Product',
+        productName: stockModelMap.get(order.modelId || '') || order.modelId || 'Unknown Product',
         stockModelId: order.modelId,
         priority: 50 // Default priority
       })) as AllOrder[];

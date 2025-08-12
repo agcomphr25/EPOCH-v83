@@ -157,19 +157,79 @@ export function registerRoutes(app: Express): Server {
         order.currentDepartment === 'P1 Production Queue'
       );
       
-      // Get Mesa production orders (400 orders)
+      // Get Mesa production orders (400 orders) and convert to proper orders in Production Queue
       const productionOrders = await storage.getAllProductionOrders();
       const mesaOrders = productionOrders.filter(order => 
         order.itemName && order.itemName.includes('Mesa')
       );
       
+      console.log(`🔍 Found ${productionOrders.length} total production orders, ${mesaOrders.length} Mesa orders`);
+      
+      // Convert Mesa production orders to main orders table with proper department assignment (one-time conversion)
+      let mesaConvertedCount = 0;
+      const mesaOrdersToConvert = mesaOrders.slice(0, 100); // Convert 100 Mesa orders at a time
+      
+      for (const mesaOrder of mesaOrdersToConvert) {
+        // Check if this production order already has a corresponding main order
+        const existingOrder = allOrders.find(order => order.orderId === mesaOrder.orderId);
+        
+        if (!existingOrder) {
+          // Create new order in main table with P1 Production Queue department
+          console.log(`📋 Converting Mesa production order ${mesaOrder.orderId} to main order with P1 Production Queue department`);
+          
+          const { stockModelId, product } = inferStockModelFromFeatures({
+            ...mesaOrder,
+            source: 'p1_purchase_order',
+            features: mesaOrder.specifications || {},
+            itemName: mesaOrder.itemName,
+            orderId: mesaOrder.orderId
+          });
+          
+          const newMainOrderData = {
+            orderId: mesaOrder.orderId,
+            orderDate: mesaOrder.orderDate,
+            dueDate: mesaOrder.dueDate,
+            customerId: mesaOrder.customerId,
+            customerPO: mesaOrder.poNumber,
+            currentDepartment: 'P1 Production Queue', // Start in Production Queue
+            features: { itemName: mesaOrder.itemName, ...mesaOrder.specifications },
+            status: 'FINALIZED'
+          };
+          
+          try {
+            const { db } = await import('../../db');
+            const { allOrders } = await import('../../schema');
+            await db.insert(allOrders).values(newMainOrderData);
+            mesaConvertedCount++;
+            console.log(`✅ Created main order ${mesaOrder.orderId} in P1 Production Queue`);
+          } catch (error) {
+            console.log(`❌ ERROR creating order ${mesaOrder.orderId}:`, error);
+            console.log('Error details:', JSON.stringify(error, null, 2));
+            console.log('Order data:', JSON.stringify(newMainOrderData, null, 2));
+          }
+        }
+      }
+      
+      console.log(`🏁 Mesa conversion complete: ${mesaConvertedCount} orders converted out of ${mesaOrders.length} found`);
+      
+      // Re-fetch all orders after potential creation to get updated list
+      const updatedAllOrders = await storage.getAllOrders();
+      const updatedUnscheduledOrders = updatedAllOrders.filter(order => 
+        order.currentDepartment === 'P1 Production Queue'
+      );
+      
       // Combine both order types into unified production queue with enhanced stock model inference
       const combinedQueue = [
-        ...unscheduledOrders.map(order => {
+        ...updatedUnscheduledOrders.map(order => {
           const { stockModelId, product } = inferStockModelFromFeatures({
             ...order,
             source: 'p1_purchase_order'
           });
+          
+          // Log Mesa orders specifically
+          if (product && product.includes('Mesa')) {
+            console.log(`🏭 MESA ORDER IN PRODUCTION QUEUE: ${order.orderId} → ${stockModelId} (${product})`);
+          }
           
           return {
             ...order,
@@ -179,30 +239,6 @@ export function registerRoutes(app: Express): Server {
             stockModelId,
             product,
             stockModelName: product
-          };
-        }),
-        ...mesaOrders.map(order => {
-          const { stockModelId, product } = inferStockModelFromFeatures({
-            ...order,
-            source: 'p1_purchase_order',
-            features: order.specifications || {},
-            itemName: order.itemName,
-            orderId: order.orderId
-          });
-          
-          console.log(`🏭 MESA ORDER MAPPED: ${order.orderId} → ${stockModelId} (${product})`);
-          
-          return {
-            ...order,
-            source: 'p1_purchase_order',
-            priorityScore: calculatePriorityScore(order.dueDate),
-            orderId: order.orderId,
-            features: order.specifications || {},
-            stockModelId,
-            product,
-            stockModelName: product,
-            customer: order.customer || 'Mesa Universal',
-            itemName: order.itemName
           };
         })
       ];

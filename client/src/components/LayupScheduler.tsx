@@ -988,7 +988,7 @@ export default function LayupScheduler() {
       return schedulingWeeks;
     };
 
-    // Get work days for dynamic window (Mon-Thu primary scheduling)
+    // Get work days for dynamic window (Mon-Thu ONLY - Never Friday)
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
@@ -998,10 +998,23 @@ export default function LayupScheduler() {
         current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
       }
 
-      // Add Monday through Thursday (primary work days)
+      // Add Monday through Thursday (primary work days) - EXPLICITLY exclude Friday
       for (let i = 0; i < 4; i++) {
-        workDays.push(new Date(current));
+        const workDay = new Date(current);
+        // Double-check: ensure we never include Friday
+        if (workDay.getDay() === 5) {
+          console.error(`❌ CRITICAL: getWorkDaysInWeek attempted to include a Friday! Date: ${workDay.toDateString()}`);
+          break; // Stop adding days if we hit Friday
+        }
+        workDays.push(workDay);
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+      }
+
+      // Final validation: ensure no Fridays made it into the work days
+      const fridayCheck = workDays.filter(date => date.getDay() === 5);
+      if (fridayCheck.length > 0) {
+        console.error(`❌ CRITICAL: Found ${fridayCheck.length} Friday dates in work days!`, fridayCheck.map(d => d.toDateString()));
+        return workDays.filter(date => date.getDay() !== 5); // Remove any Fridays
       }
 
       return workDays;
@@ -1334,7 +1347,9 @@ export default function LayupScheduler() {
       console.log(`  ${format(new Date(date), 'MM/dd')}: ${count}/8 Mesa Universal orders`);
     });
 
-    setOrderAssignments(newAssignments);
+    // Apply Friday validation before setting smart assignments
+    const validatedSmartAssignments = validateNoFridayAssignments(newAssignments);
+    setOrderAssignments(validatedSmartAssignments);
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
@@ -2221,8 +2236,10 @@ export default function LayupScheduler() {
         }
       });
       
-      setOrderAssignments(newAssignments);
-      console.log('✅ Merged assignments:', Object.keys(newAssignments).length);
+      // Apply Friday validation before merging assignments
+      const validatedNewAssignments = validateNoFridayAssignments(newAssignments);
+      setOrderAssignments(validatedNewAssignments);
+      console.log('✅ Merged assignments:', Object.keys(validatedNewAssignments).length);
     }
   }, [schedule, orderAssignments]);
 
@@ -2288,11 +2305,18 @@ export default function LayupScheduler() {
       return;
     }
 
+    // Check if target date is Friday - allow manual placement but warn user
+    const targetDate = new Date(dateIso);
+    if (targetDate.getDay() === 5) {
+      // Allow Friday manual placement but confirm it's intentional
+      console.log(`⚠️ Manual Friday placement: Order ${orderId} being placed on Friday ${targetDate.toDateString()}`);
+    }
+
     // Simple move - just update the assignment to the new position
     // This leaves the original slot empty and doesn't auto-fill it
     console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${dateIso}`);
 
-    // Update assignment to new position
+    // Update assignment to new position (manual placements bypass Friday validation)
     setOrderAssignments(prev => ({
       ...prev,
       [orderId]: { moldId: targetMoldId, date: dateIso }
@@ -2310,6 +2334,37 @@ export default function LayupScheduler() {
 
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id);
+  };
+
+  // Critical validation function: NEVER allow Friday assignments
+  const validateNoFridayAssignments = (assignments: { [orderId: string]: { moldId: string, date: string } }) => {
+    const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
+      const assignmentDate = new Date(assignment.date);
+      return assignmentDate.getDay() === 5; // Friday check
+    });
+    
+    if (fridayAssignments.length > 0) {
+      console.error(`❌ CRITICAL VALIDATION FAILURE: Found ${fridayAssignments.length} Friday assignments!`);
+      fridayAssignments.forEach(([orderId, assignment]) => {
+        console.error(`   - Order ${orderId} assigned to Friday ${new Date(assignment.date).toDateString()}`);
+      });
+      
+      // Remove Friday assignments
+      const cleanedAssignments = { ...assignments };
+      fridayAssignments.forEach(([orderId]) => {
+        delete cleanedAssignments[orderId];
+      });
+      
+      toast({
+        title: "Friday Assignment Blocked",
+        description: `Prevented ${fridayAssignments.length} orders from being assigned to Friday. Orders must be manually placed on Friday if needed.`,
+        variant: "destructive",
+      });
+      
+      return cleanedAssignments;
+    }
+    
+    return assignments;
   };
 
   // Auto-schedule function to automatically assign orders to molds and dates
@@ -2335,16 +2390,30 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Get work days for scheduling (Monday through Thursday)
+    // Get work days for scheduling (Monday through Thursday ONLY - Never Friday)
     const getWorkDays = (startDate: Date, weeksCount: number = 8) => { // Increased from 4 to 8 weeks
       const workDays: Date[] = [];
       for (let week = 0; week < weeksCount; week++) {
         const weekStart = addDays(startOfWeek(startDate, { weekStartsOn: 1 }), week * 7);
-        // Add Mon, Tue, Wed, Thu for each week
+        // Add Mon, Tue, Wed, Thu for each week - EXPLICITLY exclude Friday
         for (let day = 0; day < 4; day++) {
-          workDays.push(addDays(weekStart, day));
+          const workDay = addDays(weekStart, day);
+          // Double-check: ensure we never include Friday
+          if (workDay.getDay() === 5) {
+            console.error(`❌ CRITICAL: getWorkDays attempted to include a Friday! Date: ${workDay.toDateString()}`);
+            continue; // Skip this day
+          }
+          workDays.push(workDay);
         }
       }
+      
+      // Final validation: ensure no Fridays made it into the work days
+      const fridayCheck = workDays.filter(date => date.getDay() === 5);
+      if (fridayCheck.length > 0) {
+        console.error(`❌ CRITICAL: Found ${fridayCheck.length} Friday dates in work days!`, fridayCheck.map(d => d.toDateString()));
+        return workDays.filter(date => date.getDay() !== 5); // Remove any Fridays
+      }
+      
       return workDays;
     };
 
@@ -2444,8 +2513,9 @@ export default function LayupScheduler() {
       }
     });
 
-    // Apply the assignments
-    setOrderAssignments(newAssignments);
+    // Apply Friday validation before setting assignments
+    const validatedAssignments = validateNoFridayAssignments(newAssignments);
+    setOrderAssignments(validatedAssignments);
     setHasUnsavedScheduleChanges(true);
 
     // Show results

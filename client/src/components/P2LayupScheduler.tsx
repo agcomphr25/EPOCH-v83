@@ -447,7 +447,7 @@ export default function P2LayupScheduler() {
     
     console.log('🚀 Generating P2 auto-schedule for', p2Orders.length, 'P2 orders');
     
-    // Get work days for scheduling (Mon-Thu primary)
+    // Get work days for scheduling (Mon-Thu ONLY - Never Friday)
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
@@ -457,8 +457,21 @@ export default function P2LayupScheduler() {
       }
       
       for (let i = 0; i < 4; i++) {
-        workDays.push(new Date(current));
+        const workDay = new Date(current);
+        // Double-check: ensure we never include Friday in P2 scheduling
+        if (workDay.getDay() === 5) {
+          console.error(`❌ CRITICAL: P2 getWorkDaysInWeek attempted to include a Friday! Date: ${workDay.toDateString()}`);
+          break; // Stop adding days if we hit Friday
+        }
+        workDays.push(workDay);
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+      }
+      
+      // Final validation for P2: ensure no Fridays made it into the work days
+      const fridayCheck = workDays.filter(date => date.getDay() === 5);
+      if (fridayCheck.length > 0) {
+        console.error(`❌ CRITICAL: P2 Found ${fridayCheck.length} Friday dates in work days!`, fridayCheck.map(d => d.toDateString()));
+        return workDays.filter(date => date.getDay() !== 5); // Remove any Fridays
       }
       
       return workDays;

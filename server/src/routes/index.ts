@@ -388,7 +388,7 @@ export function registerRoutes(app: Express): Server {
           
           const dayOfWeek = testDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
           
-          // Only count Monday (1) through Thursday (4) as work days
+          // Only count Monday (1) through Thursday (4) as work days - NEVER Friday (5)
           if (dayOfWeek >= 1 && dayOfWeek <= 4) {
             workDaysAdded++;
           }
@@ -396,6 +396,16 @@ export function registerRoutes(app: Express): Server {
         
         const finalDate = new Date(fromDate);
         finalDate.setDate(fromDate.getDate() + currentDayOffset);
+        
+        // Double-check: ensure we never return a Friday
+        const finalDayOfWeek = finalDate.getDay();
+        if (finalDayOfWeek === 5) {
+          console.error(`❌ CRITICAL: getNextWorkDay attempted to return a Friday! Date: ${finalDate.toDateString()}`);
+          // Skip to next Monday if we somehow land on Friday
+          const daysToNextMonday = 3; // Friday + 3 = Monday
+          finalDate.setDate(finalDate.getDate() + daysToNextMonday);
+        }
+        
         return finalDate;
       };
 

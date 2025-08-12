@@ -168,12 +168,12 @@ export function registerRoutes(app: Express): Server {
         ...unscheduledOrders.map(order => {
           const { stockModelId, product } = inferStockModelFromFeatures({
             ...order,
-            source: 'regular_order'
+            source: 'p1_purchase_order'
           });
           
           return {
             ...order,
-            source: 'regular_order',
+            source: 'p1_purchase_order',
             priorityScore: calculatePriorityScore(order.dueDate),
             orderId: order.orderId,
             stockModelId,
@@ -184,14 +184,14 @@ export function registerRoutes(app: Express): Server {
         ...mesaOrders.map(order => {
           const { stockModelId, product } = inferStockModelFromFeatures({
             ...order,
-            source: 'mesa_production_order',
+            source: 'p1_purchase_order',
             features: order.specifications || {},
             itemName: order.itemName
           });
           
           return {
             ...order,
-            source: 'mesa_production_order',
+            source: 'p1_purchase_order',
             priorityScore: calculatePriorityScore(order.dueDate),
             orderId: order.orderId,
             features: order.specifications || {},

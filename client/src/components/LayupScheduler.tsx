@@ -2241,57 +2241,59 @@ export default function LayupScheduler() {
     return key;
   }, [processedOrders]);
 
-  // AGGRESSIVE FRIDAY CLEANER: Clear state completely and rebuild
+  // FRIDAY DELETION: Remove Friday assignments from database and state
   useEffect(() => {
-    if (Object.keys(orderAssignments).length > 0) {
-      let hasChanges = false;
-      const cleanedAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      
-      console.log(`🧹 AGGRESSIVE CLEANER: Analyzing ${Object.keys(orderAssignments).length} assignments`);
-      
-      Object.entries(orderAssignments).forEach(([key, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        const isFriday = assignmentDate.getDay() === 5;
+    const deleteFridayRecords = async () => {
+      if (Object.keys(orderAssignments).length > 0) {
+        const fridayAssignments = Object.entries(orderAssignments).filter(([key, assignment]) => {
+          const assignmentDate = new Date(assignment.date);
+          return assignmentDate.getDay() === 5; // Friday
+        });
         
-        // Step 1: Normalize the key (convert FB Order Number to Order ID if needed)
-        const normalizedKey = normalizeOrderKey(key);
-        if (normalizedKey !== key) {
-          hasChanges = true;
+        if (fridayAssignments.length > 0) {
+          console.error(`🚨 FRIDAY DELETION: Found ${fridayAssignments.length} Friday assignments to remove`);
+          
+          // Delete from database first
+          for (const [orderKey, assignment] of fridayAssignments) {
+            const normalizedKey = normalizeOrderKey(orderKey);
+            console.error(`🗑️ DELETING Friday record: ${normalizedKey} scheduled for ${assignment.date}`);
+            
+            try {
+              const response = await fetch('/api/layup-schedule', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: normalizedKey })
+              });
+              
+              if (response.ok) {
+                console.log(`✅ Deleted Friday record for ${normalizedKey}`);
+              } else {
+                console.error(`❌ Failed to delete Friday record for ${normalizedKey}`);
+              }
+            } catch (error) {
+              console.error(`❌ Error deleting Friday record for ${normalizedKey}:`, error);
+            }
+          }
+          
+          // Remove from state
+          const cleanedAssignments = { ...orderAssignments };
+          fridayAssignments.forEach(([key]) => {
+            delete cleanedAssignments[key];
+          });
+          
+          console.error(`🧹 STATE CLEANUP: Removed ${fridayAssignments.length} Friday assignments from state`);
+          setOrderAssignments(cleanedAssignments);
+          
+          // Force refetch of schedule data
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
         }
-        
-        // Step 2: Check if this is a phantom order (not in processedOrders)
-        const orderExists = processedOrders.some(order => order.orderId === normalizedKey);
-        
-        // Step 3: Remove Friday assignments (but allow processing to continue)
-        if (isFriday) {
-          console.warn(`⚠️ FRIDAY ASSIGNMENT REMOVED: ${key}/${normalizedKey} scheduled for Friday`);
-          console.warn(`   Date: ${assignment.date} (${assignmentDate.toDateString()})`);
-          hasChanges = true;
-          return; // Skip this assignment, but continue processing others
-        }
-        
-        // Step 4: Remove phantom orders
-        if (!orderExists) {
-          console.warn(`👻 CLEANER: Removing phantom assignment for ${key}/${normalizedKey} (order doesn't exist in queue)`);
-          hasChanges = true;
-          return; // Skip this assignment
-        }
-        
-        // Step 5: Keep valid assignments with normalized keys
-        cleanedAssignments[normalizedKey] = assignment;
-      });
-      
-      if (hasChanges) {
-        const removedCount = Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length;
-        console.error(`🧹 AGGRESSIVE CLEANER: Fixed ${removedCount} invalid assignments and normalized keys`);
-        console.error(`🧹 BEFORE: ${Object.keys(orderAssignments).length} assignments`);
-        console.error(`🧹 AFTER: ${Object.keys(cleanedAssignments).length} assignments`);
-        
-        // Force immediate state update
-        setOrderAssignments(cleanedAssignments);
       }
-    }
-  }, [JSON.stringify(orderAssignments), processedOrders.length, normalizeOrderKey]); // Run when assignments or orders change
+    };
+    
+    deleteFridayRecords();
+  }, [JSON.stringify(orderAssignments), normalizeOrderKey]); // Run when assignments change
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {

@@ -3636,6 +3636,15 @@ export default function LayupScheduler() {
                                   console.error(`🚨 DISPLAYING FRIDAY ORDER: ${orderId} on ${date.toDateString()}`);
                                   console.error(`   Assignment date: ${assignment.date}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
+                                  
+                                  // Add to debug info state to show in UI
+                                  const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${getDisplayOrderId(orderId)}) on ${date.toDateString()} mold ${assignment.moldId}`;
+                                  setDebugInfo(prev => {
+                                    if (!prev.includes(errorMsg)) {
+                                      return [...prev, errorMsg];
+                                    }
+                                    return prev;
+                                  });
                                 }
                                 
                                 return isMatch;

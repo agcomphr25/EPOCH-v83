@@ -1422,18 +1422,19 @@ export type InsertLayupSchedule = z.infer<typeof insertLayupScheduleSchema>;
 export type LayupSchedule = typeof layupSchedule.$inferSelect;
 
 // Module 8: API Integrations & Communications
-export const customers = pgTable("customers", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
-  company: text("company"),
-  customerType: text("customer_type").default("standard"),
-  preferredCommunicationMethod: json("preferred_communication_method"), // Array of strings: ["email", "sms"]
-  notes: text("notes"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  company: text('company'),
+  contact: text('contact'),
+  customerType: text('customer_type').default('standard'),
+  preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
+  notes: text('notes'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const customerAddresses = pgTable("customer_addresses", {
@@ -1516,6 +1517,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
   ),
   phone: z.string().optional(),
   company: z.string().optional(),
+  contact: z.string().optional(),
   customerType: z.string().default("standard"),
   preferredCommunicationMethod: z.array(z.enum(["email", "sms"])).optional(),
   notes: z.string().optional(),
@@ -1708,7 +1710,7 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   notes: text('notes'),
   orderCount: integer('order_count').default(0), // Number of orders generated from this item
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // P2 Customer Management - separate customer database for P2 operations
@@ -1753,7 +1755,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Production Orders - separate from regular orders for PO tracking
@@ -1765,7 +1767,7 @@ export const productionOrders = pgTable('production_orders', {
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   poNumber: text('po_number').notNull(),
-  itemType: text('item_type').notNull(), // 'stock_model', 'custom_model', 'feature_item'
+  itemType: text('item_type').notNull(),
   itemId: text('item_id').notNull(),
   itemName: text('item_name').notNull(),
   specifications: jsonb('specifications'), // Product specifications
@@ -1777,7 +1779,7 @@ export const productionOrders = pgTable('production_orders', {
   shippedAt: timestamp('shipped_at'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Enhanced Form Insert Schemas
@@ -2317,4 +2319,3 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
 export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
   order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
 }));
-

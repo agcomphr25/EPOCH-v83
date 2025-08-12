@@ -2527,13 +2527,13 @@ export default function LayupScheduler() {
   };
 
   // Critical validation function: NEVER allow Friday assignments (defined early for use in effects)
-  const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }) => {
+  const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }, allowManualFriday: boolean = false) => {
     const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       return assignmentDate.getDay() === 5; // Friday check
     });
     
-    if (fridayAssignments.length > 0) {
+    if (fridayAssignments.length > 0 && !allowManualFriday) {
       console.error(`❌ CRITICAL VALIDATION FAILURE: Found ${fridayAssignments.length} Friday assignments!`);
       fridayAssignments.forEach(([orderId, assignment]) => {
         console.error(`   - Order ${orderId} assigned to Friday ${new Date(assignment.date).toDateString()}`);
@@ -2552,6 +2552,11 @@ export default function LayupScheduler() {
       });
       
       return cleanedAssignments;
+    } else if (fridayAssignments.length > 0 && allowManualFriday) {
+      console.log(`⚠️ Manual Friday placement allowed: ${fridayAssignments.length} orders placed on Friday`);
+      fridayAssignments.forEach(([orderId, assignment]) => {
+        console.log(`   - Order ${orderId} manually placed on Friday ${new Date(assignment.date).toDateString()}`);
+      });
     }
     
     return assignments;

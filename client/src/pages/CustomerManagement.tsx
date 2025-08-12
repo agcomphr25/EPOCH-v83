@@ -493,6 +493,7 @@ export default function CustomerManagement() {
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     customerId: '',
     street: '',
+    street2: '',
     city: '',
     state: '',
     zipCode: '',

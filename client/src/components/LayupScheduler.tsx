@@ -2473,6 +2473,19 @@ export default function LayupScheduler() {
     // Show orderAssignments when we're rendering
     if (Object.keys(orderAssignments).length > 0) {
       console.log('📋 CURRENT orderAssignments STATE:');
+      
+      // SPECIAL CHECK: Look for AI141 specifically
+      Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignmentDate.getDay()];
+        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${assignmentDate.getDay()})`);
+        
+        if (orderId === 'AI141') {
+          console.error(`🚨 AI141 FOUND IN STATE:`, assignment);
+          console.error(`🚨 AI141 Date: ${assignment.date}`);
+          console.error(`🚨 AI141 Parsed: ${assignmentDate.toDateString()} (day ${assignmentDate.getDay()})`);
+        }
+      });
       Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
         const assignmentDate = new Date(assignment.date);
         const dayOfWeek = assignmentDate.getDay();

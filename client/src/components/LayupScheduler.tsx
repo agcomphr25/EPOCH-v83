@@ -3654,6 +3654,17 @@ export default function LayupScheduler() {
                                 const cellDateOnly = dateString.split('T')[0];
                                 const isMatch = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
                                 
+                                // DEBUG: Specific check for AG822 (AI266)
+                                if (orderId === 'AG822') {
+                                  console.error(`🔍 AG822 (AI266) MATCHING DEBUG:`);
+                                  console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
+                                  console.error(`   Assignment date: ${assignment.date}`);
+                                  console.error(`   Assignment date only: ${assignment.date.split('T')[0]}`);
+                                  console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
+                                  console.error(`   Is match: ${isMatch}`);
+                                  console.error(`   Mold: ${assignment.moldId}`);
+                                }
+
                                 // DEBUG: Log Friday assignments being displayed
                                 if (isMatch && date.getDay() === 5) {
                                   console.error(`🚨 DISPLAYING FRIDAY ORDER: ${orderId} on ${date.toDateString()}`);

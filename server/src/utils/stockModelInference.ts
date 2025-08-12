@@ -12,9 +12,10 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   }
   
   // Then check if it's a mesa order from production orders
-  if (order.source === 'mesa_production_order' && order.itemName?.includes('Mesa')) {
+  if ((order.source === 'mesa_production_order' || order.source === 'p1_purchase_order') && order.itemName?.includes('Mesa')) {
     stockModelId = 'mesa_universal';
     product = 'Mesa Universal';
+    console.log(`🎯 MESA INFERENCE: ${order.orderId || order.order_id} → Mesa Universal (itemName: ${order.itemName})`);
     return { stockModelId, product };
   }
   

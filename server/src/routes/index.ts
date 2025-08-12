@@ -186,8 +186,11 @@ export function registerRoutes(app: Express): Server {
             ...order,
             source: 'p1_purchase_order',
             features: order.specifications || {},
-            itemName: order.itemName
+            itemName: order.itemName,
+            orderId: order.orderId
           });
+          
+          console.log(`🏭 MESA ORDER MAPPED: ${order.orderId} → ${stockModelId} (${product})`);
           
           return {
             ...order,
@@ -197,7 +200,9 @@ export function registerRoutes(app: Express): Server {
             features: order.specifications || {},
             stockModelId,
             product,
-            stockModelName: product
+            stockModelName: product,
+            customer: order.customer || 'Mesa Universal',
+            itemName: order.itemName
           };
         })
       ];

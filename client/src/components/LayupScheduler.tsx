@@ -565,9 +565,12 @@ export default function LayupScheduler() {
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
+  const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
 
@@ -1029,6 +1032,22 @@ export default function LayupScheduler() {
       const weekDays = getWorkDaysInWeek(weekStartDate);
       allWorkDays.push(...weekDays);
     }
+
+    // CRITICAL VALIDATION: Ensure no Friday dates made it into allWorkDays
+    const fridayDatesInAllWorkDays = allWorkDays.filter(date => date.getDay() === 5);
+    if (fridayDatesInAllWorkDays.length > 0) {
+      console.error(`❌ CRITICAL BUG DETECTED: Found ${fridayDatesInAllWorkDays.length} Friday dates in allWorkDays!`);
+      fridayDatesInAllWorkDays.forEach(date => {
+        console.error(`   - Friday found in work days: ${date.toDateString()}`);
+      });
+      
+      // Remove all Friday dates from allWorkDays
+      const cleanedWorkDays = allWorkDays.filter(date => date.getDay() !== 5);
+      allWorkDays.splice(0, allWorkDays.length, ...cleanedWorkDays);
+      console.log(`🔧 Cleaned allWorkDays: removed ${fridayDatesInAllWorkDays.length} Friday dates, ${allWorkDays.length} work days remaining`);
+    }
+
+    console.log(`📅 Final allWorkDays validation: ${allWorkDays.length} work days generated (all Monday-Thursday)`);
 
     // Enhanced intelligent stock model detection (define before usage)
     const getOrderStockModelId = (order: any) => {
@@ -2336,8 +2355,8 @@ export default function LayupScheduler() {
     setActiveId(event.active.id);
   };
 
-  // Critical validation function: NEVER allow Friday assignments
-  const validateNoFridayAssignments = (assignments: { [orderId: string]: { moldId: string, date: string } }) => {
+  // Critical validation function: NEVER allow Friday assignments (defined early for use in effects)
+  const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }) => {
     const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       return assignmentDate.getDay() === 5; // Friday check
@@ -2365,7 +2384,19 @@ export default function LayupScheduler() {
     }
     
     return assignments;
-  };
+  }, [toast]);
+
+  // Initial Friday cleanup effect - run once when orderAssignments are first loaded
+  React.useEffect(() => {
+    if (!initialFridayCleanup && Object.keys(orderAssignments).length > 0) {
+      const cleanedAssignments = validateNoFridayAssignments(orderAssignments);
+      if (Object.keys(cleanedAssignments).length !== Object.keys(orderAssignments).length) {
+        console.log('🔧 Initial Friday cleanup: removed existing Friday assignments');
+        setOrderAssignments(cleanedAssignments);
+      }
+      setInitialFridayCleanup(true);
+    }
+  }, [orderAssignments, initialFridayCleanup, validateNoFridayAssignments]);
 
   // Auto-schedule function to automatically assign orders to molds and dates
   const handleAutoSchedule = () => {

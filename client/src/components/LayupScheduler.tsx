@@ -619,7 +619,9 @@ export default function LayupScheduler() {
         console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
         
         if (dayOfWeek === 5) {
-          console.error(`   ❌ FRIDAY DETECTED: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`);
+          const errorMsg = `❌ FRIDAY FROM DATABASE: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`;
+          console.error(errorMsg);
+          setDebugInfo(prev => [...prev, errorMsg]);
         }
       });
       

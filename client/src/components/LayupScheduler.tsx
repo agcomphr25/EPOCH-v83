@@ -2185,41 +2185,70 @@ export default function LayupScheduler() {
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
-  // COMPREHENSIVE STATE CLEANER: Remove Friday assignments AND phantom orders
+  // Key normalization function to convert FB Order Numbers back to Order IDs
+  const normalizeOrderKey = useCallback((key: string): string => {
+    // If key is already a valid Order ID, return it
+    const isValidOrderId = processedOrders.some(order => order.orderId === key);
+    if (isValidOrderId) {
+      return key;
+    }
+    
+    // Try to find order by FB Order Number
+    const orderByFbNumber = processedOrders.find(order => getDisplayOrderId(order) === key);
+    if (orderByFbNumber) {
+      console.warn(`🔧 KEY NORMALIZATION: Converting FB Order Number "${key}" to Order ID "${orderByFbNumber.orderId}"`);
+      return orderByFbNumber.orderId;
+    }
+    
+    console.warn(`⚠️ KEY NORMALIZATION: Unknown key "${key}" - keeping as is`);
+    return key;
+  }, [processedOrders]);
+
+  // COMPREHENSIVE STATE CLEANER: Remove Friday assignments, phantom orders, AND fix FB Order Number keys
   useEffect(() => {
     if (Object.keys(orderAssignments).length > 0) {
       let hasChanges = false;
-      const cleanedAssignments = Object.fromEntries(
-        Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-          const assignmentDate = new Date(assignment.date);
-          const isFriday = assignmentDate.getDay() === 5;
-          
-          // Check if this is a phantom order (not in processedOrders)
-          const orderExists = processedOrders.some(order => order.orderId === orderId);
-          
-          if (isFriday) {
-            console.warn(`🧹 CLEANER: Removing Friday assignment for ${orderId} from ${assignmentDate.toDateString()}`);
-            hasChanges = true;
-            return false;
-          }
-          
-          if (!orderExists) {
-            console.warn(`👻 CLEANER: Removing phantom assignment for ${orderId} (order doesn't exist in queue)`);
-            hasChanges = true;
-            return false;
-          }
-          
-          return true; // Keep valid assignments
-        })
-      );
+      const cleanedAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      
+      Object.entries(orderAssignments).forEach(([key, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        const isFriday = assignmentDate.getDay() === 5;
+        
+        // Step 1: Normalize the key (convert FB Order Number to Order ID if needed)
+        const normalizedKey = normalizeOrderKey(key);
+        if (normalizedKey !== key) {
+          hasChanges = true;
+        }
+        
+        // Step 2: Check if this is a phantom order (not in processedOrders)
+        const orderExists = processedOrders.some(order => order.orderId === normalizedKey);
+        
+        // Step 3: Remove Friday assignments
+        if (isFriday) {
+          console.warn(`🧹 CLEANER: Removing Friday assignment for ${key}/${normalizedKey} from ${assignmentDate.toDateString()}`);
+          hasChanges = true;
+          return; // Skip this assignment
+        }
+        
+        // Step 4: Remove phantom orders
+        if (!orderExists) {
+          console.warn(`👻 CLEANER: Removing phantom assignment for ${key}/${normalizedKey} (order doesn't exist in queue)`);
+          hasChanges = true;
+          return; // Skip this assignment
+        }
+        
+        // Step 5: Keep valid assignments with normalized keys
+        cleanedAssignments[normalizedKey] = assignment;
+      });
       
       if (hasChanges) {
-        console.log(`🧹 COMPREHENSIVE CLEANER: Cleaned ${Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length} invalid assignments`);
+        const removedCount = Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length;
+        console.log(`🧹 COMPREHENSIVE CLEANER: Fixed ${removedCount} invalid assignments and normalized keys`);
         // Use setTimeout to ensure this runs after render cycle
         setTimeout(() => setOrderAssignments(cleanedAssignments), 0);
       }
     }
-  }, [JSON.stringify(orderAssignments), processedOrders.length]); // Run when assignments or orders change
+  }, [JSON.stringify(orderAssignments), processedOrders.length, normalizeOrderKey]); // Run when assignments or orders change
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
@@ -2463,9 +2492,12 @@ export default function LayupScheduler() {
     console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${dateIso}`);
 
     // Update assignment to new position (manual placements bypass Friday validation)
+    // Apply key normalization to ensure we use Order ID, not FB Order Number
+    const normalizedOrderId = normalizeOrderKey(orderId);
+    
     setOrderAssignments(prev => ({
       ...prev,
-      [orderId]: { moldId: targetMoldId, date: dateIso }
+      [normalizedOrderId]: { moldId: targetMoldId, date: dateIso }
     }));
 
     // Mark as having unsaved changes
@@ -3713,16 +3745,22 @@ export default function LayupScheduler() {
                                   console.error(`   Mold: ${assignment.moldId}`);
                                 }
                                 
-                                // DEBUG: AI141 specific debugging - this is a phantom assignment
-                                if (orderId === 'AI141') {
-                                  console.error(`👻 AI141 PHANTOM ASSIGNMENT DEBUG:`);
+                                // DEBUG: FB Order Number key detection - AI141 should be normalized to AH005
+                                if (orderId.match(/^[A-Z]{2}\d{3}$/) && !processedOrders.some(o => o.orderId === orderId)) {
+                                  console.error(`👻 FB ORDER NUMBER AS KEY DETECTED: ${orderId}`);
                                   console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
                                   console.error(`   Assignment date: ${assignment.date}`);
                                   console.error(`   Assignment date only: ${assignment.date.split('T')[0]}`);
                                   console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
                                   console.error(`   Is match: ${isMatch}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
-                                  console.error(`   ❗ AI141 should NOT exist - it's not in database!`);
+                                  console.error(`   ❗ This is an FB Order Number being used as a key - should be normalized!`);
+                                  
+                                  // Try to find the actual order
+                                  const actualOrder = processedOrders.find(o => getDisplayOrderId(o) === orderId);
+                                  if (actualOrder) {
+                                    console.error(`   🔧 Should be Order ID: ${actualOrder.orderId}`);
+                                  }
                                 }
 
                                 // DEBUG: Log Friday assignments being displayed
@@ -3730,9 +3768,19 @@ export default function LayupScheduler() {
                                   console.error(`🚨 DISPLAYING FRIDAY ORDER: ${orderId} on ${date.toDateString()}`);
                                   console.error(`   Assignment date: ${assignment.date}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
+                                  console.error(`   Order lookup result:`, processedOrders.find(o => o.orderId === orderId) ? 'FOUND' : 'NOT FOUND');
+                                  
+                                  // Check if this is an FB Order Number key issue
+                                  const actualOrder = processedOrders.find(o => getDisplayOrderId(o) === orderId);
+                                  if (actualOrder) {
+                                    console.error(`   🔧 KEY ISSUE: ${orderId} is FB Order Number, should be ${actualOrder.orderId}`);
+                                  }
                                   
                                   // Add to debug info state to show in UI
-                                  const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${getDisplayOrderId(orderId)}) on ${date.toDateString()} mold ${assignment.moldId}`;
+                                  const displayOrderId = processedOrders.find(o => o.orderId === orderId) 
+                                    ? getDisplayOrderId(orderId) 
+                                    : actualOrder ? `${orderId} (FB#)` : orderId;
+                                  const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${displayOrderId}) on ${date.toDateString()} mold ${assignment.moldId}`;
                                   setDebugInfo(prev => {
                                     if (!prev.includes(errorMsg)) {
                                       return [...prev, errorMsg];

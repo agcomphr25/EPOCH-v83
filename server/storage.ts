@@ -16,6 +16,8 @@ import {
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
+  // Order attachments table
+  orderAttachments,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,

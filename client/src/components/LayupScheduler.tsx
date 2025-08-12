@@ -3268,9 +3268,8 @@ export default function LayupScheduler() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <>
-            <div className="px-6 pb-6">
-              {viewType === 'week' || viewType === 'day' ? (
+          <div className="px-6 pb-6">
+            {viewType === 'week' || viewType === 'day' ? (
               <div className="space-y-6">
                 {/* Auto-Schedule Controls */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -3351,9 +3350,8 @@ export default function LayupScheduler() {
                   className="grid gap-1"
                   style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
                 >
-
-              {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
-              {(() => {
+                  {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
+                  {(() => {
 
                 // Get molds that either have orders OR are compatible with existing orders in queue
                 const getCompatibleMolds = (order: any) => {
@@ -3478,28 +3476,19 @@ export default function LayupScheduler() {
                         features={features}
                         processedOrders={processedOrders}
                       />
-                      );
+                    );
                     });
                   })()}
                 </React.Fragment>
-                ));
-              })()}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  Month view not yet implemented
-                </div>
-              )}
-            </div>
-            
-            <DragOverlay>
-              {activeId ? (
-                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded border shadow-lg text-xs">
-                  {activeId}
-                </div>
-              ) : null}
-            </DragOverlay>
-          </>
+                  ));
+                  })()}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Month view not yet implemented
+              </div>
+            )}
+          </div>
         </DndContext>
       </div>
     </div>

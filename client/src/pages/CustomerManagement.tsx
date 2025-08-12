@@ -1839,6 +1839,16 @@ export default function CustomerManagement() {
                   )}
                 </div>
 
+                <div>
+                  <Label htmlFor="edit-street2">Suite/Apt/Unit #</Label>
+                  <Input
+                    id="edit-street2"
+                    value={formData.street2}
+                    onChange={(e) => setFormData(prev => ({ ...prev, street2: e.target.value }))}
+                    placeholder="Suite 100, Apt 2B, Unit 5"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-city">City</Label>

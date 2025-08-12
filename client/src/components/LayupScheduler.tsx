@@ -2185,27 +2185,41 @@ export default function LayupScheduler() {
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
 
-  // FRIDAY STATE CLEANER: Remove any Friday assignments from orderAssignments - run IMMEDIATELY when assignments load
+  // COMPREHENSIVE STATE CLEANER: Remove Friday assignments AND phantom orders
   useEffect(() => {
     if (Object.keys(orderAssignments).length > 0) {
+      let hasChanges = false;
       const cleanedAssignments = Object.fromEntries(
         Object.entries(orderAssignments).filter(([orderId, assignment]) => {
           const assignmentDate = new Date(assignment.date);
           const isFriday = assignmentDate.getDay() === 5;
+          
+          // Check if this is a phantom order (not in processedOrders)
+          const orderExists = processedOrders.some(order => order.orderId === orderId);
+          
           if (isFriday) {
-            console.warn(`🧹 FRIDAY CLEANER: Removing Friday assignment for ${orderId} from ${assignmentDate.toDateString()}`);
+            console.warn(`🧹 CLEANER: Removing Friday assignment for ${orderId} from ${assignmentDate.toDateString()}`);
+            hasChanges = true;
+            return false;
           }
-          return !isFriday; // Keep non-Friday assignments
+          
+          if (!orderExists) {
+            console.warn(`👻 CLEANER: Removing phantom assignment for ${orderId} (order doesn't exist in queue)`);
+            hasChanges = true;
+            return false;
+          }
+          
+          return true; // Keep valid assignments
         })
       );
       
-      if (Object.keys(cleanedAssignments).length !== Object.keys(orderAssignments).length) {
-        console.log(`🧹 FRIDAY CLEANER: Cleaned ${Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length} Friday assignments`);
+      if (hasChanges) {
+        console.log(`🧹 COMPREHENSIVE CLEANER: Cleaned ${Object.keys(orderAssignments).length - Object.keys(cleanedAssignments).length} invalid assignments`);
         // Use setTimeout to ensure this runs after render cycle
         setTimeout(() => setOrderAssignments(cleanedAssignments), 0);
       }
     }
-  }, [JSON.stringify(orderAssignments)]); // Run when assignments change (serialized to prevent infinite loop)
+  }, [JSON.stringify(orderAssignments), processedOrders.length]); // Run when assignments or orders change
 
   // Auto-generate schedule when data is loaded OR when production/P1 orders are present
   useEffect(() => {
@@ -3688,7 +3702,7 @@ export default function LayupScheduler() {
                                 const cellDateStr = cellDate.toISOString().split('T')[0];
                                 const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
                                 
-                                // DEBUG: Specific check for AG822 (AI266)
+                                // DEBUG: Specific check for AI141 and AG822 (AI266)
                                 if (orderId === 'AG822') {
                                   console.error(`🔍 AG822 (AI266) MATCHING DEBUG:`);
                                   console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
@@ -3697,6 +3711,18 @@ export default function LayupScheduler() {
                                   console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
                                   console.error(`   Is match: ${isMatch}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
+                                }
+                                
+                                // DEBUG: AI141 specific debugging - this is a phantom assignment
+                                if (orderId === 'AI141') {
+                                  console.error(`👻 AI141 PHANTOM ASSIGNMENT DEBUG:`);
+                                  console.error(`   Calendar date: ${date.toDateString()} (day ${date.getDay()})`);
+                                  console.error(`   Assignment date: ${assignment.date}`);
+                                  console.error(`   Assignment date only: ${assignment.date.split('T')[0]}`);
+                                  console.error(`   Calendar date only: ${dateString.split('T')[0]}`);
+                                  console.error(`   Is match: ${isMatch}`);
+                                  console.error(`   Mold: ${assignment.moldId}`);
+                                  console.error(`   ❗ AI141 should NOT exist - it's not in database!`);
                                 }
 
                                 // DEBUG: Log Friday assignments being displayed

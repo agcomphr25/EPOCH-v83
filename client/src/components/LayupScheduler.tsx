@@ -3652,7 +3652,12 @@ export default function LayupScheduler() {
                               .filter(([orderId, assignment]) => {
                                 const assignmentDateOnly = assignment.date.split('T')[0];
                                 const cellDateOnly = dateString.split('T')[0];
-                                const isMatch = assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                                // CRITICAL FIX: Use proper date comparison to prevent Friday display bugs
+                                const assignmentDate = new Date(assignment.date);
+                                const cellDate = new Date(dateString);
+                                const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
+                                const cellDateStr = cellDate.toISOString().split('T')[0];
+                                const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
                                 
                                 // DEBUG: Specific check for AG822 (AI266)
                                 if (orderId === 'AG822') {

@@ -960,6 +960,7 @@ export default function CustomerManagement() {
           email: formData.email,
           phone: formData.phone,
           company: formData.company,
+          contact: formData.contact,
           customerType: formData.customerType,
           preferredCommunicationMethod: formData.preferredCommunicationMethod,
           notes: formData.notes,

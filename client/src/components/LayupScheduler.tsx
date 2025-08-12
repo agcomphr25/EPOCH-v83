@@ -597,6 +597,17 @@ export default function LayupScheduler() {
         
         console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
         
+        // SPECIAL DEBUG: Extra logging for AI141
+        if (entry.orderId === 'AI141') {
+          console.error(`🔍 AI141 SPECIAL DEBUG:`);
+          console.error(`   Raw date from DB: ${entry.scheduledDate}`);
+          console.error(`   Parsed date: ${schedDate.toDateString()}`);
+          console.error(`   Day of week: ${dayOfWeek} (0=Sun, 5=Fri)`);
+          console.error(`   ISO string: ${schedDate.toISOString()}`);
+          console.error(`   Local string: ${schedDate.toLocaleString()}`);
+          console.error(`   Mold ID: ${entry.moldId}`);
+        }
+        
         // CRITICAL: Skip any Friday assignments from database - they should never exist
         if (dayOfWeek === 5) {
           console.error(`🚨 CRITICAL: Skipping Friday assignment for ${entry.orderId} on ${schedDate.toDateString()}`);
@@ -2153,6 +2164,26 @@ export default function LayupScheduler() {
   console.log('🎯 LayupScheduler - Orders data:', orders);
   console.log('📊 LayupScheduler - Orders count:', orders?.length);
   console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
+  
+  // AGGRESSIVE FRIDAY DEBUGGING: Check orderAssignments state immediately
+  if (Object.keys(orderAssignments).length > 0) {
+    console.log('🚨 CHECKING ORDERASSIGNMENTS FOR FRIDAY:');
+    Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+      const assignmentDate = new Date(assignment.date);
+      const dayOfWeek = assignmentDate.getDay();
+      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+      console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
+      
+      if (dayOfWeek === 5) {
+        console.error(`💥 FRIDAY FOUND IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`);
+        console.error(`💥 TRIGGERING IMMEDIATE STATE CLEAR`);
+        setTimeout(() => {
+          setOrderAssignments({});
+          console.error(`💥 STATE CLEARED SUCCESSFULLY`);
+        }, 10);
+      }
+    });
+  }
 
   // Debug production orders and P1 purchase orders specifically
   const productionOrders = orders.filter(order => order.source === 'production_order' || order.source === 'p1_purchase_order');
@@ -3773,12 +3804,34 @@ export default function LayupScheduler() {
                               .filter(([orderId, assignment]) => {
                                 const assignmentDateOnly = assignment.date.split('T')[0];
                                 const cellDateOnly = dateString.split('T')[0];
-                                // CRITICAL FIX: Use proper date comparison to prevent Friday display bugs
+                                // CRITICAL FIX: Use UTC date comparison to prevent timezone bugs
                                 const assignmentDate = new Date(assignment.date);
                                 const cellDate = new Date(dateString);
+                                
+                                // Force UTC comparison to avoid timezone issues
                                 const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
                                 const cellDateStr = cellDate.toISOString().split('T')[0];
                                 const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
+                                
+                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders
+                                if (orderId === 'AI141' || orderId === 'AH005' || orderId === 'AG822') {
+                                  console.error(`🔍 MATCH DEBUG for ${orderId}:`);
+                                  console.error(`   Cell Date: ${cellDate.toDateString()} (day ${cellDate.getDay()})`);
+                                  console.error(`   Assignment Date: ${assignmentDate.toDateString()} (day ${assignmentDate.getDay()})`);
+                                  console.error(`   Assignment Raw: ${assignment.date}`);
+                                  console.error(`   Cell Raw: ${dateString}`);
+                                  console.error(`   Assignment UTC: ${assignmentDateStr}`);
+                                  console.error(`   Cell UTC: ${cellDateStr}`);
+                                  console.error(`   Mold match: ${assignment.moldId} === ${mold.moldId} = ${assignment.moldId === mold.moldId}`);
+                                  console.error(`   Date match: ${assignmentDateStr} === ${cellDateStr} = ${assignmentDateStr === cellDateStr}`);
+                                  console.error(`   Final match: ${isMatch}`);
+                                  
+                                  if (isMatch && cellDate.getDay() === 5) {
+                                    console.error(`💥 FRIDAY MATCH DETECTED FOR ${orderId}!`);
+                                    console.error(`💥 THIS SHOULD NEVER HAPPEN - CLEARING STATE`);
+                                    setTimeout(() => setOrderAssignments({}), 5);
+                                  }
+                                }
                                 
                                 // DEBUG: Specific check for AI141 and AG822 (AI266)
                                 if (orderId === 'AG822') {

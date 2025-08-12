@@ -816,7 +816,7 @@ export default function LayupScheduler() {
         });
         
         // Apply Friday validation to algorithmic schedule (never allow Friday)
-        const validatedAssignments = validateNoFridayAssignments(newAssignments, false);
+        const validatedAssignments = validateNoFridayAssignments(newAssignments);
         setOrderAssignments(validatedAssignments);
         setHasUnsavedScheduleChanges(true);
       }
@@ -1487,7 +1487,7 @@ export default function LayupScheduler() {
       console.log('📋 Sample processedOrders IDs:', processedOrders?.slice(0, 5)?.map(o => o.orderId) || []);
       
       // Apply Friday validation to auto-generated schedule (never allow Friday)
-      const validatedAssignments = validateNoFridayAssignments(scheduleAssignments, false);
+      const validatedAssignments = validateNoFridayAssignments(scheduleAssignments);
       setOrderAssignments(validatedAssignments);
       console.log('📋 Order assignments state updated');
       
@@ -2198,10 +2198,14 @@ export default function LayupScheduler() {
     }
     
     // Try to find order by FB Order Number
-    const orderByFbNumber = processedOrders.find(order => getDisplayOrderId(order) === key);
+    const orderByFbNumber = processedOrders.find(order => {
+      // Safely handle order object - cast to any to avoid type issues
+      const orderAny = order as any;
+      return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === key;
+    });
     if (orderByFbNumber) {
-      console.warn(`🔧 KEY NORMALIZATION: Converting FB Order Number "${key}" to Order ID "${orderByFbNumber.orderId}"`);
-      return orderByFbNumber.orderId;
+      console.warn(`🔧 KEY NORMALIZATION: Converting FB Order Number "${key}" to Order ID "${(orderByFbNumber as any).orderId}"`);
+      return (orderByFbNumber as any).orderId;
     }
     
     console.warn(`⚠️ KEY NORMALIZATION: Unknown key "${key}" - keeping as is`);
@@ -3765,9 +3769,12 @@ export default function LayupScheduler() {
                                   console.error(`   ❗ This is an FB Order Number being used as a key - should be normalized!`);
                                   
                                   // Try to find the actual order
-                                  const actualOrder = processedOrders.find(o => getDisplayOrderId(o) === orderId);
+                                  const actualOrder = processedOrders.find(o => {
+                                    const orderAny = o as any;
+                                    return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === orderId;
+                                  });
                                   if (actualOrder) {
-                                    console.error(`   🔧 Should be Order ID: ${actualOrder.orderId}`);
+                                    console.error(`   🔧 Should be Order ID: ${(actualOrder as any).orderId}`);
                                   }
                                 }
 
@@ -3779,14 +3786,18 @@ export default function LayupScheduler() {
                                   console.error(`   Order lookup result:`, processedOrders.find(o => o.orderId === orderId) ? 'FOUND' : 'NOT FOUND');
                                   
                                   // Check if this is an FB Order Number key issue
-                                  const actualOrder = processedOrders.find(o => getDisplayOrderId(o) === orderId);
+                                  const actualOrder = processedOrders.find(o => {
+                                    const orderAny = o as any;
+                                    return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === orderId;
+                                  });
                                   if (actualOrder) {
-                                    console.error(`   🔧 KEY ISSUE: ${orderId} is FB Order Number, should be ${actualOrder.orderId}`);
+                                    console.error(`   🔧 KEY ISSUE: ${orderId} is FB Order Number, should be ${(actualOrder as any).orderId}`);
                                   }
                                   
                                   // Add to debug info state to show in UI
-                                  const displayOrderId = processedOrders.find(o => o.orderId === orderId) 
-                                    ? getDisplayOrderId(orderId) 
+                                  const orderForDisplay = processedOrders.find(o => (o as any).orderId === orderId);
+                                  const displayOrderId = orderForDisplay 
+                                    ? getDisplayOrderId({ orderId: (orderForDisplay as any).orderId, fbOrderNumber: (orderForDisplay as any).fbOrderNumber })
                                     : actualOrder ? `${orderId} (FB#)` : orderId;
                                   const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${displayOrderId}) on ${date.toDateString()} mold ${assignment.moldId}`;
                                   setDebugInfo(prev => {

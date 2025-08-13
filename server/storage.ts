@@ -1213,6 +1213,9 @@ export class DatabaseStorage implements IStorage {
       notificationSentAt: allOrders.notificationSentAt,
       deliveryConfirmed: allOrders.deliveryConfirmed,
       deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+      isCancelled: allOrders.isCancelled,
+      cancelledAt: allOrders.cancelledAt,
+      cancelReason: allOrders.cancelReason,
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     }).from(allOrders).orderBy(desc(allOrders.updatedAt));

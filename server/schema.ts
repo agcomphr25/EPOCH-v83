@@ -85,6 +85,10 @@ export const allOrders = pgTable("all_orders", {
   notificationSentAt: timestamp("notification_sent_at"),
   deliveryConfirmed: boolean("delivery_confirmed").default(false),
   deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
+  // Cancellation Information
+  isCancelled: boolean("is_cancelled").default(false),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

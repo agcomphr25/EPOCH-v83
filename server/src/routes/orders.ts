@@ -625,4 +625,42 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Cancel an order
+router.post('/cancel/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    // Use Drizzle to update the order
+    const { db } = storage;
+    const { allOrders } = await import('@shared/schema');
+    const { eq } = await import('drizzle-orm');
+
+    const updatedOrders = await db
+      .update(allOrders)
+      .set({
+        isCancelled: true,
+        cancelledAt: new Date(),
+        cancelReason: reason || 'No reason provided',
+        updatedAt: new Date()
+      })
+      .where(eq(allOrders.orderId, orderId))
+      .returning();
+    
+    if (updatedOrders.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Order cancelled successfully',
+      order: updatedOrders[0]
+    });
+
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    res.status(500).json({ error: 'Failed to cancel order' });
+  }
+});
+
 export default router;

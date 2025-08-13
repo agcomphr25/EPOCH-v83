@@ -1,13 +1,32 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, X, Download } from 'lucide-react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Search, X, Download, MoreHorizontal, XCircle } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface Order {
   id: number;
@@ -23,17 +42,64 @@ interface Order {
   fbOrderNumber?: string;
   paymentTotal?: number;
   isFullyPaid?: boolean;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelReason?: string;
 }
 
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [cancelReason, setCancelReason] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>('');
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status', 'v2'],
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
     refetchInterval: 30000
   });
+
+  // Cancel order mutation
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+      return apiRequest(`/api/orders/cancel/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      toast({
+        title: "Order Cancelled",
+        description: "The order has been cancelled successfully.",
+      });
+      setIsDialogOpen(false);
+      setCancelReason('');
+      setOrderToCancel('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to cancel order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleCancelOrder = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setIsDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (orderToCancel && cancelReason.trim()) {
+      cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
+    }
+  };
 
   // Filter orders based on search and department
   const filteredOrders = orders.filter(order => {
@@ -167,6 +233,7 @@ export default function AllOrdersPage() {
                 <TableHead>Order Date</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -189,9 +256,41 @@ export default function AllOrdersPage() {
                     {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : '-'}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={order.status === 'SCRAPPED' ? 'destructive' : 'default'}>
-                      {order.status || 'ACTIVE'}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={order.status === 'SCRAPPED' ? 'destructive' : 'default'}>
+                        {order.status || 'ACTIVE'}
+                      </Badge>
+                      {order.isFullyPaid && (
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          PAID
+                        </Badge>
+                      )}
+                      {order.isCancelled && (
+                        <Badge variant="destructive" className="bg-red-100 text-red-800">
+                          CANCELLED
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {!order.isCancelled && (
+                          <DropdownMenuItem 
+                            onClick={() => handleCancelOrder(order.orderId)}
+                            className="text-red-600"
+                          >
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Cancel Order
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -205,6 +304,37 @@ export default function AllOrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order {orderToCancel}? This action cannot be undone.
+              Please provide a reason for cancellation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <Textarea
+              placeholder="Enter reason for cancellation..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancel}
+              disabled={!cancelReason.trim() || cancelOrderMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

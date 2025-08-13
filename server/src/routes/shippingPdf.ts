@@ -1571,13 +1571,29 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Order IDs array is required' });
     }
 
-    // Get order data from storage
+    // Get order data from storage - use the same approach as All Orders page
     const { storage } = await import('../../storage');
-    const orders = await storage.getAllOrderDrafts();
-    const selectedOrders = orders.filter(o => orderIds.includes(o.orderId));
+    
+    console.log(`Bulk endpoint: Looking for orders ${orderIds.join(', ')}`);
+    
+    // Get all orders (finalized orders) and filter by orderIds
+    const allOrders = await storage.getAllOrders();
+    const selectedOrders = allOrders.filter(order => orderIds.includes(order.orderId));
+    
+    console.log(`Found ${selectedOrders.length} orders out of ${orderIds.length} requested`);
+    
+    // If no finalized orders found, try draft orders
+    if (selectedOrders.length < orderIds.length) {
+      console.log('Some orders not found in finalized table, checking drafts...');
+      const drafts = await storage.getAllOrderDrafts();
+      const missingOrderIds = orderIds.filter(id => !selectedOrders.some(o => o.orderId === id));
+      const draftOrders = drafts.filter(draft => missingOrderIds.includes(draft.orderId));
+      selectedOrders.push(...draftOrders);
+      console.log(`Added ${draftOrders.length} draft orders, total: ${selectedOrders.length}`);
+    }
 
     if (selectedOrders.length === 0) {
-      return res.status(404).json({ error: 'No matching orders found' });
+      return res.status(404).json({ error: `Order not found` });
     }
 
     // Create a new PDF document

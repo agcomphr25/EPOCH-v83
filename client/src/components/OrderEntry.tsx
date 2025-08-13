@@ -227,7 +227,7 @@ export default function OrderEntry() {
     }
 
     // Add rail accessory prices (from features object)
-    const currentRails = features.rail_accessory || [];
+    const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
     if (currentRails && currentRails.length > 0) {
       console.log('💰 Rails calculation - current rails:', currentRails);
       const railFeature = featureDefs.find(f => f.id === 'rail_accessory');
@@ -255,18 +255,19 @@ export default function OrderEntry() {
     }
 
     // Add other options prices (from features object)
-    if (features.other_options && features.other_options.length > 0) {
+    const currentOtherOptions = Array.isArray(features.other_options) ? features.other_options : [];
+    if (currentOtherOptions && currentOtherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
       if (otherFeature?.options) {
         let otherTotal = 0;
-        features.other_options.forEach((optionValue: string) => {
+        currentOtherOptions.forEach((optionValue: string) => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
             otherTotal += option.price;
             total += option.price;
           }
         });
-        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', features.other_options);
+        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', currentOtherOptions);
       }
     }
 

@@ -60,7 +60,7 @@ export function ShippingScreen({ rows }: ShippingScreenProps) {
   // Create UPS labels mutation
   const createLabelsMut = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      const response = await fetch('/api/shipping-pdf/ups-shipping-label/bulk', {
+      const response = await fetch('/api/shipping-pdf/bulk-shipping-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

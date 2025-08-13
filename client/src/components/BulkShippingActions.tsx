@@ -107,7 +107,7 @@ export function BulkShippingActions({ selectedOrders, onClearSelection, shipping
 
     try {
       // Generate shipping label for bulk shipment
-      const response = await axios.post('/api/shipping-pdf/ups-shipping-label/bulk', {
+      const response = await axios.post('/api/shipping-pdf/bulk-shipping-labels', {
         orderIds: selectedOrders,
         shippingAddress,
         packageDetails,

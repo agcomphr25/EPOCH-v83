@@ -7,8 +7,23 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 
-## Recent Changes (August 12, 2025)
-### P1 Production Orders Flow - FULLY RESTORED
+## Recent Changes (August 13, 2025)
+### Customer Management Contact Field - FULLY RESOLVED
+- **Issue Identified**: Contact field in edit customer modal not saving or displaying
+- **Root Causes Fixed**:
+  - Missing `contact` column in customers database table
+  - Missing `contact` field in database schema definition
+  - Missing `contact` field in API query selection
+  - Missing `contact` field display in customer management table
+- **Complete Resolution**: 
+  - Added `contact` column to customers table using SQL ALTER TABLE
+  - Updated customers schema definition to include contact field
+  - Modified getAllCustomers query to select contact field
+  - Added contact field display in customer management UI
+- **Verification**: Contact field now saves, loads, and displays correctly across all interfaces
+- **User Confirmation**: Contact field functionality confirmed working by user
+
+### P1 Production Orders Flow - FULLY RESTORED (August 12, 2025)
 - **Issue Identified**: Original restoration missed 368 non-Pure Precision orders from P1 Production Queue
 - **Root Cause**: When reversing changes, only restored 400 Pure Precision orders from production_orders table
 - **Complete Restoration**: Added missing 368 orders from diverse customers (101, 106, 107, 122, 138, 152, etc.)

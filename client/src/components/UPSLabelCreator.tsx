@@ -91,46 +91,48 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
 
   // Get order details
   const { data: order } = useQuery({
-    queryKey: ['/api/orders', orderId],
+    queryKey: ['/api/shipping/order', orderId],
     enabled: !!orderId && isOpen,
   });
 
   // Get customer details
   const { data: customer } = useQuery({
-    queryKey: ['/api/customers', order?.customerId],
-    enabled: !!order?.customerId,
+    queryKey: ['/api/customers', (order as any)?.customerId],
+    enabled: !!(order as any)?.customerId,
   });
 
   // Get customer addresses
   const { data: addresses } = useQuery({
-    queryKey: ['/api/addresses', order?.customerId],
-    enabled: !!order?.customerId,
+    queryKey: ['/api/customer-addresses', (order as any)?.customerId],
+    enabled: !!(order as any)?.customerId,
   });
 
   // Auto-populate customer shipping address
   useEffect(() => {
-    if (customer && addresses?.length > 0) {
+    if (customer && Array.isArray(addresses) && addresses.length > 0) {
       const shippingAddress = addresses.find((addr: any) => 
         addr.type === 'shipping' || addr.type === 'both' || addr.isDefault
       ) || addresses[0];
 
-      setShipToAddress({
-        name: customer.name,
-        company: customer.company || '',
-        contact: customer.contact || '',
-        street: shippingAddress.street,
-        street2: shippingAddress.street2 || '',
-        city: shippingAddress.city,
-        state: shippingAddress.state,
-        zipCode: shippingAddress.zipCode,
-        country: shippingAddress.country || 'US',
-        phone: customer.phone || '',
-        email: customer.email || '',
-        isResidential: !customer.company,
-      });
+      if (shippingAddress) {
+        setShipToAddress({
+          name: (customer as any).name || '',
+          company: (customer as any).company || '',
+          contact: (customer as any).contact || '',
+          street: shippingAddress.street || '',
+          street2: shippingAddress.street2 || '',
+          city: shippingAddress.city || '',
+          state: shippingAddress.state || '',
+          zipCode: shippingAddress.zipCode || '',
+          country: shippingAddress.country || 'US',
+          phone: (customer as any).phone || '',
+          email: (customer as any).email || '',
+          isResidential: !(customer as any).company,
+        });
+      }
       
       setReference1(orderId);
-      setReference2(customer.name);
+      setReference2((customer as any).name || '');
     }
   }, [customer, addresses, orderId]);
 

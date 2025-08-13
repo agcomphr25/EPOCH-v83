@@ -85,6 +85,31 @@ ORDER BY ordinal_position;
 - Edit modal pre-populates contact field correctly
 - Consistent data display between table and modal views
 
+### UPS Shipping Integration - COMPLETE (August 13, 2025)
+- **Implementation**: Full UPS API integration for shipping label creation and tracking
+- **Core Components**:
+  - **UPSLabelCreator.tsx**: Comprehensive shipping label creation interface
+  - **Enhanced ShippingManagement.tsx**: Updated with UPS label functionality
+  - **Backend API**: `/api/shipping/create-label` and `/api/shipping/get-rates` endpoints
+- **Features Implemented**:
+  - Official UPS shipping label generation with Base64 encoded GIF output
+  - Real-time shipping rate calculation for different UPS services
+  - Automatic tracking number assignment and order updates
+  - Address validation and package dimension handling
+  - Customer notification system for shipped orders
+- **API Integration Details**:
+  - Uses UPS REST API with proper authentication (UPS_USERNAME, UPS_PASSWORD, UPS_ACCESS_KEY, UPS_SHIPPER_NUMBER)
+  - Supports both production and development UPS endpoints
+  - Error handling for API failures and credential validation
+- **User Workflow**:
+  1. View shipping-ready orders in Shipping Management
+  2. Click "Create Label" for orders without tracking numbers
+  3. Auto-populated customer address from database
+  4. Get shipping rates and select preferred service
+  5. Generate official UPS label with tracking number
+  6. Download printable shipping label (GIF format)
+  7. Mark order as shipped with customer notification
+
 ### PAID Badge Implementation - COMPLETE (August 13, 2025)
 - **Issue Identified**: User requested PAID badge functionality for All Orders list
 - **Implementation**: Successfully added green PAID badge to orders with payment data

@@ -368,9 +368,9 @@ router.post('/create-label', async (req: Request, res: Response) => {
     const { orderId } = shipmentDetails;
 
     // Validate required UPS credentials
-    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY) {
+    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY || !process.env.UPS_SHIPPER_NUMBER) {
       return res.status(500).json({ 
-        error: 'UPS API credentials not configured. Please set UPS_USERNAME, UPS_PASSWORD, and UPS_ACCESS_KEY environment variables.' 
+        error: 'UPS API credentials not configured. Please set UPS_USERNAME, UPS_PASSWORD, UPS_ACCESS_KEY, and UPS_SHIPPER_NUMBER environment variables.' 
       });
     }
 

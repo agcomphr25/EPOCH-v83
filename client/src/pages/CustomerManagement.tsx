@@ -1508,6 +1508,12 @@ export default function CustomerManagement() {
                               {customer.phone}
                             </div>
                           )}
+                          {customer.contact && (
+                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <span className="font-medium">Contact:</span>
+                              {customer.contact}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>

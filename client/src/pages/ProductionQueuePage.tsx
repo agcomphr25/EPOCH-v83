@@ -101,17 +101,18 @@ export default function ProductionQueuePage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle className="flex items-center gap-2">
+    <div className="h-screen flex flex-col">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
+        <div className="container mx-auto p-6 pb-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
               <Package className="w-6 h-6" />
-              Production Queue Manager
+              <h1 className="text-2xl font-bold">Production Queue Manager</h1>
               <Badge variant="secondary" className="ml-2">
                 {filteredOrders.length} orders
               </Badge>
-            </CardTitle>
+            </div>
             <div className="flex gap-2">
               {selectedOrders.length > 0 && (
                 <Button
@@ -125,7 +126,8 @@ export default function ProductionQueuePage() {
               )}
             </div>
           </div>
-          <div className="relative">
+          
+          <div className="relative mb-4">
             <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <Input
               placeholder="Search by Order ID, FB Order Number, Customer, or Product..."
@@ -134,83 +136,85 @@ export default function ProductionQueuePage() {
               className="pl-10"
             />
           </div>
-        </CardHeader>
 
-        <CardContent>
+          {/* Sticky Table Header */}
+          {filteredOrders.length > 0 && (
+            <div className="bg-gray-50 border rounded-t-lg">
+              <div className="grid grid-cols-7 gap-4 px-4 py-3 text-sm font-medium text-gray-700">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded mr-2"
+                  />
+                  Select
+                </div>
+                <div>Order ID</div>
+                <div>Customer</div>
+                <div>Product</div>
+                <div>Due Date</div>
+                <div>Priority</div>
+                <div>Actions</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto px-6">
           {filteredOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No orders found in Production Queue
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
+            <div className="bg-white border-x border-b rounded-b-lg">
+              {filteredOrders.map((order: any) => (
+                <div key={order.orderId} className="grid grid-cols-7 gap-4 px-4 py-4 border-b last:border-b-0 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
-                      onChange={handleSelectAll}
+                      checked={selectedOrders.includes(order.orderId)}
+                      onChange={() => handleSelectOrder(order.orderId)}
                       className="rounded"
                     />
-                  </TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((order: any) => (
-                  <TableRow key={order.orderId}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedOrders.includes(order.orderId)}
-                        onChange={() => handleSelectOrder(order.orderId)}
-                        className="rounded"
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {order.fbOrderNumber || order.orderId}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        {order.customer || 'N/A'}
-                      </div>
-                    </TableCell>
-                    <TableCell>{order.productName || order.stockModelId || 'N/A'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={order.priority > 80 ? 'destructive' : order.priority > 60 ? 'default' : 'secondary'}>
-                        {order.priority || 'N/A'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        onClick={() => progressOrdersMutation.mutate([order.orderId])}
-                        disabled={progressOrdersMutation.isPending}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <ArrowRight className="w-4 h-4 mr-1" />
-                        Push to Layup
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                  </div>
+                  <div className="font-medium">
+                    {order.fbOrderNumber || order.orderId}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{order.customer || 'N/A'}</span>
+                  </div>
+                  <div className="truncate">{order.productName || order.stockModelId || 'N/A'}</div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span>{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <Badge variant={order.priority > 80 ? 'destructive' : order.priority > 60 ? 'default' : 'secondary'}>
+                      {order.priority || 'N/A'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Button
+                      size="sm"
+                      onClick={() => progressOrdersMutation.mutate([order.orderId])}
+                      disabled={progressOrdersMutation.isPending}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <ArrowRight className="w-4 h-4 mr-1" />
+                      Push to Layup
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

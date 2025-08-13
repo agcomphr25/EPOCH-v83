@@ -615,4 +615,42 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   }
 });
 
+// Test UPS shipment creation endpoint
+router.post('/test-ups-shipment', async (req: Request, res: Response) => {
+  try {
+    const { createShipment } = await import('../utils/upsShipping');
+    
+    const testShipment = {
+      shipTo: {
+        name: "Test Customer",
+        address1: "123 Test Street",
+        city: "Austin", 
+        state: "TX",
+        postalCode: "78701"
+      },
+      serviceCode: "03", // UPS Ground
+      weightLbs: 5,
+      referenceNumber: "TEST-SHIPMENT"
+    };
+
+    console.log('🚚 Testing UPS shipment creation...');
+    const result = await createShipment(testShipment);
+    console.log('✅ UPS shipment creation successful');
+    
+    res.json({
+      success: true,
+      message: 'UPS shipment creation successful',
+      trackingNumber: result.trackingNumber,
+      labelData: result.labelData ? 'Generated' : 'None'
+    });
+  } catch (error) {
+    console.error('❌ UPS shipment creation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'UPS shipment creation failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

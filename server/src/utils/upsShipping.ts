@@ -8,8 +8,8 @@ const UPS_OAUTH_URL =
 
 const UPS_SHIP_URL_BASE =
   process.env.UPS_ENV === "production"
-    ? "https://onlinetools.ups.com/api/shipments"
-    : "https://wwwcie.ups.com/api/shipments";
+    ? "https://onlinetools.ups.com/api/shipments/v1801/ship"
+    : "https://wwwcie.ups.com/api/shipments/v1801/ship";
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
@@ -51,6 +51,13 @@ export type ShipTo = {
   country?: string;
 };
 
+function getCountryCode(country?: string): string {
+  if (!country) return "US";
+  if (country === "United States" || country === "USA") return "US";
+  if (country === "Canada") return "CA";
+  return country.length === 2 ? country : "US";
+}
+
 export async function createShipment(opts: {
   shipTo: ShipTo;
   serviceCode: string; // e.g. "03"
@@ -75,7 +82,7 @@ export async function createShipment(opts: {
             City: process.env.SHIP_FROM_CITY,
             StateProvinceCode: process.env.SHIP_FROM_STATE,
             PostalCode: process.env.SHIP_FROM_POSTAL,
-            CountryCode: process.env.SHIP_FROM_COUNTRY,
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY),
           },
         },
         ShipTo: {
@@ -99,7 +106,7 @@ export async function createShipment(opts: {
             City: process.env.SHIP_FROM_CITY,
             StateProvinceCode: process.env.SHIP_FROM_STATE,
             PostalCode: process.env.SHIP_FROM_POSTAL,
-            CountryCode: process.env.SHIP_FROM_COUNTRY,
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY),
           },
         },
         PaymentInformation: {
@@ -134,12 +141,32 @@ export async function createShipment(opts: {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      "x-merchant-id": process.env.UPS_ACCOUNT_NUMBER ?? "",
     },
     body: JSON.stringify(body),
   });
 
-  const data = await res.json() as any;
-  if (!res.ok) throw new Error(`UPS create shipment failed: ${JSON.stringify(data)}`);
+  const responseText = await res.text();
+  console.log(`UPS Request URL: ${UPS_SHIP_URL_BASE}`);
+  console.log(`UPS Request Headers:`, JSON.stringify({
+    'Authorization': `Bearer ${token.substring(0, 20)}...`,
+    'Content-Type': 'application/json',
+    'x-merchant-id': process.env.UPS_ACCOUNT_NUMBER ?? ""
+  }));
+  console.log(`UPS Response Status: ${res.status}`);
+  console.log(`UPS Response Headers:`, JSON.stringify(res.headers.raw()));
+  console.log(`UPS Response Text: ${responseText.substring(0, 500)}`);
+  
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch (error) {
+    throw new Error(`UPS Shipment creation failed: ${res.status} - Invalid JSON response: ${responseText.substring(0, 200)}`);
+  }
+  
+  if (!res.ok) {
+    throw new Error(`UPS Shipment creation failed: ${res.status} ${res.statusText} - ${JSON.stringify(data)}`);
+  }
 
   const pkg =
     data?.ShipmentResponse?.ShipmentResults?.PackageResults?.[0] ??

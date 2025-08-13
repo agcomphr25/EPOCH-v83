@@ -117,7 +117,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           Phone: {
             Number: process.env.SHIP_FROM_PHONE || "2567238381"
           },
-          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim() || " 27835W",
+          ShipperNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || "27835W",
           Address: {
             AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
             City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
@@ -158,7 +158,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           ShipmentCharge: {
             Type: "01",
             BillShipper: {
-              AccountNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || process.env.UPS_SHIPPER_NUMBER?.trim()
+              AccountNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || "27835W"
             }
           }
         },

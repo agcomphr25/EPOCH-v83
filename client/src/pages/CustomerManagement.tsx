@@ -1519,7 +1519,12 @@ export default function CustomerManagement() {
                       <TableCell>
                         {defaultAddress ? (
                           <div className="text-sm">
-                            <div className="font-medium">{defaultAddress.street}</div>
+                            <div className="font-medium">
+                              {defaultAddress.street}
+                              {defaultAddress.street2 && (
+                                <span>, {defaultAddress.street2}</span>
+                              )}
+                            </div>
                             <div className="text-gray-600">{defaultAddress.city}, {defaultAddress.state} {defaultAddress.zipCode}</div>
                             <div className="text-gray-500">{defaultAddress.country}</div>
                             {defaultAddress.type !== 'shipping' && (

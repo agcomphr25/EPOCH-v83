@@ -632,6 +632,50 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.post('/api/stock-models', async (req, res) => {
+    try {
+      console.log('🔧 STOCK MODEL CREATE ROUTE CALLED');
+      console.log('🔧 Request body:', req.body);
+      const { storage } = await import('../../storage');
+      const stockModel = await storage.createStockModel(req.body);
+      console.log('🔧 Created stock model:', stockModel.id);
+      res.status(201).json(stockModel);
+    } catch (error) {
+      console.error('🔧 Stock model create error:', error);
+      res.status(500).json({ error: "Failed to create stock model" });
+    }
+  });
+
+  app.put('/api/stock-models/:id', async (req, res) => {
+    try {
+      console.log('🔧 STOCK MODEL UPDATE ROUTE CALLED');
+      console.log('🔧 Stock model ID:', req.params.id);
+      console.log('🔧 Request body:', req.body);
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const stockModel = await storage.updateStockModel(id, req.body);
+      console.log('🔧 Updated stock model:', stockModel.id);
+      res.json(stockModel);
+    } catch (error) {
+      console.error('🔧 Stock model update error:', error);
+      res.status(500).json({ error: "Failed to update stock model" });
+    }
+  });
+
+  app.delete('/api/stock-models/:id', async (req, res) => {
+    try {
+      console.log('🔧 STOCK MODEL DELETE ROUTE CALLED');
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      await storage.deleteStockModel(id);
+      console.log('🔧 Deleted stock model:', id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('🔧 Stock model delete error:', error);
+      res.status(500).json({ error: "Failed to delete stock model" });
+    }
+  });
+
   // Features routes - bypass to old monolithic routes temporarily
   app.get('/api/features', async (req, res) => {
     try {

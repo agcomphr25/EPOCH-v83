@@ -10,7 +10,7 @@ export default function AllOrdersPage() {
           Order Management & Department Progression
         </div>
       </div>
-      
+
       {/* Orders List with Department Actions */}
       <AllOrdersList />
     </div>

@@ -4,15 +4,23 @@ import fetch from 'node-fetch';
 
 const router = Router();
 
-// UPS API Configuration - Force production since API is approved
-const UPS_ENV = 'production';
+// UPS API Configuration - Use environment variable or default to test  
+const UPS_ENV = process.env.UPS_ENV || 'test';
 const UPS_API_BASE_URL = UPS_ENV === 'production'
-  ? 'https://onlinetools.ups.com/ship/v1/shipments'
-  : 'https://wwwcie.ups.com/ship/v1/shipments';
+  ? 'https://onlinetools.ups.com/api/shipments/v1801/ship'
+  : 'https://wwwcie.ups.com/api/shipments/v1801/ship';
 
 const UPS_OAUTH_URL = UPS_ENV === 'production'
   ? 'https://onlinetools.ups.com/security/v1/oauth/token'
   : 'https://wwwcie.ups.com/security/v1/oauth/token';
+
+// Convert country names to UPS country codes
+function getCountryCode(country?: string): string {
+  if (!country) return "US";
+  if (country === "United States" || country === "USA") return "US";
+  if (country === "Canada") return "CA";
+  return country.length === 2 ? country : "US";
+}
 
 // UPS API Helper Functions
 async function getUPSAccessToken() {
@@ -83,6 +91,7 @@ async function createUPSShipment(shipmentData: any) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
+      'x-merchant-id': process.env.UPS_SHIPPER_NUMBER || "",
       'transId': transId,
       'transactionSrc': 'AG_Composites_ERP'
     },
@@ -117,13 +126,13 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
           Phone: {
             Number: process.env.SHIP_FROM_PHONE || "2567238381"
           },
-          ShipperNumber: process.env.UPS_ACCOUNT_NUMBER?.trim() || "27835W",
+          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim() || "27835W",
           Address: {
             AddressLine: [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd"],
             City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
             StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
             PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
-            CountryCode: process.env.SHIP_FROM_COUNTRY || "US"
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY)
           }
         },
         ShipTo: {
@@ -151,7 +160,7 @@ function buildUPSShipmentRequest(orderData: any, shippingAddress: any, packageDe
             City: process.env.SHIP_FROM_CITY || "Owens Crossroads",
             StateProvinceCode: process.env.SHIP_FROM_STATE || "AL",
             PostalCode: process.env.SHIP_FROM_POSTAL || "35763",
-            CountryCode: process.env.SHIP_FROM_COUNTRY || "US"
+            CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY)
           }
         },
         PaymentInformation: {
@@ -1648,13 +1657,40 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
       try {
         console.log(`Creating UPS shipment for order: ${order.orderId}`);
         
-        // Build shipping address from order data or use provided address
+        // Get customer and address information
+        let customerInfo = null;
+        let customerAddress = null;
+        
+        console.log(`Looking up customer info for order ${order.orderId}, customerId: ${order.customerId}`);
+        
+        if (order.customerId) {
+          try {
+            customerInfo = await storage.getCustomerById(order.customerId);
+            console.log(`Found customer:`, customerInfo);
+            
+            if (customerInfo) {
+              // Get customer's default shipping address
+              const addresses = await storage.getCustomerAddresses(order.customerId);
+              console.log(`Found ${addresses.length} addresses for customer ${order.customerId}:`, addresses);
+              customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
+                              addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
+                              addresses[0]; // fallback to first address
+              console.log(`Selected address:`, customerAddress);
+            }
+          } catch (e) {
+            console.log(`Error finding customer info for order ${order.orderId}:`, e);
+          }
+        } else {
+          console.log(`No customerId found for order ${order.orderId}`);
+        }
+        
+        // Build shipping address from customer data or use provided address
         const orderShippingAddress = shippingAddress || {
-          name: (order as any).customer_name || (order as any).customerName || "Customer Name",
-          street: order.shipStreet || order.shipAddress || "Address Line 1", 
-          city: order.shipCity || "City",
-          state: order.shipState || "State",
-          zip: order.shipZip || order.shipPostalCode || "00000"
+          name: customerInfo?.name || "Customer Name",
+          street: customerAddress?.street || "Address Line 1", 
+          city: customerAddress?.city || "City",
+          state: customerAddress?.state || "State",
+          zip: customerAddress?.zipCode || "00000"
         };
 
         // Create UPS shipment request

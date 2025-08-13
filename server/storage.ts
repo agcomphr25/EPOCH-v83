@@ -350,6 +350,7 @@ export interface IStorage {
 
   // Module 8: Customers CRUD
   getAllCustomers(): Promise<Customer[]>;
+  getCustomerById(id: string): Promise<Customer | undefined>;
   getCustomersWithPurchaseOrders(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
@@ -2551,6 +2552,27 @@ export class DatabaseStorage implements IStorage {
       .from(customers)
       .where(eq(customers.isActive, true))
       .orderBy(customers.name);
+  }
+
+  async getCustomerById(id: string): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        company: customers.company,
+        contact: customers.contact,
+        customerType: customers.customerType,
+        notes: customers.notes,
+        isActive: customers.isActive,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        preferredCommunicationMethod: customers.preferredCommunicationMethod
+      })
+      .from(customers)
+      .where(eq(customers.id, parseInt(id)));
+    return customer || undefined;
   }
 
   async getCustomersWithPurchaseOrders(): Promise<Customer[]> {

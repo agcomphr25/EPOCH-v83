@@ -1693,109 +1693,11 @@ export default function CustomerManagement() {
                 </div>
 
                 <div>
-                  <Label htmlFor="edit-company">Company</Label>
-                  <Input
-                    id="edit-company"
-                    value={formData.company}
-                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                  />
-                </div>
-
-                <div>
                   <Label htmlFor="edit-contact">Contact</Label>
                   <Input
                     id="edit-contact"
                     value={formData.contact}
                     onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-customerType">Customer Type</Label>
-                  <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
-                    <SelectTrigger id="edit-customerType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">Standard</SelectItem>
-                      <SelectItem value="wholesale">Wholesale</SelectItem>
-                      <SelectItem value="dealer">Dealer</SelectItem>
-                      <SelectItem value="oem">OEM</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Preferred Communication Method Section */}
-                <div>
-                  <Label className="text-sm font-medium">Preferred Communication Method</Label>
-                  <div className="flex flex-col space-y-3 mt-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="edit-comm-email"
-                        checked={formData.preferredCommunicationMethod.includes('email')}
-                        onCheckedChange={(checked) => {
-                          const methods = formData.preferredCommunicationMethod;
-                          if (checked) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: [...methods, 'email'] 
-                            }));
-                          } else {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: methods.filter(m => m !== 'email') 
-                            }));
-                          }
-                        }}
-                      />
-                      <div className="flex items-center space-x-2">
-                        <Mail className="h-4 w-4 text-blue-600" />
-                        <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
-                          Email
-                        </Label>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="edit-comm-sms"
-                        checked={formData.preferredCommunicationMethod.includes('sms')}
-                        onCheckedChange={(checked) => {
-                          const methods = formData.preferredCommunicationMethod;
-                          if (checked) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: [...methods, 'sms'] 
-                            }));
-                          } else {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
-                            }));
-                          }
-                        }}
-                      />
-                      <div className="flex items-center space-x-2">
-                        <Phone className="h-4 w-4 text-green-600" />
-                        <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
-                          SMS
-                        </Label>
-                      </div>
-                    </div>
-                    
-                    {formData.preferredCommunicationMethod.length === 0 && (
-                      <p className="text-sm text-gray-500 italic">No communication method selected</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-notes">Notes</Label>
-                  <Textarea
-                    id="edit-notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
                   />
                 </div>
               </div>
@@ -1908,6 +1810,109 @@ export default function CustomerManagement() {
                   </Select>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Additional Customer Fields - Full Width */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-company">Company</Label>
+                <Input
+                  id="edit-company"
+                  value={formData.company}
+                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-customerType">Customer Type</Label>
+                <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
+                  <SelectTrigger id="edit-customerType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="wholesale">Wholesale</SelectItem>
+                    <SelectItem value="dealer">Dealer</SelectItem>
+                    <SelectItem value="oem">OEM</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Preferred Communication Method Section */}
+            <div>
+              <Label className="text-sm font-medium">Preferred Communication Method</Label>
+              <div className="flex flex-row space-x-6 mt-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="edit-comm-email"
+                    checked={formData.preferredCommunicationMethod.includes('email')}
+                    onCheckedChange={(checked) => {
+                      const methods = formData.preferredCommunicationMethod;
+                      if (checked) {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: [...methods, 'email'] 
+                        }));
+                      } else {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: methods.filter(m => m !== 'email') 
+                        }));
+                      }
+                    }}
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
+                      Email
+                    </Label>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="edit-comm-sms"
+                    checked={formData.preferredCommunicationMethod.includes('sms')}
+                    onCheckedChange={(checked) => {
+                      const methods = formData.preferredCommunicationMethod;
+                      if (checked) {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: [...methods, 'sms'] 
+                        }));
+                      } else {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
+                        }));
+                      }
+                    }}
+                  />
+                  <div className="flex items-center space-x-2">
+                    <Phone className="h-4 w-4 text-green-600" />
+                    <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
+                      SMS
+                    </Label>
+                  </div>
+                </div>
+                
+                {formData.preferredCommunicationMethod.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No communication method selected</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Textarea
+                id="edit-notes"
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
             </div>
           </div>
           

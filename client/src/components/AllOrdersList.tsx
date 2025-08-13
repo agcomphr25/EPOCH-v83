@@ -43,6 +43,7 @@ const departments = ['P1 Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish'
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model'>('orderDate');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
@@ -187,6 +188,22 @@ export default function AllOrdersList() {
     return departmentMatch && searchMatch;
   }) || [];
 
+  // Sort orders based on selected sort option
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    switch (sortBy) {
+      case 'orderDate':
+        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(); // Newest first
+      case 'dueDate':
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); // Earliest due date first
+      case 'customer':
+        return (a.customer || '').localeCompare(b.customer || '');
+      case 'model':
+        return (a.modelId || '').localeCompare(b.modelId || '');
+      default:
+        return 0;
+    }
+  });
+
   const handleProgressOrder = (orderId: string, nextDepartment?: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
@@ -256,7 +273,7 @@ export default function AllOrdersList() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            All Orders ({filteredOrders.length})
+            All Orders ({sortedOrders.length})
             <div className="flex items-center gap-4">
               {/* Search Input */}
               <div className="relative">
@@ -280,17 +297,36 @@ export default function AllOrdersList() {
               </div>
 
               {/* Department Filter */}
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(dept => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Department:</span>
+                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sort By */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Sort by:</span>
+                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model') => setSortBy(value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="orderDate">Order Date</SelectItem>
+                    <SelectItem value="dueDate">Due Date</SelectItem>
+                    <SelectItem value="customer">Customer</SelectItem>
+                    <SelectItem value="model">Model</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardTitle>
         </CardHeader>
@@ -310,7 +346,7 @@ export default function AllOrdersList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map(order => {
+              {sortedOrders.map(order => {
                 const nextDept = getNextDepartment(order.currentDepartment);
                 const isComplete = order.currentDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';

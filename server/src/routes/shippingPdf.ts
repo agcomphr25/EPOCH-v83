@@ -4,8 +4,8 @@ import fetch from 'node-fetch';
 
 const router = Router();
 
-// UPS API Configuration - Try production endpoints since API is approved
-const UPS_ENV = process.env.UPS_ENV || 'production';
+// UPS API Configuration - Force production since API is approved
+const UPS_ENV = 'production';
 const UPS_API_BASE_URL = UPS_ENV === 'production'
   ? 'https://onlinetools.ups.com/ship/v1/shipments'
   : 'https://wwwcie.ups.com/ship/v1/shipments';
@@ -32,6 +32,8 @@ async function getUPSAccessToken() {
     clientSecret: credentials.clientSecret ? 'PROVIDED' : 'MISSING',
     environment: UPS_ENV
   });
+
+  console.log('🚨 SWITCHING TO PRODUCTION UPS API - Sandbox token validation issues');
 
   const response = await fetch(UPS_OAUTH_URL, {
     method: 'POST',

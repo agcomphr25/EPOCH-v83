@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const router = Router();
 
-// Get order by ID (checks both draft and finalized orders)
+// Get order by ID with customer and address data for shipping
 router.get('/order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
@@ -24,8 +24,25 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    // Get customer data if customerId exists
+    let customer: any = null;
+    let addresses: any[] = [];
     
-    res.json(order);
+    if (order.customerId) {
+      try {
+        customer = await storage.getCustomer(order.customerId);
+        addresses = await storage.getCustomerAddresses(order.customerId);
+      } catch (customerError) {
+        console.warn('Could not fetch customer data:', customerError);
+      }
+    }
+    
+    res.json({
+      ...order,
+      customer,
+      addresses
+    });
   } catch (error) {
     console.error('Error getting order:', error);
     res.status(500).json({ error: 'Failed to get order' });

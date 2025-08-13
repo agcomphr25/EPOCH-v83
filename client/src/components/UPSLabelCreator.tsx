@@ -89,52 +89,70 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
   const [showRates, setShowRates] = useState(false);
   const [rates, setRates] = useState<ShippingRate[]>([]);
 
-  // Get order details
-  const { data: order } = useQuery({
+  // Get order details with customer and address data
+  const { data: orderData } = useQuery({
     queryKey: ['/api/shipping/order', orderId],
     enabled: !!orderId && isOpen,
   });
 
-  // Get customer details
-  const { data: customer } = useQuery({
-    queryKey: ['/api/customers', (order as any)?.customerId],
-    enabled: !!(order as any)?.customerId,
-  });
-
-  // Get customer addresses
-  const { data: addresses } = useQuery({
-    queryKey: ['/api/customer-addresses', (order as any)?.customerId],
-    enabled: !!(order as any)?.customerId,
-  });
+  const order = (orderData as any);
+  const customer = (orderData as any)?.customer;
+  const addresses = (orderData as any)?.addresses;
 
   // Auto-populate customer shipping address
   useEffect(() => {
-    if (customer && Array.isArray(addresses) && addresses.length > 0) {
-      const shippingAddress = addresses.find((addr: any) => 
-        addr.type === 'shipping' || addr.type === 'both' || addr.isDefault
-      ) || addresses[0];
+    if (customer) {
+      console.log('🚚 Auto-populating shipping info for:', customer.name);
+      console.log('📍 Available addresses:', addresses);
+      
+      let shippingAddress = null;
+      
+      // Try to find shipping address from customer addresses
+      if (Array.isArray(addresses) && addresses.length > 0) {
+        shippingAddress = addresses.find((addr: any) => 
+          addr.type === 'shipping' || addr.type === 'both' || addr.isDefault
+        ) || addresses[0];
+      }
+      
+      // Fallback: Use order address data if available
+      if (!shippingAddress && order?.shippingAddress) {
+        shippingAddress = order.shippingAddress;
+      }
+      
+      // Set customer info regardless of address availability
+      const customerInfo = {
+        name: customer.name || '',
+        company: customer.company || '',
+        contact: customer.contact || customer.name || '',
+        phone: customer.phone || '',
+        email: customer.email || '',
+        isResidential: !customer.company,
+      };
 
       if (shippingAddress) {
         setShipToAddress({
-          name: (customer as any).name || '',
-          company: (customer as any).company || '',
-          contact: (customer as any).contact || '',
+          ...customerInfo,
           street: shippingAddress.street || '',
           street2: shippingAddress.street2 || '',
           city: shippingAddress.city || '',
           state: shippingAddress.state || '',
           zipCode: shippingAddress.zipCode || '',
           country: shippingAddress.country || 'US',
-          phone: (customer as any).phone || '',
-          email: (customer as any).email || '',
-          isResidential: !(customer as any).company,
         });
+        console.log('✅ Auto-populated full shipping address');
+      } else {
+        // At least set customer info, user can fill address manually
+        setShipToAddress(prev => ({
+          ...prev,
+          ...customerInfo,
+        }));
+        console.log('ℹ️ Auto-populated customer info only, address needs manual entry');
       }
       
       setReference1(orderId);
-      setReference2((customer as any).name || '');
+      setReference2(customer.name || '');
     }
-  }, [customer, addresses, orderId]);
+  }, [customer, addresses, orderId, order]);
 
   // Get shipping rates mutation
   const getRatesMutation = useMutation({

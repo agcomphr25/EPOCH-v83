@@ -2537,6 +2537,7 @@ export class DatabaseStorage implements IStorage {
         email: customers.email,
         phone: customers.phone,
         company: customers.company,
+        contact: customers.contact,
         customerType: customers.customerType,
         notes: customers.notes,
         isActive: customers.isActive,

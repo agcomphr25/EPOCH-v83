@@ -1636,11 +1636,11 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         
         // Build shipping address from order data or use provided address
         const orderShippingAddress = shippingAddress || {
-          name: order.customer_name || order.customerName || "Customer Name",
-          street: order.ship_street || order.ship_address || "Address Line 1", 
-          city: order.ship_city || "City",
-          state: order.ship_state || "State",
-          zip: order.ship_zip || order.ship_postal_code || "00000"
+          name: (order as any).customer_name || (order as any).customerName || "Customer Name",
+          street: order.shipStreet || order.shipAddress || "Address Line 1", 
+          city: order.shipCity || "City",
+          state: order.shipState || "State",
+          zip: order.shipZip || order.shipPostalCode || "00000"
         };
 
         // Create UPS shipment request
@@ -1650,8 +1650,8 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         // Call UPS API to create shipment and get label
         const upsResponse = await createUPSShipment(shipmentRequest);
         
-        if (upsResponse && upsResponse.ShipmentResponse && upsResponse.ShipmentResponse.ShipmentResults) {
-          const shipmentResults = upsResponse.ShipmentResponse.ShipmentResults;
+        if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
+          const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
           const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
           const labelImage = shipmentResults.PackageResults[0]?.ShippingLabel?.GraphicImage;
 
@@ -1698,12 +1698,13 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         }
 
       } catch (orderError) {
+        const errorMessage = orderError instanceof Error ? orderError.message : String(orderError);
         console.error(`Error processing order ${order.orderId}:`, orderError);
         // Add error page to PDF
-        await addErrorLabelPage(bulkPdfDoc, order, orderError.message);
+        await addErrorLabelPage(bulkPdfDoc, order, errorMessage);
         upsLabels.push({
           orderId: order.orderId,
-          error: orderError.message,
+          error: errorMessage,
           success: false
         });
       }
@@ -1729,10 +1730,113 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
     console.log('Tracking numbers:', trackingNumbers);
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('UPS bulk shipping labels error:', error);
-    return res.status(500).json({ error: `Failed to generate UPS bulk shipping labels: ${error.message}` });
+    return res.status(500).json({ error: `Failed to generate UPS bulk shipping labels: ${errorMessage}` });
   }
 });
+
+// Helper functions for bulk shipping
+async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: string) {
+  const page = pdfDoc.addPage([432, 648]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  let currentY = 600;
+  
+  page.drawText('UPS SHIPPING LABEL', {
+    x: 50, y: currentY, size: 16, font: boldFont
+  });
+  
+  currentY -= 30;
+  page.drawText(`Order: ${order.orderId}`, {
+    x: 50, y: currentY, size: 12, font: boldFont
+  });
+  
+  currentY -= 20;
+  page.drawText(`Tracking: ${trackingNumber}`, {
+    x: 50, y: currentY, size: 12, font: boldFont
+  });
+  
+  currentY -= 20;
+  page.drawText(`Customer: ${(order as any).customer_name || (order as any).customerName || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 15;
+  page.drawText(`Ship To: ${order.shipCity || 'N/A'}, ${order.shipState || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+}
+
+async function addErrorLabelPage(pdfDoc: any, order: any, errorMessage: string) {
+  const page = pdfDoc.addPage([432, 648]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  let currentY = 600;
+  
+  page.drawText('SHIPPING LABEL ERROR', {
+    x: 50, y: currentY, size: 16, font: boldFont, color: rgb(1, 0, 0)
+  });
+  
+  currentY -= 30;
+  page.drawText(`Order: ${order.orderId}`, {
+    x: 50, y: currentY, size: 12, font: boldFont
+  });
+  
+  currentY -= 20;
+  page.drawText(`Error: ${errorMessage.substring(0, 80)}`, {
+    x: 50, y: currentY, size: 10, font: font, color: rgb(1, 0, 0)
+  });
+}
+
+async function addSummaryPage(pdfDoc: any, upsLabels: any[]) {
+  const page = pdfDoc.addPage([432, 648]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  let currentY = 600;
+  
+  page.drawText('UPS BULK SHIPPING SUMMARY', {
+    x: 50, y: currentY, size: 16, font: boldFont
+  });
+  
+  currentY -= 30;
+  page.drawText(`Generated: ${new Date().toLocaleString()}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 30;
+  const successful = upsLabels.filter(l => l.success).length;
+  const failed = upsLabels.filter(l => !l.success).length;
+  
+  page.drawText(`Successful: ${successful}`, {
+    x: 50, y: currentY, size: 12, font: boldFont, color: rgb(0, 0.7, 0)
+  });
+  
+  currentY -= 20;
+  page.drawText(`Failed: ${failed}`, {
+    x: 50, y: currentY, size: 12, font: boldFont, color: rgb(1, 0, 0)
+  });
+  
+  // List successful labels
+  currentY -= 30;
+  for (const label of upsLabels.filter(l => l.success)) {
+    page.drawText(`✓ ${label.orderId}: ${label.trackingNumber}`, {
+      x: 50, y: currentY, size: 10, font: font
+    });
+    currentY -= 15;
+  }
+  
+  // List errors
+  for (const label of upsLabels.filter(l => !l.success)) {
+    page.drawText(`✗ ${label.orderId}: ${label.error}`, {
+      x: 50, y: currentY, size: 10, font: font, color: rgb(1, 0, 0)
+    });
+    currentY -= 15;
+  }
+}
 
 // Keep the old broken endpoint for now but make it redirect to the new working endpoint
 router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {

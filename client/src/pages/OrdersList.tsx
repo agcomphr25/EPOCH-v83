@@ -56,6 +56,12 @@ interface Order {
   status: string;
   currentDepartment?: string;
   barcode?: string;
+  // Payment Information
+  isPaid: boolean;
+  paymentType?: string;
+  paymentAmount?: number;
+  paymentDate?: string;
+  paymentTimestamp?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -707,6 +713,14 @@ export default function OrdersList() {
                             onClick={handleKickbackClick}
                           >
                             KICKBACK
+                          </Badge>
+                        )}
+                        {order.isPaid && (
+                          <Badge 
+                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
+                            title={`Paid via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                          >
+                            PAID
                           </Badge>
                         )}
                       </div>

@@ -715,10 +715,10 @@ export default function OrdersList() {
                             KICKBACK
                           </Badge>
                         )}
-                        {order.isPaid && (
+                        {order.isPaid && order.paymentAmount && order.paymentAmount > 0 && (
                           <Badge 
                             className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
-                            title={`Paid via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                            title={`Paid $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
                           >
                             PAID
                           </Badge>

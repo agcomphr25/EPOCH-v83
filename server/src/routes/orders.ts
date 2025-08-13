@@ -465,34 +465,17 @@ router.post('/purchase-orders', async (req: Request, res: Response) => {
 
 
 // Payment Management Routes
-// Get all payments for an order (now using main orders table)
+// Get all payments for an order
 router.get('/:orderId/payments', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
+    console.log('Fetching payments for order:', orderId);
     
-    // Get payment information from main orders table instead of separate payments table
-    const order = await storage.getOrderById(orderId);
+    // Get payments from separate payments table
+    const payments = await storage.getPaymentsByOrderId(orderId);
+    console.log('Found payments:', payments);
     
-    if (!order) {
-      return res.json([]);
-    }
-    
-    // If order has payment data, return it in the expected format
-    if (order.isPaid && order.paymentAmount && order.paymentAmount > 0) {
-      const payment = {
-        id: 1, // Single payment ID
-        orderId: order.orderId,
-        paymentType: order.paymentType || 'unknown',
-        paymentAmount: order.paymentAmount,
-        paymentDate: order.paymentDate || order.paymentTimestamp,
-        notes: `Payment from main orders table: $${order.paymentAmount} via ${order.paymentType}`,
-        createdAt: order.paymentTimestamp || order.updatedAt,
-        updatedAt: order.paymentTimestamp || order.updatedAt
-      };
-      res.json([payment]);
-    } else {
-      res.json([]);
-    }
+    res.json(payments);
   } catch (error) {
     console.error('Get payments error:', error);
     res.status(500).json({ error: "Failed to fetch payments" });
@@ -503,11 +486,19 @@ router.get('/:orderId/payments', async (req: Request, res: Response) => {
 router.post('/:orderId/payments', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
+    console.log('Creating payment for order:', orderId);
+    console.log('Payment data received:', req.body);
+    
     const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
+    console.log('Validated payment data:', paymentData);
+    
     const newPayment = await storage.createPayment(paymentData);
+    console.log('Payment created successfully:', newPayment);
+    
     res.status(201).json(newPayment);
   } catch (error) {
     console.error('Create payment error:', error);
+    console.error('Error details:', error.message);
     res.status(400).json({ error: "Failed to create payment", details: (error as any).message });
   }
 });

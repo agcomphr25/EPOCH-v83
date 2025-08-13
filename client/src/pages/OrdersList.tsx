@@ -717,10 +717,10 @@ export default function OrdersList() {
                         )}
                         {order.isPaid && order.paymentAmount && order.paymentAmount > 0 && (
                           <Badge 
-                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
-                            title={`Paid $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                            className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-xs px-1 py-0"
+                            title={`Payment Recorded: $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''} - Note: Verify payment details in individual order view`}
                           >
-                            PAID
+                            PAID*
                           </Badge>
                         )}
                       </div>

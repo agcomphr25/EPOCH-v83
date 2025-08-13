@@ -1656,7 +1656,7 @@ export default function CustomerManagement() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Customer Information Section */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold border-b pb-2">Customer Information</h3>

@@ -1716,6 +1716,9 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
               const [labelPage] = await bulkPdfDoc.copyPages(labelPdf, [0]);
               bulkPdfDoc.addPage(labelPage);
               
+              // Also add a summary page with customer information for easy reference
+              await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
+              
               upsLabels.push({
                 orderId: order.orderId,
                 trackingNumber: trackingNumber,
@@ -1724,7 +1727,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             } catch (pdfError) {
               console.error(`Error processing PDF label for ${order.orderId}:`, pdfError);
               // Add a fallback text page for this order
-              await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber);
+              await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
               upsLabels.push({
                 orderId: order.orderId,
                 trackingNumber: trackingNumber,
@@ -1734,7 +1737,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             }
           } else {
             // No label image received, add text-based page
-            await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber);
+            await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber, customerInfo, customerAddress);
             upsLabels.push({
               orderId: order.orderId,
               trackingNumber: trackingNumber,
@@ -1751,7 +1754,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         const errorMessage = orderError instanceof Error ? orderError.message : String(orderError);
         console.error(`Error processing order ${order.orderId}:`, orderError);
         // Add error page to PDF
-        await addErrorLabelPage(bulkPdfDoc, order, errorMessage);
+        await addErrorLabelPage(bulkPdfDoc, order, errorMessage, customerInfo, customerAddress);
         upsLabels.push({
           orderId: order.orderId,
           error: errorMessage,
@@ -1787,7 +1790,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
 });
 
 // Helper functions for bulk shipping
-async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: string) {
+async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: string, customerInfo?: any, customerAddress?: any) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1809,17 +1812,22 @@ async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: str
   });
   
   currentY -= 20;
-  page.drawText(`Customer: ${(order as any).customer_name || (order as any).customerName || 'N/A'}`, {
+  page.drawText(`Customer: ${customerInfo?.name || 'N/A'}`, {
     x: 50, y: currentY, size: 10, font: font
   });
   
   currentY -= 15;
-  page.drawText(`Ship To: ${order.shipCity || 'N/A'}, ${order.shipState || 'N/A'}`, {
+  page.drawText(`Ship To: ${customerAddress?.street || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 15;
+  page.drawText(`${customerAddress?.city || 'N/A'}, ${customerAddress?.state || 'N/A'} ${customerAddress?.zipCode || 'N/A'}`, {
     x: 50, y: currentY, size: 10, font: font
   });
 }
 
-async function addErrorLabelPage(pdfDoc: any, order: any, errorMessage: string) {
+async function addErrorLabelPage(pdfDoc: any, order: any, errorMessage: string, customerInfo?: any, customerAddress?: any) {
   const page = pdfDoc.addPage([432, 648]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1833,6 +1841,21 @@ async function addErrorLabelPage(pdfDoc: any, order: any, errorMessage: string) 
   currentY -= 30;
   page.drawText(`Order: ${order.orderId}`, {
     x: 50, y: currentY, size: 12, font: boldFont
+  });
+  
+  currentY -= 20;
+  page.drawText(`Customer: ${customerInfo?.name || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 15;
+  page.drawText(`Ship To: ${customerAddress?.street || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 15;
+  page.drawText(`${customerAddress?.city || 'N/A'}, ${customerAddress?.state || 'N/A'} ${customerAddress?.zipCode || 'N/A'}`, {
+    x: 50, y: currentY, size: 10, font: font
   });
   
   currentY -= 20;

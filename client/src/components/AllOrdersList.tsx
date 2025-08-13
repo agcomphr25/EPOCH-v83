@@ -94,7 +94,7 @@ export default function AllOrdersList() {
   const getKickbackStatus = (orderId: string) => {
     const orderKickbacks = allKickbacks.filter(kickback => kickback.orderId === orderId);
     if (orderKickbacks.length === 0) return null;
-    
+
     // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
     const highestPriority = orderKickbacks.reduce((highest, kickback) => {
@@ -102,7 +102,7 @@ export default function AllOrdersList() {
       const highestIndex = priorities.indexOf(highest);
       return currentIndex < highestIndex ? kickback.priority : highest;
     }, 'LOW');
-    
+
     return highestPriority;
   };
 

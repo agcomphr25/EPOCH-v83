@@ -416,12 +416,34 @@ router.post('/purchase-orders', async (req: Request, res: Response) => {
 
 
 // Payment Management Routes
-// Get all payments for an order
+// Get all payments for an order (now using main orders table)
 router.get('/:orderId/payments', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
-    const payments = await storage.getPaymentsByOrderId(orderId);
-    res.json(payments);
+    
+    // Get payment information from main orders table instead of separate payments table
+    const order = await storage.getOrderById(orderId);
+    
+    if (!order) {
+      return res.json([]);
+    }
+    
+    // If order has payment data, return it in the expected format
+    if (order.isPaid && order.paymentAmount && order.paymentAmount > 0) {
+      const payment = {
+        id: 1, // Single payment ID
+        orderId: order.orderId,
+        paymentType: order.paymentType || 'unknown',
+        paymentAmount: order.paymentAmount,
+        paymentDate: order.paymentDate || order.paymentTimestamp,
+        notes: `Payment from main orders table: $${order.paymentAmount} via ${order.paymentType}`,
+        createdAt: order.paymentTimestamp || order.updatedAt,
+        updatedAt: order.paymentTimestamp || order.updatedAt
+      };
+      res.json([payment]);
+    } else {
+      res.json([]);
+    }
   } catch (error) {
     console.error('Get payments error:', error);
     res.status(500).json({ error: "Failed to fetch payments" });

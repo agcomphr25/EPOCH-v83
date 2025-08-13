@@ -506,41 +506,40 @@ export default function OrdersList() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
-        <div className="container mx-auto p-6 pb-4">
-          {/* Title and Action Buttons */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+    <div className="container mx-auto p-6">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <Package className="h-6 w-6" />
-              <h1 className="text-2xl font-bold text-gray-900">All Orders</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                onClick={handleExportCSV}
-                variant="outline" 
-                className="flex items-center gap-2"
-                data-testid="export-csv-button"
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </Button>
-              <Link href="/order-entry">
-                <Button className="flex items-center gap-2" data-testid="create-order-button">
-                  <FileText className="h-4 w-4" />
-                  Create New Order
-                </Button>
-              </Link>
-            </div>
+              All Orders
+            </h1>
+            <p className="text-gray-600 mt-1">
+              View and manage all created orders - with CSV export
+            </p>
           </div>
-          
-          <p className="text-gray-600 mb-4">
-            View and manage all created orders - with CSV export
-          </p>
-          
-          {/* Search Bar */}
-          <div className="flex items-center gap-2 mb-4 max-w-md">
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleExportCSV}
+              variant="outline" 
+              className="flex items-center gap-2"
+              data-testid="export-csv-button"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+            <Link href="/order-entry">
+              <Button className="flex items-center gap-2" data-testid="create-order-button">
+                <FileText className="h-4 w-4" />
+                Create New Order
+              </Button>
+            </Link>
+          </div>
+        </div>
+        
+        {/* Search and Filter Controls */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 max-w-md">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
@@ -564,7 +563,7 @@ export default function OrdersList() {
           </div>
           
           {/* Filter and Sort Controls */}
-          <div className="flex items-center gap-4 flex-wrap mb-4">
+          <div className="flex items-center gap-4 flex-wrap">
             {/* Department Filter */}
             <div className="flex items-center gap-2">
               <Label htmlFor="department-filter" className="text-sm font-medium whitespace-nowrap">
@@ -636,28 +635,10 @@ export default function OrdersList() {
               </Button>
             )}
           </div>
-
-          {/* Sticky Table Header */}
-          {filteredOrders && filteredOrders.length > 0 && (
-            <div className="bg-gray-50 border rounded-t-lg">
-              <div className="grid grid-cols-7 gap-4 px-4 py-3 text-sm font-medium text-gray-700">
-                <div>Order ID</div>
-                <div>Current Department</div>
-                <div>Customer</div>
-                <div>Model</div>
-                <div>Order Date</div>
-                <div>Due Date</div>
-                <div>Actions</div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="container mx-auto px-6 py-2">
-          {!filteredOrders || filteredOrders.length === 0 ? (
+      {!filteredOrders || filteredOrders.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-8">
@@ -691,60 +672,65 @@ export default function OrdersList() {
             </div>
           </CardContent>
         </Card>
-          ) : (
-            <>
-              {/* Orders Count Section */}
-              <div className="mb-4">
-                <div className="flex items-center gap-2 text-lg font-medium text-gray-900">
-                  <FileText className="h-5 w-5" />
-                  Orders ({filteredOrders.length}{searchTerm ? ` of ${orders?.length || 0}` : ''})
-                </div>
-              </div>
-
-              {/* Orders Table Content */}
-              <div className="bg-white border border-t-0 rounded-b-lg">
-                <div className="divide-y divide-gray-200">
-                  {filteredOrders.map((order) => (
-                    <div 
-                      key={order.id}
-                      className={`grid grid-cols-7 gap-4 px-4 py-3 hover:bg-gray-50 ${order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}`}
-                    >
-                      {/* Order ID */}
-                      <div className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
-                        <div className="flex items-center gap-2">
-                          <OrderSummaryTooltip orderId={order.orderId}>
-                            <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
-                              {getDisplayOrderId(order)}
-                            </span>
-                          </OrderSummaryTooltip>
-                          {hasUnresolvedKickback(order.orderId) && (
-                            <Badge 
-                              className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
-                              title="This order has unresolved kickbacks - Click to view Kickback Tracking"
-                              onClick={handleKickbackClick}
-                            >
-                              KICKBACK
-                            </Badge>
-                          )}
-                          {order.isPaid && order.paymentAmount && order.paymentAmount > 0 && (
-                            <Badge 
-                              className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
-                              title={`Paid $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
-                            >
-                              PAID
-                            </Badge>
-                          )}
-                        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Orders ({filteredOrders.length}{searchTerm ? ` of ${orders?.length || 0}` : ''})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Current Department</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Order Date</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredOrders.map((order) => (
+                  <TableRow 
+                    key={order.id}
+                    className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
+                  >
+                    <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
+                      <div className="flex items-center gap-2">
+                        <OrderSummaryTooltip orderId={order.orderId}>
+                          <span className="text-blue-600 hover:text-blue-800 cursor-pointer">
+                            {getDisplayOrderId(order)}
+                          </span>
+                        </OrderSummaryTooltip>
+                        {hasUnresolvedKickback(order.orderId) && (
+                          <Badge 
+                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"
+                            title="This order has unresolved kickbacks - Click to view Kickback Tracking"
+                            onClick={handleKickbackClick}
+                          >
+                            KICKBACK
+                          </Badge>
+                        )}
+                        {order.isPaid && order.paymentAmount && order.paymentAmount > 0 && (
+                          <Badge 
+                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
+                            title={`Paid $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                          >
+                            PAID
+                          </Badge>
+                        )}
                       </div>
-                      
-                      {/* Current Department */}
-                      <div>
-                        <Badge variant="secondary">
-                          {order.currentDepartment || 'Not Set'}
-                        </Badge>
-                      </div>
-                      
-                      {/* Customer */}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {order.currentDepartment || 'Not Set'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="relative group">
                         <CustomerDetailsTooltip 
                           customerId={order.customerId} 
@@ -778,111 +764,103 @@ export default function OrdersList() {
                           </Button>
                         </div>
                       </div>
-                      
-                      {/* Model */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-gray-400" />
-                          {getModelDisplayName(order.modelId) || 'N/A'}
-                        </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-gray-400" />
+                        {getModelDisplayName(order.modelId) || 'N/A'}
                       </div>
-                      
-                      {/* Order Date */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4 text-gray-400" />
-                          {format(new Date(order.orderDate), 'MMM d, yyyy')}
-                        </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-gray-400" />
+                        {format(new Date(order.orderDate), 'MMM d, yyyy')}
                       </div>
-                      
-                      {/* Due Date */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4 text-gray-400" />
-                          {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                        </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-gray-400" />
+                        {format(new Date(order.dueDate), 'MMM d, yyyy')}
                       </div>
-                      
-                      {/* Actions */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          {/* IMPORTANT: Use order.orderId (e.g. "AG245") NOT order.id (database record ID) 
-                              The order entry page expects the actual order identifier */}
-                          <Link href={`/order-entry?draft=${order.orderId}`}>
-                            <Button variant="outline" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleReportKickback(order)}
-                            title="Report Kickback"
-                          >
-                            <TrendingDown className="h-4 w-4" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {/* IMPORTANT: Use order.orderId (e.g. "AG245") NOT order.id (database record ID) 
+                            The order entry page expects the actual order identifier */}
+                        <Link href={`/order-entry?draft=${order.orderId}`}>
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4" />
                           </Button>
-                          {(() => {
-                            const nextDept = getNextDepartment(order.currentDepartment || '');
-                            const isComplete = order.currentDepartment === 'Shipping';
-                            const isScrapped = order.status === 'SCRAPPED';
-                            
-                            if (!isScrapped && !isComplete && nextDept) {
-                              return (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleProgressOrder(order.orderId, nextDept)}
-                                  disabled={progressOrderMutation.isPending}
-                                >
-                                  <ArrowRight className="w-4 h-4 mr-1" />
-                                  {nextDept}
-                                </Button>
-                              );
-                            }
-                            return null;
-                          })()}
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
+                        </Link>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleReportKickback(order)}
+                          title="Report Kickback"
+                        >
+                          <TrendingDown className="h-4 w-4" />
+                        </Button>
+                        {(() => {
+                          const nextDept = getNextDepartment(order.currentDepartment || '');
+                          const isComplete = order.currentDepartment === 'Shipping';
+                          const isScrapped = order.status === 'SCRAPPED';
+                          
+                          if (!isScrapped && !isComplete && nextDept) {
+                            return (
+                              <Button
                                 size="sm"
-                                onClick={() => setSelectedOrderBarcode({
-                                  orderId: order.orderId,
-                                  barcode: order.barcode || `P1-${order.orderId}`
-                                })}
+                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                disabled={progressOrderMutation.isPending}
                               >
-                                <QrCode className="h-4 w-4" />
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                {nextDept}
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
-                              <DialogHeader>
-                                <DialogTitle>Order Barcode</DialogTitle>
-                              </DialogHeader>
-                              {selectedOrderBarcode && (
-                                <BarcodeDisplay 
-                                  orderId={selectedOrderBarcode.orderId}
-                                  barcode={selectedOrderBarcode.barcode}
-                                  showTitle={false}
-                                  customerName={getCustomerName(order.customerId)}
-                                  orderDate={order.orderDate}
-                                  dueDate={order.dueDate}
-                                  status={order.status}
-                                  actionLength={getActionLengthAbbreviation(order.features)}
-                                  stockModel={getStockModelName(order.modelId)}
-                                  paintOption={getPaintOption(order.features)}
-                                />
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setSelectedOrderBarcode({
+                                orderId: order.orderId,
+                                barcode: order.barcode || `P1-${order.orderId}`
+                              })}
+                            >
+                              <QrCode className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>Order Barcode</DialogTitle>
+                            </DialogHeader>
+                            {selectedOrderBarcode && (
+                              <BarcodeDisplay 
+                                orderId={selectedOrderBarcode.orderId}
+                                barcode={selectedOrderBarcode.barcode}
+                                showTitle={false}
+                                customerName={getCustomerName(order.customerId)}
+                                orderDate={order.orderDate}
+                                dueDate={order.dueDate}
+                                status={order.status}
+                                actionLength={getActionLengthAbbreviation(order.features)}
+                                stockModel={getStockModelName(order.modelId)}
+                                paintOption={getPaintOption(order.features)}
+                              />
+                            )}
+                          </DialogContent>
+                        </Dialog>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Kickback Report Modal */}
       <Dialog open={isKickbackDialogOpen} onOpenChange={setIsKickbackDialogOpen}>

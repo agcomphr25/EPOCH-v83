@@ -1428,6 +1428,7 @@ export const customers = pgTable('customers', {
   email: text('email'),
   phone: text('phone'),
   company: text('company'),
+  contact: text('contact'),
   customerType: text('customer_type').default('standard'),
   preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
   notes: text('notes'),

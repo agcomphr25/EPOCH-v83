@@ -56,6 +56,11 @@ async function getUPSAccessToken() {
   }
 
   const data = await response.json() as any;
+  console.log('UPS OAuth Success:', {
+    access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : 'MISSING',
+    token_type: data.token_type,
+    expires_in: data.expires_in
+  });
   return data.access_token;
 }
 
@@ -63,6 +68,13 @@ async function createUPSShipment(shipmentData: any) {
   const accessToken = await getUPSAccessToken();
 
   const transId = Math.random().toString(36).substring(7);
+
+  console.log('UPS Shipment Request Details:', {
+    url: UPS_API_BASE_URL,
+    token: accessToken ? `${accessToken.substring(0, 20)}...` : 'MISSING',
+    transId: transId,
+    bodySize: JSON.stringify(shipmentData).length
+  });
 
   const response = await fetch(UPS_API_BASE_URL, {
     method: 'POST',
@@ -2225,6 +2237,100 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Bulk shipping labels error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Debug endpoint for UPS troubleshooting
+router.post('/debug-ups-auth', async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 UPS DEBUG: Starting authentication troubleshooting...');
+    
+    // Step 1: Check credentials
+    const hasClientId = !!process.env.UPS_CLIENT_ID;
+    const hasClientSecret = !!process.env.UPS_CLIENT_SECRET;
+    
+    console.log('🔍 UPS DEBUG - Credentials Check:', {
+      hasClientId,
+      hasClientSecret,
+      clientIdLength: hasClientId ? process.env.UPS_CLIENT_ID!.length : 0,
+      clientSecretLength: hasClientSecret ? process.env.UPS_CLIENT_SECRET!.length : 0
+    });
+
+    if (!hasClientId || !hasClientSecret) {
+      return res.json({
+        success: false,
+        step: 'credentials',
+        error: 'Missing UPS credentials',
+        details: { hasClientId, hasClientSecret }
+      });
+    }
+
+    // Step 2: Test OAuth
+    console.log('🔍 UPS DEBUG: Testing OAuth...');
+    let accessToken;
+    try {
+      accessToken = await getUPSAccessToken();
+      console.log('🔍 UPS DEBUG - OAuth Success:', {
+        tokenReceived: !!accessToken,
+        tokenLength: accessToken ? accessToken.length : 0,
+        tokenStart: accessToken ? accessToken.substring(0, 10) : 'N/A'
+      });
+    } catch (oauthError: any) {
+      console.error('🔍 UPS DEBUG - OAuth Failed:', oauthError.message);
+      return res.json({
+        success: false,
+        step: 'oauth',
+        error: oauthError.message,
+        details: oauthError
+      });
+    }
+
+    // Step 3: Test simple shipment request
+    console.log('🔍 UPS DEBUG: Testing shipment creation...');
+    const testShipment = buildUPSShipmentRequest(
+      { orderId: 'TEST001' },
+      {
+        name: 'Test Customer',
+        street: '123 Main St',
+        city: 'Birmingham',
+        state: 'AL',
+        zip: '35203'
+      },
+      {
+        weight: '5',
+        length: '10',
+        width: '10',
+        height: '6'
+      }
+    );
+
+    try {
+      const shipmentResult = await createUPSShipment(testShipment);
+      console.log('🔍 UPS DEBUG - Shipment Success');
+      return res.json({
+        success: true,
+        step: 'shipment',
+        message: 'UPS API working correctly',
+        trackingNumber: shipmentResult?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber
+      });
+    } catch (shipmentError: any) {
+      console.error('🔍 UPS DEBUG - Shipment Failed:', shipmentError.message);
+      return res.json({
+        success: false,
+        step: 'shipment',
+        error: shipmentError.message,
+        authWorking: true,
+        tokenReceived: !!accessToken
+      });
+    }
+
+  } catch (error: any) {
+    console.error('🔍 UPS DEBUG - General Error:', error);
+    res.status(500).json({
+      success: false,
+      step: 'general',
+      error: error.message
+    });
   }
 });
 

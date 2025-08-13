@@ -200,25 +200,26 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     const updates = insertOrderDraftSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
 
-    // First, try to update as a draft order
+    // For finalized orders that need to appear in All Orders page,
+    // prioritize updating the all_orders table first
     let updatedOrder;
     try {
-      console.log('Attempting to update as draft order...');
-      updatedOrder = await storage.updateOrderDraft(orderId, updates);
-      console.log('Updated draft order successfully:', updatedOrder);
+      console.log('Attempting to update as finalized order...');
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+      console.log('Updated finalized order successfully:', updatedOrder);
       return res.json(updatedOrder);
-    } catch (draftError) {
-      console.log('Draft order not found, attempting finalized order update...');
-      console.log('Draft error:', draftError.message);
+    } catch (finalizedError) {
+      console.log('Finalized order not found, attempting draft order update...');
+      console.log('Finalized error:', finalizedError.message);
       
-      // If draft update fails, try to update as a finalized order
+      // If finalized update fails, try to update as a draft order
       try {
-        console.log('Calling updateFinalizedOrder...');
-        updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
-        console.log('Updated finalized order successfully:', updatedOrder);
+        console.log('Calling updateOrderDraft...');
+        updatedOrder = await storage.updateOrderDraft(orderId, updates);
+        console.log('Updated draft order successfully:', updatedOrder);
         return res.json(updatedOrder);
-      } catch (finalizedError) {
-        console.error('Finalized order update failed:', finalizedError.message);
+      } catch (draftError) {
+        console.error('Draft order update failed:', draftError.message);
         return res.status(404).json({ error: `Order ${orderId} not found in drafts or finalized orders` });
       }
     }

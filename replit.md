@@ -8,20 +8,82 @@ Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 
 ## Recent Changes (August 13, 2025)
-### Customer Management Contact Field - FULLY RESOLVED
+### Customer Management Enhancements - FULLY IMPLEMENTED
+
+#### 1. Contact Field Implementation - COMPLETE
 - **Issue Identified**: Contact field in edit customer modal not saving or displaying
 - **Root Causes Fixed**:
   - Missing `contact` column in customers database table
-  - Missing `contact` field in database schema definition
+  - Missing `contact` field in database schema definition  
   - Missing `contact` field in API query selection
   - Missing `contact` field display in customer management table
-- **Complete Resolution**: 
-  - Added `contact` column to customers table using SQL ALTER TABLE
-  - Updated customers schema definition to include contact field
-  - Modified getAllCustomers query to select contact field
-  - Added contact field display in customer management UI
+- **Implementation Details**:
+  - **Database Schema**: Added `contact: text('contact')` to customers table definition in `server/schema.ts`
+  - **Database Column**: Added contact column using `ALTER TABLE customers ADD COLUMN contact text;`
+  - **API Query**: Updated `getAllCustomers()` in `server/storage.ts` to include contact field in select statement
+  - **UI Display**: Added contact field display in customer management table (`client/src/pages/CustomerManagement.tsx`)
 - **Verification**: Contact field now saves, loads, and displays correctly across all interfaces
 - **User Confirmation**: Contact field functionality confirmed working by user
+
+#### 2. Address Display Enhancement - COMPLETE
+- **Issue Identified**: Suite/apartment information (street2) not visible in customer list, only in edit modal
+- **Implementation Details**:
+  - **UI Enhancement**: Modified address display in customer table to show both street and street2 fields
+  - **Code Location**: Updated `client/src/pages/CustomerManagement.tsx` line 1525-1530
+  - **Display Format**: Street address now shows as "123 Main St, Suite 200" instead of just "123 Main St"
+- **Result**: Complete address information now visible in both customer list and edit modal
+
+#### 3. Database Schema Synchronization - COMPLETE
+- **Issues Resolved**:
+  - Database schema mismatch between code definition and actual database structure
+  - Missing columns causing silent save failures
+- **Actions Taken**:
+  - Verified database column existence using SQL information_schema queries
+  - Added missing `street2` and `contact` columns to match schema definitions
+  - Ensured all schema changes reflected in API responses
+
+### Technical Implementation Details
+
+#### Files Modified:
+1. **`server/schema.ts`** (Lines 1428-1437):
+   - Added `contact: text('contact')` to customers table definition
+   - Schema now properly defines contact field for type safety
+
+2. **`server/storage.ts`** (Lines 2535-2551):
+   - Updated `getAllCustomers()` function to include contact field in select statement
+   - Added `contact: customers.contact` to explicit field selection
+
+3. **`client/src/pages/CustomerManagement.tsx`** (Multiple locations):
+   - Lines 1511-1517: Added contact field display in customer table
+   - Lines 1525-1530: Enhanced address display to include street2 field
+   - Contact shows as "Contact: [Name]" under customer info
+   - Address shows as "[Street], [Suite/Apt]" when street2 exists
+
+#### Database Commands Executed:
+```sql
+-- Added missing contact column
+ALTER TABLE customers ADD COLUMN contact text;
+
+-- Added missing street2 column (was already present but verified)
+ALTER TABLE customer_addresses ADD COLUMN street2 text;
+
+-- Verification queries used
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'customers' 
+ORDER BY ordinal_position;
+```
+
+#### API Endpoints Enhanced:
+- **GET /api/customers**: Now returns contact field in response
+- **PUT /api/customers/update-bypass/:id**: Contact field saves correctly
+- All customer-related endpoints now handle contact field properly
+
+#### User Experience Improvements:
+- Contact field visible in customer table alongside email/phone
+- Complete address (including suite/apt) visible in customer list
+- Edit modal pre-populates contact field correctly
+- Consistent data display between table and modal views
 
 ### P1 Production Orders Flow - FULLY RESTORED (August 12, 2025)
 - **Issue Identified**: Original restoration missed 368 non-Pure Precision orders from P1 Production Queue

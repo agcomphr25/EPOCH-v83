@@ -1046,7 +1046,7 @@ export default function CustomerManagement() {
       email: customer.email || '',
       phone: customer.phone || '',
       company: customer.company || '',
-      contact: customer.contact || '',
+      contact: '',
       customerType: customer.customerType,
       preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
       notes: customer.notes || '',
@@ -1646,268 +1646,142 @@ export default function CustomerManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Customer Dialog - Redesigned */}
+      {/* Edit Customer Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit className="h-5 w-5" />
-              Edit Customer & Address
+              Edit Customer
             </DialogTitle>
           </DialogHeader>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Customer Information Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Customer Information</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="edit-name">Name *</Label>
-                  <Input
-                    id="edit-name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className={formErrors.name ? 'border-red-500' : ''}
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                className={formErrors.name ? 'border-red-500' : ''}
+              />
+              {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                value={formData.phone}
+                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-company">Company</Label>
+              <Input
+                id="edit-company"
+                value={formData.company}
+                onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-customerType">Customer Type</Label>
+              <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
+                <SelectTrigger id="edit-customerType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="wholesale">Wholesale</SelectItem>
+                  <SelectItem value="dealer">Dealer</SelectItem>
+                  <SelectItem value="oem">OEM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Preferred Communication Method</Label>
+              <div className="flex flex-col space-y-3 mt-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="edit-comm-email"
+                    checked={formData.preferredCommunicationMethod.includes('email')}
+                    onCheckedChange={(checked) => {
+                      const methods = formData.preferredCommunicationMethod;
+                      if (checked) {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: [...methods, 'email'] 
+                        }));
+                      } else {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: methods.filter(m => m !== 'email') 
+                        }));
+                      }
+                    }}
                   />
-                  {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-email">Email</Label>
-                  <Input
-                    id="edit-email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-phone">Phone</Label>
-                  <Input
-                    id="edit-phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-company">Company</Label>
-                  <Input
-                    id="edit-company"
-                    value={formData.company}
-                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-contact">Contact</Label>
-                  <Input
-                    id="edit-contact"
-                    value={formData.contact}
-                    onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-customerType">Customer Type</Label>
-                  <Select value={formData.customerType} onValueChange={(value) => setFormData(prev => ({ ...prev, customerType: value }))}>
-                    <SelectTrigger id="edit-customerType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">Standard</SelectItem>
-                      <SelectItem value="wholesale">Wholesale</SelectItem>
-                      <SelectItem value="dealer">Dealer</SelectItem>
-                      <SelectItem value="oem">OEM</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Preferred Communication Method Section */}
-                <div>
-                  <Label className="text-sm font-medium">Preferred Communication Method</Label>
-                  <div className="flex flex-col space-y-3 mt-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="edit-comm-email"
-                        checked={formData.preferredCommunicationMethod.includes('email')}
-                        onCheckedChange={(checked) => {
-                          const methods = formData.preferredCommunicationMethod;
-                          if (checked) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: [...methods, 'email'] 
-                            }));
-                          } else {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: methods.filter(m => m !== 'email') 
-                            }));
-                          }
-                        }}
-                      />
-                      <div className="flex items-center space-x-2">
-                        <Mail className="h-4 w-4 text-blue-600" />
-                        <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
-                          Email
-                        </Label>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="edit-comm-sms"
-                        checked={formData.preferredCommunicationMethod.includes('sms')}
-                        onCheckedChange={(checked) => {
-                          const methods = formData.preferredCommunicationMethod;
-                          if (checked) {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: [...methods, 'sms'] 
-                            }));
-                          } else {
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
-                            }));
-                          }
-                        }}
-                      />
-                      <div className="flex items-center space-x-2">
-                        <Phone className="h-4 w-4 text-green-600" />
-                        <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
-                          SMS
-                        </Label>
-                      </div>
-                    </div>
-                    
-                    {formData.preferredCommunicationMethod.length === 0 && (
-                      <p className="text-sm text-gray-500 italic">No communication method selected</p>
-                    )}
+                  <div className="flex items-center space-x-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <Label htmlFor="edit-comm-email" className="text-sm font-medium cursor-pointer">
+                      Email
+                    </Label>
                   </div>
                 </div>
-
-                <div>
-                  <Label htmlFor="edit-notes">Notes</Label>
-                  <Textarea
-                    id="edit-notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="edit-comm-sms"
+                    checked={formData.preferredCommunicationMethod.includes('sms')}
+                    onCheckedChange={(checked) => {
+                      const methods = formData.preferredCommunicationMethod;
+                      if (checked) {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: [...methods, 'sms'] 
+                        }));
+                      } else {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          preferredCommunicationMethod: methods.filter(m => m !== 'sms') 
+                        }));
+                      }
+                    }}
                   />
+                  <div className="flex items-center space-x-2">
+                    <Phone className="h-4 w-4 text-green-600" />
+                    <Label htmlFor="edit-comm-sms" className="text-sm font-medium cursor-pointer">
+                      SMS
+                    </Label>
+                  </div>
                 </div>
+                
+                {formData.preferredCommunicationMethod.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No communication method selected</p>
+                )}
               </div>
             </div>
 
-            {/* Address Information Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Primary Address</h3>
-              
-              <div className="space-y-4">
-                <div className="relative">
-                  <Label htmlFor="edit-street">Street Address</Label>
-                  <Input
-                    id="edit-street"
-                    value={formData.street}
-                    onChange={(e) => handleCustomerAddressChange('street', e.target.value)}
-                    placeholder="Start typing for address suggestions..."
-                  />
-                  {isValidatingCustomerAddress && (
-                    <div className="absolute right-3 top-8">
-                      <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  )}
-                  
-                  {/* Address Suggestions Dropdown */}
-                  {showCustomerFormSuggestions && customerFormSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                      {customerFormSuggestions.map((suggestion, index) => (
-                        <button
-                          key={index}
-                          className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b last:border-b-0"
-                          onClick={() => handleCustomerFormSuggestionSelect(suggestion)}
-                        >
-                          <div className="font-medium">{suggestion.text}</div>
-                          {suggestion.streetLine && suggestion.streetLine !== suggestion.text && (
-                            <div className="text-sm text-gray-600">{suggestion.streetLine}</div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-street2">Suite/Apt/Unit #</Label>
-                  <Input
-                    id="edit-street2"
-                    value={formData.street2}
-                    onChange={(e) => setFormData(prev => ({ ...prev, street2: e.target.value }))}
-                    placeholder="Suite 100, Apt 2B, Unit 5"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-city">City</Label>
-                    <Input
-                      id="edit-city"
-                      value={formData.city}
-                      onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-state">State</Label>
-                    <Input
-                      id="edit-state"
-                      value={formData.state}
-                      onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-                      maxLength={2}
-                      placeholder="SC"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-zipCode">ZIP Code</Label>
-                    <Input
-                      id="edit-zipCode"
-                      value={formData.zipCode}
-                      onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-country">Country</Label>
-                    <Select value={formData.country} onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}>
-                      <SelectTrigger id="edit-country">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="United States">United States</SelectItem>
-                        <SelectItem value="Canada">Canada</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-addressType">Address Type</Label>
-                  <Select value={formData.addressType} onValueChange={(value: 'shipping' | 'billing' | 'both') => setFormData(prev => ({ ...prev, addressType: value }))}>
-                    <SelectTrigger id="edit-addressType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="shipping">Shipping</SelectItem>
-                      <SelectItem value="billing">Billing</SelectItem>
-                      <SelectItem value="both">Both</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Textarea
+                id="edit-notes"
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
             </div>
           </div>
           
@@ -1919,8 +1793,7 @@ export default function CustomerManagement() {
               onClick={handleUpdateCustomer}
               disabled={updateCustomerMutation.isPending || !formData.name}
             >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer & Address'}
+              {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer'}
             </Button>
           </div>
         </DialogContent>

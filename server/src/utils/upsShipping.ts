@@ -14,7 +14,7 @@ const UPS_SHIP_URL_BASE =
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 
-async function getAccessToken(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && now < tokenExpiresAt - 60_000) return cachedToken;
 
@@ -138,7 +138,7 @@ export async function createShipment(opts: {
     body: JSON.stringify(body),
   });
 
-  const data = await res.json();
+  const data = await res.json() as any;
   if (!res.ok) throw new Error(`UPS create shipment failed: ${JSON.stringify(data)}`);
 
   const pkg =

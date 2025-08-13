@@ -21,6 +21,7 @@ import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
+import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -82,6 +83,26 @@ export function registerRoutes(app: Express): Server {
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
+  
+  // UPS Test endpoint
+  app.post('/api/test-ups-auth', async (req, res) => {
+    try {
+      console.log('🚚 Testing UPS authentication...');
+      const token = await getAccessToken();
+      console.log('✅ UPS authentication successful');
+      res.json({ 
+        success: true, 
+        message: 'UPS authentication successful',
+        tokenLength: token.length 
+      });
+    } catch (error: any) {
+      console.error('❌ UPS authentication failed:', error.message);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  });
   
   // Direct algorithmic schedule endpoint for frontend auto-schedule button
   app.post('/api/algorithmic-schedule', async (req, res) => {

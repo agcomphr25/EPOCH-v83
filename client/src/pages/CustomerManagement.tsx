@@ -762,7 +762,8 @@ export default function CustomerManagement() {
       // Create customer first
       const customer = await apiRequest('/api/customers', {
         method: 'POST',
-        body: {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -772,14 +773,15 @@ export default function CustomerManagement() {
           preferredCommunicationMethod: data.preferredCommunicationMethod,
           notes: data.notes,
           isActive: data.isActive,
-        },
+        }),
       });
 
       // Create address if address fields are provided
       if (data.street && data.city && data.state) {
         await apiRequest('/api/addresses', {
           method: 'POST',
-          body: {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             customerId: customer.id.toString(),
             street: data.street,
             street2: data.street2,
@@ -789,7 +791,7 @@ export default function CustomerManagement() {
             country: data.country,
             type: data.addressType,
             isDefault: true,
-          },
+          }),
         });
       }
 
@@ -819,7 +821,8 @@ export default function CustomerManagement() {
     mutationFn: ({ id, data }: { id: number; data: Partial<CustomerFormData> }) => 
       apiRequest(`/api/customers/update-bypass/${id}`, {
         method: 'PUT',
-        body: data,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
@@ -866,7 +869,8 @@ export default function CustomerManagement() {
   const createAddressMutation = useMutation({
     mutationFn: (data: AddressFormData) => apiRequest('/api/addresses', {
       method: 'POST',
-      body: data,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });
@@ -889,7 +893,8 @@ export default function CustomerManagement() {
   const updateAddressMutation = useMutation({
     mutationFn: (data: AddressFormData & { id: number }) => apiRequest(`/api/addresses/${data.id}`, {
       method: 'PUT',
-      body: data,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/addresses', selectedCustomer?.id] });

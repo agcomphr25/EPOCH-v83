@@ -123,26 +123,56 @@ router.get('/drafts', async (req: Request, res: Response) => {
 
 router.get('/draft/:id', async (req: Request, res: Response) => {
   try {
-    const draftId = req.params.id;
-    let draft;
+    const orderId = req.params.id;
+    console.log('Fetching order for ID:', orderId);
 
     // Check if the ID is a number (database ID) or string (order ID like AG422)
-    if (/^\d+$/.test(draftId)) {
-      // It's a numeric database ID
-      draft = await storage.getOrderDraftById(parseInt(draftId));
+    if (/^\d+$/.test(orderId)) {
+      // It's a numeric database ID - try draft first
+      try {
+        const draft = await storage.getOrderDraftById(parseInt(orderId));
+        console.log('Found draft by database ID:', orderId);
+        return res.json(draft);
+      } catch (draftError) {
+        console.log('No draft found by database ID, checking finalized orders...');
+        try {
+          const finalizedOrder = await storage.getOrderById(orderId);
+          if (finalizedOrder) {
+            console.log('Found finalized order by database ID:', orderId);
+            return res.json(finalizedOrder);
+          }
+        } catch (finalizedError) {
+          console.error('Order not found by database ID:', finalizedError);
+        }
+      }
     } else {
-      // It's an order ID like AG422
-      draft = await storage.getOrderDraft(draftId);
+      // It's an order ID like AG422 - try draft first, then finalized
+      try {
+        const draft = await storage.getOrderDraft(orderId);
+        if (draft) {
+          console.log('Found draft order:', orderId);
+          return res.json(draft);
+        }
+      } catch (draftError) {
+        console.log('Draft not found, checking finalized orders...');
+      }
+      
+      // Try finalized orders
+      try {
+        const finalizedOrder = await storage.getFinalizedOrderById(orderId);
+        if (finalizedOrder) {
+          console.log('Found finalized order:', orderId);
+          return res.json(finalizedOrder);
+        }
+      } catch (finalizedError) {
+        console.error('Order not found in either table:', finalizedError);
+      }
     }
 
-    if (!draft) {
-      return res.status(404).json({ error: "Order draft not found" });
-    }
-
-    res.json(draft);
+    return res.status(404).json({ error: `Order ${orderId} not found` });
   } catch (error) {
-    console.error('Get draft error:', error);
-    res.status(500).json({ error: "Failed to fetch order draft" });
+    console.error('Get order error:', error);
+    res.status(500).json({ error: "Failed to fetch order" });
   }
 });
 
@@ -162,23 +192,42 @@ router.post('/draft', async (req: Request, res: Response) => {
 
 router.put('/draft/:id', async (req: Request, res: Response) => {
   try {
-    const draftId = req.params.id;
-    console.log('Update draft endpoint called for ID:', draftId);
+    const orderId = req.params.id;
+    console.log('Update order endpoint called for ID:', orderId);
     console.log('Update data received:', req.body);
 
     // Validate the input data using the schema
     const updates = insertOrderDraftSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
 
-    const updatedDraft = await storage.updateOrderDraft(draftId, updates);
-    console.log('Update successful, returning:', updatedDraft);
-    res.json(updatedDraft);
+    // First, try to update as a draft order
+    let updatedOrder;
+    try {
+      console.log('Attempting to update as draft order...');
+      updatedOrder = await storage.updateOrderDraft(orderId, updates);
+      console.log('Updated draft order successfully:', updatedOrder);
+      return res.json(updatedOrder);
+    } catch (draftError) {
+      console.log('Draft order not found, attempting finalized order update...');
+      console.log('Draft error:', draftError.message);
+      
+      // If draft update fails, try to update as a finalized order
+      try {
+        console.log('Calling updateFinalizedOrder...');
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+        console.log('Updated finalized order successfully:', updatedOrder);
+        return res.json(updatedOrder);
+      } catch (finalizedError) {
+        console.error('Finalized order update failed:', finalizedError.message);
+        return res.status(404).json({ error: `Order ${orderId} not found in drafts or finalized orders` });
+      }
+    }
   } catch (error) {
-    console.error('Update draft error:', error);
+    console.error('Update order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: "Failed to update order draft" });
+    res.status(500).json({ error: "Failed to update order" });
   }
 });
 

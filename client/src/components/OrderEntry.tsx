@@ -429,11 +429,15 @@ export default function OrderEntry() {
     if (!initialDataLoaded) return;
 
     const editOrderId = getOrderIdFromUrl();
+    console.log('🔍 Checking for edit order ID from URL:', editOrderId);
+    console.log('🔍 Current URL search params:', window.location.search);
     if (editOrderId) {
+      console.log('✅ Setting edit mode to TRUE for order:', editOrderId);
       setIsEditMode(true);
       setEditingOrderId(editOrderId);
       loadExistingOrder(editOrderId);
     } else {
+      console.log('❌ No edit order ID found, creating new order');
       setIsEditMode(false);
       setEditingOrderId(null);
       generateOrderId();
@@ -837,7 +841,7 @@ export default function OrderEntry() {
 
   // Use unified pricing calculation (calculated above with discount already included)
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>, saveAsDraft: boolean = false) => {
     if (e) {
       e.preventDefault();
     }
@@ -894,7 +898,7 @@ export default function OrderEntry() {
         fbOrderNumber,
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
         shipping,
-        status: 'FINALIZED',
+        status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
         discountCode,
@@ -917,7 +921,7 @@ export default function OrderEntry() {
 
         toast({
           title: "Success",
-          description: "Order updated successfully",
+          description: saveAsDraft ? "Order saved as draft" : "Order updated successfully",
         });
       } else {
         // Create new order
@@ -928,7 +932,7 @@ export default function OrderEntry() {
 
         toast({
           title: "Success", 
-          description: "Order created successfully",
+          description: saveAsDraft ? "Order saved as draft" : "Order created successfully",
         });
       }
 
@@ -936,8 +940,10 @@ export default function OrderEntry() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
-      // Reset form
-      resetForm();
+      // Reset form only if not editing
+      if (!isEditMode) {
+        resetForm();
+      }
 
     } catch (error: any) {
       console.error('Submit error:', error);
@@ -2493,7 +2499,7 @@ export default function OrderEntry() {
                   className="w-full"
                   variant="outline"
                   disabled={isSubmitting}
-                  onClick={() => handleSubmit()}
+                  onClick={() => handleSubmit(undefined, true)}
                 >
                   {isSubmitting ? "Saving..." : "Save as Draft"}
                 </Button>
@@ -2502,7 +2508,7 @@ export default function OrderEntry() {
                   className="w-full"
                   variant="default"
                   disabled={isSubmitting}
-                  onClick={() => handleSubmit()}
+                  onClick={() => handleSubmit(undefined, false)}
                 >
                   {isSubmitting ? "Processing..." : (isEditMode ? "Update Order" : "Create Order")}
                 </Button>

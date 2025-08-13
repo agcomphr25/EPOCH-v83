@@ -7,6 +7,30 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 
+## Interface Components Reference
+**IMPORTANT: Multiple Order List Interfaces Exist**
+
+The system has several different order list components. When the user refers to "All Orders" interface, clarify which specific component they're viewing:
+
+1. **OrdersList.tsx** (`client/src/pages/OrdersList.tsx`)
+   - Primary orders interface accessed via main navigation
+   - Features: Department filter, Sort by (Order Date, Due Date, Order ID, Customer, Model, Department), Order dropdown (Newest/Oldest First)
+   - Table columns: Order ID, Current Department, Customer, Model, Order Date, Due Date, Actions
+   - Has kickback badges, payment status, and comprehensive search
+
+2. **AllOrdersPage.tsx** (`client/src/pages/AllOrdersPage.tsx`)
+   - Alternative orders page with simpler interface
+   - Features: Department filter, Sort by (Order Date, Due Date, Customer, Model)
+   - Different table layout and functionality
+
+3. **AllOrdersList.tsx** (`client/src/components/AllOrdersList.tsx`)  
+   - Component version with enhanced features
+   - Features: Search, Department filter, Sort by (Order Date, Due Date, Customer, Model)
+   - Table columns: Order ID, Payment Status, Order Date, Customer, Product, Current Department, Due Date, Status, Actions
+   - Includes payment badges, kickback tracking, communication tools
+
+**Best Practice**: When user mentions "All Orders", ask them to specify which interface they're referring to by describing visible features (e.g., "the one with Payment Status column" or "the one with the Order dropdown showing Newest First").
+
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
 

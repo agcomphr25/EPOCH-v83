@@ -97,6 +97,7 @@ ORDER BY ordinal_position;
   - Automatic tracking number assignment and order updates
   - Address validation and package dimension handling
   - Customer notification system for shipped orders
+  - **Auto-population**: Customer information automatically fills shipping forms from order data
 - **API Integration Details**:
   - Uses UPS REST API with proper authentication (UPS_USERNAME, UPS_PASSWORD, UPS_ACCESS_KEY, UPS_SHIPPER_NUMBER)
   - Supports both production and development UPS endpoints
@@ -109,6 +110,24 @@ ORDER BY ordinal_position;
   5. Generate official UPS label with tracking number
   6. Download printable shipping label (GIF format)
   7. Mark order as shipped with customer notification
+
+### Enhanced Sales Order PDF - COMPLETE (August 13, 2025)
+- **Issue Addressed**: Sales orders needed customer information and readable feature names
+- **Implementation**: Comprehensive sales order PDF enhancement for professional presentation
+- **Key Improvements**:
+  - **Customer Information**: Full customer details with company, contact, email, and phone
+  - **Address Display**: Complete billing and shipping addresses with proper formatting
+  - **Feature Display Names**: Converts database field names to readable format (e.g., "action_inlet" → "Action Inlet")
+  - **Multi-column Layout**: Features organized in clean columns for better readability
+  - **Order Summary**: Detailed pricing breakdown with base price, features, shipping, and total
+  - **Professional Layout**: Bordered sections, proper spacing, and clean typography
+- **Technical Details**:
+  - Enhanced `/api/shipping-pdf/sales-order/:orderId` endpoint
+  - Uses feature display names from database when available
+  - Automatic conversion of database values to readable format
+  - Improved PDF layout with better spacing and organization
+  - Company contact information and professional footer
+- **User Experience**: Sales orders now provide complete, professional documentation suitable for customer review and internal use
 
 ### PAID Badge Implementation - COMPLETE (August 13, 2025)
 - **Issue Identified**: User requested PAID badge functionality for All Orders list

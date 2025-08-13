@@ -609,84 +609,145 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Customer Information Section
+    // Customer Information Section - Enhanced Layout
     currentY -= 80;
-    page.drawText('BILL TO:', {
+    
+    // Create customer info box
+    page.drawRectangle({
       x: margin,
-      y: currentY,
+      y: currentY - 100,
+      width: printableWidth,
+      height: 100,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
+    // Customer header
+    page.drawText('CUSTOMER INFORMATION', {
+      x: margin + 5,
+      y: currentY - 15,
       size: 12,
       font: boldFont,
     });
 
-    // Bill to address
-    currentY -= 20;
+    // Bill to section
+    currentY -= 35;
+    page.drawText('BILL TO:', {
+      x: margin + 5,
+      y: currentY,
+      size: 10,
+      font: boldFont,
+    });
+
+    currentY -= 15;
     if (customer) {
-      page.drawText(customer.name || 'N/A', {
-        x: margin,
+      // Customer name and company
+      const customerLine = customer.company ? 
+        `${customer.name} - ${customer.company}` : customer.name || 'N/A';
+      page.drawText(customerLine, {
+        x: margin + 5,
         y: currentY,
         size: 10,
         font: font,
       });
 
-      currentY -= 15;
-      if (customer.email) {
-        page.drawText(customer.email, {
-          x: margin,
+      currentY -= 13;
+      // Contact person if different from customer name
+      if (customer.contact && customer.contact !== customer.name) {
+        page.drawText(`Contact: ${customer.contact}`, {
+          x: margin + 5,
           y: currentY,
-          size: 10,
+          size: 9,
           font: font,
         });
-        currentY -= 15;
+        currentY -= 13;
       }
 
-      if (customer.phone) {
-        page.drawText(customer.phone, {
-          x: margin,
+      // Email and phone on same line if both exist
+      const contactInfo = [];
+      if (customer.email) contactInfo.push(`Email: ${customer.email}`);
+      if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
+      
+      if (contactInfo.length > 0) {
+        page.drawText(contactInfo.join(' | '), {
+          x: margin + 5,
           y: currentY,
-          size: 10,
+          size: 9,
           font: font,
         });
-        currentY -= 15;
       }
+    } else {
+      page.drawText('Customer information not available', {
+        x: margin + 5,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
     }
 
-    // Ship to address (if different)
-    const shipToY = currentY + 75;
+    // Ship to address section (right side)
+    const shipToX = margin + 280;
+    let shipCurrentY = currentY + 60;
+    
     page.drawText('SHIP TO:', {
-      x: margin + 250,
-      y: shipToY,
-      size: 12,
+      x: shipToX,
+      y: shipCurrentY,
+      size: 10,
       font: boldFont,
     });
 
-    let shipCurrentY = shipToY - 20;
+    shipCurrentY -= 15;
     if (customerAddresses.length > 0) {
       const primaryAddress = customerAddresses[0];
+      
+      // Ship to name
       page.drawText(customer?.name || 'N/A', {
-        x: margin + 250,
+        x: shipToX,
         y: shipCurrentY,
         size: 10,
         font: font,
       });
 
-      shipCurrentY -= 15;
-      page.drawText(primaryAddress.street || '', {
-        x: margin + 250,
-        y: shipCurrentY,
-        size: 10,
-        font: font,
-      });
+      shipCurrentY -= 13;
+      // Street address
+      if (primaryAddress.street) {
+        page.drawText(primaryAddress.street, {
+          x: shipToX,
+          y: shipCurrentY,
+          size: 9,
+          font: font,
+        });
+        shipCurrentY -= 13;
+      }
 
-      shipCurrentY -= 15;
+      // Street2 (suite, apt, etc.)
+      if (primaryAddress.street2) {
+        page.drawText(primaryAddress.street2, {
+          x: shipToX,
+          y: shipCurrentY,
+          size: 9,
+          font: font,
+        });
+        shipCurrentY -= 13;
+      }
+
+      // City, State, ZIP
       const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
       if (cityStateZip !== ', ') {
         page.drawText(cityStateZip, {
-          x: margin + 250,
+          x: shipToX,
           y: shipCurrentY,
-          size: 10,
+          size: 9,
           font: font,
         });
       }
+    } else {
+      page.drawText('Same as billing address', {
+        x: shipToX,
+        y: shipCurrentY,
+        size: 9,
+        font: font,
+      });
     }
 
     // Order Details Section
@@ -796,7 +857,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Features and Customizations Section
+    // Features and Customizations Section - Enhanced
     currentY -= 140;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
@@ -805,60 +866,89 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
+    // Create features box
+    const featuresBoxHeight = 120;
+    page.drawRectangle({
+      x: margin,
+      y: currentY - featuresBoxHeight - 10,
+      width: printableWidth,
+      height: featuresBoxHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
     currentY -= 25;
     let featureTotal = 0;
     let featureLineCount = 0;
+    const maxFeaturesPerColumn = 6;
+    let currentColumn = 0;
+    let columnY = currentY;
 
     if (order.features && Object.keys(order.features).length > 0) {
       Object.entries(order.features).forEach(([featureKey, featureValue]) => {
         if (featureValue && featureValue !== false && featureValue !== '') {
           // Find feature details for pricing and display name
           const featureDetail = features.find(f => f.id === featureKey);
-          const featureName = featureDetail ? (featureDetail.displayName || featureDetail.name) : featureKey;
+          const featureName = featureDetail ? (featureDetail.displayName || featureDetail.name) : 
+            // Convert database names to readable format if no display name
+            featureKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
           const featurePrice = featureDetail ? featureDetail.price || 0 : 0;
 
-          // Display feature line
-          page.drawText(`• ${featureName}`, {
-            x: margin + 5,
-            y: currentY,
-            size: 10,
+          // Calculate column position
+          const columnX = margin + 5 + (currentColumn * 260);
+          
+          // Display feature name with better formatting
+          let displayText = `• ${featureName}`;
+          
+          // Add feature value if it's a meaningful string
+          if (typeof featureValue === 'string' && featureValue !== 'true' && featureValue !== 'yes') {
+            // Convert database values to readable format
+            const readableValue = featureValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            displayText += `: ${readableValue}`;
+          }
+
+          page.drawText(displayText, {
+            x: columnX,
+            y: columnY,
+            size: 9,
             font: font,
           });
 
-          if (typeof featureValue === 'string' && featureValue !== 'true') {
-            page.drawText(`(${featureValue})`, {
-              x: margin + 200,
-              y: currentY,
-              size: 9,
-              font: font,
-            });
-          }
-
+          // Add pricing if applicable
           if (featurePrice > 0) {
             page.drawText(`+$${featurePrice.toFixed(2)}`, {
-              x: margin + 400,
-              y: currentY,
-              size: 10,
+              x: columnX + 200,
+              y: columnY,
+              size: 9,
               font: font,
+              color: rgb(0, 0.5, 0),
             });
             featureTotal += featurePrice;
           }
 
-          currentY -= 18;
           featureLineCount++;
+          columnY -= 12;
+
+          // Move to next column if needed
+          if (featureLineCount % maxFeaturesPerColumn === 0) {
+            currentColumn++;
+            columnY = currentY;
+          }
         }
+      });
+    } else {
+      // No features message
+      page.drawText('Standard configuration - no additional features', {
+        x: margin + 5,
+        y: columnY,
+        size: 10,
+        font: font,
+        color: rgb(0.5, 0.5, 0.5),
       });
     }
 
-    if (featureLineCount === 0) {
-      page.drawText('Standard configuration - no additional features', {
-        x: margin + 5,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-      currentY -= 18;
-    }
+    // Reset current Y for next section
+    currentY -= featuresBoxHeight + 10;
 
     // Order Notes/Special Instructions
     if (order.notes) {
@@ -949,6 +1039,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
     }
 
+    // Shipping total
+    if (order.shipping && order.shipping > 0) {
+      currentY -= 18;
+      page.drawText('Shipping:', {
+        x: totalsBoxX + 10,
+        y: currentY - 20,
+        size: 11,
+        font: boldFont,
+      });
+
+      page.drawText(`$${order.shipping.toFixed(2)}`, {
+        x: totalsBoxX + 120,
+        y: currentY - 20,
+        size: 11,
+        font: font,
+      });
+    }
+
     // Separator line
     page.drawLine({
       start: { x: totalsBoxX + 10, y: currentY - 30 },
@@ -958,7 +1066,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Total
-    const finalTotal = basePrice + featureTotal;
+    const finalTotal = basePrice + featureTotal + (order.shipping || 0);
     page.drawText('TOTAL:', {
       x: totalsBoxX + 10,
       y: currentY - 50,
@@ -1039,8 +1147,10 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    // Company footer
-    currentY -= 40;
+
+
+    // Company footer with better contact info
+    currentY -= 50;
     page.drawText('Thank you for your business!', {
       x: margin,
       y: currentY,
@@ -1049,7 +1159,15 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     currentY -= 20;
-    page.drawText('Questions? Contact us at sales@agatcomposite.com or (XXX) XXX-XXXX', {
+    page.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+      x: margin,
+      y: currentY,
+      size: 9,
+      font: font,
+    });
+
+    currentY -= 12;
+    page.drawText('Phone: (256) 723-8381 | Email: sales@agatcomposite.com', {
       x: margin,
       y: currentY,
       size: 9,

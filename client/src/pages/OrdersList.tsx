@@ -342,6 +342,10 @@ export default function OrdersList() {
           aValue = getCustomerName(a.customerId);
           bValue = getCustomerName(b.customerId);
           break;
+        case 'model':
+          aValue = a.modelId || '';
+          bValue = b.modelId || '';
+          break;
         case 'dueDate':
           aValue = new Date(a.dueDate);
           bValue = new Date(b.dueDate);
@@ -598,6 +602,7 @@ export default function OrdersList() {
                   <SelectItem value="dueDate">Due Date</SelectItem>
                   <SelectItem value="orderId">Order ID</SelectItem>
                   <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="model">Model</SelectItem>
                   <SelectItem value="department">Department</SelectItem>
                 </SelectContent>
               </Select>

@@ -50,6 +50,7 @@ interface Order {
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model'>('orderDate');
   const [cancelReason, setCancelReason] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
@@ -126,6 +127,22 @@ export default function AllOrdersPage() {
     return departmentMatch && searchMatch;
   });
 
+  // Sort orders based on selected sort option
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    switch (sortBy) {
+      case 'orderDate':
+        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(); // Newest first
+      case 'dueDate':
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); // Earliest due date first
+      case 'customer':
+        return (a.customer || '').localeCompare(b.customer || '');
+      case 'model':
+        return (a.modelId || '').localeCompare(b.modelId || '');
+      default:
+        return 0;
+    }
+  });
+
   const departments = ['P1 Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
 
   if (isLoading) {
@@ -166,7 +183,7 @@ export default function AllOrdersPage() {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span>📋 All Orders</span>
-              <span className="text-sm text-gray-500">Orders ({filteredOrders.length})</span>
+              <span className="text-sm text-gray-500">Orders ({sortedOrders.length})</span>
             </div>
             <div className="flex items-center gap-4">
               {/* Search Input */}
@@ -208,7 +225,7 @@ export default function AllOrdersPage() {
 
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Sort by:</span>
-                <Select defaultValue="orderDate">
+                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model') => setSortBy(value)}>
                   <SelectTrigger className="w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -216,6 +233,7 @@ export default function AllOrdersPage() {
                     <SelectItem value="orderDate">Order Date</SelectItem>
                     <SelectItem value="dueDate">Due Date</SelectItem>
                     <SelectItem value="customer">Customer</SelectItem>
+                    <SelectItem value="model">Model</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -237,7 +255,7 @@ export default function AllOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map(order => (
+              {sortedOrders.map(order => (
                 <TableRow key={order.orderId}>
                   <TableCell className="font-medium">
                     {order.fbOrderNumber || order.orderId}
@@ -297,7 +315,7 @@ export default function AllOrdersPage() {
             </TableBody>
           </Table>
 
-          {filteredOrders.length === 0 && (
+          {sortedOrders.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No orders found for the selected criteria
             </div>

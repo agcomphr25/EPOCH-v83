@@ -429,15 +429,11 @@ export default function OrderEntry() {
     if (!initialDataLoaded) return;
 
     const editOrderId = getOrderIdFromUrl();
-    console.log('🔍 Checking for edit order ID from URL:', editOrderId);
-    console.log('🔍 Current URL search params:', window.location.search);
     if (editOrderId) {
-      console.log('✅ Setting edit mode to TRUE for order:', editOrderId);
       setIsEditMode(true);
       setEditingOrderId(editOrderId);
       loadExistingOrder(editOrderId);
     } else {
-      console.log('❌ No edit order ID found, creating new order');
       setIsEditMode(false);
       setEditingOrderId(null);
       generateOrderId();
@@ -870,11 +866,6 @@ export default function OrderEntry() {
 
       if (!modelId) {
         setErrors(prev => ({ ...prev, modelId: 'Stock model is required' }));
-        return;
-      }
-
-      if (!orderId) {
-        setErrors(prev => ({ ...prev, orderId: 'Order ID is required' }));
         return;
       }
 

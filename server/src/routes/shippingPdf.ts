@@ -1562,15 +1562,27 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
   }
 });
 
-// Replace the old bulk endpoint that has routing conflicts
+// Replace the old bulk endpoint that has routing conflicts - REAL UPS API INTEGRATION
 router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
-  console.log('NEW BULK SHIPPING LABELS ENDPOINT CALLED');
+  console.log('REAL UPS BULK SHIPPING LABELS ENDPOINT CALLED');
   try {
-    const { orderIds, packageDetails, serviceCode } = req.body;
+    const { orderIds, packageDetails, serviceCode, shippingAddress } = req.body;
     
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return res.status(400).json({ error: 'Order IDs array is required' });
     }
+
+    // Default package details if not provided
+    const defaultPackageDetails = {
+      weight: "10",
+      length: "12", 
+      width: "12",
+      height: "12"
+    };
+    const finalPackageDetails = { ...defaultPackageDetails, ...packageDetails };
+
+    // Default shipping address if not provided (use customer info from order)
+    const defaultServiceCode = serviceCode || "03"; // UPS Ground
 
     // Get order data from storage using the unified approach that works
     const { storage } = await import('../../storage');
@@ -1612,81 +1624,113 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
       });
     }
 
-    // Create a UPS shipping label PDF document
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
-    const { width, height } = page.getSize();
+    // Create bulk PDF document to hold multiple UPS labels
+    const bulkPdfDoc = await PDFDocument.create();
+    const upsLabels = [];
+    const trackingNumbers = [];
 
-    // Load fonts
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    // Header
-    let currentY = height - 40;
-    page.drawText('UPS BULK SHIPPING LABELS', {
-      x: 50,
-      y: currentY,
-      size: 16,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-
-    currentY -= 40;
-    page.drawText(`Generated: ${new Date().toLocaleDateString()}`, {
-      x: 50,
-      y: currentY,
-      size: 10,
-      font: font,
-    });
-
-    // Order details section
-    currentY -= 30;
+    // Process each order through UPS API
     for (const order of selectedOrders) {
-      currentY -= 25;
-      
-      page.drawText(`Order: ${order.orderId}`, {
-        x: 50,
-        y: currentY,
-        size: 12,
-        font: boldFont,
-      });
-      
-      currentY -= 15;
-      page.drawText(`Status: ${order.status || 'FINALIZED'}`, {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-      
-      // Add tracking number placeholder
-      currentY -= 15;
-      page.drawText(`Tracking: 1Z999AA${Math.random().toString(36).substr(2, 9).toUpperCase()}`, {
-        x: 50,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-      
-      currentY -= 20;
+      try {
+        console.log(`Creating UPS shipment for order: ${order.orderId}`);
+        
+        // Build shipping address from order data or use provided address
+        const orderShippingAddress = shippingAddress || {
+          name: order.customer_name || order.customerName || "Customer Name",
+          street: order.ship_street || order.ship_address || "Address Line 1", 
+          city: order.ship_city || "City",
+          state: order.ship_state || "State",
+          zip: order.ship_zip || order.ship_postal_code || "00000"
+        };
+
+        // Create UPS shipment request
+        const shipmentRequest = buildUPSShipmentRequest(order, orderShippingAddress, finalPackageDetails);
+        console.log(`UPS shipment request for ${order.orderId}:`, JSON.stringify(shipmentRequest, null, 2));
+
+        // Call UPS API to create shipment and get label
+        const upsResponse = await createUPSShipment(shipmentRequest);
+        
+        if (upsResponse && upsResponse.ShipmentResponse && upsResponse.ShipmentResponse.ShipmentResults) {
+          const shipmentResults = upsResponse.ShipmentResponse.ShipmentResults;
+          const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
+          const labelImage = shipmentResults.PackageResults[0]?.ShippingLabel?.GraphicImage;
+
+          console.log(`UPS label created for ${order.orderId}: ${trackingNumber}`);
+          trackingNumbers.push({ orderId: order.orderId, trackingNumber });
+
+          // If we have the base64 label image, add it to our PDF
+          if (labelImage) {
+            try {
+              const labelBytes = Buffer.from(labelImage, 'base64');
+              const labelPdf = await PDFDocument.load(labelBytes);
+              const [labelPage] = await bulkPdfDoc.copyPages(labelPdf, [0]);
+              bulkPdfDoc.addPage(labelPage);
+              
+              upsLabels.push({
+                orderId: order.orderId,
+                trackingNumber: trackingNumber,
+                success: true
+              });
+            } catch (pdfError) {
+              console.error(`Error processing PDF label for ${order.orderId}:`, pdfError);
+              // Add a fallback text page for this order
+              await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber);
+              upsLabels.push({
+                orderId: order.orderId,
+                trackingNumber: trackingNumber,
+                success: true,
+                fallback: true
+              });
+            }
+          } else {
+            // No label image received, add text-based page
+            await addFallbackLabelPage(bulkPdfDoc, order, trackingNumber);
+            upsLabels.push({
+              orderId: order.orderId,
+              trackingNumber: trackingNumber,
+              success: true,
+              fallback: true
+            });
+          }
+        } else {
+          console.error(`No valid UPS response for order ${order.orderId}`);
+          throw new Error(`UPS API returned invalid response for ${order.orderId}`);
+        }
+
+      } catch (orderError) {
+        console.error(`Error processing order ${order.orderId}:`, orderError);
+        // Add error page to PDF
+        await addErrorLabelPage(bulkPdfDoc, order, orderError.message);
+        upsLabels.push({
+          orderId: order.orderId,
+          error: orderError.message,
+          success: false
+        });
+      }
     }
 
-    // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
+    // If no pages were added, create a summary page
+    if (bulkPdfDoc.getPageCount() === 0) {
+      await addSummaryPage(bulkPdfDoc, upsLabels);
+    }
+
+    // Generate final PDF
+    const pdfBytes = await bulkPdfDoc.save();
 
     // Set response headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Bulk-Shipping-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
     res.send(Buffer.from(pdfBytes));
     
-    console.log(`Successfully generated bulk shipping labels for ${selectedOrders.length} orders`);
+    console.log(`Successfully generated UPS bulk shipping labels for ${upsLabels.length} orders`);
+    console.log('Tracking numbers:', trackingNumbers);
 
   } catch (error) {
-    console.error('Bulk shipping labels error:', error);
-    return res.status(500).json({ error: 'Failed to generate bulk shipping labels' });
+    console.error('UPS bulk shipping labels error:', error);
+    return res.status(500).json({ error: `Failed to generate UPS bulk shipping labels: ${error.message}` });
   }
 });
 

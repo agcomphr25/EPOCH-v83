@@ -337,12 +337,12 @@ export default function AllOrdersList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Order ID</TableHead>
-                <TableHead>Payment Status</TableHead>
                 <TableHead>Order Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Current Department</TableHead>
                 <TableHead>Due Date</TableHead>
+                <TableHead>Order Total / Payment Status</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -361,17 +361,6 @@ export default function AllOrdersList() {
                           {getDisplayOrderId(order)}
                         </span>
                       </OrderSummaryModal>
-                    </TableCell>
-                    <TableCell>
-                      {order.isFullyPaid ? (
-                        <Badge className="bg-green-600 text-white hover:bg-green-700">
-                          PAID
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-red-500 hover:bg-red-600 text-white">
-                          NOT PAID
-                        </Badge>
-                      )}
                     </TableCell>
                     <TableCell>
                       {order.orderDate ? (() => {
@@ -426,6 +415,24 @@ export default function AllOrdersList() {
                           timeZone: 'UTC'
                         });
                       })() : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="font-semibold text-sm">
+                          ${order.paymentTotal ? order.paymentTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                        </div>
+                        <div>
+                          {order.isFullyPaid ? (
+                            <Badge className="bg-green-600 text-white hover:bg-green-700 text-xs">
+                              PAID
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs">
+                              NOT PAID
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

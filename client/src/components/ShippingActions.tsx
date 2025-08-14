@@ -64,15 +64,12 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   const handleQCChecklist = async () => {
     setIsGeneratingQC(true);
     try {
-      const response = await axios.get(`/api/shipping-pdf/qc-checklist/${orderId}`, {
-        responseType: 'blob'
-      });
-      
-      downloadPdf(response.data, `QC-Checklist-${orderId}.pdf`);
+      // Open PDF in new tab for easy printing instead of downloading
+      window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
       
       toast({
         title: "QC Checklist Generated",
-        description: `QC checklist for order ${orderId} has been downloaded.`,
+        description: `QC checklist for order ${orderId} opened in new tab.`,
       });
     } catch (error) {
       console.error('Error generating QC checklist:', error);
@@ -89,15 +86,12 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   const handleSalesOrder = async () => {
     setIsGeneratingSO(true);
     try {
-      const response = await axios.get(`/api/shipping-pdf/sales-order/${orderId}`, {
-        responseType: 'blob'
-      });
-      
-      downloadPdf(response.data, `Sales-Order-${orderId}.pdf`);
+      // Open PDF in new tab for easy printing instead of downloading
+      window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
       
       toast({
         title: "Sales Order Generated",
-        description: `Sales order for ${orderId} has been downloaded.`,
+        description: `Sales order for ${orderId} opened in new tab.`,
       });
     } catch (error) {
       console.error('Error generating sales order:', error);

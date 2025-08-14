@@ -200,16 +200,12 @@ export default function ShippingQueuePage() {
         description: "Please wait while we generate the PDF"
       });
 
-      const response = await fetch(`/api/shipping-pdf/qc-checklist/${orderId}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const pdfBlob = await response.blob();
-      downloadPdf(pdfBlob, `QC-Checklist-${orderId}.pdf`);
+      // Open PDF in new tab for easy printing instead of downloading
+      window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
       
       toast({
-        title: "QC checklist downloaded",
-        description: `QC checklist for order ${orderId} has been downloaded`
+        title: "QC checklist opened",
+        description: `QC checklist for order ${orderId} opened in new tab for printing`
       });
     } catch (error) {
       console.error('Error generating QC checklist:', error);
@@ -258,16 +254,12 @@ export default function ShippingQueuePage() {
         description: "Please wait while we generate the PDF"
       });
 
-      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const pdfBlob = await response.blob();
-      downloadPdf(pdfBlob, `Sales-Order-${orderId}.pdf`);
+      // Open PDF in new tab for easy printing instead of downloading
+      window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
       
       toast({
-        title: "Sales order invoice downloaded",
-        description: `Sales order invoice for ${orderId} has been downloaded`
+        title: "Sales order invoice opened",
+        description: `Sales order invoice for ${orderId} opened in new tab for printing`
       });
     } catch (error) {
       console.error('Error generating sales order:', error);

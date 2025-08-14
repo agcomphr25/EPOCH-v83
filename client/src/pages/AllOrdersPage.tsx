@@ -278,9 +278,13 @@ export default function AllOrdersPage() {
                       <Badge variant={order.status === 'SCRAPPED' ? 'destructive' : 'default'}>
                         {order.status || 'ACTIVE'}
                       </Badge>
-                      {order.isFullyPaid && (
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      {order.isFullyPaid ? (
+                        <Badge className="bg-green-500 hover:bg-green-600 text-white">
                           PAID
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-500 hover:bg-red-600 text-white">
+                          NOT PAID
                         </Badge>
                       )}
                       {order.isCancelled && (

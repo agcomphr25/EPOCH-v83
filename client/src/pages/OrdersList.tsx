@@ -720,12 +720,18 @@ export default function OrdersList() {
                             KICKBACK
                           </Badge>
                         )}
-                        {order.isPaid && order.paymentAmount && order.paymentAmount > 0 && (
+                        {order.isFullyPaid ? (
                           <Badge 
-                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs px-1 py-0"
-                            title={`Paid $${order.paymentAmount} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
+                            className="bg-green-500 hover:bg-green-600 text-white text-xs px-1 py-0"
+                            title={`Paid $${order.paymentAmount || 0} via ${order.paymentType || 'Unknown'} ${order.paymentDate ? `on ${format(new Date(order.paymentDate), 'MMM d, yyyy')}` : ''}`}
                           >
                             PAID
+                          </Badge>
+                        ) : (
+                          <Badge 
+                            className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0"
+                          >
+                            NOT PAID
                           </Badge>
                         )}
                       </div>

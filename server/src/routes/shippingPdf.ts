@@ -1337,7 +1337,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         throw new Error('UPS API response missing tracking number or label image');
       }
 
-      // Save tracking information to database
+      // Save tracking information to database and update order status
       const { updateTrackingInfo, sendCustomerNotification } = await import('../../utils/notifications');
       await updateTrackingInfo(orderId, {
         trackingNumber,
@@ -1345,6 +1345,35 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         shippedDate: new Date(),
         estimatedDelivery: undefined // UPS response may include this
       });
+
+      // Update order status and move to Shipping Manager
+      try {
+        console.log(`Moving order ${orderId} to Shipping Manager after individual label creation`);
+        
+        const { storage } = await import('../../storage');
+        const updateData = {
+          trackingNumber: trackingNumber,
+          shippingCarrier: 'UPS',
+          shippingMethod: 'UPS Ground',
+          shippedDate: new Date().toISOString(),
+          shippingLabelGenerated: true,
+          currentDepartment: 'Shipping Manager',
+          status: 'COMPLETED'
+        };
+
+        // Try to update the order in both tables
+        try {
+          await storage.updateOrder(orderId, updateData);
+          console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
+        } catch (finalizedError) {
+          // If not found in finalized orders, try draft orders
+          await storage.updateOrderDraft(orderId, updateData);
+          console.log(`Updated draft order ${orderId} status to Shipping Manager`);
+        }
+      } catch (updateError) {
+        console.error(`Failed to update order ${orderId} status:`, updateError);
+        // Continue processing even if status update fails
+      }
 
       // Send customer notification
       try {
@@ -1430,7 +1459,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       // Generate placeholder tracking number
       const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
 
-      // Save placeholder tracking information to database
+      // Save placeholder tracking information to database and update order status
       const { updateTrackingInfo } = await import('../../utils/notifications');
       await updateTrackingInfo(orderId, {
         trackingNumber: placeholderTrackingNumber,
@@ -1438,6 +1467,35 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
         shippedDate: new Date(),
         estimatedDelivery: undefined
       });
+
+      // Update order status and move to Shipping Manager even for placeholder labels
+      try {
+        console.log(`Moving order ${orderId} to Shipping Manager after placeholder label creation`);
+        
+        const { storage } = await import('../../storage');
+        const updateData = {
+          trackingNumber: placeholderTrackingNumber,
+          shippingCarrier: 'UPS (Placeholder)',
+          shippingMethod: 'UPS Ground',
+          shippedDate: new Date().toISOString(),
+          shippingLabelGenerated: true,
+          currentDepartment: 'Shipping Manager',
+          status: 'COMPLETED'
+        };
+
+        // Try to update the order in both tables
+        try {
+          await storage.updateOrder(orderId, updateData);
+          console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
+        } catch (finalizedError) {
+          // If not found in finalized orders, try draft orders
+          await storage.updateOrderDraft(orderId, updateData);
+          console.log(`Updated draft order ${orderId} status to Shipping Manager`);
+        }
+      } catch (updateError) {
+        console.error(`Failed to update order ${orderId} status:`, updateError);
+        // Continue processing even if status update fails
+      }
 
       // Tracking number placeholder
       currentY -= 30;
@@ -1749,6 +1807,36 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
 
           console.log(`UPS label created for ${order.orderId}: ${trackingNumber}`);
           trackingNumbers.push({ orderId: order.orderId, trackingNumber });
+
+          // Update order status and move to Shipping Manager
+          try {
+            console.log(`Moving order ${order.orderId} to Shipping Manager after label creation`);
+            
+            // Update tracking information and order status
+            const updateData = {
+              trackingNumber: trackingNumber,
+              shippingCarrier: 'UPS',
+              shippingMethod: 'UPS Ground',
+              shippedDate: new Date().toISOString(),
+              shippingLabelGenerated: true,
+              currentDepartment: 'Shipping Manager',
+              status: 'COMPLETED'
+            };
+
+            // Update either finalized or draft order based on which table it's in
+            if (order.id) {
+              // This is a finalized order - update the main orders table
+              await storage.updateOrder(order.orderId, updateData);
+              console.log(`Updated finalized order ${order.orderId} status to Shipping Manager`);
+            } else {
+              // This is a draft order - update the drafts table
+              await storage.updateOrderDraft(order.orderId, updateData);
+              console.log(`Updated draft order ${order.orderId} status to Shipping Manager`);
+            }
+          } catch (updateError) {
+            console.error(`Failed to update order ${order.orderId} status:`, updateError);
+            // Continue processing even if status update fails
+          }
 
           // If we have the base64 label image, add it to our PDF
           if (labelImage) {

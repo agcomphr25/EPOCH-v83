@@ -23,13 +23,20 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
-  // Get orders in Shipping department
+  // Get orders in Shipping department, sorted by due date (latest first)
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
+    const filteredOrders = orders.filter((order: any) => 
       order.currentDepartment === 'Shipping' || 
       (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
+    
+    // Sort by due date - latest due date first (most urgent)
+    return filteredOrders.sort((a: any, b: any) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dateB - dateA; // Latest due date first
+    });
   }, [allOrders]);
 
   // Count orders in previous department (Shipping QC)

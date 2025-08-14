@@ -1246,6 +1246,62 @@ export class DatabaseStorage implements IStorage {
     })) as AllOrder[];
   }
 
+  // Helper function to calculate order total from features and pricing
+  private async calculateOrderTotal(order: AllOrder): Promise<number> {
+    let total = 0;
+
+    // Add base stock model price (use override if set, otherwise use standard price)
+    if (order.modelId) {
+      const stockModels = await this.getAllStockModels();
+      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      if (selectedModel) {
+        const basePrice = order.priceOverride !== null ? order.priceOverride : (selectedModel.price || 0);
+        total += basePrice;
+      }
+    }
+
+    // Add feature prices from features object
+    if (order.features && typeof order.features === 'object') {
+      const features = await this.getAllFeatures();
+      Object.entries(order.features).forEach(([featureId, value]) => {
+        if (value && value !== 'none') {
+          const feature = features.find(f => f.id === featureId);
+          if (feature?.options) {
+            if (Array.isArray(value)) {
+              // Handle multi-select features
+              value.forEach(optionValue => {
+                const option = feature.options.find(opt => opt.value === optionValue);
+                if (option?.price) {
+                  total += option.price;
+                }
+              });
+            } else {
+              // Handle single-select features
+              const option = feature.options.find(opt => opt.value === value);
+              if (option?.price) {
+                total += option.price;
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Apply custom discount if present
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      if (order.customDiscountType === 'percent') {
+        total = total * (1 - (order.customDiscountValue / 100));
+      } else {
+        total = Math.max(0, total - order.customDiscountValue);
+      }
+    }
+
+    // Add shipping
+    total += order.shipping || 0;
+
+    return total;
+  }
+
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
     // First get all orders
@@ -1264,43 +1320,33 @@ export class DatabaseStorage implements IStorage {
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
     // Calculate order totals and determine payment status
-    return orders.map(order => {
-      const paymentTotal = paymentMap.get(order.orderId) || 0;
+    const ordersWithPaymentInfo = await Promise.all(
+      orders.map(async order => {
+        const paymentTotal = paymentMap.get(order.orderId) || 0;
 
-      // Calculate order total from features pricing, shipping, etc.
-      let orderTotal = 0;
-
-      // Use price override if available, otherwise use paymentAmount
-      if (order.priceOverride && order.priceOverride > 0) {
-        orderTotal = order.priceOverride;
-        // Add shipping only when using price override (paymentAmount already includes shipping)
-        orderTotal += order.shipping || 0;
-      } else {
-        // paymentAmount already includes shipping and all costs
-        orderTotal = order.paymentAmount || 0;
-      }
-
-      // Apply custom discount if present
-      if (order.showCustomDiscount && order.customDiscountValue) {
-        if (order.customDiscountType === 'percent') {
-          orderTotal = orderTotal * (1 - (order.customDiscountValue / 100));
-        } else {
-          orderTotal = Math.max(0, orderTotal - order.customDiscountValue);
+        // Calculate actual order total using Order Summary logic
+        let orderTotal = order.paymentAmount || 0;
+        
+        // If paymentAmount is NULL or 0, calculate from features and pricing
+        if (orderTotal === 0) {
+          orderTotal = await this.calculateOrderTotal(order);
         }
-      }
 
-      // Consider an order fully paid if:
-      // 1. Standard case: payments >= orderTotal and orderTotal > 0, OR
-      // 2. Legacy case: paymentAmount is null but we have substantial payments (> shipping cost)
-      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
-                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
+        // Consider an order fully paid if:
+        // 1. Standard case: payments >= orderTotal and orderTotal > 0, OR
+        // 2. Legacy case: orderTotal is 0 but we have substantial payments (> shipping cost)
+        const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
+                           (orderTotal === 0 && paymentTotal > (order.shipping || 0));
 
-      return {
-        ...order,
-        paymentTotal,
-        isFullyPaid
-      };
-    });
+        return {
+          ...order,
+          paymentTotal,
+          isFullyPaid
+        };
+      })
+    );
+
+    return ordersWithPaymentInfo;
   }
 
   async getOrdersByDepartment(department: string): Promise<AllOrder[]> {

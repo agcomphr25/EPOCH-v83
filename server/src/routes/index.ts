@@ -1536,7 +1536,7 @@ export function registerRoutes(app: Express): Server {
             department: 'Layup' as const, // Start at Layup department
             status: 'PENDING' as const,
             priority: 3, // Default priority
-            dueDate: purchaseOrder.expectedDelivery || purchaseOrder.poDate,
+            dueDate: purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate),
             p2PoId: poId,
             p2PoItemId: item.id,
             sku: item.itemId,
@@ -1549,8 +1549,8 @@ export function registerRoutes(app: Express): Server {
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery
             },
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdAt: new Date(),
+            updatedAt: new Date()
           };
 
           const createdOrder = await storage.createP2ProductionOrder(productionOrderData);

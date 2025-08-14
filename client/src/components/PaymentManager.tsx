@@ -301,7 +301,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
-                    <SelectItem value="aaaa">AAAA</SelectItem>
+
                   </SelectContent>
                 </Select>
               </div>
@@ -404,7 +404,7 @@ export default function PaymentManager({ orderId, totalAmount, onPaymentsChange,
                     <SelectItem value="check">Check</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="ach">ACH</SelectItem>
-                    <SelectItem value="aaaa">AAAA</SelectItem>
+
                   </SelectContent>
                 </Select>
               </div>

@@ -1062,94 +1062,285 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-    // Totals Section
-    currentY -= 40;
+    // ORDER SUMMARY - DETAILED PRICING BREAKDOWN
+    currentY -= 50;
+    page.drawText('ORDER SUMMARY - PRICING BREAKDOWN', {
+      x: margin,
+      y: currentY,
+      size: 14,
+      font: boldFont,
+    });
 
-    // Create totals box
-    const totalsBoxX = width - margin - 200;
+    // Create Order Summary box (larger for detailed breakdown)
+    const summaryBoxHeight = 200;
     page.drawRectangle({
-      x: totalsBoxX,
-      y: currentY - 80,
-      width: 200,
-      height: 80,
+      x: margin,
+      y: currentY - summaryBoxHeight - 10,
+      width: printableWidth,
+      height: summaryBoxHeight,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
+    currentY -= 25;
+    let summaryLineY = currentY;
+
+    // Stock Model - Base Price
+    page.drawText(`Stock Model (${model?.displayName || model?.name || 'Custom'}):`, {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(`$${basePrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 15;
+
+    // Handedness
+    page.drawText('Handedness:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    const handednessDisplay = order.features?.handedness ? 
+      (order.features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
+    page.drawText(`${handednessDisplay}`, {
+      x: margin + 150,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText('$0.00', {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 15;
+
+    // Action Length
+    const actionLengthFeature = features.find(f => f.id === 'action_length');
+    const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
+    const actionLengthPrice = actionLengthOption?.price || 0;
+
+    page.drawText('Action Length:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    const actionLengthDisplay = actionLengthOption?.label || 
+      (order.features?.action_length ? order.features.action_length.charAt(0).toUpperCase() + order.features.action_length.slice(1) : 'Not selected');
+    
+    page.drawText(actionLengthDisplay, {
+      x: margin + 150,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 15;
+
+    // Barrel Inlet
+    const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
+    const barrelInletOption = barrelInletFeature?.options?.find(opt => opt.value === order.features?.barrel_inlet);
+    const barrelInletPrice = barrelInletOption?.price || 0;
+
+    page.drawText('Barrel Inlet:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
+    page.drawText(barrelInletDisplay, {
+      x: margin + 150,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(`$${barrelInletPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 15;
+
+    // Paint Options
+    const paintFeature = features.find(f => f.id === 'paint_options');
+    const paintOption = paintFeature?.options?.find(opt => opt.value === order.features?.paint_options);
+    const paintPrice = paintOption?.price || 0;
+
+    page.drawText('Paint Options:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    const paintDisplay = paintOption?.label || 
+      (order.features?.paint_options ? order.features.paint_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+    
+    page.drawText(paintDisplay, {
+      x: margin + 150,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(`$${paintPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 15;
+
+    // Rails
+    let railsPrice = 0;
+    let railsDisplay = 'Not selected';
+    
+    if (order.features?.rail_accessory && Array.isArray(order.features.rail_accessory) && order.features.rail_accessory.length > 0) {
+      const railFeature = features.find(f => f.id === 'rail_accessory');
+      const selectedRails = order.features.rail_accessory.filter(rail => rail !== 'no_rail');
+      
+      if (selectedRails.length > 0) {
+        railsDisplay = selectedRails.map(railValue => {
+          const option = railFeature?.options?.find(opt => opt.value === railValue);
+          railsPrice += option?.price || 0;
+          return option?.label || railValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }).join(', ');
+      }
+    }
+
+    page.drawText('Rails:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(railsDisplay, {
+      x: margin + 150,
+      y: summaryLineY,
+      size: 10,
+      font: font,
+    });
+
+    page.drawText(`$${railsPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 25;
+
+    // Separator line
+    page.drawLine({
+      start: { x: margin + 10, y: summaryLineY },
+      end: { x: margin + printableWidth - 10, y: summaryLineY },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+
+    summaryLineY -= 20;
+
     // Subtotal
+    const calculatedSubtotal = basePrice + actionLengthPrice + barrelInletPrice + paintPrice + railsPrice;
     page.drawText('Subtotal:', {
-      x: totalsBoxX + 10,
-      y: currentY - 20,
+      x: margin + 10,
+      y: summaryLineY,
       size: 11,
       font: boldFont,
     });
 
-    page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: totalsBoxX + 120,
-      y: currentY - 20,
+    page.drawText(`$${calculatedSubtotal.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
       size: 11,
-      font: font,
+      font: boldFont,
     });
 
-    // Features total
-    if (featureTotal > 0) {
-      currentY -= 18;
-      page.drawText('Features:', {
-        x: totalsBoxX + 10,
-        y: currentY - 20,
-        size: 11,
-        font: boldFont,
-      });
+    summaryLineY -= 18;
 
-      page.drawText(`$${featureTotal.toFixed(2)}`, {
-        x: totalsBoxX + 120,
-        y: currentY - 20,
-        size: 11,
-        font: font,
-      });
-    }
-
-    // Shipping total
+    // Shipping
     if (order.shipping && order.shipping > 0) {
-      currentY -= 18;
       page.drawText('Shipping:', {
-        x: totalsBoxX + 10,
-        y: currentY - 20,
+        x: margin + 10,
+        y: summaryLineY,
         size: 11,
         font: boldFont,
       });
 
       page.drawText(`$${order.shipping.toFixed(2)}`, {
-        x: totalsBoxX + 120,
-        y: currentY - 20,
+        x: margin + printableWidth - 80,
+        y: summaryLineY,
         size: 11,
-        font: font,
+        font: boldFont,
       });
+
+      summaryLineY -= 18;
     }
 
-    // Separator line
+    // Final separator line
     page.drawLine({
-      start: { x: totalsBoxX + 10, y: currentY - 30 },
-      end: { x: totalsBoxX + 190, y: currentY - 30 },
-      thickness: 1,
+      start: { x: margin + 10, y: summaryLineY },
+      end: { x: margin + printableWidth - 10, y: summaryLineY },
+      thickness: 2,
       color: rgb(0, 0, 0),
     });
 
+    summaryLineY -= 20;
+
     // Total
-    const finalTotal = basePrice + featureTotal + (order.shipping || 0);
+    const finalTotal = calculatedSubtotal + (order.shipping || 0);
     page.drawText('TOTAL:', {
-      x: totalsBoxX + 10,
-      y: currentY - 50,
+      x: margin + 10,
+      y: summaryLineY,
       size: 12,
       font: boldFont,
     });
 
     page.drawText(`$${finalTotal.toFixed(2)}`, {
-      x: totalsBoxX + 120,
-      y: currentY - 50,
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
       size: 12,
       font: boldFont,
+      color: rgb(0, 0.6, 0),
     });
+
+    // Reset currentY for next section
+    currentY -= summaryBoxHeight + 10;
 
     // Terms and Conditions Section
     currentY -= 120;

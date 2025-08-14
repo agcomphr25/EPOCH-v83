@@ -510,9 +510,9 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
 
-    // Set response headers
+    // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="QC-Checklist-${orderId}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="QC-Checklist-${orderId}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
@@ -1220,9 +1220,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
 
-    // Set response headers
+    // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Sales-Order-${orderId}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="Sales-Order-${orderId}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
@@ -1413,9 +1413,9 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       // Generate PDF bytes
       const pdfBytes = await pdfDoc.save();
 
-      // Set response headers
+      // Set response headers for PDF inline display (opens in new tab for printing)
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`);
+      res.setHeader('Content-Disposition', `inline; filename="UPS-Label-${orderId}-${trackingNumber}.pdf"`);
       res.setHeader('Content-Length', pdfBytes.length);
 
       // Send PDF
@@ -1648,9 +1648,9 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       // Generate PDF bytes
       const fallbackPdfBytes = await placeholderPdfDoc.save();
 
-      // Set response headers
+      // Set response headers for PDF inline display (opens in new tab for printing)
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Shipping-Label-Fallback-${orderId}.pdf"`);
+      res.setHeader('Content-Disposition', `inline; filename="Shipping-Label-Fallback-${orderId}.pdf"`);
       res.setHeader('Content-Length', fallbackPdfBytes.length);
 
       // Send PDF
@@ -1901,9 +1901,9 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
     // Generate final PDF
     const pdfBytes = await bulkPdfDoc.save();
 
-    // Set response headers for PDF download
+    // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF
@@ -2247,9 +2247,9 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
 
-    // Set response headers
+    // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Bulk-Shipping-Label-${trackingNumber || 'BULK'}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="Bulk-Shipping-Label-${trackingNumber || 'BULK'}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF

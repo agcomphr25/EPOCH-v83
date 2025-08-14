@@ -113,20 +113,20 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
 
   // Determine card styling based on source and material
   const getCardStyling = () => {
-    if (order.source === 'production_order') {
+    if (order.source === 'p1_purchase_order') {
       return {
         bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
         text: 'text-orange-800 dark:text-orange-200'
       };
-    } else if (order.source === 'p1_purchase_order') {
+    } else if (order.source === 'production_order') {
       return {
         bg: 'bg-purple-100 dark:bg-purple-800/50 hover:bg-purple-200 dark:hover:bg-purple-800/70 border-2 border-purple-300 dark:border-purple-600',
         text: 'text-purple-800 dark:text-purple-200'
       };
     } else if (materialType === 'FG') {
       return {
-        bg: 'bg-blue-600 dark:bg-blue-900/70 hover:bg-blue-700 dark:hover:bg-blue-900/90 border-2 border-blue-700 dark:border-blue-800',
-        text: 'text-white dark:text-blue-100'
+        bg: 'bg-purple-600 dark:bg-purple-900/70 hover:bg-purple-700 dark:hover:bg-purple-900/90 border-2 border-purple-700 dark:border-purple-800',
+        text: 'text-white dark:text-purple-100'
       };
     } else {
       return {
@@ -1901,14 +1901,19 @@ export default function LayupScheduler() {
               text-align: center;
               line-height: 1.1;
             }
-            .order-card.production { 
+            .order-card.p1_po { 
               background: #fff5e6; 
               border-color: #ffc069;
               color: #d46b08;
             }
+            .order-card.production { 
+              background: #f3e8ff; 
+              border-color: #c084fc;
+              color: #7c3aed;
+            }
             .order-card.fg { 
-              background: #1e40af; 
-              border-color: #1e3a8a;
+              background: #7c3aed; 
+              border-color: #6d28d9;
               color: white;
             }
             .order-card.regular { 
@@ -2137,7 +2142,8 @@ export default function LayupScheduler() {
                             const hasHeavyFill = getHeavyFillDisplay(order);
 
                             let cardClass = 'regular';
-                            if (isProduction) cardClass = 'production';
+                            if (order.source === 'p1_purchase_order') cardClass = 'p1_po';
+                            else if (isProduction) cardClass = 'production';
                             else if (materialType === 'FG') cardClass = 'fg';
 
                             return `

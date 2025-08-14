@@ -214,8 +214,15 @@ export function AveryLabelPrint({
                   /* Ensure exact positioning for Avery 5160 */
                   @page {
                     size: 8.5in 11in;
-                    margin: 0.5in 0.1875in;
+                    margin: 0.5in 0.1875in 0.5in 0.1875in;
                   }
+                  
+                  /* Fine-tuning adjustments - uncomment if needed */
+                  /*
+                  @page {
+                    margin: 0.48in 0.16in 0.48in 0.16in;
+                  }
+                  */
                 }
 
                 .labels-container {

@@ -18,9 +18,9 @@ export default function ShippingQueuePage() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const { toast } = useToast();
   
-  // Get all orders from production pipeline
+  // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders/with-payment-status'],
   });
 
   // Get orders in Shipping department, sorted by due date (latest first)

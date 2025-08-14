@@ -1655,7 +1655,9 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
     // Process each order through UPS API
     for (const order of selectedOrders) {
       try {
-        console.log(`Creating UPS shipment for order: ${order.orderId}`);
+        console.log(`=== PROCESSING ORDER ${order.orderId} ===`);
+        console.log(`Order object keys:`, Object.keys(order));
+        console.log(`Order customerId field:`, order.customerId);
         
         // Get customer and address information
         let customerInfo = null;
@@ -1665,17 +1667,34 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         
         if (order.customerId) {
           try {
+            console.log(`Calling getCustomerById with ID: "${order.customerId}" (type: ${typeof order.customerId})`);
             customerInfo = await storage.getCustomerById(order.customerId);
-            console.log(`Found customer:`, customerInfo);
+            console.log(`Customer lookup result:`, customerInfo);
+            if (customerInfo) {
+              console.log(`Found customer for ${order.orderId}:`, {
+                id: customerInfo.id,
+                name: customerInfo.name,
+                email: customerInfo.email
+              });
+            } else {
+              console.log(`No customer found for ID: ${order.customerId}`);
+            }
             
             if (customerInfo) {
               // Get customer's default shipping address
               const addresses = await storage.getCustomerAddresses(order.customerId);
-              console.log(`Found ${addresses.length} addresses for customer ${order.customerId}:`, addresses);
+              console.log(`Found ${addresses.length} addresses for customer ${order.customerId}`);
               customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
                               addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
                               addresses[0]; // fallback to first address
-              console.log(`Selected address:`, customerAddress);
+              console.log(`Selected address for ${order.orderId}:`, {
+                street: customerAddress?.street,
+                city: customerAddress?.city,
+                state: customerAddress?.state,
+                zipCode: customerAddress?.zipCode,
+                type: customerAddress?.type,
+                isDefault: customerAddress?.isDefault
+              });
             }
           } catch (e) {
             console.log(`Error finding customer info for order ${order.orderId}:`, e);

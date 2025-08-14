@@ -2128,11 +2128,11 @@ export default function OrderEntry() {
                           console.log('🔧 Rails feature found but no options:', feature);
                           return currentRails.join(', ');
                         }
-                        const labels = currentRails.map((optionValue: string) => {
+                        const labels = Array.isArray(currentRails) ? currentRails.map((optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           console.log('🔧 Rails option lookup:', optionValue, '→', option?.label);
                           return option?.label || optionValue;
-                        });
+                        }) : [];
                         return labels.join(', ');
                       }
                       return 'Not selected';
@@ -2143,10 +2143,10 @@ export default function OrderEntry() {
                       if (currentRails && currentRails.length > 0) {
                         const feature = featureDefs.find(f => f.id === 'rail_accessory');
                         if (!feature?.options) return '0.00';
-                        const totalPrice = currentRails.reduce((sum: number, optionValue: string) => {
+                        const totalPrice = Array.isArray(currentRails) ? currentRails.reduce((sum: number, optionValue: string) => {
                           const option = feature.options!.find(opt => opt.value === optionValue);
                           return sum + (option?.price || 0);
-                        }, 0);
+                        }, 0) : 0;
                         return totalPrice.toFixed(2);
                       }
                       return '0.00';

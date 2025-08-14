@@ -936,64 +936,54 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    // Create Order Summary box (larger for detailed breakdown)
-    const summaryBoxHeight = 200;
-    page.drawRectangle({
-      x: margin,
-      y: currentY - summaryBoxHeight - 10,
-      width: printableWidth,
-      height: summaryBoxHeight,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
     currentY -= 25;
+    const boxStartY = currentY;
     let summaryLineY = currentY;
 
     // Stock Model - Base Price
     page.drawText(`Stock Model (${model?.displayName || model?.name || 'Custom'}):`, {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 12;
 
     // Handedness
     page.drawText('Handedness:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     const handednessDisplay = order.features?.handedness ? 
       (order.features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
     page.drawText(`${handednessDisplay}`, {
-      x: margin + 150,
+      x: margin + 120,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText('$0.00', {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 12;
 
     // Action Length
     const actionLengthFeature = features.find(f => f.id === 'action_length');
@@ -1003,7 +993,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Action Length:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
@@ -1011,21 +1001,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       (order.features?.action_length ? order.features.action_length.charAt(0).toUpperCase() + order.features.action_length.slice(1) : 'Not selected');
     
     page.drawText(actionLengthDisplay, {
-      x: margin + 150,
+      x: margin + 120,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 12;
 
     // Barrel Inlet
     const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
@@ -1035,27 +1025,27 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Barrel Inlet:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
     page.drawText(barrelInletDisplay, {
-      x: margin + 150,
+      x: margin + 120,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${barrelInletPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 12;
 
     // Paint Options
     const paintFeature = features.find(f => f.id === 'paint_options');
@@ -1065,7 +1055,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Paint Options:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
@@ -1073,21 +1063,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       (order.features?.paint_options ? order.features.paint_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     page.drawText(paintDisplay, {
-      x: margin + 150,
+      x: margin + 120,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${paintPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 12;
 
     // Rails
     let railsPrice = 0;
@@ -1109,26 +1099,26 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText('Rails:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(railsDisplay, {
-      x: margin + 150,
+      x: margin + 120,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${railsPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 10,
+      size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 25;
+    summaryLineY -= 20;
 
     // Separator line
     page.drawLine({
@@ -1138,43 +1128,43 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 20;
+    summaryLineY -= 15;
 
     // Subtotal
     const calculatedSubtotal = basePrice + actionLengthPrice + barrelInletPrice + paintPrice + railsPrice;
     page.drawText('Subtotal:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 11,
+      size: 10,
       font: boldFont,
     });
 
     page.drawText(`$${calculatedSubtotal.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 11,
+      size: 10,
       font: boldFont,
     });
 
-    summaryLineY -= 18;
+    summaryLineY -= 15;
 
     // Shipping
     if (order.shipping && order.shipping > 0) {
       page.drawText('Shipping:', {
         x: margin + 10,
         y: summaryLineY,
-        size: 11,
+        size: 10,
         font: boldFont,
       });
 
       page.drawText(`$${order.shipping.toFixed(2)}`, {
         x: margin + printableWidth - 80,
         y: summaryLineY,
-        size: 11,
+        size: 10,
         font: boldFont,
       });
 
-      summaryLineY -= 18;
+      summaryLineY -= 15;
     }
 
     // Final separator line
@@ -1185,27 +1175,40 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 20;
+    summaryLineY -= 15;
 
     // Total
     const finalTotal = calculatedSubtotal + (order.shipping || 0);
     page.drawText('TOTAL:', {
       x: margin + 10,
       y: summaryLineY,
-      size: 12,
+      size: 11,
       font: boldFont,
     });
 
     page.drawText(`$${finalTotal.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
-      size: 12,
+      size: 11,
       font: boldFont,
       color: rgb(0, 0.6, 0),
     });
 
+    summaryLineY -= 15;
+
+    // Calculate dynamic box height and draw the box
+    const actualBoxHeight = boxStartY - summaryLineY + 10;
+    page.drawRectangle({
+      x: margin,
+      y: summaryLineY - 10,
+      width: printableWidth,
+      height: actualBoxHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
     // Reset current Y for next section
-    currentY -= summaryBoxHeight + 10;
+    currentY = summaryLineY - 20;
 
     // Order Notes/Special Instructions
     if (order.notes) {

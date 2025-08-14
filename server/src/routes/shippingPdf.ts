@@ -820,8 +820,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
     }
 
-    // Order Details Section
-    currentY -= 70;
+    // Order Details Section (reduced height)
+    currentY -= 50;
     page.drawText('ORDER DETAILS', {
       x: margin,
       y: currentY,
@@ -830,24 +830,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Create order details table
-    currentY -= 30;
+    currentY -= 25;
 
-    // Table border
+    // Table border (reduced height)
     page.drawRectangle({
       x: margin,
-      y: currentY - 120,
+      y: currentY - 70,
       width: printableWidth,
-      height: 120,
+      height: 70,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
-    // Table headers
+    // Table headers (reduced height)
     page.drawRectangle({
       x: margin,
-      y: currentY - 25,
+      y: currentY - 20,
       width: printableWidth,
-      height: 25,
+      height: 20,
       color: rgb(0.9, 0.9, 0.9),
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
@@ -855,60 +855,60 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     page.drawText('Item Description', {
       x: margin + 5,
-      y: currentY - 15,
-      size: 10,
+      y: currentY - 12,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText('Model/SKU', {
       x: margin + 200,
-      y: currentY - 15,
-      size: 10,
+      y: currentY - 12,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText('Qty', {
       x: margin + 320,
-      y: currentY - 15,
-      size: 10,
+      y: currentY - 12,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText('Unit Price', {
       x: margin + 380,
-      y: currentY - 15,
-      size: 10,
+      y: currentY - 12,
+      size: 9,
       font: boldFont,
     });
 
     page.drawText('Total', {
       x: margin + 460,
-      y: currentY - 15,
-      size: 10,
+      y: currentY - 12,
+      size: 9,
       font: boldFont,
     });
 
-    // Main product line
-    currentY -= 45;
+    // Main product line (reduced spacing and font size)
+    currentY -= 30;
     const productName = model?.displayName || model?.name || 'Custom Stock';
     page.drawText(productName, {
       x: margin + 5,
       y: currentY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(order.modelId || 'CUSTOM', {
       x: margin + 200,
       y: currentY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText('1', {
       x: margin + 320,
       y: currentY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
@@ -916,19 +916,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + 380,
       y: currentY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
     page.drawText(`$${basePrice.toFixed(2)}`, {
       x: margin + 460,
       y: currentY,
-      size: 10,
+      size: 9,
       font: font,
     });
 
-    // Features and Customizations Section - ORDER SUMMARY PRICING
-    currentY -= 140;
+    // Features and Customizations Section - ORDER SUMMARY PRICING (moved higher)
+    currentY -= 50;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,

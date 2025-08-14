@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings, Camera, Smartphone } from 'lucide-react';
+import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings, Camera, Smartphone, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
@@ -26,6 +26,7 @@ interface DiscountDetail {
   type: string;
   value: number;
   amount: number;
+  description: string;
 }
 
 interface OrderFeature {
@@ -38,15 +39,27 @@ interface OrderFeature {
 interface OrderSummary {
   orderId: string;
   orderDate: string;
+  currentDepartment?: string;
+  dueDate?: string;
   customer: {
     name: string;
     email: string;
+    phone?: string;
+    company?: string;
   } | null;
   baseModel: {
     name: string;
     id: string;
+    price: number;
   } | null;
-  features: OrderFeature[];
+  features: Record<string, any> | null;
+  specifications: Record<string, any> | null;
+  productionDetails?: {
+    partName: string;
+    quantity: number;
+    department: string;
+    priority: number;
+  };
   lineItems: LineItem[];
   pricing: {
     subtotal: number;
@@ -58,15 +71,16 @@ interface OrderSummary {
   };
   paymentStatus: string;
   status: string;
+  notes?: string;
 }
 
 export function BarcodeScanner() {
   const [location] = useLocation();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
-  
+
   // Device detection for smart UI
   const { isMobile, hasCamera } = useDeviceDetection();
-  
+
   // Unified barcode input handling
   const {
     barcode,
@@ -95,7 +109,7 @@ export function BarcodeScanner() {
     queryKey: ['/api/stock-models'],
   });
 
-  const { data: orderSummary, isLoading, error } = useQuery({
+  const { data: orderSummary, isLoading, error } = useQuery<OrderSummary>({
     queryKey: ['/api/barcode/scan', scannedBarcode],
     enabled: !!scannedBarcode,
     retry: false
@@ -133,6 +147,7 @@ export function BarcodeScanner() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -249,127 +264,222 @@ export function BarcodeScanner() {
 
       {orderSummary && (
         <div className="space-y-6">
-          {/* Enhanced Order Display using OrderTooltip style */}
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Scanned Order: {orderSummary.orderId}
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Badge variant="outline" className={getPaymentStatusColor(orderSummary.paymentStatus)}>
-                    <CreditCard className="h-3 w-3 mr-1" />
-                    {orderSummary.paymentStatus}
-                  </Badge>
-                  <Badge variant="outline">
-                    {orderSummary.status}
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                <div className="font-semibold text-blue-600 dark:text-blue-400 border-b border-gray-200 dark:border-gray-600 pb-2 mb-3">
-                  Order Details
-                </div>
-                <div className="text-sm whitespace-pre-line text-gray-700 dark:text-gray-300 font-mono leading-relaxed">
-                  {formatOrderDetails(orderSummary, stockModels)}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Base Model & Features */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Product Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {/* Base Model */}
-                {orderSummary.baseModel && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="font-semibold text-blue-900">Base Model</div>
-                    <div className="text-lg font-medium">{orderSummary.baseModel.name}</div>
-                  </div>
-                )}
-                
-                {/* Features */}
-                {orderSummary.features && orderSummary.features.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="font-semibold text-gray-700 border-b pb-1">Selected Features</div>
-                    {orderSummary.features.map((feature, index) => (
-                      <div key={index} className="flex items-start justify-between py-2 border-b border-gray-100 last:border-0">
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{feature.name}</div>
-                          <div className="text-sm text-gray-600">{feature.value}</div>
-                        </div>
-                        <Badge variant="outline" className="text-xs ml-2">
-                          {feature.type}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {(!orderSummary.features || orderSummary.features.length === 0) && (
-                  <div className="text-center text-gray-500 py-4">
-                    No custom features selected
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Order Line Items */}
+          {/* Order Header */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Order Contents
-                <span className="text-sm font-normal text-gray-500 ml-2">
-                  (Pricing hidden for security)
-                </span>
+                Order Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="font-medium">Order ID:</span> {orderSummary.orderId}
+                </div>
+                <div>
+                  <span className="font-medium">Date:</span> {formatDate(orderSummary.orderDate)}
+                </div>
+                <div>
+                  <span className="font-medium">Customer:</span> {orderSummary.customer?.name || 'N/A'}
+                </div>
+                <div>
+                  <span className="font-medium">Status:</span>{' '}
+                  <Badge variant={orderSummary.status === 'COMPLETED' ? 'default' : 'secondary'}>
+                    {orderSummary.status}
+                  </Badge>
+                </div>
+                {orderSummary.currentDepartment && (
+                  <div>
+                    <span className="font-medium">Current Department:</span>{' '}
+                    <Badge variant="outline">{orderSummary.currentDepartment}</Badge>
+                  </div>
+                )}
+                {orderSummary.dueDate && (
+                  <div>
+                    <span className="font-medium">Due Date:</span> {formatDate(orderSummary.dueDate)}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Customer Information */}
+          {orderSummary.customer && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Customer Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium">Name:</span> {orderSummary.customer.name}
+                  </div>
+                  {orderSummary.customer.company && (
+                    <div>
+                      <span className="font-medium">Company:</span> {orderSummary.customer.company}
+                    </div>
+                  )}
+                  {orderSummary.customer.email && (
+                    <div>
+                      <span className="font-medium">Email:</span> {orderSummary.customer.email}
+                    </div>
+                  )}
+                  {orderSummary.customer.phone && (
+                    <div>
+                      <span className="font-medium">Phone:</span> {orderSummary.customer.phone}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Base Model */}
+          {orderSummary.baseModel && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Base Model
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="text-lg font-semibold">
+                    {orderSummary.baseModel.name}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Model ID: {orderSummary.baseModel.id}
+                  </div>
+                  {orderSummary.baseModel.price > 0 && (
+                    <div className="text-sm font-medium text-green-600">
+                      Base Price: {formatCurrency(orderSummary.baseModel.price)}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Features & Specifications */}
+          {((orderSummary.features && Object.keys(orderSummary.features).length > 0) || 
+            (orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0)) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuration Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {orderSummary.features && Object.keys(orderSummary.features).length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Selected Features:</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(orderSummary.features).map(([key, value], index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <span className="capitalize">{key.replace(/_/g, ' ')}:</span>
+                            <Badge variant="outline" className="ml-2">
+                              {typeof value === 'string' ? value : JSON.stringify(value)}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Specifications:</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(orderSummary.specifications).map(([key, value], index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <span className="capitalize">{key.replace(/_/g, ' ')}:</span>
+                            <Badge variant="outline" className="ml-2">
+                              {typeof value === 'string' ? value : JSON.stringify(value)}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Production Details (if applicable) */}
+          {orderSummary.productionDetails && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Production Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  {orderSummary.productionDetails.partName && (
+                    <div>
+                      <span className="font-medium">Part Name:</span> {orderSummary.productionDetails.partName}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium">Quantity:</span> {orderSummary.productionDetails.quantity}
+                  </div>
+                  {orderSummary.productionDetails.department && (
+                    <div>
+                      <span className="font-medium">Department:</span>{' '}
+                      <Badge variant="outline">{orderSummary.productionDetails.department}</Badge>
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium">Priority:</span> {orderSummary.productionDetails.priority}/5
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pricing */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Pricing
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {orderSummary.lineItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-600">{item.description}</div>
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>{formatCurrency(orderSummary.pricing.subtotal)}</span>
+                </div>
+                {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
+                  <>
+                    <div className="space-y-1">
+                      {orderSummary.pricing.discounts.map((discount, index) => (
+                        <div key={index} className="flex justify-between text-sm text-red-600">
+                          <span>- {discount.description}</span>
+                          <span>-{formatCurrency(discount.amount)}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
-                      <Badge variant="outline" className="text-xs mt-1">
-                        {item.type}
-                      </Badge>
+                    <div className="flex justify-between font-medium">
+                      <span>After Discounts:</span>
+                      <span>{formatCurrency(orderSummary.pricing.afterDiscounts)}</span>
                     </div>
+                  </>
+                )}
+                <div className="border-t pt-3">
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total:</span>
+                    <span className="text-green-600">
+                      {formatCurrency(orderSummary.pricing.total)}
+                    </span>
                   </div>
-                ))}
-                
-                <Separator />
-                
-                <div className="space-y-2 pt-2 text-center text-gray-500">
-                  <div className="flex items-center justify-center gap-2">
-                    <span>💰</span>
-                    <span>Pricing information is hidden for security</span>
-                  </div>
-                  {orderSummary.pricing.discounts && orderSummary.pricing.discounts.length > 0 && (
-                    <div className="text-sm text-blue-600">
-                      ✅ {orderSummary.pricing.discounts.length} discount(s) applied
-                    </div>
-                  )}
-                  {orderSummary.pricing.override && (
-                    <div className="text-sm text-orange-600">
-                      ⚠️ Custom pricing override applied
-                    </div>
-                  )}
                 </div>
               </div>
             </CardContent>
@@ -399,6 +509,23 @@ export function BarcodeScanner() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Notes */}
+          {orderSummary.notes && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded">
+                  {orderSummary.notes}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

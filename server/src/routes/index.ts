@@ -1702,7 +1702,137 @@ export function registerRoutes(app: Express): Server {
   // app.use('/api/scheduling', schedulingRoutes);
   // app.use('/api/bom', bomRoutes);
 
-    // Health check endpoint
+    // Complete order summary endpoint for barcode scanning
+  app.get('/api/orders/:orderId/complete-summary', async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { storage } = await import('../../storage');
+
+      // Try to find the order in various tables
+      let order = null;
+      let orderSource = 'unknown';
+
+      // Check finalized orders first
+      try {
+        order = await storage.getFinalizedOrderById(orderId);
+        if (order) orderSource = 'finalized';
+      } catch (e) {
+        // Continue searching
+      }
+
+      // Check draft orders if not found
+      if (!order) {
+        try {
+          order = await storage.getOrderDraft(orderId);
+          if (order) orderSource = 'draft';
+        } catch (e) {
+          // Continue searching
+        }
+      }
+
+      // Check production orders if not found
+      if (!order) {
+        try {
+          const productionOrders = await storage.getAllProductionOrders();
+          order = productionOrders.find(po => po.orderId === orderId);
+          if (order) orderSource = 'production';
+        } catch (e) {
+          // Continue searching
+        }
+      }
+
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Get customer details
+      let customer = null;
+      if (order.customerId) {
+        try {
+          const customers = await storage.getAllCustomers();
+          customer = customers.find(c => c.id.toString() === order.customerId || c.name === order.customerId);
+        } catch (e) {
+          console.error('Error fetching customer:', e);
+        }
+      }
+
+      // Get stock model details
+      let baseModel = null;
+      if (order.modelId || order.itemId) {
+        try {
+          const stockModels = await storage.getAllStockModels();
+          baseModel = stockModels.find(sm => 
+            sm.id === (order.modelId || order.itemId) || 
+            sm.name === (order.modelId || order.itemId)
+          );
+        } catch (e) {
+          console.error('Error fetching stock model:', e);
+        }
+      }
+
+      // Build comprehensive order summary
+      const orderSummary = {
+        orderId: order.orderId,
+        orderDate: order.orderDate || order.createdAt,
+        customer: customer ? {
+          name: customer.name,
+          email: customer.email || '',
+          company: customer.company || '',
+          phone: customer.phone || ''
+        } : {
+          name: order.customerId || 'Unknown Customer',
+          email: '',
+          company: '',
+          phone: ''
+        },
+        baseModel: baseModel ? {
+          name: baseModel.displayName || baseModel.name,
+          id: baseModel.id,
+          price: baseModel.price || 0
+        } : {
+          name: order.modelId || order.itemId || 'Unknown Model',
+          id: order.modelId || order.itemId || '',
+          price: 0
+        },
+        features: order.features || {},
+        specifications: order.specifications || {},
+        lineItems: [],
+        pricing: {
+          subtotal: order.subtotal || 0,
+          discounts: [],
+          discountTotal: 0,
+          afterDiscounts: order.subtotal || 0,
+          total: order.total || order.subtotal || 0,
+          override: false
+        },
+        paymentStatus: order.paymentStatus || 'UNPAID',
+        status: order.status || 'PENDING',
+        currentDepartment: order.currentDepartment || 'Order Entry',
+        dueDate: order.dueDate,
+        notes: order.notes || '',
+        source: orderSource,
+        barcode: `P1-${order.orderId}`
+      };
+
+      // Add production-specific details if applicable
+      if (orderSource === 'production') {
+        orderSummary.productionDetails = {
+          partName: order.partName || order.itemName,
+          quantity: order.quantity || 1,
+          department: order.department,
+          priority: order.priority || 3,
+          productionStatus: order.productionStatus || order.status
+        };
+      }
+
+      res.json(orderSummary);
+    } catch (error) {
+      console.error('Complete order summary error:', error);
+      res.status(500).json({ error: 'Failed to fetch complete order summary' });
+    }
+  });
+
+  // Health check endpoint
   app.get('/health', (req, res) => {
     res.json({ 
       status: 'healthy', 

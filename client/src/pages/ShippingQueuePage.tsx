@@ -415,7 +415,10 @@ export default function ShippingQueuePage() {
                           <div className="font-medium text-gray-700 mb-1">Shipping Address:</div>
                           {customerAddress ? (
                             <div className="text-gray-600 space-y-1">
-                              <div>{customerInfo?.name || 'Customer'}</div>
+                              <div className="font-medium">{customerInfo?.name || 'Customer'}</div>
+                              {customerInfo?.phone && (
+                                <div className="text-blue-600">{customerInfo.phone}</div>
+                              )}
                               <div>{customerAddress.street}</div>
                               {customerAddress.street2 && <div>{customerAddress.street2}</div>}
                               <div>{customerAddress.city}, {customerAddress.state} {customerAddress.zipCode}</div>

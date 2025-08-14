@@ -9,7 +9,7 @@ import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import { Link } from 'wouter';
+
 import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -271,6 +271,61 @@ export default function ShippingQueuePage() {
     }
   };
 
+  const handleShippingLabelCreator = async () => {
+    // Check for selected order - either from card selection or checkbox selection
+    let targetOrder = null;
+    let orderId = '';
+
+    if (selectedCard) {
+      // Use card selection if available
+      targetOrder = getSelectedOrder();
+      orderId = selectedCard;
+    } else if (selectedOrders.length === 1) {
+      // Use single checkbox selection if only one order is selected
+      orderId = selectedOrders[0];
+      targetOrder = shippingOrders.find(order => order.orderId === orderId);
+    } else {
+      toast({
+        title: "No order selected",
+        description: "Please select a single order by clicking on it or checking one checkbox",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!targetOrder) {
+      toast({
+        title: "Order not found",
+        description: "Selected order not found in shipping queue",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // For now, open the shipping label PDF directly (this can be enhanced with a modal later)
+    try {
+      toast({
+        title: "Opening shipping label creator...",
+        description: "Please wait while we prepare the shipping label"
+      });
+
+      // Open shipping label creation in new tab
+      window.open(`/api/shipping-pdf/ups-shipping-label/${orderId}`, '_blank');
+      
+      toast({
+        title: "Shipping label creator opened",
+        description: `Shipping label creator for order ${orderId} opened in new tab`
+      });
+    } catch (error) {
+      console.error('Error opening shipping label creator:', error);
+      toast({
+        title: "Error opening shipping label creator",
+        description: "Failed to open shipping label creator",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -511,15 +566,15 @@ export default function ShippingQueuePage() {
             <span className="text-sm font-medium text-gray-700">Sales Order</span>
           </button>
           
-          <Link 
-            href="/shipping-management" 
+          <button 
+            onClick={handleShippingLabelCreator}
             className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
           >
             <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">📦</span>
             </div>
             <span className="text-sm font-medium text-gray-700">Shipping Label</span>
-          </Link>
+          </button>
         </div>
       </div>
     </div>

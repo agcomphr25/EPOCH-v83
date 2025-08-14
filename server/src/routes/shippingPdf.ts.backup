@@ -1944,7 +1944,51 @@ async function addFallbackLabelPage(pdfDoc: any, order: any, trackingNumber: str
   });
 }
 
-// Cleaned up broken function structure
+// Removed duplicate function declarations - keeping the ones at the end of the file
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  
+  let currentY = 600;
+  
+  page.drawText('UPS BULK SHIPPING SUMMARY', {
+    x: 50, y: currentY, size: 16, font: boldFont
+  });
+  
+  currentY -= 30;
+  page.drawText(`Generated: ${new Date().toLocaleString()}`, {
+    x: 50, y: currentY, size: 10, font: font
+  });
+  
+  currentY -= 30;
+  const successful = upsLabels.filter(l => l.success).length;
+  const failed = upsLabels.filter(l => !l.success).length;
+  
+  page.drawText(`Successful: ${successful}`, {
+    x: 50, y: currentY, size: 12, font: boldFont, color: rgb(0, 0.7, 0)
+  });
+  
+  currentY -= 20;
+  page.drawText(`Failed: ${failed}`, {
+    x: 50, y: currentY, size: 12, font: boldFont, color: rgb(1, 0, 0)
+  });
+  
+  // List successful labels
+  currentY -= 30;
+  for (const label of upsLabels.filter(l => l.success)) {
+    page.drawText(`✓ ${label.orderId}: ${label.trackingNumber}`, {
+      x: 50, y: currentY, size: 10, font: font
+    });
+    currentY -= 15;
+  }
+  
+  // List errors
+  for (const label of upsLabels.filter(l => !l.success)) {
+    page.drawText(`✗ ${label.orderId}: ${label.error}`, {
+      x: 50, y: currentY, size: 10, font: font, color: rgb(1, 0, 0)
+    });
+    currentY -= 15;
+  }
+}
 
 // Keep the old broken endpoint for now but make it redirect to the new working endpoint
 router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {

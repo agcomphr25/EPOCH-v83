@@ -385,9 +385,13 @@ export default function ShippingQueuePage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {order.isPaid && (
+                          {order.isPaid ? (
                             <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
                               PAID
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs">
+                              NOT PAID
                             </Badge>
                           )}
                           {materialType && (

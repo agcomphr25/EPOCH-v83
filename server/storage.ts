@@ -43,7 +43,7 @@ import {
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
   type QcDefinition, type InsertQcDefinition,
-  type QcSubmission, type InsertQcSubmission,
+  type QcSubmission, InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
   type MaintenanceLog, type InsertMaintenanceLog,
   type TimeClockEntry, type InsertTimeClockEntry,
@@ -426,6 +426,7 @@ export interface IStorage {
   createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder>;
   updateProductionOrder(id: number, data: Partial<InsertProductionOrder>): Promise<ProductionOrder>;
   deleteProductionOrder(id: number): Promise<void>;
+  generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]>; // MODIFIED: Includes production scheduling
   generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
 
   // Layup Scheduler: Molds CRUD
@@ -1326,7 +1327,7 @@ export class DatabaseStorage implements IStorage {
 
         // Calculate actual order total using Order Summary logic
         let orderTotal = order.paymentAmount || 0;
-        
+
         // If paymentAmount is NULL or 0, calculate from features and pricing
         if (orderTotal === 0) {
           orderTotal = await this.calculateOrderTotal(order);
@@ -1780,7 +1781,7 @@ export class DatabaseStorage implements IStorage {
     return employee || undefined;
   }
 
-  async getEmployeesByRole(role: string): Promise<Employee[]> {
+  async getEmployeesByRole(role: string): Promise<Employee[] > {
     return await db.select().from(employees)
       .where(eq(employees.role, role))
       .orderBy(employees.name);
@@ -2938,34 +2939,18 @@ export class DatabaseStorage implements IStorage {
     await db.delete(productionOrders).where(eq(productionOrders.id, id));
   }
 
-  // Generate production orders from PO
-  async generateProductionOrders(poId: number): Promise<ProductionOrder[]>;
-  async generateProductionOrders(poId: number): Promise<ProductionOrder[]> {
-    // Get the PO
+  // MODIFIED: Includes production scheduling logic for P1 purchase orders
+  async generateProductionOrdersFromPO(poId: number): Promise<ProductionOrder[]> {
     const po = await this.getPurchaseOrder(poId);
     if (!po) {
       throw new Error('Purchase order not found');
     }
 
-    // Check if production orders already exist for this PO
-    const existingOrders = await db
-      .select()
-      .from(productionOrders)
-      .where(eq(productionOrders.poId, poId));
+    const customer = await this.db.select()
+      .from(customers)
+      .where(eq(customers.id, parseInt(po.customerId)))
+      .then(results => results[0]);
 
-    if (existingOrders.length > 0) {
-      console.log(`🏭 Found ${existingOrders.length} existing production orders for PO ${poId}`);
-      console.log(`🏭 Returning existing production orders instead of creating duplicates`);
-      return existingOrders;
-    }
-
-    // Get customer from the main customers table
-    const customerIdNum = parseInt(po.customerId);
-    if (isNaN(customerIdNum)) {
-      throw new Error('Invalid customer ID in purchase order');
-    }
-
-    const customer = await this.getCustomer(customerIdNum);
     if (!customer) {
       throw new Error('Customer not found');
     }
@@ -2975,6 +2960,9 @@ export class DatabaseStorage implements IStorage {
       throw new Error('No items found in purchase order');
     }
 
+    // Calculate production schedule for due date fulfillment
+    const productionSchedule = this.calculateProductionSchedule(po.expectedDelivery, items);
+
     // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
     const customerPrefix = customer.name.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
     const poNumberDigits = po.poNumber.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
@@ -2983,10 +2971,16 @@ export class DatabaseStorage implements IStorage {
     const orders: ProductionOrder[] = [];
     let sequentialNumber = 1;
 
-    // Create production orders for each item based on quantity
+    // Create production orders for each item with distributed due dates
     for (const item of items) {
+      const itemSchedule = productionSchedule[item.id];
+
       for (let i = 0; i < item.quantity; i++) {
         const orderId = `${baseOrderId}-${sequentialNumber.toString().padStart(4, '0')}`;
+
+        // Get due date for this specific item instance
+        const weekIndex = Math.floor(i / itemSchedule.itemsPerWeek);
+        const itemDueDate = itemSchedule.weeklyDueDates[weekIndex] || new Date(po.expectedDelivery);
 
         const orderData: InsertProductionOrder = {
           orderId,
@@ -3000,7 +2994,7 @@ export class DatabaseStorage implements IStorage {
           itemName: item.itemName,
           specifications: item.specifications,
           orderDate: new Date(),
-          dueDate: new Date(po.expectedDelivery),
+          dueDate: itemDueDate,
           productionStatus: 'PENDING'
         };
 
@@ -3016,8 +3010,76 @@ export class DatabaseStorage implements IStorage {
     return orders;
   }
 
+  // Helper to calculate production schedule for P1 POs
+  private calculateProductionSchedule(dueDate: string, items: any[]): Record<number, {
+    itemsPerWeek: number;
+    weeksNeeded: number;
+    weeklyDueDates: Date[];
+  }> {
+    const finalDueDate = new Date(dueDate);
+    const today = new Date();
+
+    // Calculate available weeks (excluding weekends, only Mon-Thu production days)
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const totalWeeksAvailable = Math.floor((finalDueDate.getTime() - today.getTime()) / msPerWeek);
+    const availableWeeks = Math.max(1, totalWeeksAvailable); // At least 1 week
+
+    console.log(`📅 P1 PO Production Schedule Calculation:`);
+    console.log(`   Due Date: ${finalDueDate.toDateString()}`);
+    console.log(`   Available Weeks: ${availableWeeks}`);
+
+    const schedule: Record<number, any> = {};
+
+    items.forEach(item => {
+      // Assume production capacity of 10 items per week per item type (configurable)
+      const maxItemsPerWeek = 10;
+      const itemsNeeded = item.quantity;
+
+      // Calculate items per week needed to meet due date
+      const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
+      const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, maxItemsPerWeek);
+      const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
+
+      console.log(`   Item ${item.itemName} (${item.quantity} units):`);
+      console.log(`     Items per week needed: ${itemsPerWeekNeeded}`);
+      console.log(`     Actual items per week: ${actualItemsPerWeek}`);
+      console.log(`     Weeks needed: ${weeksNeeded}`);
+
+      // Generate weekly due dates
+      const weeklyDueDates: Date[] = [];
+      for (let week = 0; week < weeksNeeded; week++) {
+        // Calculate due date for this week (working backwards from final due date)
+        const weekDueDate = new Date(finalDueDate);
+        weekDueDate.setDate(weekDueDate.getDate() - (weeksNeeded - week - 1) * 7);
+
+        // Ensure due date is on a work day (Thursday for week completion)
+        const dayOfWeek = weekDueDate.getDay();
+        if (dayOfWeek === 0) weekDueDate.setDate(weekDueDate.getDate() + 4); // Sunday -> Thursday
+        else if (dayOfWeek === 1) weekDueDate.setDate(weekDueDate.getDate() + 3); // Monday -> Thursday  
+        else if (dayOfWeek === 2) weekDueDate.setDate(weekDueDate.getDate() + 2); // Tuesday -> Thursday
+        else if (dayOfWeek === 3) weekDueDate.setDate(weekDueDate.getDate() + 1); // Wednesday -> Thursday
+        else if (dayOfWeek === 5) weekDueDate.setDate(weekDueDate.getDate() + 6); // Friday -> Thursday
+        else if (dayOfWeek === 6) weekDueDate.setDate(weekDueDate.getDate() + 5); // Saturday -> Thursday
+        // Thursday (4) stays the same
+
+        weeklyDueDates.push(weekDueDate);
+
+        console.log(`     Week ${week + 1} due: ${weekDueDate.toDateString()}`);
+      }
+
+      schedule[item.id] = {
+        itemsPerWeek: actualItemsPerWeek,
+        weeksNeeded: weeksNeeded,
+        weeklyDueDates: weeklyDueDates
+      };
+    });
+
+    return schedule;
+  }
+
+
   // Layup Scheduler: Molds CRUD
-  async getAllMolds(): Promise<Mold[]> {
+  async getAllMolds(): Promise<Mold[] > {
     return await db.select().from(molds).orderBy(molds.modelName, molds.instanceNumber);
   }
 
@@ -3185,80 +3247,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProductionQueueItem(orderId: string): Promise<void> {
     await db.delete(productionQueue).where(eq(productionQueue.orderId, orderId));
-  }
-
-  // Get unified layup orders (combining regular orders and P1 PO items)
-  async getUnifiedProductionQueue(): Promise<any[]> {
-    try {
-      // Get regular P1 orders (from orderDrafts) that are in Layup department
-      const regularOrders = await db
-        .select()
-        .from(orderDrafts)
-        .where(
-          and(
-            eq(orderDrafts.currentDepartment, 'Layup'),
-            ne(orderDrafts.status, 'SCRAPPED'),
-            ne(orderDrafts.status, 'COMPLETED')
-          )
-        );
-
-      // Get P1 Purchase Order items - simplified query to avoid null/undefined issues
-      let p1Orders: any[] = [];
-      try {
-        p1Orders = await db
-          .select({
-            poId: purchaseOrderItems.poId,
-            itemId: purchaseOrderItems.id,
-            partNumber: purchaseOrderItems.partNumber,
-            quantity: purchaseOrderItems.quantity,
-            status: purchaseOrderItems.status
-          })
-          .from(purchaseOrderItems)
-          .where(ne(purchaseOrderItems.status, 'COMPLETED'));
-      } catch (error) {
-        console.log('Could not fetch P1 orders:', error);
-        p1Orders = [];
-      }
-
-      // Format regular orders
-      const formattedRegularOrders = regularOrders.map(order => ({
-        id: order.id,
-        orderId: order.orderId,
-        orderDate: order.createdAt,
-        customerName: order.customerName || 'Unknown',
-        stockModelId: order.modelId,
-        stockModelName: order.modelId,
-        priority: 50,
-        priorityScore: 50,
-        type: 'regular',
-        features: order.features,
-        customer: order.customerName || 'Unknown',
-        product: order.modelId || 'Unknown'
-      }));
-
-      // Format P1 orders - simplified to avoid database join issues
-      const formattedP1Orders = p1Orders.map((item, index) => ({
-        id: item.itemId || index,
-        orderId: `P1-PO-${item.poId || 'Unknown'}-${item.itemId || index}`,
-        orderDate: new Date(),
-        customerName: 'P1 Customer',
-        stockModelId: item.partNumber || 'Unknown',
-        stockModelName: item.partNumber || 'Unknown',
-        priority: 75, // Default priority for P1 orders
-        priorityScore: 75,
-        type: 'p1_po',
-        features: {},
-        customer: 'P1 Customer',
-        product: item.partNumber || 'Unknown'
-      }));
-
-      // Combine and return all orders
-      return [...formattedRegularOrders, ...formattedP1Orders];
-
-    } catch (error) {
-      console.error('Error getting unified layup orders:', error);
-      return [];
-    }
   }
 
   // P1 Purchase Order Integration - Sync P1 orders into production queue

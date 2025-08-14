@@ -71,6 +71,10 @@ export default function POManager() {
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState('');
   const queryClient = useQueryClient();
+  const [isGeneratingOrders, setIsGeneratingOrders] = useState(false);
+  const [scheduleData, setScheduleData] = useState<any>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+
 
   // Form state
   const [formData, setFormData] = useState({
@@ -139,16 +143,52 @@ export default function POManager() {
     }
   });
 
-  const generateProductionOrdersMutation = useMutation({
-    mutationFn: generateProductionOrdersFromPO,
-    onSuccess: (data) => {
-      toast.success(`Generated ${data.orders.length} production orders`);
-      queryClient.invalidateQueries({ queryKey: ['/api/production-orders'] });
-    },
-    onError: () => {
-      toast.error('Failed to generate production orders');
+  const handleCalculateSchedule = async (poId: number) => {
+    try {
+      const result = await apiRequest(`/api/pos/${poId}/calculate-production-schedule`, {
+        method: 'POST'
+      });
+
+      console.log('Production schedule calculated:', result);
+      setScheduleData(result);
+      setShowScheduleModal(true);
+
+    } catch (error) {
+      console.error('Calculate schedule error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to calculate production schedule",
+        variant: "destructive"
+      });
     }
-  });
+  };
+
+  const handleGenerateProductionOrders = async (poId: number) => {
+    setIsGeneratingOrders(true);
+    try {
+      const result = await apiRequest(`/api/pos/${poId}/generate-production-orders`, {
+        method: 'POST'
+      });
+
+      console.log('Generated production orders:', result);
+      toast({
+        title: "Production Orders Generated",
+        description: `Generated ${result.createdOrders} production orders`,
+      });
+
+      // Refresh PO list
+      refetch();
+    } catch (error) {
+      console.error('Generate production orders error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate production orders",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingOrders(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -239,12 +279,6 @@ export default function POManager() {
     }
   };
 
-  const handleGenerateProductionOrders = (po: PurchaseOrder) => {
-    if (window.confirm(`Generate production orders for PO ${po.poNumber}? This will create individual production orders for each item.`)) {
-      generateProductionOrdersMutation.mutate(po.id);
-    }
-  };
-
   const handleViewItems = (po: PurchaseOrder) => {
     setSelectedPO(po);
   };
@@ -271,8 +305,8 @@ export default function POManager() {
       {selectedPO ? (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setSelectedPO(null)}
               className="mb-4"
             >
@@ -287,13 +321,13 @@ export default function POManager() {
                 Add Order Item
               </Button>
             </div>
-            <POItemsManager 
+            <POItemsManager
               poId={selectedPO.id}
               poNumber={selectedPO.poNumber}
               customerId={selectedPO.customerId}
             />
           </div>
-          
+
           {/* Comprehensive Order Entry Dialog */}
           <POOrderEntry
             poId={selectedPO.id}
@@ -342,22 +376,22 @@ export default function POManager() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="poNumber">PO Number</Label>
-                      <Input 
-                        id="poNumber" 
-                        name="poNumber" 
+                      <Input
+                        id="poNumber"
+                        name="poNumber"
                         value={formData.poNumber}
                         onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                        required 
+                        required
                       />
                     </div>
                     <div>
                       <Label htmlFor="customerId">Customer ID</Label>
-                      <Input 
-                        id="customerId" 
-                        name="customerId" 
+                      <Input
+                        id="customerId"
+                        name="customerId"
                         value={formData.customerId}
                         onChange={(e) => setFormData({...formData, customerId: e.target.value})}
-                        required 
+                        required
                       />
                     </div>
                   </div>
@@ -378,8 +412,8 @@ export default function POManager() {
                       </PopoverTrigger>
                       <PopoverContent className="w-full p-0">
                         <Command>
-                          <CommandInput 
-                            placeholder="Type to search customers..." 
+                          <CommandInput
+                            placeholder="Type to search customers..."
                             value={customerSearchValue}
                             onValueChange={setCustomerSearchValue}
                           />
@@ -387,7 +421,7 @@ export default function POManager() {
                             <CommandEmpty>No customers found.</CommandEmpty>
                             <CommandGroup>
                               {customers
-                                .filter((customer: Customer) => 
+                                .filter((customer: Customer) =>
                                   customer.name.toLowerCase().includes(customerSearchValue.toLowerCase()) ||
                                   (customer.company && customer.company.toLowerCase().includes(customerSearchValue.toLowerCase()))
                                 )
@@ -397,7 +431,7 @@ export default function POManager() {
                                   value={customer.name}
                                   onSelect={() => {
                                     setFormData({
-                                      ...formData, 
+                                      ...formData,
                                       customerName: customer.name,
                                       customerId: customer.id.toString()
                                     });
@@ -426,24 +460,24 @@ export default function POManager() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="poDate">PO Date</Label>
-                      <Input 
-                        id="poDate" 
-                        name="poDate" 
+                      <Input
+                        id="poDate"
+                        name="poDate"
                         type="date"
                         value={formData.poDate}
                         onChange={(e) => setFormData({...formData, poDate: e.target.value})}
-                        required 
+                        required
                       />
                     </div>
                     <div>
                       <Label htmlFor="expectedDelivery">Expected Delivery</Label>
-                      <Input 
-                        id="expectedDelivery" 
-                        name="expectedDelivery" 
+                      <Input
+                        id="expectedDelivery"
+                        name="expectedDelivery"
                         type="date"
                         value={formData.expectedDelivery}
                         onChange={(e) => setFormData({...formData, expectedDelivery: e.target.value})}
-                        required 
+                        required
                       />
                     </div>
                   </div>
@@ -464,9 +498,9 @@ export default function POManager() {
 
                   <div>
                     <Label htmlFor="notes">Notes</Label>
-                    <Textarea 
-                      id="notes" 
-                      name="notes" 
+                    <Textarea
+                      id="notes"
+                      name="notes"
                       value={formData.notes}
                       onChange={(e) => setFormData({...formData, notes: e.target.value})}
                       rows={3}
@@ -554,15 +588,24 @@ export default function POManager() {
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleGenerateProductionOrders(po)}
-                            title="Generate Production Orders"
-                            disabled={generateProductionOrdersMutation.isPending}
-                          >
-                            <TrendingUp className="w-4 h-4" />
-                          </Button>
+
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCalculateSchedule(po.id)}
+                            >
+                              Calculate Schedule
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleGenerateProductionOrders(po.id)}
+                              disabled={isGeneratingOrders}
+                            >
+                              {isGeneratingOrders ? 'Generating...' : 'Generate Production Orders'}
+                            </Button>
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -596,7 +639,102 @@ export default function POManager() {
           </div>
         </div>
       )}
+
+      {/* Production Schedule Modal */}
+      <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>P1 Production Schedule Analysis</DialogTitle>
+          </DialogHeader>
+
+          {scheduleData && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium">PO Number:</label>
+                  <p className="text-lg">{scheduleData.poNumber}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Final Due Date:</label>
+                  <p className="text-lg">{new Date(scheduleData.finalDueDate).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Available Weeks:</label>
+                  <p className="text-lg">{scheduleData.availableWeeks}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Total Items:</label>
+                  <p className="text-lg">{scheduleData.totalItemsNeeded}</p>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-lg ${
+                scheduleData.overallFeasible
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              }`}>
+                <h3 className={`font-semibold ${
+                  scheduleData.overallFeasible
+                    ? 'text-green-800 dark:text-green-200'
+                    : 'text-red-800 dark:text-red-200'
+                }`}>
+                  {scheduleData.recommendations.feasible ? '✅ Schedule Feasible' : '⚠️ Schedule Requires Attention'}
+                </h3>
+                <p className="text-sm mt-1">{scheduleData.recommendations.message}</p>
+                <ul className="text-sm mt-2 space-y-1">
+                  {scheduleData.recommendations.suggestedActions.map((action: string, index: number) => (
+                    <li key={index} className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Item Production Schedules</h3>
+                {scheduleData.itemSchedules.map((item: any, index: number) => (
+                  <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-semibold">{item.itemName}</h4>
+                        <p className="text-sm text-gray-600">Total Quantity: {item.totalQuantity}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                          item.feasible
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
+                        }`}>
+                          {item.feasible ? 'Feasible' : 'Requires Attention'}
+                        </div>
+                        <p className="text-sm mt-1">{item.itemsPerWeek} items/week for {item.weeksNeeded} weeks</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {item.weeklySchedule.map((week: any, weekIndex: number) => (
+                        <div key={weekIndex} className="bg-gray-50 dark:bg-gray-800 p-3 rounded border">
+                          <div className="font-medium">Week {week.week}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Due: {new Date(week.dueDate).toLocaleDateString()}
+                          </div>
+                          <div className="text-sm">
+                            Complete: {week.itemsToComplete} items
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Cumulative: {week.cumulativeItems}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

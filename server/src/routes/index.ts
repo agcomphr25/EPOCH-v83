@@ -1580,6 +1580,123 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P1 Production Schedule Calculation
+  app.post('/api/pos/:id/calculate-production-schedule', async (req, res) => {
+    try {
+      console.log('📅 P1 Production Schedule Calculation endpoint called for PO:', req.params.id);
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.id);
+
+      // Get the purchase order details
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      // Get all items for this purchase order
+      const poItems = await storage.getPurchaseOrderItems(poId);
+      if (poItems.length === 0) {
+        return res.status(400).json({ error: 'No items found in purchase order' });
+      }
+
+      const finalDueDate = new Date(purchaseOrder.expectedDelivery);
+      const today = new Date();
+      
+      // Calculate available weeks (excluding weekends, only Mon-Thu production days)
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+      const totalWeeksAvailable = Math.floor((finalDueDate.getTime() - today.getTime()) / msPerWeek);
+      const availableWeeks = Math.max(1, totalWeeksAvailable);
+      
+      console.log(`📅 P1 PO Production Schedule Analysis:`);
+      console.log(`   PO Number: ${purchaseOrder.poNumber}`);
+      console.log(`   Due Date: ${finalDueDate.toDateString()}`);
+      console.log(`   Available Weeks: ${availableWeeks}`);
+      
+      const scheduleData = [];
+      let totalItemsNeeded = 0;
+      let totalItemsPerWeek = 0;
+      
+      for (const item of poItems) {
+        // Assume production capacity of 10 items per week per item type
+        const maxItemsPerWeek = 10;
+        const itemsNeeded = item.quantity;
+        totalItemsNeeded += itemsNeeded;
+        
+        // Calculate items per week needed to meet due date
+        const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
+        const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, maxItemsPerWeek);
+        const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
+        totalItemsPerWeek += actualItemsPerWeek;
+        
+        // Generate weekly due dates
+        const weeklySchedule = [];
+        for (let week = 0; week < weeksNeeded; week++) {
+          const weekDueDate = new Date(finalDueDate);
+          weekDueDate.setDate(weekDueDate.getDate() - (weeksNeeded - week - 1) * 7);
+          
+          // Ensure due date is on Thursday (end of production week)
+          const dayOfWeek = weekDueDate.getDay();
+          if (dayOfWeek !== 4) { // Not Thursday
+            const daysToThursday = dayOfWeek < 4 ? (4 - dayOfWeek) : (4 + 7 - dayOfWeek);
+            weekDueDate.setDate(weekDueDate.getDate() + daysToThursday);
+          }
+          
+          const itemsThisWeek = Math.min(actualItemsPerWeek, itemsNeeded - (week * actualItemsPerWeek));
+          
+          weeklySchedule.push({
+            week: week + 1,
+            dueDate: weekDueDate.toISOString().split('T')[0],
+            itemsToComplete: itemsThisWeek,
+            cumulativeItems: Math.min((week + 1) * actualItemsPerWeek, itemsNeeded)
+          });
+        }
+        
+        scheduleData.push({
+          itemId: item.id,
+          itemName: item.itemName,
+          totalQuantity: itemsNeeded,
+          itemsPerWeek: actualItemsPerWeek,
+          weeksNeeded: weeksNeeded,
+          weeklySchedule: weeklySchedule,
+          feasible: itemsPerWeekNeeded <= maxItemsPerWeek
+        });
+        
+        console.log(`   Item: ${item.itemName}`);
+        console.log(`     Quantity: ${itemsNeeded}`);
+        console.log(`     Items/week needed: ${itemsPerWeekNeeded}`);
+        console.log(`     Items/week actual: ${actualItemsPerWeek}`);
+        console.log(`     Weeks needed: ${weeksNeeded}`);
+        console.log(`     Feasible: ${itemsPerWeekNeeded <= maxItemsPerWeek ? 'Yes' : 'No'}`);
+      }
+      
+      const overallFeasible = scheduleData.every(item => item.feasible);
+      
+      res.json({
+        success: true,
+        poNumber: purchaseOrder.poNumber,
+        finalDueDate: finalDueDate.toISOString().split('T')[0],
+        availableWeeks: availableWeeks,
+        totalItemsNeeded: totalItemsNeeded,
+        totalItemsPerWeekRequired: totalItemsPerWeek,
+        overallFeasible: overallFeasible,
+        itemSchedules: scheduleData,
+        recommendations: {
+          feasible: overallFeasible,
+          message: overallFeasible 
+            ? 'Production schedule is feasible with current capacity'
+            : 'Production schedule requires additional capacity or extended timeline',
+          suggestedActions: overallFeasible 
+            ? ['Proceed with production order generation']
+            : ['Consider extending due date', 'Increase production capacity', 'Prioritize critical items']
+        }
+      });
+
+    } catch (error) {
+      console.error('📅 Production schedule calculation error:', error);
+      res.status(500).json({ error: "Failed to calculate production schedule" });
+    }
+  });
+
   // Additional routes can be added here as we continue splitting
   // app.use('/api/reports', reportsRoutes);
   // app.use('/api/scheduling', schedulingRoutes);

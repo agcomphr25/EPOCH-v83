@@ -366,8 +366,8 @@ export default function AllOrdersList() {
                           PAID
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-gray-600">
-                          PENDING
+                        <Badge className="bg-red-500 hover:bg-red-600 text-white">
+                          NOT PAID
                         </Badge>
                       )}
                     </TableCell>

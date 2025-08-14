@@ -439,7 +439,7 @@ export default function ShippingQueuePage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {order.isPaid ? (
+                          {order.isFullyPaid ? (
                             <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
                               PAID
                             </Badge>

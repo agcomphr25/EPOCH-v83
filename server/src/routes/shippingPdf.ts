@@ -1017,6 +1017,66 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 12;
 
+    // Action Inlet
+    const actionInletFeature = features.find(f => f.id === 'action_inlet');
+    const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === order.features?.action_inlet);
+    const actionInletPrice = actionInletOption?.price || 0;
+
+    page.drawText('Action Inlet:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    const actionInletDisplay = actionInletOption?.label || 'Not selected';
+    page.drawText(actionInletDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${actionInletPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
+    // Bottom Metal
+    const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
+    const bottomMetalOption = bottomMetalFeature?.options?.find(opt => opt.value === order.features?.bottom_metal);
+    const bottomMetalPrice = bottomMetalOption?.price || 0;
+
+    page.drawText('Bottom Metal:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
+    page.drawText(bottomMetalDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${bottomMetalPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
     // Barrel Inlet
     const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
     const barrelInletOption = barrelInletFeature?.options?.find(opt => opt.value === order.features?.barrel_inlet);
@@ -1047,29 +1107,27 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 12;
 
-    // Paint Options
-    const paintFeature = features.find(f => f.id === 'paint_options');
-    const paintOption = paintFeature?.options?.find(opt => opt.value === order.features?.paint_options);
-    const paintPrice = paintOption?.price || 0;
+    // QDs (Quick Detach Cups)
+    const qdFeature = features.find(f => f.id === 'qd_accessory');
+    const qdOption = qdFeature?.options?.find(opt => opt.value === order.features?.qd_accessory);
+    const qdPrice = qdOption?.price || 0;
 
-    page.drawText('Paint Options:', {
+    page.drawText('QDs (Quick Detach Cups):', {
       x: margin + 10,
       y: summaryLineY,
       size: 9,
       font: font,
     });
 
-    const paintDisplay = paintOption?.label || 
-      (order.features?.paint_options ? order.features.paint_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
-    
-    page.drawText(paintDisplay, {
+    const qdDisplay = qdOption?.label || 'Not selected';
+    page.drawText(qdDisplay, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
       font: font,
     });
 
-    page.drawText(`$${paintPrice.toFixed(2)}`, {
+    page.drawText(`$${qdPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
       y: summaryLineY,
       size: 9,
@@ -1093,7 +1151,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const lopDisplay = lopOption?.label || 
       (order.features?.length_of_pull && order.features.length_of_pull !== 'no_lop_change' ? 
-        order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'No Change');
+        order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     page.drawText(lopDisplay, {
       x: margin + 120,
@@ -1151,6 +1209,173 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0.4, 0.8),
     });
 
+    summaryLineY -= 12;
+
+    // Texture
+    const textureFeature = features.find(f => f.id === 'texture_options');
+    const textureOption = textureFeature?.options?.find(opt => opt.value === order.features?.texture_options);
+    const texturePrice = textureOption?.price || 0;
+
+    page.drawText('Texture:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    const textureDisplay = textureOption?.label || 
+      (order.features?.texture_options ? order.features.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+    
+    page.drawText(textureDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${texturePrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
+    // Swivel Studs
+    const swivelFeature = features.find(f => f.id === 'swivel_studs');
+    const swivelOption = swivelFeature?.options?.find(opt => opt.value === order.features?.swivel_studs);
+    const swivelPrice = swivelOption?.price || 0;
+
+    page.drawText('Swivel Studs:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    const swivelDisplay = swivelOption?.label || 'Not selected';
+    page.drawText(swivelDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${swivelPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
+    // Other Options
+    let otherOptionsPrice = 0;
+    let otherOptionsDisplay = 'Not selected';
+    
+    if (order.features?.other_options && Array.isArray(order.features.other_options) && order.features.other_options.length > 0) {
+      const otherFeature = features.find(f => f.id === 'other_options');
+      
+      if (otherFeature?.options) {
+        otherOptionsDisplay = order.features.other_options.map((optionValue: string) => {
+          const option = otherFeature.options!.find(opt => opt.value === optionValue);
+          otherOptionsPrice += option?.price || 0;
+          return option?.label || optionValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }).join(', ');
+      } else {
+        otherOptionsDisplay = order.features.other_options.join(', ');
+      }
+    }
+
+    page.drawText('Other Options:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(otherOptionsDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${otherOptionsPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
+    // Paint Options
+    let paintPrice = 0;
+    let paintDisplay = 'Not selected';
+    
+    // Handle multiple paint option fields
+    const currentPaint = order.features?.metallic_finishes || order.features?.paint_options || order.features?.paint_options_combined;
+    
+    if (currentPaint && currentPaint !== 'none') {
+      // Search through paint-related features
+      const paintFeatures = features.filter(f => 
+        f.displayName?.includes('Options') || 
+        f.displayName?.includes('Camo') || 
+        f.displayName?.includes('Cerakote') ||
+        f.displayName?.includes('Terrain') ||
+        f.displayName?.includes('Rogue') ||
+        f.displayName?.includes('Standard') ||
+        f.id === 'metallic_finishes' ||
+        f.id === 'paint_options' ||
+        f.category === 'paint' ||
+        f.subcategory === 'paint'
+      );
+
+      for (const feature of paintFeatures) {
+        if (feature.options) {
+          const option = feature.options.find(opt => opt.value === currentPaint);
+          if (option) {
+            paintDisplay = option.label;
+            paintPrice = option.price || 0;
+            break;
+          }
+        }
+      }
+      
+      // Fallback to formatted value if no option found
+      if (paintDisplay === 'Not selected') {
+        paintDisplay = currentPaint.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+    }
+
+    page.drawText('Paint Options:', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(paintDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${paintPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
     summaryLineY -= 20;
 
     // Separator line
@@ -1164,7 +1389,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 15;
 
     // Subtotal
-    const calculatedSubtotal = basePrice + actionLengthPrice + barrelInletPrice + paintPrice + lopPrice + railsPrice;
+    const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
     page.drawText('Subtotal:', {
       x: margin + 10,
       y: summaryLineY,

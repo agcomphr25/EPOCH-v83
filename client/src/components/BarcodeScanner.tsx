@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings } from 'lucide-react';
+import { Scan, Package, User, Calendar, DollarSign, CreditCard, Settings, Camera, Smartphone } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 import { formatOrderDetails } from '@/components/OrderTooltip';
+import { useDeviceDetection } from '@/hooks/useDeviceDetection';
+import { useBarcodeInput } from '@/hooks/useBarcodeInput';
+import { CameraScanner } from '@/components/CameraScanner';
 
 interface LineItem {
   type: string;
@@ -59,20 +62,33 @@ interface OrderSummary {
 
 export function BarcodeScanner() {
   const [location] = useLocation();
-  const [barcode, setBarcode] = useState('');
-  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  
+  // Device detection for smart UI
+  const { isMobile, hasCamera } = useDeviceDetection();
+  
+  // Unified barcode input handling
+  const {
+    barcode,
+    scannedBarcode,
+    isValidBarcode,
+    barcodeType,
+    setBarcode,
+    handleScan,
+    handleBarcodeDetected,
+    clearScan
+  } = useBarcodeInput();
 
   // Check for URL parameter and auto-scan
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const scanParam = searchParams.get('scan');
     if (scanParam) {
-      setBarcode(scanParam);
-      setScannedBarcode(scanParam);
+      handleBarcodeDetected(scanParam);
       // Clear the URL parameter
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [location]);
+  }, [location, handleBarcodeDetected]);
 
   // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
@@ -85,16 +101,15 @@ export function BarcodeScanner() {
     retry: false
   });
 
-  const handleScan = () => {
-    if (barcode.trim()) {
-      setScannedBarcode(barcode.trim());
-    }
-  };
-
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleScan();
     }
+  };
+
+  const handleCameraScan = (detectedBarcode: string) => {
+    handleBarcodeDetected(detectedBarcode);
+    setShowCameraScanner(false);
   };
 
   const getPaymentStatusColor = (status: string) => {
@@ -135,18 +150,74 @@ export function BarcodeScanner() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Scan or enter barcode (e.g., P1-AG185)"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyPress={handleInputKeyPress}
-              className="flex-1"
-            />
-            <Button onClick={handleScan} disabled={!barcode.trim()}>
-              <Scan className="h-4 w-4 mr-2" />
-              Scan
-            </Button>
+          <div className="space-y-4">
+            {/* Input method selection */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Scan or enter barcode (e.g., P1-AG185)"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                onKeyPress={handleInputKeyPress}
+                className={`flex-1 ${!isValidBarcode && barcode.length > 0 ? 'border-red-300' : ''}`}
+              />
+              <Button 
+                onClick={handleScan} 
+                disabled={!isValidBarcode}
+                variant={isValidBarcode ? "default" : "secondary"}
+              >
+                <Scan className="h-4 w-4 mr-2" />
+                Scan
+              </Button>
+            </div>
+
+            {/* Camera scanning option for mobile devices */}
+            {hasCamera && (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCameraScanner(true)}
+                  className="flex-1"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  {isMobile ? 'Use Camera' : 'Camera Scanner'}
+                </Button>
+                {isMobile && (
+                  <div className="flex items-center text-xs text-gray-500 gap-1">
+                    <Smartphone className="h-3 w-3" />
+                    <span>Recommended for mobile</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Barcode validation feedback */}
+            {barcode.length > 0 && (
+              <div className="text-xs">
+                {isValidBarcode ? (
+                  <div className="text-green-600 flex items-center gap-1">
+                    <span>✓</span>
+                    <span>Valid {barcodeType?.replace('_', ' ').toLowerCase()} barcode</span>
+                  </div>
+                ) : (
+                  <div className="text-orange-600 flex items-center gap-1">
+                    <span>⚠</span>
+                    <span>Enter a valid barcode (e.g., P1-AG185, PART001)</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Clear scan button */}
+            {scannedBarcode && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearScan}
+                className="w-fit"
+              >
+                Clear & Scan Again
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -330,6 +401,13 @@ export function BarcodeScanner() {
           </Card>
         </div>
       )}
+
+      {/* Camera Scanner Modal */}
+      <CameraScanner
+        isOpen={showCameraScanner}
+        onClose={() => setShowCameraScanner(false)}
+        onBarcodeDetected={handleCameraScan}
+      />
     </div>
   );
 }

@@ -58,7 +58,7 @@ export default function ShippingQueuePage() {
       order.currentDepartment === 'Shipping' || 
       (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
-    return [...new Set(shippingOrdersList.map(order => order.customerId).filter(Boolean))];
+    return Array.from(new Set(shippingOrdersList.map(order => order.customerId).filter(Boolean)));
   }, [allOrders]);
 
   // Fetch customer addresses for all shipping orders at once
@@ -384,11 +384,18 @@ export default function ShippingQueuePage() {
                             {getDisplayOrderId(order)}
                           </div>
                         </div>
-                        {materialType && (
-                          <Badge variant="secondary" className="text-xs">
-                            {materialType}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {order.isPaid && (
+                            <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
+                              PAID
+                            </Badge>
+                          )}
+                          {materialType && (
+                            <Badge variant="secondary" className="text-xs">
+                              {materialType}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -10,10 +10,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare, MoreHorizontal, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
@@ -64,6 +80,10 @@ interface Order {
   paymentTimestamp?: string;
   paymentTotal?: number;
   isFullyPaid?: boolean;
+  // Cancellation Information
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -109,6 +129,11 @@ export default function OrdersList() {
   } | null>(null);
   const { toast: showToast } = useToast();
   const [, setLocation] = useLocation();
+  
+  // Cancel order state
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>('');
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -119,6 +144,33 @@ export default function OrdersList() {
       priority: 'MEDIUM',
       impactedDepartments: [],
     },
+  });
+
+  // Cancel order mutation
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+      return apiRequest(`/api/orders/cancel/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      showToast({
+        title: "Order Cancelled",
+        description: "The order has been cancelled successfully.",
+      });
+      setIsCancelDialogOpen(false);
+      setCancelReason('');
+      setOrderToCancel('');
+    },
+    onError: (error: any) => {
+      showToast({
+        title: "Error",
+        description: "Failed to cancel order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
   });
 
   // Create kickback mutation
@@ -215,6 +267,17 @@ export default function OrdersList() {
 
   const handleKickbackClick = () => {
     setLocation('/kickback-tracking');
+  };
+
+  const handleCancelOrder = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setIsCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (orderToCancel && cancelReason.trim()) {
+      cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
+    }
   };
   
   const handleExportCSV = async () => {
@@ -737,6 +800,11 @@ export default function OrdersList() {
                             NOT PAID
                           </Badge>
                         )}
+                        {order.isCancelled && (
+                          <Badge variant="destructive" className="bg-red-100 text-red-800 text-xs px-1 py-0">
+                            CANCELLED
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -866,6 +934,26 @@ export default function OrdersList() {
                             )}
                           </DialogContent>
                         </Dialog>
+                        
+                        {/* More Actions Dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!order.isCancelled && (
+                              <DropdownMenuItem 
+                                onClick={() => handleCancelOrder(order.orderId)}
+                                className="text-red-600"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancel Order
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1071,6 +1159,37 @@ export default function OrdersList() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order {orderToCancel}? This action cannot be undone.
+              Please provide a reason for cancellation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <Textarea
+              placeholder="Enter reason for cancellation..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancel}
+              disabled={!cancelReason.trim() || cancelOrderMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Communication Compose Modal */}
       {communicationModal && (

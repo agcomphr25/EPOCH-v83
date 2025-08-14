@@ -46,11 +46,85 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
+  // Get customers data for address information
+  const { data: customers = [] } = useQuery({
+    queryKey: ['/api/customers'],
+  });
+
+  // Get unique customer IDs from shipping orders for address lookup
+  const uniqueCustomerIds = useMemo(() => {
+    const orders = allOrders as any[];
+    const shippingOrdersList = orders.filter((order: any) => 
+      order.currentDepartment === 'Shipping' || 
+      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
+    );
+    return [...new Set(shippingOrdersList.map(order => order.customerId).filter(Boolean))];
+  }, [allOrders]);
+
+  // Fetch customer addresses for all shipping orders at once
+  const { data: customerAddressesMap = {} } = useQuery({
+    queryKey: ['/api/customers/addresses', uniqueCustomerIds],
+    queryFn: async () => {
+      const addressMap: Record<string, any> = {};
+      
+      // Fetch addresses for each unique customer ID
+      await Promise.all(
+        uniqueCustomerIds.map(async (customerId: string) => {
+          try {
+            const response = await fetch(`/api/customers/${customerId}/addresses`);
+            if (response.ok) {
+              const addresses = await response.json();
+              addressMap[customerId] = addresses;
+            }
+          } catch (error) {
+            console.error(`Failed to fetch addresses for customer ${customerId}:`, error);
+          }
+        })
+      );
+      
+      return addressMap;
+    },
+    enabled: uniqueCustomerIds.length > 0,
+  });
+
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
     const models = stockModels as any[];
     const model = models.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  const getCustomerInfo = (customerId: string) => {
+    const customerList = customers as any[];
+    return customerList.find((c: any) => c.id.toString() === customerId.toString());
+  };
+
+  const getCustomerAddress = (customerId: string) => {
+    const addressList = customerAddressesMap[customerId] || [];
+    
+    // Find default shipping address
+    let address = addressList.find((a: any) => 
+      a.type === 'shipping' && a.isDefault
+    );
+    
+    // Fallback to any 'both' type default address
+    if (!address) {
+      address = addressList.find((a: any) => 
+        a.type === 'both' && a.isDefault
+      );
+    }
+    
+    // Fallback to any default address
+    if (!address) {
+      address = addressList.find((a: any) => a.isDefault);
+    }
+    
+    // Fallback to first address for this customer
+    if (!address && addressList.length > 0) {
+      address = addressList[0];
+    }
+    
+    return address;
   };
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
@@ -285,6 +359,8 @@ export default function ShippingQueuePage() {
                 const isSelected = selectedCard === order.orderId;
                 const modelId = order.stockModelId || order.modelId;
                 const materialType = order.features?.material_type;
+                const customerInfo = getCustomerInfo(order.customerId);
+                const customerAddress = getCustomerAddress(order.customerId);
                 
                 return (
                   <Card 
@@ -315,21 +391,44 @@ export default function ShippingQueuePage() {
                         )}
                       </div>
                       
-                      <div className="space-y-1 text-sm">
-                        <div className="text-gray-600">
-                          <span className="font-medium">Customer:</span> {order.customer}
-                        </div>
-                        <div className="text-gray-600">
-                          <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}
-                        </div>
-                        <div className="text-gray-600">
-                          <span className="font-medium">Order Date:</span> {format(new Date(order.orderDate), 'MMM dd, yyyy')}
-                        </div>
-                        {order.dueDate && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Order Info */}
+                        <div className="space-y-1 text-sm">
                           <div className="text-gray-600">
-                            <span className="font-medium">Due Date:</span> {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            <span className="font-medium">Customer:</span> {customerInfo?.name || order.customer}
                           </div>
-                        )}
+                          <div className="text-gray-600">
+                            <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}
+                          </div>
+                          <div className="text-gray-600">
+                            <span className="font-medium">Order Date:</span> {format(new Date(order.orderDate), 'MMM dd, yyyy')}
+                          </div>
+                          {order.dueDate && (
+                            <div className="text-gray-600">
+                              <span className="font-medium">Due Date:</span> {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Shipping Address */}
+                        <div className="space-y-1 text-sm">
+                          <div className="font-medium text-gray-700 mb-1">Shipping Address:</div>
+                          {customerAddress ? (
+                            <div className="text-gray-600 space-y-1">
+                              <div>{customerInfo?.name || 'Customer'}</div>
+                              <div>{customerAddress.street}</div>
+                              {customerAddress.street2 && <div>{customerAddress.street2}</div>}
+                              <div>{customerAddress.city}, {customerAddress.state} {customerAddress.zipCode}</div>
+                              {customerAddress.country !== 'United States' && (
+                                <div>{customerAddress.country}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-red-500 text-xs">
+                              ⚠️ No shipping address found
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

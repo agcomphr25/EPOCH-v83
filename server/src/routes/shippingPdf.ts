@@ -927,143 +927,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Features and Customizations Section - Enhanced
+    // Features and Customizations Section - ORDER SUMMARY PRICING
     currentY -= 140;
-    page.drawText('FEATURES & CUSTOMIZATIONS', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: boldFont,
-    });
-
-    // Create features box
-    const featuresBoxHeight = 120;
-    page.drawRectangle({
-      x: margin,
-      y: currentY - featuresBoxHeight - 10,
-      width: printableWidth,
-      height: featuresBoxHeight,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-    });
-
-    currentY -= 25;
-    let featureTotal = 0;
-    let featureLineCount = 0;
-    const maxFeaturesPerColumn = 6;
-    let currentColumn = 0;
-    let columnY = currentY;
-
-    if (order.features && Object.keys(order.features).length > 0) {
-      Object.entries(order.features).forEach(([featureKey, featureValue]) => {
-        if (featureValue && featureValue !== false && featureValue !== '') {
-          // Find feature details for pricing and display name
-          const featureDetail = features.find(f => f.id === featureKey);
-          const featureName = featureDetail ? (featureDetail.displayName || featureDetail.name) : 
-            // Convert database names to readable format if no display name
-            featureKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          const featurePrice = featureDetail ? featureDetail.price || 0 : 0;
-
-          // Calculate column position
-          const columnX = margin + 5 + (currentColumn * 260);
-          
-          // Display feature name with better formatting
-          let displayText = `• ${featureName}`;
-          
-          // Add feature value if it's a meaningful string
-          if (typeof featureValue === 'string' && featureValue !== 'true' && featureValue !== 'yes') {
-            // Convert database values to readable format
-            const readableValue = featureValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            displayText += `: ${readableValue}`;
-          }
-
-          page.drawText(displayText, {
-            x: columnX,
-            y: columnY,
-            size: 9,
-            font: font,
-          });
-
-          // Add pricing if applicable
-          if (featurePrice > 0) {
-            page.drawText(`+$${featurePrice.toFixed(2)}`, {
-              x: columnX + 200,
-              y: columnY,
-              size: 9,
-              font: font,
-              color: rgb(0, 0.5, 0),
-            });
-            featureTotal += featurePrice;
-          }
-
-          featureLineCount++;
-          columnY -= 12;
-
-          // Move to next column if needed
-          if (featureLineCount % maxFeaturesPerColumn === 0) {
-            currentColumn++;
-            columnY = currentY;
-          }
-        }
-      });
-    } else {
-      // No features message
-      page.drawText('Standard configuration - no additional features', {
-        x: margin + 5,
-        y: columnY,
-        size: 10,
-        font: font,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-    }
-
-    // Reset current Y for next section
-    currentY -= featuresBoxHeight + 10;
-
-    // Order Notes/Special Instructions
-    if (order.notes) {
-      currentY -= 15;
-      page.drawText('SPECIAL INSTRUCTIONS:', {
-        x: margin,
-        y: currentY,
-        size: 12,
-        font: boldFont,
-      });
-
-      currentY -= 20;
-      // Word wrap the notes
-      const noteWords = order.notes.split(' ');
-      let currentLine = '';
-      const maxLineLength = 70;
-
-      noteWords.forEach(word => {
-        if ((currentLine + ' ' + word).length > maxLineLength) {
-          page.drawText(currentLine, {
-            x: margin + 5,
-            y: currentY,
-            size: 10,
-            font: font,
-          });
-          currentY -= 15;
-          currentLine = word;
-        } else {
-          currentLine += (currentLine ? ' ' : '') + word;
-        }
-      });
-
-      if (currentLine) {
-        page.drawText(currentLine, {
-          x: margin + 5,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-        currentY -= 15;
-      }
-    }
-
-    // FEATURES & CUSTOMIZATIONS - DETAILED PRICING BREAKDOWN
-    currentY -= 50;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
@@ -1339,8 +1204,52 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0.6, 0),
     });
 
-    // Reset currentY for next section
+    // Reset current Y for next section
     currentY -= summaryBoxHeight + 10;
+
+    // Order Notes/Special Instructions
+    if (order.notes) {
+      currentY -= 15;
+      page.drawText('SPECIAL INSTRUCTIONS:', {
+        x: margin,
+        y: currentY,
+        size: 12,
+        font: boldFont,
+      });
+
+      currentY -= 20;
+      // Word wrap the notes
+      const noteWords = order.notes.split(' ');
+      let currentLine = '';
+      const maxLineLength = 70;
+
+      noteWords.forEach(word => {
+        if ((currentLine + ' ' + word).length > maxLineLength) {
+          page.drawText(currentLine, {
+            x: margin + 5,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+          currentY -= 15;
+          currentLine = word;
+        } else {
+          currentLine += (currentLine ? ' ' : '') + word;
+        }
+      });
+
+      if (currentLine) {
+        page.drawText(currentLine, {
+          x: margin + 5,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+        currentY -= 15;
+      }
+    }
+
+
 
     // Terms and Conditions Section
     currentY -= 120;

@@ -837,7 +837,7 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   updatedAt: true,
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
-  paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach']),
+  paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa']),
   paymentAmount: z.number().min(0.01, "Payment amount must be greater than 0"),
   paymentDate: z.coerce.date(),
   notes: z.string().optional().nullable(),

@@ -102,6 +102,9 @@ export default function OrderEntry() {
   
   // Miscellaneous items state
   const [miscItems, setMiscItems] = useState<MiscItem[]>([]);
+  
+  // Other options quantities - tracks qty for options that don't include "No"
+  const [otherOptionsQuantities, setOtherOptionsQuantities] = useState<Record<string, number>>({});
 
   // Miscellaneous items functions
   const addMiscItem = () => {
@@ -254,7 +257,7 @@ export default function OrderEntry() {
       console.log('💰 Rails calculation - No rails selected');
     }
 
-    // Add other options prices (from features object)
+    // Add other options prices with quantities (from features object)
     const currentOtherOptions = Array.isArray(features.other_options) ? features.other_options : [];
     if (currentOtherOptions && currentOtherOptions.length > 0) {
       const otherFeature = featureDefs.find(f => f.id === 'other_options');
@@ -263,11 +266,13 @@ export default function OrderEntry() {
         currentOtherOptions.forEach((optionValue: string) => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           if (option?.price) {
-            otherTotal += option.price;
-            total += option.price;
+            const quantity = otherOptionsQuantities[optionValue] || 1;
+            const optionTotal = option.price * quantity;
+            otherTotal += optionTotal;
+            total += optionTotal;
           }
         });
-        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', currentOtherOptions);
+        console.log('💰 Price calculation - Other options total:', otherTotal, 'from', currentOtherOptions, 'with quantities:', otherOptionsQuantities);
       }
     }
 
@@ -278,7 +283,7 @@ export default function OrderEntry() {
 
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems, otherOptionsQuantities]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);
@@ -633,6 +638,14 @@ export default function OrderEntry() {
         const finalNotes = notesFromField || notesFromFeatures;
         setNotes(finalNotes);
         console.log('✅ Loading notes:', { notesFromField, notesFromFeatures, finalNotes });
+        
+        // Load other options quantities from featureQuantities field
+        if (order.featureQuantities) {
+          setOtherOptionsQuantities(order.featureQuantities);
+          console.log('✅ Loading feature quantities:', order.featureQuantities);
+        } else {
+          setOtherOptionsQuantities({});
+        }
         setDiscountCode(order.discountCode || '');
         setCustomDiscountType(order.customDiscountType || 'percent');
         setCustomDiscountValue(order.customDiscountValue || 0);
@@ -899,6 +912,7 @@ export default function OrderEntry() {
         showCustomDiscount,
         priceOverride,
         miscItems: miscItems,
+        featureQuantities: otherOptionsQuantities,
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -977,6 +991,7 @@ export default function OrderEntry() {
     // Reset payment state - payments now handled by PaymentManager
     setOrderPayments([]);
     setMiscItems([]);
+    setOtherOptionsQuantities({});
     generateOrderId();
   };
 
@@ -1482,31 +1497,65 @@ export default function OrderEntry() {
 
                         return otherOptionsFeature.options
                           .filter(option => option.value && option.value.trim() !== '')
-                          .map((option) => (
-                          <div key={option.value} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`other-option-${option.value}`}
-                              checked={(features.other_options || []).includes(option.value)}
-                              onCheckedChange={(checked) => {
-                                const currentOther = features.other_options || [];
-                                if (checked) {
-                                  setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
-                                } else {
-                                  setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
-                                }
-                              }}
-                            />
-                            <label
-                              htmlFor={`other-option-${option.value}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                            >
-                              {option.label}
-                              {option.price && option.price > 0 && (
-                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
-                              )}
-                            </label>
-                          </div>
-                        ));
+                          .map((option) => {
+                            const isChecked = (features.other_options || []).includes(option.value);
+                            const showQuantity = isChecked && !option.label?.toLowerCase().includes('no');
+                            const quantity = otherOptionsQuantities[option.value] || 1;
+                            
+                            return (
+                              <div key={option.value} className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`other-option-${option.value}`}
+                                    checked={isChecked}
+                                    onCheckedChange={(checked) => {
+                                      const currentOther = features.other_options || [];
+                                      if (checked) {
+                                        setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
+                                        // Set default quantity to 1 for new selections
+                                        setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: 1 }));
+                                      } else {
+                                        setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
+                                        // Remove quantity when unchecked
+                                        setOtherOptionsQuantities(prev => {
+                                          const newQuantities = { ...prev };
+                                          delete newQuantities[option.value];
+                                          return newQuantities;
+                                        });
+                                      }
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`other-option-${option.value}`}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                                  >
+                                    {option.label}
+                                    {option.price && option.price > 0 && (
+                                      <span className="ml-2 text-blue-600 font-bold">
+                                        +${option.price.toFixed(2)}{showQuantity && ` x ${quantity}`}
+                                      </span>
+                                    )}
+                                  </label>
+                                </div>
+                                {showQuantity && (
+                                  <div className="ml-6 flex items-center space-x-2">
+                                    <Label htmlFor={`qty-${option.value}`} className="text-xs text-gray-600">Qty:</Label>
+                                    <Input
+                                      id={`qty-${option.value}`}
+                                      type="number"
+                                      min="1"
+                                      value={quantity}
+                                      onChange={(e) => {
+                                        const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                        setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: newQuantity }));
+                                      }}
+                                      className="w-16 h-8 text-xs"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          });
                       })()}
                       {(!features.other_options || features.other_options.length === 0) && (
                         <div className="text-gray-400 text-sm italic">No options selected</div>
@@ -2206,7 +2255,10 @@ export default function OrderEntry() {
                       if (!feature?.options) return features.other_options.join(', ');
                       const labels = features.other_options.map((optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
-                        return option?.label || optionValue;
+                        const quantity = otherOptionsQuantities[optionValue] || 1;
+                        const baseLabel = option?.label || optionValue;
+                        const showQuantity = !option?.label?.toLowerCase().includes('no');
+                        return showQuantity && quantity > 1 ? `${baseLabel} (${quantity})` : baseLabel;
                       });
                       return labels.join(', ');
                     })() : 'Not selected'}</span>
@@ -2215,7 +2267,8 @@ export default function OrderEntry() {
                       if (!feature?.options) return '0.00';
                       const totalPrice = features.other_options.reduce((sum: number, optionValue: string) => {
                         const option = feature.options!.find(opt => opt.value === optionValue);
-                        return sum + (option?.price || 0);
+                        const quantity = otherOptionsQuantities[optionValue] || 1;
+                        return sum + ((option?.price || 0) * quantity);
                       }, 0);
                       return totalPrice.toFixed(2);
                     })() : '0.00'}</span>

@@ -1289,7 +1289,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      const isFullyPaid = paymentTotal >= orderTotal && orderTotal > 0;
+      // Consider an order fully paid if:
+      // 1. Standard case: payments >= orderTotal and orderTotal > 0, OR
+      // 2. Legacy case: paymentAmount is null but we have substantial payments (> shipping cost)
+      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
+                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
 
       return {
         ...order,

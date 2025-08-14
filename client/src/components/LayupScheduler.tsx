@@ -2862,46 +2862,7 @@ export default function LayupScheduler() {
 
             </div>
             
-            {/* Debug Information Panel */}
-            {(debugInfo.length > 0 || Object.keys(orderAssignments).length > 0) && (
-              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 rounded">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">⚠️ Friday Assignment Issues Found:</h3>
-                
-                {/* Show current orderAssignments state */}
-                <div className="mb-4">
-                  <h4 className="text-xs font-bold text-red-800 dark:text-red-200">Current Order Assignments in State:</h4>
-                  <div className="text-xs font-mono text-red-700 dark:text-red-300 space-y-1 max-h-32 overflow-y-auto">
-                    {Object.entries(orderAssignments).slice(0, 10).map(([orderId, assignment]) => {
-                      const date = new Date(assignment.date);
-                      const dayOfWeek = date.getDay();
-                      const isFriday = dayOfWeek === 5;
-                      return (
-                        <div key={orderId} className={isFriday ? 'bg-red-200 dark:bg-red-800 p-1 rounded' : ''}>
-                          {orderId}: {assignment.moldId} on {date.toDateString()} {isFriday ? '← FRIDAY!' : ''}
-                        </div>
-                      );
-                    })}
-                    {Object.keys(orderAssignments).length > 10 && (
-                      <div>... and {Object.keys(orderAssignments).length - 10} more assignments</div>
-                    )}
-                  </div>
-                </div>
-
-                {debugInfo.length > 0 && (
-                  <div className="text-xs font-mono text-red-700 dark:text-red-300 space-y-1">
-                    {debugInfo.map((info, idx) => (
-                      <div key={idx}>{info}</div>
-                    ))}
-                  </div>
-                )}
-                <button 
-                  onClick={() => setDebugInfo([])}
-                  className="mt-2 text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
-                >
-                  Clear Debug Info
-                </button>
-              </div>
-            )}
+            
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
                 <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>

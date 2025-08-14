@@ -15,13 +15,14 @@ interface AveryLabelPrintProps {
   actionLength?: string;
   stockModel?: string;
   paintOption?: string;
+  color?: string; // Added color prop
   labelType?: 'basic' | 'detailed';
   copies?: number;
 }
 
-export function AveryLabelPrint({ 
-  orderId, 
-  barcode, 
+export function AveryLabelPrint({
+  orderId,
+  barcode,
   customerName,
   orderDate,
   dueDate,
@@ -30,8 +31,9 @@ export function AveryLabelPrint({
   actionLength,
   stockModel,
   paintOption,
+  color, // Added color prop
   labelType = 'detailed',
-  copies = 6 
+  copies = 6
 }: AveryLabelPrintProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [barcodeGenerated, setBarcodeGenerated] = useState(false);
@@ -82,26 +84,28 @@ export function AveryLabelPrint({
           day: '2-digit',
           year: '2-digit'
         });
-        
-        const generateLabelContent = () => {
+
+        const generateLabelContent = (index: number) => {
           // Format: "SA CF Chalkbranch" (Action Length + Stock Model)
-          const actionLengthModel = actionLength && stockModel ? 
-            `${actionLength} ${stockModel}` : 
+          const actionLengthModel = actionLength && stockModel ?
+            `${actionLength} ${stockModel}` :
             (actionLength || stockModel || orderId);
-          
+
           return `
-            <div class="label-content">
-              <div class="line1">${actionLengthModel}</div>
-              <div class="line2">
-                <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
+            <div class="avery-label">
+              <div class="label-content">
+                <div class="line1">${orderId}</div>
+                ${customerName ? `<div class="line2">${customerName}</div>` : ''}
+                ${stockModel || color ? `<div class="line3">${stockModel || ''}${stockModel && color ? ' - ' : ''}${color || ''}</div>` : ''}
+                ${dueDate ? `<div class="line4">Due: ${formatDate(dueDate)}</div>` : ''}
+                <div class="line5">
+                  <canvas id="barcode-${index}" width="180" height="25"></canvas>
+                </div>
               </div>
-              <div class="line3">${paintOption || 'Standard'}</div>
-              <div class="line4">${customerName || 'N/A'}</div>
-              <div class="line5">${dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>
           `;
         };
-        
+
         printWindow.document.write(`
           <html>
             <head>
@@ -112,7 +116,7 @@ export function AveryLabelPrint({
                   padding: 0;
                   font-family: Arial, sans-serif;
                 }
-                
+
                 /* Avery 5160 Label Dimensions: 2.625" x 1" (30 labels per sheet) */
                 .avery-label {
                   width: 2.625in;
@@ -127,7 +131,7 @@ export function AveryLabelPrint({
                   background: white;
                   position: relative;
                 }
-                
+
                 .label-content {
                   height: 100%;
                   display: flex;
@@ -137,8 +141,8 @@ export function AveryLabelPrint({
                   padding: 2px;
                   box-sizing: border-box;
                 }
-                
-                /* Line 1: Action Length + Stock Model */
+
+                /* Line 1: Order ID */
                 .line1 {
                   font-size: 8pt;
                   font-weight: bold;
@@ -149,24 +153,19 @@ export function AveryLabelPrint({
                   white-space: nowrap;
                   text-align: center;
                 }
-                
-                /* Line 2: Barcode */
+
+                /* Line 2: Customer Name */
                 .line2 {
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  margin: 2px 0;
-                  min-height: 0.3in;
+                  font-size: 6pt;
+                  color: #000;
+                  margin: 1px 0;
+                  text-overflow: ellipsis;
+                  overflow: hidden;
+                  white-space: nowrap;
+                  text-align: center;
                 }
-                
-                .barcode-img {
-                  max-width: 100%;
-                  max-height: 0.3in;
-                  height: auto;
-                  display: block;
-                }
-                
-                /* Line 3: Paint Option */
+
+                /* Line 3: Stock Model + Color */
                 .line3 {
                   font-size: 5.5pt;
                   font-weight: bold;
@@ -177,50 +176,55 @@ export function AveryLabelPrint({
                   white-space: nowrap;
                   text-align: center;
                 }
-                
-                /* Line 4: Customer Name */
+
+                /* Line 4: Due Date */
                 .line4 {
-                  font-size: 6pt;
-                  color: #000;
-                  margin: 1px 0;
-                  text-overflow: ellipsis;
-                  overflow: hidden;
-                  white-space: nowrap;
-                  text-align: center;
-                }
-                
-                /* Line 5: Due Date */
-                .line5 {
                   font-size: 6pt;
                   font-weight: bold;
                   color: #000;
                   margin-top: 1px;
                   text-align: center;
                 }
-                
+
+                /* Line 5: Barcode */
+                .line5 {
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  margin: 2px 0;
+                  min-height: 0.3in;
+                }
+
+                .barcode-img {
+                  max-width: 100%;
+                  max-height: 0.3in;
+                  height: auto;
+                  display: block;
+                }
+
                 @media print {
                   body { margin: 0; }
-                  .avery-label { 
-                    border: none; 
+                  .avery-label {
+                    border: none;
                     margin: 0;
                     width: 2.625in;
                     height: 1in;
                   }
-                  
+
                   /* Ensure exact positioning for Avery 5160 */
                   @page {
                     size: 8.5in 11in;
                     margin: 0.5in 0.1875in;
                   }
                 }
-                
+
                 .labels-container {
                   display: flex;
                   flex-wrap: wrap;
                   justify-content: flex-start;
                   width: 8.5in;
                 }
-                
+
                 /* Preview styles */
                 .preview-label {
                   border: 2px solid #007bff;
@@ -231,9 +235,7 @@ export function AveryLabelPrint({
             <body>
               <div class="labels-container">
                 ${Array(copies).fill().map((_, i) => `
-                  <div class="avery-label ${i === 0 ? 'preview-label' : ''}">
-                    ${generateLabelContent()}
-                  </div>
+                  ${generateLabelContent(i)}
                 `).join('')}
               </div>
             </body>
@@ -241,8 +243,25 @@ export function AveryLabelPrint({
         `);
         printWindow.document.close();
         printWindow.focus();
-        
+
+        // After writing content, generate barcodes in the print window
         setTimeout(() => {
+          for (let i = 0; i < copies; i++) {
+            const canvas = printWindow.document.getElementById(`barcode-${i}`) as HTMLCanvasElement;
+            if (canvas && barcode) {
+              try {
+                JsBarcode(canvas, barcode, {
+                  format: "CODE39",
+                  width: 1.5, // Adjusted for smaller canvas
+                  height: 25,
+                  displayValue: false,
+                  margin: 2,
+                });
+              } catch (error) {
+                console.error(`Error generating barcode for label ${i}:`, error);
+              }
+            }
+          }
           printWindow.print();
           printWindow.close();
         }, 500);
@@ -262,24 +281,32 @@ export function AveryLabelPrint({
         <div className="space-y-4">
           {/* Hidden canvas for barcode generation */}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
-          
+
           {/* Label Preview */}
           <div className="border border-gray-300 bg-gray-50 p-4 rounded">
             <div className="text-sm font-semibold mb-2">Label Preview:</div>
-            <div 
+            <div
               className="bg-white border border-gray-400 p-2 text-center flex flex-col justify-between"
               style={{ width: '2.625in', height: '1in', fontSize: '8px', lineHeight: '1.1' }}
             >
               <div className="font-bold text-xs">
-                {actionLength && stockModel ? 
-                  `${actionLength} ${stockModel}` : 
-                  (actionLength || stockModel || orderId)
-                }
+                {orderId}
               </div>
+              {customerName && (
+                <div className="text-xs">{customerName}</div>
+              )}
+              {stockModel || color ? (
+                <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`${stockModel || ''}${stockModel && color ? ' - ' : ''}${color || ''}`}>
+                  {`${stockModel || ''}${(stockModel && color) ? ' - ' : ''}${color || ''}`}
+                </div>
+              ) : ''}
+              {dueDate && (
+                <div className="text-xs font-bold">{`Due: ${formatDate(dueDate)}`}</div>
+              )}
               <div className="my-1 flex justify-center">
                 {barcodeGenerated && canvasRef.current && (
-                  <img 
-                    src={canvasRef.current.toDataURL()} 
+                  <img
+                    src={canvasRef.current.toDataURL()}
                     alt="Barcode preview"
                     style={{ maxHeight: '0.3in', maxWidth: '100%' }}
                   />
@@ -290,14 +317,6 @@ export function AveryLabelPrint({
                   </div>
                 )}
               </div>
-              <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={paintOption || 'Standard'}>
-                {(paintOption || 'Standard').length > 20 ? 
-                  `${(paintOption || 'Standard').substring(0, 20)}...` : 
-                  (paintOption || 'Standard')
-                }
-              </div>
-              <div className="text-xs">{customerName || 'N/A'}</div>
-              <div className="text-xs font-bold">{dueDate ? formatDate(dueDate) : 'TBD'}</div>
             </div>
           </div>
 
@@ -324,6 +343,16 @@ export function AveryLabelPrint({
                 <strong>Status:</strong> {status}
               </div>
             )}
+            {stockModel && (
+              <div>
+                <strong>Stock Model:</strong> {stockModel}
+              </div>
+            )}
+            {color && (
+              <div>
+                <strong>Color:</strong> {color}
+              </div>
+            )}
             <div>
               <strong>Label Type:</strong> {labelType === 'basic' ? 'Basic' : 'Detailed'}
             </div>
@@ -333,14 +362,14 @@ export function AveryLabelPrint({
           </div>
 
           {/* Print Button */}
-          <Button 
+          <Button
             onClick={handlePrintLabels}
             className="w-full"
           >
             <Printer className="h-4 w-4 mr-2" />
             Print {copies} Avery Labels (5160)
           </Button>
-          
+
           <div className="text-xs text-gray-600 mt-2">
             <p><strong>Compatible with:</strong> Avery 5160 labels (2.625" x 1", 30 labels per sheet)</p>
             <p><strong>Note:</strong> Ensure your printer is set to actual size (100% scale) for proper alignment</p>

@@ -1702,7 +1702,166 @@ export function registerRoutes(app: Express): Server {
   // app.use('/api/scheduling', schedulingRoutes);
   // app.use('/api/bom', bomRoutes);
 
-    // Complete order summary endpoint for barcode scanning
+    // Barcode scanning endpoint
+  app.get('/api/barcode/scan/:barcode', async (req, res) => {
+    try {
+      const { barcode } = req.params;
+      console.log(`🔍 Barcode scan requested: ${barcode}`);
+      
+      // Extract order ID from barcode (handle various formats)
+      let orderId = barcode;
+      if (barcode.startsWith('P1-')) {
+        orderId = barcode.substring(3); // Remove 'P1-' prefix
+      }
+      
+      const { storage } = await import('../../storage');
+
+      // Try to find the order in various tables
+      let order = null;
+      let orderSource = 'unknown';
+
+      // Check finalized orders first
+      try {
+        order = await storage.getFinalizedOrderById(orderId);
+        if (order) orderSource = 'finalized';
+      } catch (e) {
+        // Continue searching
+      }
+
+      // Check draft orders if not found
+      if (!order) {
+        try {
+          order = await storage.getOrderDraft(orderId);
+          if (order) orderSource = 'draft';
+        } catch (e) {
+          // Continue searching
+        }
+      }
+
+      // Check production orders if not found
+      if (!order) {
+        try {
+          const productionOrders = await storage.getAllProductionOrders();
+          order = productionOrders.find(po => po.orderId === orderId);
+          if (order) orderSource = 'production';
+        } catch (e) {
+          // Continue searching
+        }
+      }
+
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Get customer details
+      let customer = null;
+      if (order.customerId) {
+        try {
+          const customers = await storage.getAllCustomers();
+          customer = customers.find(c => c.id.toString() === order.customerId || c.name === order.customerId);
+        } catch (e) {
+          console.error('Error fetching customer:', e);
+        }
+      }
+
+      // Get stock model details and extract color information
+      let baseModel = null;
+      let color = null;
+      if (order.modelId || order.itemId) {
+        try {
+          const stockModels = await storage.getAllStockModels();
+          baseModel = stockModels.find(sm => 
+            sm.id === (order.modelId || order.itemId) || 
+            sm.name === (order.modelId || order.itemId)
+          );
+        } catch (e) {
+          console.error('Error fetching stock model:', e);
+        }
+      }
+
+      // Extract color from features or specifications
+      if (order.features) {
+        if (order.features.color) color = order.features.color;
+        if (order.features.paintOption) color = order.features.paintOption;
+        if (order.features.finish) color = order.features.finish;
+      }
+      if (order.specifications) {
+        if (order.specifications.color) color = order.specifications.color;
+        if (order.specifications.paintOption) color = order.specifications.paintOption;
+        if (order.specifications.finish) color = order.specifications.finish;
+      }
+
+      // Build comprehensive order summary
+      const orderSummary = {
+        orderId: order.orderId,
+        barcode: barcode,
+        orderDate: order.orderDate || order.createdAt,
+        customer: customer ? {
+          name: customer.name,
+          email: customer.email || '',
+          company: customer.company || '',
+          phone: customer.phone || ''
+        } : {
+          name: order.customerId || order.customerName || 'Unknown Customer',
+          email: '',
+          company: '',
+          phone: ''
+        },
+        baseModel: baseModel ? {
+          name: baseModel.displayName || baseModel.name,
+          id: baseModel.id,
+          price: baseModel.price || 0
+        } : {
+          name: order.modelId || order.itemId || order.itemName || 'Unknown Model',
+          id: order.modelId || order.itemId || '',
+          price: 0
+        },
+        features: order.features || {},
+        specifications: order.specifications || {},
+        lineItems: [],
+        pricing: {
+          subtotal: order.subtotal || 0,
+          discounts: [],
+          discountTotal: 0,
+          afterDiscounts: order.subtotal || 0,
+          total: order.total || order.subtotal || 0,
+          override: false
+        },
+        paymentStatus: order.paymentStatus || 'UNPAID',
+        status: order.status || 'PENDING',
+        currentDepartment: order.currentDepartment || 'Order Entry',
+        dueDate: order.dueDate,
+        notes: order.notes || '',
+        source: orderSource,
+        
+        // Additional fields for barcode display
+        customerName: customer?.name || order.customerId || order.customerName || 'Unknown Customer',
+        stockModel: baseModel?.displayName || baseModel?.name || order.modelId || order.itemId || order.itemName,
+        color: color || 'Not specified',
+        actionLength: order.features?.action_length || order.specifications?.action_length || '',
+        paintOption: order.features?.paintOption || order.specifications?.paintOption || color
+      };
+
+      // Add production-specific details if applicable
+      if (orderSource === 'production') {
+        orderSummary.productionDetails = {
+          partName: order.partName || order.itemName,
+          quantity: order.quantity || 1,
+          department: order.department,
+          priority: order.priority || 3,
+          productionStatus: order.productionStatus || order.status
+        };
+      }
+
+      console.log(`✅ Barcode scan successful for order: ${orderId}`);
+      res.json(orderSummary);
+    } catch (error) {
+      console.error('Barcode scan error:', error);
+      res.status(500).json({ error: 'Failed to scan barcode' });
+    }
+  });
+
+  // Complete order summary endpoint for barcode scanning
   app.get('/api/orders/:orderId/complete-summary', async (req, res) => {
     try {
       const { orderId } = req.params;

@@ -563,6 +563,7 @@ export default function LayupScheduler() {
   const [editingMoldStockModels, setEditingMoldStockModels] = useState<string[]>([]);
   const [editingMoldName, setEditingMoldName] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -1077,7 +1078,7 @@ export default function LayupScheduler() {
       return schedulingWeeks;
     };
 
-    // Get work days for dynamic window (Mon-Thu ONLY - Never Friday)
+    // Get work days for dynamic window based on selected days
     const getWorkDaysInWeek = (startDate: Date) => {
       const workDays: Date[] = [];
       let current = new Date(startDate);
@@ -1087,23 +1088,17 @@ export default function LayupScheduler() {
         current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
       }
 
-      // Add Monday through Thursday (primary work days) - EXPLICITLY exclude Friday
-      for (let i = 0; i < 4; i++) {
+      // Add selected work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
+      for (let i = 0; i < 5; i++) {
         const workDay = new Date(current);
-        // Double-check: ensure we never include Friday
-        if (workDay.getDay() === 5) {
-          console.error(`❌ CRITICAL: getWorkDaysInWeek attempted to include a Friday! Date: ${workDay.toDateString()}`);
-          break; // Stop adding days if we hit Friday
+        const dayOfWeek = workDay.getDay();
+        
+        // Only include days that are selected by the user
+        if (selectedWorkDays.includes(dayOfWeek)) {
+          workDays.push(workDay);
         }
-        workDays.push(workDay);
+        
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
-      }
-
-      // Final validation: ensure no Fridays made it into the work days
-      const fridayCheck = workDays.filter(date => date.getDay() === 5);
-      if (fridayCheck.length > 0) {
-        console.error(`❌ CRITICAL: Found ${fridayCheck.length} Friday dates in work days!`, fridayCheck.map(d => d.toDateString()));
-        return workDays.filter(date => date.getDay() !== 5); // Remove any Fridays
       }
 
       return workDays;
@@ -2412,12 +2407,12 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
-  // Generate date ranges based on view type - Mon-Thu primary with Fri as backup
+  // Generate date ranges based on view type - Always show Mon-Fri in calendar view
   const dates = useMemo(() => {
     let calculatedDates;
     if (viewType === 'day') calculatedDates = [currentDate];
     else if (viewType === 'week') {
-      // Show work week: Monday through Friday (with Friday as backup)
+      // Always show Monday through Friday in calendar view
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
       calculatedDates = eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
     } else {
@@ -2612,19 +2607,23 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Get work days for scheduling (Monday through Thursday ONLY - Never Friday)
+    // Get work days for scheduling based on selected days
     const getWorkDays = (startDate: Date, weeksCount: number = 8) => {
       const workDays: Date[] = [];
       console.log(`📅 Generating work days starting from: ${startDate.toDateString()} (Day: ${startDate.getDay()})`);
+      console.log(`📅 Selected work days: ${selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`);
       
       for (let week = 0; week < weeksCount; week++) {
         const weekStart = startOfWeek(startDate, { weekStartsOn: 1 }); // Get Monday of current week
         const actualWeekStart = addDays(weekStart, week * 7); // Add weeks
         
-        // Generate ONLY Monday (1), Tuesday (2), Wednesday (3), Thursday (4) - NEVER Friday
-        for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
-          const workDay = addDays(actualWeekStart, dayOffset);
-          workDays.push(workDay);
+        // Generate days based on user selection (Monday = 0 offset, Tuesday = 1 offset, etc.)
+        for (let dayOffset = 0; dayOffset < 5; dayOffset++) {
+          const dayOfWeek = dayOffset + 1; // Monday = 1, Tuesday = 2, etc.
+          if (selectedWorkDays.includes(dayOfWeek)) {
+            const workDay = addDays(actualWeekStart, dayOffset);
+            workDays.push(workDay);
+          }
         }
       }
       
@@ -2895,6 +2894,64 @@ export default function LayupScheduler() {
         <div className="px-6 pb-4">
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Work Days
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Work Day Settings</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Select which days should be included when generating layup schedules. 
+                    All days Monday-Friday will remain visible in the calendar.
+                  </p>
+                  <div className="space-y-3">
+                    {[
+                      { day: 1, label: 'Monday' },
+                      { day: 2, label: 'Tuesday' },
+                      { day: 3, label: 'Wednesday' },
+                      { day: 4, label: 'Thursday' },
+                      { day: 5, label: 'Friday' }
+                    ].map(({ day, label }) => (
+                      <div key={day} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`day-${day}`}
+                          checked={selectedWorkDays.includes(day)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedWorkDays(prev => [...prev, day].sort());
+                            } else {
+                              setSelectedWorkDays(prev => prev.filter(d => d !== day));
+                            }
+                          }}
+                        />
+                        <label 
+                          htmlFor={`day-${day}`}
+                          className={`text-sm cursor-pointer font-medium ${
+                            day === 5 ? 'text-amber-700 dark:text-amber-300' : ''
+                          }`}
+                        >
+                          {label}
+                          {day === 5 && ' (Backup Day)'}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' : 
+                        selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Dialog>
               <DialogTrigger asChild>
@@ -3519,24 +3576,33 @@ export default function LayupScheduler() {
               style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
             >
               {dates.map(date => {
-                  const isFriday = date.getDay() === 5;
+                  const dayOfWeek = date.getDay();
+                  const isFriday = dayOfWeek === 5;
+                  const isSelectedWorkDay = selectedWorkDays.includes(dayOfWeek);
+                  const isSchedulingDay = isSelectedWorkDay;
+                  
                   return (
                     <div
                       key={date.toISOString()}
                       className={`p-3 border text-center font-semibold text-sm ${
                         isFriday 
                           ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
-                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                          : isSchedulingDay
+                          ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
+                          : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'
                       }`}
                     >
                       {format(date, 'MM/dd')}
                       <div className={`text-xs mt-1 ${
                         isFriday 
                           ? 'text-amber-600 dark:text-amber-400' 
+                          : isSchedulingDay
+                          ? 'text-green-600 dark:text-green-400'
                           : 'text-gray-500'
                       }`}>
                         {format(date, 'EEE')}
                         {isFriday && <div className="text-[10px] font-medium">Backup</div>}
+                        {!isFriday && !isSchedulingDay && <div className="text-[10px] font-medium">Disabled</div>}
                       </div>
                     </div>
                   );

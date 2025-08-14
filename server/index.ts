@@ -114,6 +114,7 @@ app.use((req, res, next) => {
       console.log(`- Port: ${port}`);
       console.log(`- Host: 0.0.0.0`);
       console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`);
       log(`serving on port ${port}`);
     });
   } catch (error) {

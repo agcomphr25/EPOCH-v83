@@ -1062,9 +1062,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-    // ORDER SUMMARY - DETAILED PRICING BREAKDOWN
+    // FEATURES & CUSTOMIZATIONS - DETAILED PRICING BREAKDOWN
     currentY -= 50;
-    page.drawText('ORDER SUMMARY - PRICING BREAKDOWN', {
+    page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,
       size: 14,

@@ -65,6 +65,17 @@ export default function AllOrdersList() {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
+  // Debug log to check data
+  React.useEffect(() => {
+    if (orders?.length) {
+      console.log('AllOrdersList orders sample:', orders.slice(0, 3).map(o => ({
+        orderId: o.orderId,
+        isFullyPaid: o.isFullyPaid,
+        paymentTotal: o.paymentTotal
+      })));
+    }
+  }, [orders]);
+
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],

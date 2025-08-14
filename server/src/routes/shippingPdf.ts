@@ -1079,6 +1079,39 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     summaryLineY -= 12;
 
+    // Length of Pull (LOP)
+    const lopFeature = features.find(f => f.id === 'length_of_pull');
+    const lopOption = lopFeature?.options?.find(opt => opt.value === order.features?.length_of_pull);
+    const lopPrice = lopOption?.price || 0;
+
+    page.drawText('LOP (Length of Pull):', {
+      x: margin + 10,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    const lopDisplay = lopOption?.label || 
+      (order.features?.length_of_pull && order.features.length_of_pull !== 'no_lop_change' ? 
+        order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'No Change');
+    
+    page.drawText(lopDisplay, {
+      x: margin + 120,
+      y: summaryLineY,
+      size: 9,
+      font: font,
+    });
+
+    page.drawText(`$${lopPrice.toFixed(2)}`, {
+      x: margin + printableWidth - 80,
+      y: summaryLineY,
+      size: 9,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+
+    summaryLineY -= 12;
+
     // Rails
     let railsPrice = 0;
     let railsDisplay = 'Not selected';
@@ -1131,7 +1164,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 15;
 
     // Subtotal
-    const calculatedSubtotal = basePrice + actionLengthPrice + barrelInletPrice + paintPrice + railsPrice;
+    const calculatedSubtotal = basePrice + actionLengthPrice + barrelInletPrice + paintPrice + lopPrice + railsPrice;
     page.drawText('Subtotal:', {
       x: margin + 10,
       y: summaryLineY,

@@ -529,13 +529,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
 
-    // Get comprehensive order data from storage
+    // Get comprehensive order data from storage with payment status
     const { storage } = await import('../../storage');
     const order = await storage.getOrderById(orderId);
     const stockModels = await storage.getAllStockModels();
     const customers = await storage.getAllCustomers();
     const features = await storage.getAllFeatures();
     const addresses = await storage.getAllAddresses();
+    
+    // Get payment data for payment status calculation
+    const payments = await storage.getPaymentsByOrderId(orderId);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -641,8 +644,32 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    const paymentStatus = order.isPaid ? 'PAID' : 'PENDING';
-    const paymentColor = order.isPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
+    // Calculate payment status using the same logic as the enhanced calculation
+    const paymentTotal = payments.reduce((sum, payment) => sum + (payment.paymentAmount || 0), 0);
+    
+    // Calculate order total (same logic as OrderEntry.tsx and enhanced payment calculation)
+    const basePriceForPayment = model?.price || 0;
+    let featuresCostForPayment = 0;
+    
+    if (order.features && Object.keys(order.features).length > 0) {
+      Object.entries(order.features).forEach(([featureKey, featureValue]) => {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          const featureDetail = features.find(f => f.id === featureKey);
+          featuresCostForPayment += featureDetail?.price || 0;
+        }
+      });
+    }
+    
+    const shippingForPayment = order.shipping || 0;
+    const orderTotal = basePriceForPayment + featuresCostForPayment + shippingForPayment;
+    
+    // Determine if fully paid (same logic as backend calculation)
+    const isFullyPaid = order.paymentAmount !== null ? 
+      (order.paymentAmount >= orderTotal) :
+      (paymentTotal >= orderTotal);
+    
+    const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
+    const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
     
     page.drawText(paymentStatus, {
       x: orderBoxX + 90,

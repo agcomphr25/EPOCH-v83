@@ -62,6 +62,8 @@ interface Order {
   paymentAmount?: number;
   paymentDate?: string;
   paymentTimestamp?: string;
+  paymentTotal?: number;
+  isFullyPaid?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -179,7 +181,7 @@ export default function OrdersList() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.success('Order progressed successfully');
     },
     onError: (error: any) => {
@@ -240,7 +242,8 @@ export default function OrdersList() {
   
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
-      queryKey: ['/api/orders/all'],
+      queryKey: ['/api/orders/with-payment-status', 'v2'],
+      queryFn: () => apiRequest('/api/orders/with-payment-status'),
       refetchInterval: 30000, // Auto-refresh every 30 seconds
       refetchOnWindowFocus: true, // Refresh when window regains focus
     });

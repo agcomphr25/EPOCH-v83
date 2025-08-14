@@ -1536,7 +1536,11 @@ export function registerRoutes(app: Express): Server {
             department: 'Layup' as const, // Start at Layup department
             status: 'PENDING' as const,
             priority: 3, // Default priority
-            dueDate: purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate),
+            dueDate: (() => {
+              const expectedDue = purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate);
+              const today = new Date();
+              return expectedDue > today ? expectedDue : today;
+            })(),
             p2PoId: poId,
             p2PoItemId: item.id,
             sku: item.itemId,

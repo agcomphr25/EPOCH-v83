@@ -237,15 +237,26 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
       let scheduled = false;
 
-      // Try to schedule on each work day
+      // Try to schedule on each work day (distribute evenly across all work days)
       for (const workDate of workDates) {
         if (scheduled) break;
         
         const dailyKey = workDate.toISOString().split('T')[0];
         const currentDailyCount = dailyAllocationCount.get(dailyKey) || 0;
+        const dayOfWeek = workDate.getDay();
+        const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek];
+        
+        // CRITICAL: Verify this is an allowed work day before scheduling
+        if (!workDays.includes(dayOfWeek)) {
+          console.log(`⚠️ SKIP: ${workDate.toDateString()} (${dayName}) not in allowed work days: [${workDays.join(', ')}]`);
+          continue;
+        }
+        
+        console.log(`🎯 ATTEMPTING: ${workDate.toDateString()} (${dayName}, Day ${dayOfWeek}) - Current count: ${currentDailyCount}/${actualDailyCapacity}`);
         
         // Check daily capacity based on actual employee production rates
         if (currentDailyCount >= actualDailyCapacity) {
+          console.log(`⏸️ CAPACITY FULL: ${dayName} already has ${currentDailyCount}/${actualDailyCapacity} orders`);
           continue;
         }
 
@@ -256,14 +267,15 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           const moldCapacity = mold.multiplier || 1; // Use realistic mold capacity per day
 
           if (currentUsage < moldCapacity) {
-            // CRITICAL VALIDATION: Never allow Friday assignments
+            // CRITICAL VALIDATION: Never allow assignments on non-work days
             const scheduleDate = new Date(workDate);
-            if (scheduleDate.getDay() === 5) {
-              console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on Friday ${scheduleDate.toDateString()}`);
-              console.error(`   Work date: ${workDate.toDateString()}`);
-              console.error(`   Schedule date: ${scheduleDate.toDateString()}`);
-              console.error(`   Day of week: ${scheduleDate.getDay()}`);
-              throw new Error(`Friday assignment blocked for order ${order.orderId}`);
+            const scheduleDayOfWeek = scheduleDate.getDay();
+            const scheduleDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][scheduleDayOfWeek];
+            
+            if (!workDays.includes(scheduleDayOfWeek)) {
+              console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on ${scheduleDayName} ${scheduleDate.toDateString()}`);
+              console.error(`   Allowed work days: [${workDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
+              throw new Error(`${scheduleDayName} assignment blocked - not in configured work days`);
             }
             
             // Schedule this order

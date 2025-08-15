@@ -139,7 +139,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.created_at as createdAt,
         c.customer_name as customerName
       FROM all_orders o
-      LEFT JOIN customers c ON o.customerId = c.id
+      LEFT JOIN customers c ON o.customer_id = c.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status = 'FINALIZED'
       ORDER BY 

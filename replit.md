@@ -17,6 +17,12 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 5. **Manual Adjustments**: Allow moving orders between days (Mon-Fri visible, but only Mon-Thu scheduled by default)
 6. **Save & Lock**: Once saved, week is locked and orders move to Layup/Plugging department automatically
 
+**Work Day Scheduling Status (2025-08-15):**
+✅ **FIXED**: Algorithmic scheduler now properly respects selected work days
+✅ **VERIFIED**: Orders are distributed across Monday-Thursday as configured
+✅ **WORKING**: No Friday assignments are being made
+✅ **COMPLETE**: Comprehensive production queue flow is functional
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 

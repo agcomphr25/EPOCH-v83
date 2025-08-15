@@ -239,7 +239,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     
     const stats = {
       readyForShipping: orders.filter((o: any) => 
-        (o.currentDepartment === 'QC' || o.currentDepartment === 'Shipping') && !o.shippedDate
+        (o.currentDepartment === 'Shipping QC' || o.currentDepartment === 'Shipping') && !o.shippedDate
       ).length,
       shipped: orders.filter((o: any) => o.shippedDate).length,
       delivered: orders.filter((o: any) => o.deliveryConfirmed).length,

@@ -3637,7 +3637,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Define department sequence
-    const departmentSequence = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+    const departmentSequence = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
 
     // Check if order is overdue in current department
     const currentDeptStandardTime = departmentTimes[order.currentDepartment] || 7;
@@ -3693,7 +3693,7 @@ export class DatabaseStorage implements IStorage {
 
       // Department progression logic
       const departmentFlow = [
-        'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+        'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
       ];
 
       let nextDept = nextDepartment;
@@ -3710,13 +3710,14 @@ export class DatabaseStorage implements IStorage {
       const now = new Date();
 
       switch (currentOrder.currentDepartment) {
-        case 'Layup': completionUpdates.layupCompletedAt = now; break;
-        case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
+        case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+        case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
+        case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
         case 'CNC': completionUpdates.cncCompletedAt = now; break;
         case 'Finish': completionUpdates.finishCompletedAt = now; break;
         case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
         case 'Paint': completionUpdates.paintCompletedAt = now; break;
-        case 'QC': completionUpdates.qcCompletedAt = now; break;
+        case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
         case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
       }
 

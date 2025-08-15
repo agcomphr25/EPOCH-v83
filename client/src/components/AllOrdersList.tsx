@@ -39,7 +39,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -222,13 +222,13 @@ export default function AllOrdersList() {
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
       'P1 Production Queue': 'bg-slate-600',
-      'Layup': 'bg-blue-500',
-      'Plugging': 'bg-orange-500',
+      'Layup/Plugging': 'bg-blue-500',
+      'Barcode': 'bg-cyan-500',
       'CNC': 'bg-green-500',
       'Finish': 'bg-yellow-500',
       'Gunsmith': 'bg-purple-500',
       'Paint': 'bg-pink-500',
-      'QC': 'bg-indigo-500',
+      'Shipping QC': 'bg-indigo-500',
       'Shipping': 'bg-gray-500'
     };
     return colors[department] || 'bg-gray-400';
@@ -240,7 +240,7 @@ export default function AllOrdersList() {
   };
 
   const handlePushToLayupPlugging = (orderId: string) => {
-    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup' });
+    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
   };
   const handleCommunicationOpen = (customer: any, communicationType: string) => {
     setSelectedCustomer({
@@ -478,7 +478,7 @@ export default function AllOrdersList() {
                             className="bg-green-600 hover:bg-green-700 text-white"
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            Push to Layup
+                            Push to Layup/Plugging
                           </Button>
                         )}
 

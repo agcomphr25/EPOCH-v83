@@ -559,13 +559,14 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     const now = new Date();
 
     switch (existingOrder.currentDepartment) {
-      case 'Layup': completionUpdates.layupCompletedAt = now; break;
-      case 'Plugging': completionUpdates.pluggingCompletedAt = now; break;
+      case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+      case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
+      case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
       case 'CNC': completionUpdates.cncCompletedAt = now; break;
       case 'Finish': completionUpdates.finishCompletedAt = now; break;
       case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
       case 'Paint': completionUpdates.paintCompletedAt = now; break;
-      case 'QC': completionUpdates.qcCompletedAt = now; break;
+      case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
       case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
     }
 

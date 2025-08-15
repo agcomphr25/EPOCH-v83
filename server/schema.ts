@@ -219,6 +219,7 @@ export const stockModels = pgTable("stock_models", {
   displayName: text("display_name").notNull(),
   price: real("price").notNull(),
   description: text("description"),
+  handedness: text("handedness"), // "LH", "RH", null for ambidextrous
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),

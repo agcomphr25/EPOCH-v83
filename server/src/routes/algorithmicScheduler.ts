@@ -5,20 +5,26 @@ const router = Router();
 
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
-    const { maxOrdersPerDay = 50, scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
+    // FIXED: Force correct work days and realistic capacity
+    const { scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
     
-    console.log(`🚀 Starting algorithmic scheduler with ${maxOrdersPerDay} orders/day over ${scheduleDays} days`);
-    console.log(`📅 Work days configured: ${workDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')} (${workDays.join(', ')})`);
+    // CRITICAL: Force Monday-Thursday only scheduling
+    const MANDATORY_WORK_DAYS = [1, 2, 3, 4]; // Monday-Thursday ONLY
+    if (JSON.stringify(workDays) !== JSON.stringify(MANDATORY_WORK_DAYS)) {
+      console.log(`⚠️ OVERRIDING work days from ${workDays} to mandatory Monday-Thursday: ${MANDATORY_WORK_DAYS}`);
+    }
+    const enforcedWorkDays = MANDATORY_WORK_DAYS;
+    
+    console.log(`🚀 Starting algorithmic scheduler over ${scheduleDays} days`);
+    console.log(`📅 Work days ENFORCED: ${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')} (${enforcedWorkDays.join(', ')})`);
 
     // Get unified P1 layup queue including all orders from all_orders + production_orders
     const fetch = (await import('node-fetch')).default;
     const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
-    const p1QueueData = await p1QueueResponse.json();
+    const p1QueueData = await p1QueueResponse.json() as any[];
     
     // Filter out orders that are already scheduled or in later departments
     const ordersToProcess = p1QueueData.filter((order: any) => {
-
-      
       // Only include orders that need to be scheduled for layup
       const needsScheduling = !order.currentDepartment || 
                             order.currentDepartment === 'Production Queue' ||
@@ -48,9 +54,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`  ${emp.employee_id}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
     });
 
-    // Use actual employee capacity instead of arbitrary maxOrdersPerDay
-    const actualDailyCapacity = Math.floor(totalDailyCapacity) || 1;
-    console.log(`🎯 Using realistic daily capacity: ${actualDailyCapacity} orders/day (was ${maxOrdersPerDay})`);
+    // CRITICAL FIX: Use realistic employee capacity (20 orders/day max)
+    const actualDailyCapacity = Math.min(Math.floor(totalDailyCapacity) || 20, 20);
+    console.log(`🎯 ENFORCED realistic daily capacity: ${actualDailyCapacity} orders/day (employee capacity: ${totalDailyCapacity})`);
 
     // Fetch active molds with capacity and stock models
     const moldsResult = await pool.query(`
@@ -179,7 +185,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       return workDates;
     };
 
-    const workDates = generateWorkDates(new Date(), scheduleDays, workDays);
+    const workDates = generateWorkDates(new Date(), scheduleDays, enforcedWorkDays);
     const allocations: any[] = [];
     const dailyMoldUsage = new Map<string, number>();
     const dailyAllocationCount = new Map<string, number>();
@@ -247,8 +253,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek];
         
         // CRITICAL: Verify this is an allowed work day before scheduling
-        if (!workDays.includes(dayOfWeek)) {
-          console.log(`⚠️ SKIP: ${workDate.toDateString()} (${dayName}) not in allowed work days: [${workDays.join(', ')}]`);
+        if (!enforcedWorkDays.includes(dayOfWeek)) {
+          console.log(`⚠️ SKIP: ${workDate.toDateString()} (${dayName}) not in allowed work days: [${enforcedWorkDays.join(', ')}]`);
           continue;
         }
         
@@ -272,9 +278,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
             const scheduleDayOfWeek = scheduleDate.getDay();
             const scheduleDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][scheduleDayOfWeek];
             
-            if (!workDays.includes(scheduleDayOfWeek)) {
+            if (!enforcedWorkDays.includes(scheduleDayOfWeek)) {
               console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on ${scheduleDayName} ${scheduleDate.toDateString()}`);
-              console.error(`   Allowed work days: [${workDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
+              console.error(`   Allowed work days: [${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
               throw new Error(`${scheduleDayName} assignment blocked - not in configured work days`);
             }
             
@@ -318,8 +324,8 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`✅ Successfully scheduled: ${totalScheduled}`);
     console.log(`❌ Unable to schedule: ${totalProcessed - totalScheduled}`);
     console.log(`📊 Success rate: ${successRate.toFixed(1)}%`);
-    console.log(`🏗️ Work days in schedule: ${scheduleDays}`);
-    console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (requested: ${maxOrdersPerDay})`);
+    console.log(`🏗️ Work days in schedule: ${workDates.length}`);
+    console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (enforced max: 20)`);
 
     // Analyze failed orders
     const unscheduledOrders = prioritizedOrders.slice(totalScheduled);

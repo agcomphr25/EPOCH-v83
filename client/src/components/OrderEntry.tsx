@@ -190,7 +190,7 @@ export default function OrderEntry() {
         });
       }
     }
-  }, [features.other_options, baseDueDate, toast]); // Don't include dueDate to avoid infinite loop
+  }, [features.other_options, baseDueDate, toast, modelId]); // Include modelId to recalculate when model changes
 
   // Update base due date when user manually changes due date (and no rush fees are selected)
   useEffect(() => {
@@ -200,8 +200,12 @@ export default function OrderEntry() {
     );
     
     // Only update base due date if no rush fees are currently selected
+    // Add a small delay to prevent immediate recalculation cycles
     if (!hasAnyRushFee) {
-      setBaseDueDate(new Date(dueDate));
+      const timeoutId = setTimeout(() => {
+        setBaseDueDate(new Date(dueDate));
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }
   }, [dueDate, features.other_options]);
 

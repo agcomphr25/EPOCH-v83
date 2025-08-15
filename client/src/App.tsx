@@ -73,6 +73,8 @@ import ShippingManagement from "./pages/ShippingManagement";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
+import ProductionQueueManager from "./components/ProductionQueueManager";
+import EnhancedLayupSchedulerPage from "./pages/EnhancedLayupSchedulerPage";
 import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
@@ -235,7 +237,9 @@ function App() {
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
+                  <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
                   <Route path="/p2-layup-scheduler" component={P2LayupSchedulerPage} />
+                  <Route path="/production-queue" component={ProductionQueueManager} />
                   
                   {/* Nonconformance Tracking Routes */}
                   <Route path="/nonconformance" component={NonconformanceDashboard} />

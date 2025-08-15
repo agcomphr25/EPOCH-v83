@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 Order finalization rules: Orders with "None" or empty stock models cannot be finalized and sent to the Production Queue. The system will block finalization with a clear error message.
 
+## Layup Scheduler Flow Requirements (Updated 2025-08-15)
+**Comprehensive Production Queue Auto-Population Flow:**
+1. **Auto-Add to Production Queue**: All orders with valid stock models (except "None") automatically populate P1 Production Queue
+2. **P1 Purchase Orders**: Generate schedules with predicted due dates and add to production queue  
+3. **Priority Scoring**: Due date priority system, with entry order tiebreaker for same due dates
+4. **Layup Scheduler**: Uses Mon-Thu selection by default, employee production rates, and mold capacities to generate optimal weekly schedules
+5. **Manual Adjustments**: Allow moving orders between days (Mon-Fri visible, but only Mon-Thu scheduled by default)
+6. **Save & Lock**: Once saved, week is locked and orders move to Layup/Plugging department automatically
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 
@@ -51,7 +60,8 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Database**: PostgreSQL managed via Neon serverless, with Drizzle ORM for type-safe database operations and Drizzle-kit for schema migrations.
 -   **Core Features**:
     -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders.
-    -   **Layup Scheduler**: Advanced auto-scheduling algorithm for production orders, prioritizing by score and due date, with Monday-Thursday work week distribution. Supports drag-and-drop, mold filtering, employee capacity management, and visual status indicators.
+    -   **Layup Scheduler**: Comprehensive auto-scheduling system with production queue auto-population, priority scoring by due date and entry order, Monday-Thursday default scheduling with Friday visibility for manual adjustments. Features drag-and-drop, mold matching, employee capacity management, and automatic department progression when schedules are saved and locked.
+    -   **Production Queue Manager**: Auto-populate production queue from finalized orders with valid stock models, calculate priority scores based on due date urgency, manage queue positions with manual priority adjustments, and provide comprehensive production flow management.
     -   **Department Manager**: Enhanced navigation with department-specific views (e.g., Shipping QC, Shipping). Displays comprehensive order details via tooltips.
     -   **Customer Management**: Comprehensive CRM with CSV import/update, integrated address validation, and enhanced contact/address display.
     -   **Inventory Management**: Enhanced with search, BOM integration, and part number display.

@@ -22,6 +22,7 @@ import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
+import productionQueueRoutes from './productionQueue';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -87,6 +88,9 @@ export function registerRoutes(app: Express): Server {
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);
+  
+  // Production queue management routes
+  app.use('/api/production-queue', productionQueueRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

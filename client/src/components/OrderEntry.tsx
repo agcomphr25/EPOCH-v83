@@ -68,7 +68,7 @@ export default function OrderEntry() {
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
 
   const [orderDate, setOrderDate] = useState(new Date());
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 days from now
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 84 * 24 * 60 * 60 * 1000)); // 84 days from now (default)
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,7 +107,34 @@ export default function OrderEntry() {
   const [otherOptionsQuantities, setOtherOptionsQuantities] = useState<Record<string, number>>({});
 
   // Track base due date for rush fee calculations
-  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 84 * 24 * 60 * 60 * 1000));
+
+  // Calculate base due date based on stock model
+  const calculateBaseDueDate = useCallback(() => {
+    const selectedModel = modelOptions.find(m => m.id === modelId);
+    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+    const isAdjModel = modelName.toLowerCase().includes('adj');
+    const daysFromNow = isAdjModel ? 112 : 84;
+    return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+  }, [modelId, modelOptions]);
+
+  // Update base due date when stock model changes
+  useEffect(() => {
+    if (modelId && modelOptions.length > 0) {
+      const newBaseDueDate = calculateBaseDueDate();
+      setBaseDueDate(newBaseDueDate);
+      
+      // Only update actual due date if no rush fees are currently selected
+      const otherOptions = features.other_options || [];
+      const hasAnyRushFee = otherOptions.some((option: string) => 
+        option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee')
+      );
+      
+      if (!hasAnyRushFee) {
+        setDueDate(newBaseDueDate);
+      }
+    }
+  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options]);
 
   // Auto-adjust due date based on rush fee selections
   useEffect(() => {
@@ -136,22 +163,29 @@ export default function OrderEntry() {
       setDueDate(adjustedDate);
       
       // Show user feedback about the date change
+      const selectedModel = modelOptions.find(m => m.id === modelId);
+      const modelName = selectedModel?.displayName || selectedModel?.name || '';
+      const isAdjModel = modelName.toLowerCase().includes('adj');
+      const baseWeeks = isAdjModel ? 16 : 12; // 112 days = 16 weeks, 84 days = 12 weeks
+
       if (hasRushFee2) {
+        const finalWeeks = baseWeeks - 6; // 42 days = 6 weeks
         toast({
           title: "Due Date Updated",
-          description: `Due date moved up by 6 weeks due to Rush Fee 2 selection`,
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 2 selection`,
           duration: 3000,
         });
       } else if (hasRushFee1) {
+        const finalWeeks = baseWeeks - 4; // 28 days = 4 weeks
         toast({
           title: "Due Date Updated", 
-          description: `Due date moved up by 4 weeks due to Rush Fee 1 selection`,
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 1 selection`,
           duration: 3000,
         });
       } else {
         toast({
           title: "Due Date Reset",
-          description: `Due date restored to original date`,
+          description: `Due date restored to ${baseWeeks} weeks (${isAdjModel ? 'Adj model' : 'Standard model'})`,
           duration: 3000,
         });
       }
@@ -652,7 +686,19 @@ export default function OrderEntry() {
         setOrderDate(new Date(order.orderDate));
         const loadedDueDate = new Date(order.dueDate);
         setDueDate(loadedDueDate);
-        setBaseDueDate(loadedDueDate);
+        
+        // Calculate what the base due date should be for this model (without rush fees)
+        if (order.modelId) {
+          const selectedModel = modelOptions.find(m => m.id === order.modelId);
+          const modelName = selectedModel?.displayName || selectedModel?.name || '';
+          const isAdjModel = modelName.toLowerCase().includes('adj');
+          const orderDate = new Date(order.orderDate);
+          const daysFromOrder = isAdjModel ? 112 : 84;
+          const calculatedBaseDueDate = new Date(orderDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
+          setBaseDueDate(calculatedBaseDueDate);
+        } else {
+          setBaseDueDate(loadedDueDate);
+        }
 
         if (order.customerId) {
           // Load customer data
@@ -1036,7 +1082,7 @@ export default function OrderEntry() {
     setModelOpen(false);
     setFeatures({});
     setOrderDate(new Date());
-    const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const defaultDueDate = new Date(Date.now() + 84 * 24 * 60 * 60 * 1000); // Default to 84 days
     setDueDate(defaultDueDate);
     setBaseDueDate(defaultDueDate);
     setHasCustomerPO(false);

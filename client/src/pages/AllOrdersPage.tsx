@@ -24,7 +24,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, X, Download, MoreHorizontal, XCircle } from 'lucide-react';
+import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -54,9 +54,46 @@ export default function AllOrdersPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
+
+  // Department progression flow
+  const departments = [
+    'P1 Production Queue',
+    'Layup/Plugging',
+    'Barcode',
+    'CNC',
+    'Finish',
+    'Gunsmith',
+    'Paint',
+    'Shipping QC',
+    'Shipping'
+  ];
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Progress order mutation
+  const progressOrderMutation = useMutation({
+    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
+      return apiRequest(`/api/orders/${orderId}/progress`, {
+        method: 'POST',
+        body: JSON.stringify({ nextDepartment })
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Order progressed successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to progress order: " + (error.message || 'Unknown error'),
+        variant: "destructive",
+      });
+    }
+  });
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status', 'v2'],
@@ -100,6 +137,35 @@ export default function AllOrdersPage() {
     if (orderToCancel && cancelReason.trim()) {
       cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
     }
+  };
+
+  // Department progression helpers
+  const getNextDepartment = (currentDept: string) => {
+    const index = departments.indexOf(currentDept);
+    return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+  };
+
+  const handleProgressOrder = (orderId: string, nextDepartment?: string) => {
+    progressOrderMutation.mutate({ orderId, nextDepartment });
+  };
+
+  const handlePushToLayupPlugging = (orderId: string) => {
+    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
+  };
+
+  const getDepartmentBadgeColor = (department: string) => {
+    const colors: { [key: string]: string } = {
+      'P1 Production Queue': 'bg-slate-600',
+      'Layup/Plugging': 'bg-blue-500',
+      'Barcode': 'bg-cyan-500',
+      'CNC': 'bg-green-500',
+      'Finish': 'bg-yellow-500',
+      'Gunsmith': 'bg-purple-500',
+      'Paint': 'bg-pink-500',
+      'Shipping QC': 'bg-indigo-500',
+      'Shipping': 'bg-gray-500'
+    };
+    return colors[department] || 'bg-gray-400';
   };
 
   // Filter orders based on search and department
@@ -261,7 +327,7 @@ export default function AllOrdersPage() {
                     {order.fbOrderNumber || order.orderId}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">
+                    <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
                       {order.currentDepartment}
                     </Badge>
                   </TableCell>
@@ -295,24 +361,62 @@ export default function AllOrdersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {!order.isCancelled && (
-                          <DropdownMenuItem 
-                            onClick={() => handleCancelOrder(order.orderId)}
-                            className="text-red-600"
-                          >
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Cancel Order
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex space-x-2">
+                      {(() => {
+                        const nextDept = getNextDepartment(order.currentDepartment);
+                        const isComplete = order.currentDepartment === 'Shipping';
+                        const isScrapped = order.status === 'SCRAPPED';
+                        
+                        return (
+                          <>
+                            {/* Push to Layup/Plugging Button - Only for P1 Production Queue */}
+                            {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handlePushToLayupPlugging(order.orderId)}
+                                disabled={progressOrderMutation.isPending}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                Push to Layup/Plugging
+                              </Button>
+                            )}
+                            
+                            {/* Progress to Next Department Button - For all other departments */}
+                            {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                disabled={progressOrderMutation.isPending}
+                              >
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                {nextDept}
+                              </Button>
+                            )}
+                            
+                            {/* More Actions Dropdown */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {!order.isCancelled && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleCancelOrder(order.orderId)}
+                                    className="text-red-600"
+                                  >
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Cancel Order
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

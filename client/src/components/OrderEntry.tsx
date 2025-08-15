@@ -106,6 +106,71 @@ export default function OrderEntry() {
   // Other options quantities - tracks qty for options that don't include "No"
   const [otherOptionsQuantities, setOtherOptionsQuantities] = useState<Record<string, number>>({});
 
+  // Track base due date for rush fee calculations
+  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+  // Auto-adjust due date based on rush fee selections
+  useEffect(() => {
+    const otherOptions = features.other_options || [];
+    
+    // Check for rush fee options
+    const hasRushFee1 = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee') && option.includes('1')
+    );
+    const hasRushFee2 = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee') && option.includes('2')
+    );
+
+    let adjustedDate = new Date(baseDueDate);
+    
+    if (hasRushFee2) {
+      // Rush Fee 2: reduce by 42 days (6 weeks)
+      adjustedDate.setDate(adjustedDate.getDate() - 42);
+    } else if (hasRushFee1) {
+      // Rush Fee 1: reduce by 28 days (4 weeks)
+      adjustedDate.setDate(adjustedDate.getDate() - 28);
+    }
+
+    // Only update if the calculated date is different from current due date
+    if (adjustedDate.getTime() !== dueDate.getTime()) {
+      setDueDate(adjustedDate);
+      
+      // Show user feedback about the date change
+      if (hasRushFee2) {
+        toast({
+          title: "Due Date Updated",
+          description: `Due date moved up by 6 weeks due to Rush Fee 2 selection`,
+          duration: 3000,
+        });
+      } else if (hasRushFee1) {
+        toast({
+          title: "Due Date Updated", 
+          description: `Due date moved up by 4 weeks due to Rush Fee 1 selection`,
+          duration: 3000,
+        });
+      } else {
+        toast({
+          title: "Due Date Reset",
+          description: `Due date restored to original date`,
+          duration: 3000,
+        });
+      }
+    }
+  }, [features.other_options, baseDueDate, toast]); // Don't include dueDate to avoid infinite loop
+
+  // Update base due date when user manually changes due date (and no rush fees are selected)
+  useEffect(() => {
+    const otherOptions = features.other_options || [];
+    const hasAnyRushFee = otherOptions.some((option: string) => 
+      option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee')
+    );
+    
+    // Only update base due date if no rush fees are currently selected
+    if (!hasAnyRushFee) {
+      setBaseDueDate(new Date(dueDate));
+    }
+  }, [dueDate, features.other_options]);
+
   // Miscellaneous items functions
   const addMiscItem = () => {
     const newItem: MiscItem = {
@@ -585,7 +650,9 @@ export default function OrderEntry() {
         // Populate form with existing order data
         setOrderId(order.orderId);
         setOrderDate(new Date(order.orderDate));
-        setDueDate(new Date(order.dueDate));
+        const loadedDueDate = new Date(order.dueDate);
+        setDueDate(loadedDueDate);
+        setBaseDueDate(loadedDueDate);
 
         if (order.customerId) {
           // Load customer data
@@ -969,7 +1036,9 @@ export default function OrderEntry() {
     setModelOpen(false);
     setFeatures({});
     setOrderDate(new Date());
-    setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    setDueDate(defaultDueDate);
+    setBaseDueDate(defaultDueDate);
     setHasCustomerPO(false);
     setCustomerPO('');
     setFbOrderNumber('');

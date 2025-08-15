@@ -1471,7 +1471,8 @@ export default function LayupScheduler() {
         body: JSON.stringify({
           maxOrdersPerDay: 50, // Increased daily capacity to handle all orders
           scheduleDays: 60,    // Extended schedule for next 60 work days
-          priorityWeighting: 'urgent' // Prioritize by due date and priority score
+          priorityWeighting: 'urgent', // Prioritize by due date and priority score
+          workDays: selectedWorkDays // Pass current work day settings
         }),
       });
 

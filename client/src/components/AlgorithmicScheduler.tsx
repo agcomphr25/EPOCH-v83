@@ -27,6 +27,7 @@ import {
 interface AlgorithmicSchedulerProps {
   onScheduleGenerated?: (allocations: any[]) => void;
   currentOrderCount?: number;
+  workDays?: number[];
 }
 
 interface ScheduleAnalytics {
@@ -46,7 +47,8 @@ interface StockModelGroup {
 
 export default function AlgorithmicScheduler({ 
   onScheduleGenerated, 
-  currentOrderCount = 0 
+  currentOrderCount = 0,
+  workDays = [1, 2, 3, 4]
 }: AlgorithmicSchedulerProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [analytics, setAnalytics] = useState<ScheduleAnalytics | null>(null);
@@ -75,7 +77,8 @@ export default function AlgorithmicScheduler({
           stockModelFilter: stockModelFilter.trim() || undefined,
           maxOrdersPerDay,
           scheduleDays,
-          priorityWeighting
+          priorityWeighting,
+          workDays: workDays
         }
       });
 

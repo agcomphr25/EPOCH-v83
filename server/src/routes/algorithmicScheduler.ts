@@ -5,9 +5,10 @@ const router = Router();
 
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
-    const { maxOrdersPerDay = 50, scheduleDays = 60 } = req.body;
+    const { maxOrdersPerDay = 50, scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
     
     console.log(`🚀 Starting algorithmic scheduler with ${maxOrdersPerDay} orders/day over ${scheduleDays} days`);
+    console.log(`📅 Work days configured: ${workDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')} (${workDays.join(', ')})`);
 
     // Get unified P1 layup queue including all orders from all_orders + production_orders
     const fetch = (await import('node-fetch')).default;
@@ -140,13 +141,13 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`   ${index + 1}. ${order.orderId}: ${stockModelId}, Due ${dueDate.toDateString()}${isMesaUniversal ? ' [MESA UNIVERSAL - HIGH PRIORITY]' : ''}`);
     });
 
-    // Generate work dates (Monday-Thursday only)
-    const generateWorkDates = (startDate: Date, days: number): Date[] => {
+    // Generate work dates based on configured work days
+    const generateWorkDates = (startDate: Date, days: number, allowedWorkDays: number[]): Date[] => {
       const workDates: Date[] = [];
       let currentDate = new Date(startDate);
       
-      // Start from next Monday if today is Friday/weekend
-      while (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
+      // Start from next valid work day if current day is not a work day
+      while (!allowedWorkDays.includes(currentDate.getDay())) {
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
@@ -154,31 +155,31 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       while (totalDays < days) {
         const dayOfWeek = currentDate.getDay();
         
-        // CRITICAL: Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4 - NEVER Friday (5)
-        if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+        // Only include days that are in the allowed work days
+        if (allowedWorkDays.includes(dayOfWeek)) {
           const workDate = new Date(currentDate);
           
-          // CRITICAL VALIDATION: Double-check this is not Friday
-          if (workDate.getDay() === 5) {
-            console.error(`❌ CRITICAL ERROR: Attempted to add Friday ${workDate.toDateString()} to work schedule`);
-            console.error(`   Current date: ${currentDate.toDateString()}`);
-            console.error(`   Day of week: ${workDate.getDay()} (5=Friday)`);
-            throw new Error(`Friday assignment prevented in backend scheduler`);
+          // CRITICAL VALIDATION: Ensure Friday is only included if explicitly allowed
+          if (workDate.getDay() === 5 && !allowedWorkDays.includes(5)) {
+            console.error(`❌ CRITICAL ERROR: Attempted to add Friday ${workDate.toDateString()} but Friday not in allowed work days: [${allowedWorkDays.join(', ')}]`);
+            throw new Error(`Friday assignment prevented - not in configured work days`);
           }
           
           workDates.push(workDate);
-          console.log(`✅ Added work date: ${workDate.toDateString()} (Day ${workDate.getDay()})`);
+          const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][workDate.getDay()];
+          console.log(`✅ Added work date: ${workDate.toDateString()} (${dayName}, Day ${workDate.getDay()})`);
           totalDays++;
         }
         
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
-      console.log(`📅 Generated ${workDates.length} work dates (Monday-Thursday only)`);
+      const allowedDayNames = allowedWorkDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]);
+      console.log(`📅 Generated ${workDates.length} work dates for: ${allowedDayNames.join(', ')}`);
       return workDates;
     };
 
-    const workDates = generateWorkDates(new Date(), scheduleDays);
+    const workDates = generateWorkDates(new Date(), scheduleDays, workDays);
     const allocations: any[] = [];
     const dailyMoldUsage = new Map<string, number>();
     const dailyAllocationCount = new Map<string, number>();

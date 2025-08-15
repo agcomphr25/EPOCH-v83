@@ -1,21 +1,21 @@
 // Order ID Generation Utility
-// Based on year-month format: AG001, AG002, etc.
-// Year Letters: 2025=A, 2026=B, ..., 2047=W, 2048=AA, 2049=AB...
+// Based on year-month format: EH001, EH002, etc.
+// Year Letters: 2025=E, 2026=F, ..., 2043=W, 2044=AA, 2045=AB...
 // Month Letters: Jan=A, Feb=B, ..., Dec=L
 
 export function generateP1OrderId(date: Date, lastId: string): string {
-  // Calculate year letter
+  // Calculate year letter (E=2025, F=2026, etc.)
   const year = date.getFullYear();
-  const yearsSince2025 = year - 2025;
+  const yearsSince2021 = year - 2021;
   
   let yearLetter: string;
-  if (yearsSince2025 < 26) {
-    // Single letter years (2025-2047)
-    yearLetter = String.fromCharCode(65 + yearsSince2025);
+  if (yearsSince2021 < 26) {
+    // Single letter years (2021=A -> 2025=E, 2026=F, ..., 2046=Z)
+    yearLetter = String.fromCharCode(65 + yearsSince2021);
   } else {
-    // Double letter years (2048+)
-    const firstLetter = Math.floor((yearsSince2025 - 26) / 26);
-    const secondLetter = (yearsSince2025 - 26) % 26;
+    // Double letter years (2047+)
+    const firstLetter = Math.floor((yearsSince2021 - 26) / 26);
+    const secondLetter = (yearsSince2021 - 26) % 26;
     yearLetter = String.fromCharCode(65 + firstLetter) + String.fromCharCode(65 + secondLetter);
   }
   
@@ -31,7 +31,7 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   }
   
   // Parse the last order ID - handle both current format and legacy formats
-  // Try new format first: AG001, AG002, etc.
+  // Try new format first: EH001, EH002, etc.
   let match = /^([A-Z]+)([A-Z])(\d{3,})$/.exec(lastId.trim());
   
   if (match) {
@@ -62,19 +62,19 @@ export function generateP1OrderId(date: Date, lastId: string): string {
   return currentPrefix + '001';
 }
 
-// Helper function to get current year-month prefix (e.g., "AG" for July 2025)
+// Helper function to get current year-month prefix (e.g., "EH" for August 2025)
 export function getCurrentYearMonthPrefix(date: Date = new Date()): string {
   const year = date.getFullYear();
-  const yearsSince2025 = year - 2025;
+  const yearsSince2021 = year - 2021;
   
   let yearLetter: string;
-  if (yearsSince2025 < 26) {
-    // Single letter years (2025-2047)
-    yearLetter = String.fromCharCode(65 + yearsSince2025);
+  if (yearsSince2021 < 26) {
+    // Single letter years (2021=A -> 2025=E, 2026=F, ..., 2046=Z)
+    yearLetter = String.fromCharCode(65 + yearsSince2021);
   } else {
-    // Double letter years (2048+)
-    const firstLetter = Math.floor((yearsSince2025 - 26) / 26);
-    const secondLetter = (yearsSince2025 - 26) % 26;
+    // Double letter years (2047+)
+    const firstLetter = Math.floor((yearsSince2021 - 26) / 26);
+    const secondLetter = (yearsSince2021 - 26) % 26;
     yearLetter = String.fromCharCode(65 + firstLetter) + String.fromCharCode(65 + secondLetter);
   }
   
@@ -87,7 +87,7 @@ export function getCurrentYearMonthPrefix(date: Date = new Date()): string {
 
 // Parse an Order ID to extract its components
 export function parseOrderId(orderId: string): { prefix: string; sequence: number } | null {
-  // Try new format: AG001, AG002, etc.
+  // Try new format: EH001, EH002, etc.
   const match = /^([A-Z]+)(\d{3,})$/.exec(orderId.trim());
   
   if (match) {

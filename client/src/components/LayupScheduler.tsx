@@ -2417,21 +2417,20 @@ export default function LayupScheduler() {
     if (viewType === 'day') {
       calculatedDates = [currentDate];
     } else if (viewType === 'week') {
-      // Show all weekdays (Monday-Friday) for manual scheduling flexibility
+      // FIXED: Show only selected work days instead of hardcoded Mon-Fri
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      calculatedDates = eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
-      console.log(`📅 WEEK VIEW: Showing all weekdays, work days are [${selectedWorkDays.join(', ')}]`);
+      const allWeekDays = eachDayOfInterval({ start, end: addDays(start, 6) }); // 7 days
+      // Filter to only show selected work days (typically Mon-Thu)
+      calculatedDates = allWeekDays.filter(date => selectedWorkDays.includes(date.getDay()));
+      console.log(`📅 WEEK VIEW: Showing only selected work days [${selectedWorkDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
     } else {
-      // month - show all weekdays but distinguish work vs non-work days
+      // month - show only selected work days
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       const allDays = eachDayOfInterval({ start, end });
-      // Show weekdays only (no weekends) but include non-work days for manual scheduling
-      calculatedDates = allDays.filter(date => {
-        const dayOfWeek = date.getDay();
-        return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday(1) to Friday(5)
-      });
-      console.log(`📅 MONTH VIEW: Showing all weekdays, work days are [${selectedWorkDays.join(', ')}]`);
+      // Show only selected work days (no hardcoded Friday)
+      calculatedDates = allDays.filter(date => selectedWorkDays.includes(date.getDay()));
+      console.log(`📅 MONTH VIEW: Showing only selected work days [${selectedWorkDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
     }
     
     // DEBUG: Show what dates we're displaying and what assignments exist

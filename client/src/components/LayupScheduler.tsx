@@ -125,8 +125,8 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       };
     } else if (materialType === 'FG') {
       return {
-        bg: 'bg-purple-600 dark:bg-purple-900/70 hover:bg-purple-700 dark:hover:bg-purple-900/90 border-2 border-purple-700 dark:border-purple-800',
-        text: 'text-white dark:text-purple-100'
+        bg: 'bg-orange-600 dark:bg-orange-900/80 hover:bg-orange-700 dark:hover:bg-orange-900/90 border-2 border-orange-700 dark:border-orange-800',
+        text: 'text-white dark:text-orange-100'
       };
     } else {
       return {

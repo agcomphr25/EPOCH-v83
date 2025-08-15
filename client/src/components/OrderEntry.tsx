@@ -1480,87 +1480,126 @@ export default function OrderEntry() {
                   {/* Other Options */}
                   <div>
                     <Label>Other Options</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
-                      {(() => {
-                        const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between">
+                          {(() => {
+                            const selectedCount = (features.other_options || []).length;
+                            if (selectedCount === 0) return "Select options...";
+                            if (selectedCount === 1) return "1 option selected";
+                            return `${selectedCount} options selected`;
+                          })()}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search options..." />
+                          <CommandEmpty>No options found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandList className="max-h-48 overflow-y-auto">
+                              {(() => {
+                                const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
 
-                        if (!otherOptionsFeature || !otherOptionsFeature.options) {
-                          return <div className="text-gray-500 text-sm">
-                            No Other Options available (Features loaded: {featureDefs.length}, Looking for: other_options)
-                            {featureDefs.length > 0 && (
-                              <div className="text-xs mt-1">
-                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
-                              </div>
-                            )}
-                          </div>;
-                        }
+                                if (!otherOptionsFeature || !otherOptionsFeature.options) {
+                                  return (
+                                    <div className="text-gray-500 text-sm p-3">
+                                      No Other Options available
+                                    </div>
+                                  );
+                                }
 
-                        return otherOptionsFeature.options
-                          .filter(option => option.value && option.value.trim() !== '')
-                          .map((option) => {
-                            const isChecked = (features.other_options || []).includes(option.value);
-                            const showQuantity = isChecked && !option.label?.toLowerCase().includes('no');
-                            const quantity = otherOptionsQuantities[option.value] || 1;
-                            
-                            return (
-                              <div key={option.value} className="space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`other-option-${option.value}`}
-                                    checked={isChecked}
-                                    onCheckedChange={(checked) => {
-                                      const currentOther = features.other_options || [];
-                                      if (checked) {
-                                        setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
-                                        // Set default quantity to 1 for new selections
-                                        setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: 1 }));
-                                      } else {
-                                        setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
-                                        // Remove quantity when unchecked
-                                        setOtherOptionsQuantities(prev => {
-                                          const newQuantities = { ...prev };
-                                          delete newQuantities[option.value];
-                                          return newQuantities;
-                                        });
-                                      }
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`other-option-${option.value}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                                  >
-                                    {option.label}
-                                    {option.price && option.price > 0 && (
-                                      <span className="ml-2 text-blue-600 font-bold">
-                                        +${option.price.toFixed(2)}{showQuantity && ` x ${quantity}`}
-                                      </span>
-                                    )}
-                                  </label>
-                                </div>
-                                {showQuantity && (
-                                  <div className="ml-6 flex items-center space-x-2">
-                                    <Label htmlFor={`qty-${option.value}`} className="text-xs text-gray-600">Qty:</Label>
-                                    <Input
-                                      id={`qty-${option.value}`}
-                                      type="number"
-                                      min="1"
-                                      value={quantity}
-                                      onChange={(e) => {
-                                        const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
-                                        setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: newQuantity }));
-                                      }}
-                                      className="w-16 h-8 text-xs"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          });
-                      })()}
-                      {(!features.other_options || features.other_options.length === 0) && (
-                        <div className="text-gray-400 text-sm italic">No options selected</div>
-                      )}
-                    </div>
+                                return otherOptionsFeature.options
+                                  .filter(option => option.value && option.value.trim() !== '')
+                                  .map((option) => {
+                                    const isChecked = (features.other_options || []).includes(option.value);
+                                    const showQuantity = isChecked && !option.label?.toLowerCase().includes('no');
+                                    const quantity = otherOptionsQuantities[option.value] || 1;
+                                    
+                                    return (
+                                      <CommandItem
+                                        key={option.value}
+                                        onSelect={() => {
+                                          const currentOther = features.other_options || [];
+                                          if (isChecked) {
+                                            setFeatures(prev => ({ ...prev, other_options: currentOther.filter((item: string) => item !== option.value) }));
+                                            // Remove quantity when unchecked
+                                            setOtherOptionsQuantities(prev => {
+                                              const newQuantities = { ...prev };
+                                              delete newQuantities[option.value];
+                                              return newQuantities;
+                                            });
+                                          } else {
+                                            setFeatures(prev => ({ ...prev, other_options: [...currentOther, option.value] }));
+                                            // Set default quantity to 1 for new selections
+                                            setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: 1 }));
+                                          }
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <div className="flex items-center space-x-2 w-full">
+                                          <Checkbox
+                                            checked={isChecked}
+                                            onChange={() => {}} // Handled by onSelect
+                                            className="pointer-events-none"
+                                          />
+                                          <div className="flex-1 space-y-1">
+                                            <div className="text-sm font-medium">
+                                              {option.label}
+                                              {option.price && option.price > 0 && (
+                                                <span className="ml-2 text-blue-600 font-bold">
+                                                  +${option.price.toFixed(2)}{showQuantity && ` x ${quantity}`}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {showQuantity && (
+                                              <div className="flex items-center space-x-2">
+                                                <Label className="text-xs text-gray-600">Qty:</Label>
+                                                <Input
+                                                  type="number"
+                                                  min="1"
+                                                  value={quantity}
+                                                  onChange={(e) => {
+                                                    const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                                    setOtherOptionsQuantities(prev => ({ ...prev, [option.value]: newQuantity }));
+                                                  }}
+                                                  className="w-16 h-6 text-xs"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </CommandItem>
+                                    );
+                                  });
+                              })()}
+                            </CommandList>
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Display selected options as badges */}
+                    {features.other_options && features.other_options.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {features.other_options.map((optionValue: string) => {
+                          const otherOptionsFeature = featureDefs.find(f => f.id === 'other_options');
+                          const option = otherOptionsFeature?.options?.find(o => o.value === optionValue);
+                          const quantity = otherOptionsQuantities[optionValue] || 1;
+                          const showQuantity = !option?.label?.toLowerCase().includes('no');
+                          
+                          return (
+                            <Badge 
+                              key={optionValue}
+                              variant="secondary" 
+                              className="text-xs px-2 py-1"
+                            >
+                              {option?.label}{showQuantity && ` (${quantity})`}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1720,76 +1759,119 @@ export default function OrderEntry() {
                         );
                       })()}
                     </Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
-                      {(() => {
-                        const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" className="w-full justify-between">
+                          {(() => {
+                            const selectedCount = (features.rail_accessory || []).length;
+                            if (selectedCount === 0) return "Select rails...";
+                            if (selectedCount === 1) return "1 rail selected";
+                            return `${selectedCount} rails selected`;
+                          })()}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search rails..." />
+                          <CommandEmpty>No rails found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandList className="max-h-48 overflow-y-auto">
+                              {(() => {
+                                const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
 
-                        if (!railsFeature || !railsFeature.options) {
-                          return <div className="text-gray-500 text-sm">
-                            No Rails options available (Features loaded: {featureDefs.length}, Looking for: rail_accessory)
-                            {featureDefs.length > 0 && (
-                              <div className="text-xs mt-1">
-                                Available feature IDs: {featureDefs.map(f => f.id).join(', ')}
-                              </div>
-                            )}
-                          </div>;
-                        }
-
-                        // Check if selected model contains "Chalk" in the name
-                        const selectedModel = modelOptions.find(m => m.id === modelId);
-                        const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
-                                           selectedModel?.name?.toLowerCase().includes('chalk');
-                        
-                        // Define limited Rails options for Chalk models (based on actual database values)
-                        const chalkRailsOptions = ['arca_4', 'pic_rail', 'pic_intgrated_stud'];
-                        
-                        // Filter options based on model type
-                        let availableOptions = railsFeature.options.filter(option => option.value && option.value.trim() !== '');
-                        
-                        if (isChalkModel) {
-                          console.log('🎯 Chalk model detected:', selectedModel?.displayName);
-                          console.log('🎯 Original Rails options:', availableOptions.map(o => o.label));
-                          
-                          availableOptions = availableOptions.filter(option => 
-                            chalkRailsOptions.includes(option.value) ||
-                            option.label?.toLowerCase().includes('4" arca rail') ||
-                            option.label?.toLowerCase().includes('ag pic') ||
-                            option.label?.toLowerCase().includes('ag pic w/int stud')
-                          );
-                          
-                          console.log('🎯 Filtered Rails options for Chalk:', availableOptions.map(o => o.label));
-                        }
-                        
-                        return availableOptions.map((option) => (
-                          <div key={option.value} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`rail-option-${option.value}`}
-                              checked={(features.rail_accessory || []).includes(option.value)}
-                              onCheckedChange={(checked) => {
-                                const currentRails = features.rail_accessory || [];
-                                if (checked) {
-                                  setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
-                                } else {
-                                  setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
+                                if (!railsFeature || !railsFeature.options) {
+                                  return (
+                                    <div className="text-gray-500 text-sm p-3">
+                                      No Rails options available
+                                    </div>
+                                  );
                                 }
-                              }}
-                            />
-                            <label
-                              htmlFor={`rail-option-${option.value}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+
+                                // Check if selected model contains "Chalk" in the name
+                                const selectedModel = modelOptions.find(m => m.id === modelId);
+                                const isChalkModel = selectedModel?.displayName?.toLowerCase().includes('chalk') || 
+                                                   selectedModel?.name?.toLowerCase().includes('chalk');
+                                
+                                // Define limited Rails options for Chalk models (based on actual database values)
+                                const chalkRailsOptions = ['arca_4', 'pic_rail', 'pic_intgrated_stud'];
+                                
+                                // Filter options based on model type
+                                let availableOptions = railsFeature.options.filter(option => option.value && option.value.trim() !== '');
+                                
+                                if (isChalkModel) {
+                                  console.log('🎯 Chalk model detected:', selectedModel?.displayName);
+                                  console.log('🎯 Original Rails options:', availableOptions.map(o => o.label));
+                                  
+                                  availableOptions = availableOptions.filter(option => 
+                                    chalkRailsOptions.includes(option.value) ||
+                                    option.label?.toLowerCase().includes('4" arca rail') ||
+                                    option.label?.toLowerCase().includes('ag pic') ||
+                                    option.label?.toLowerCase().includes('ag pic w/int stud')
+                                  );
+                                  
+                                  console.log('🎯 Filtered Rails options for Chalk:', availableOptions.map(o => o.label));
+                                }
+                                
+                                return availableOptions.map((option) => {
+                                  const isChecked = (features.rail_accessory || []).includes(option.value);
+                                  
+                                  return (
+                                    <CommandItem
+                                      key={option.value}
+                                      onSelect={() => {
+                                        const currentRails = features.rail_accessory || [];
+                                        if (isChecked) {
+                                          setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
+                                        } else {
+                                          setFeatures(prev => ({ ...prev, rail_accessory: [...currentRails, option.value] }));
+                                        }
+                                      }}
+                                      className="cursor-pointer"
+                                    >
+                                      <div className="flex items-center space-x-2 w-full">
+                                        <Checkbox
+                                          checked={isChecked}
+                                          onChange={() => {}} // Handled by onSelect
+                                          className="pointer-events-none"
+                                        />
+                                        <div className="flex-1">
+                                          <div className="text-sm font-medium">
+                                            {option.label}
+                                            {option.price && option.price > 0 && (
+                                              <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </CommandItem>
+                                  );
+                                });
+                              })()}
+                            </CommandList>
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {/* Display selected rails as badges */}
+                    {features.rail_accessory && features.rail_accessory.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {features.rail_accessory.map((optionValue: string) => {
+                          const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');
+                          const option = railsFeature?.options?.find(o => o.value === optionValue);
+                          
+                          return (
+                            <Badge 
+                              key={optionValue}
+                              variant="secondary" 
+                              className="text-xs px-2 py-1"
                             >
-                              {option.label}
-                              {option.price && option.price > 0 && (
-                                <span className="ml-2 text-blue-600 font-bold">+${option.price.toFixed(2)}</span>
-                              )}
-                            </label>
-                          </div>
-                        ));
-                      })()}
-                      {(!features.rail_accessory || features.rail_accessory.length === 0) && (
-                        <div className="text-gray-400 text-sm italic">No options selected</div>
-                      )}
-                    </div>
+                              {option?.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Swivel Studs */}

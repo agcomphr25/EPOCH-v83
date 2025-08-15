@@ -187,6 +187,8 @@ export default function AllOrdersList() {
 
     const searchMatch = searchFields.some(field => field?.includes(searchLower));
 
+
+
     return departmentMatch && searchMatch;
   }) || [];
 
@@ -353,6 +355,8 @@ export default function AllOrdersList() {
                 const nextDept = getNextDepartment(order.currentDepartment);
                 const isComplete = order.currentDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
+
+
 
                 return (
                   <TableRow key={order.orderId}>

@@ -182,15 +182,17 @@ export default function EnhancedLayupScheduler() {
 
   // Generate schedule mutation
   const generateScheduleMutation = useMutation({
-    mutationFn: () => 
-      apiRequest('/api/scheduler/generate-algorithmic-schedule', {
+    mutationFn: () => {
+      console.log('🎯 ENHANCED SCHEDULER: Generating schedule with work days:', selectedWorkDays);
+      return apiRequest('/api/scheduler/generate-algorithmic-schedule', {
         method: 'POST',
         body: JSON.stringify({
-          maxOrdersPerDay: 50,
-          scheduleDays: 7,
-          workDays: selectedWorkDays
+          maxOrdersPerDay: Math.floor(totalCapacity) || 50,
+          scheduleDays: 5,
+          workDays: selectedWorkDays // This is the key - must be respected
         })
-      }),
+      });
+    },
     onSuccess: (result: any) => {
       toast({
         title: "Schedule Generated",

@@ -75,6 +75,7 @@ import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
 import ProductionQueueManager from "./components/ProductionQueueManager";
 import EnhancedLayupSchedulerPage from "./pages/EnhancedLayupSchedulerPage";
+import WorkDayAwareScheduler from "./components/WorkDayAwareScheduler";
 import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
@@ -238,6 +239,7 @@ function App() {
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
+                  <Route path="/work-day-scheduler" component={() => <WorkDayAwareScheduler />} />
                   <Route path="/p2-layup-scheduler" component={P2LayupSchedulerPage} />
                   <Route path="/production-queue" component={ProductionQueueManager} />
                   

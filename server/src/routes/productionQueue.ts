@@ -12,8 +12,8 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
-        o.model_id as modelId,
-        o.stock_model_id as stockModelId,
+        o.modelId as modelId,
+        o.modelId as stockModelId,
         o.due_date as dueDate,
         o.order_date as orderDate,
         o.current_department as currentDepartment,
@@ -21,13 +21,13 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.features,
         o.created_at as createdAt,
         CASE 
-          WHEN o.stock_model_id IS NULL OR o.stock_model_id = '' OR o.stock_model_id = 'None' THEN false
+          WHEN o.modelId IS NULL OR o.modelId = '' OR o.modelId = 'None' THEN false
           ELSE true
         END as hasValidStock
       FROM all_orders o
       WHERE o.status = 'FINALIZED' 
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
-        AND (o.stock_model_id IS NOT NULL AND o.stock_model_id != '' AND o.stock_model_id != 'None')
+        AND (o.modelId IS NOT NULL AND o.modelId != '' AND o.modelId != 'None')
       ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
@@ -126,20 +126,20 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       SELECT 
         o.order_id as orderId,
         o.fb_order_number as fbOrderNumber,
-        o.model_id as modelId,
-        o.stock_model_id as stockModelId,
+        o.modelId as modelId,
+        o.modelId as stockModelId,
         o.due_date as dueDate,
         o.order_date as orderDate,
         o.current_department as currentDepartment,
         o.status,
-        o.customer_id as customerId,
+        o.customerId as customerId,
         o.features,
-        o.priority_score as priorityScore,
-        o.queue_position as queuePosition,
+        NULL as priorityScore,
+        NULL as queuePosition,
         o.created_at as createdAt,
         c.customer_name as customerName
       FROM all_orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN customers c ON o.customerId = c.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status = 'FINALIZED'
       ORDER BY 

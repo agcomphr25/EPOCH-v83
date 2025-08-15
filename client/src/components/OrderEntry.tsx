@@ -68,7 +68,7 @@ export default function OrderEntry() {
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
 
   const [orderDate, setOrderDate] = useState(new Date());
-  const [dueDate, setDueDate] = useState(new Date(Date.now() + 84 * 24 * 60 * 60 * 1000)); // 84 days from now (default)
+  const [dueDate, setDueDate] = useState(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)); // 98 days from now (default)
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,14 +107,14 @@ export default function OrderEntry() {
   const [otherOptionsQuantities, setOtherOptionsQuantities] = useState<Record<string, number>>({});
 
   // Track base due date for rush fee calculations
-  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 84 * 24 * 60 * 60 * 1000));
+  const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
 
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
     const modelName = selectedModel?.displayName || selectedModel?.name || '';
     const isAdjModel = modelName.toLowerCase().includes('adj');
-    const daysFromNow = isAdjModel ? 112 : 84;
+    const daysFromNow = isAdjModel ? 112 : 98;
     return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
   }, [modelId, modelOptions]);
 
@@ -166,7 +166,7 @@ export default function OrderEntry() {
       const selectedModel = modelOptions.find(m => m.id === modelId);
       const modelName = selectedModel?.displayName || selectedModel?.name || '';
       const isAdjModel = modelName.toLowerCase().includes('adj');
-      const baseWeeks = isAdjModel ? 16 : 12; // 112 days = 16 weeks, 84 days = 12 weeks
+      const baseWeeks = isAdjModel ? 16 : 14; // 112 days = 16 weeks, 98 days = 14 weeks
 
       if (hasRushFee2) {
         const finalWeeks = baseWeeks - 6; // 42 days = 6 weeks
@@ -693,7 +693,7 @@ export default function OrderEntry() {
           const modelName = selectedModel?.displayName || selectedModel?.name || '';
           const isAdjModel = modelName.toLowerCase().includes('adj');
           const orderDate = new Date(order.orderDate);
-          const daysFromOrder = isAdjModel ? 112 : 84;
+          const daysFromOrder = isAdjModel ? 112 : 98;
           const calculatedBaseDueDate = new Date(orderDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
           setBaseDueDate(calculatedBaseDueDate);
         } else {
@@ -1082,7 +1082,7 @@ export default function OrderEntry() {
     setModelOpen(false);
     setFeatures({});
     setOrderDate(new Date());
-    const defaultDueDate = new Date(Date.now() + 84 * 24 * 60 * 60 * 1000); // Default to 84 days
+    const defaultDueDate = new Date(Date.now() + 98 * 24 * 60 * 60 * 1000); // Default to 98 days
     setDueDate(defaultDueDate);
     setBaseDueDate(defaultDueDate);
     setHasCustomerPO(false);

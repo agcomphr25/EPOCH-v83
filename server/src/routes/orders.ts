@@ -176,9 +176,34 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Create finalized order directly (new streamlined process)
+router.post('/finalized', async (req: Request, res: Response) => {
+  try {
+    const orderData = insertOrderDraftSchema.parse(req.body);
+    const finalizedOrder = await storage.createFinalizedOrder(orderData, req.body.finalizedBy);
+    res.status(201).json(finalizedOrder);
+  } catch (error) {
+    console.error('Create finalized order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create finalized order" });
+  }
+});
+
+// Create draft order (legacy method for special cases)
 router.post('/draft', async (req: Request, res: Response) => {
   try {
     const orderData = insertOrderDraftSchema.parse(req.body);
+    
+    // Check if this should be a finalized order instead
+    if (orderData.status === 'FINALIZED') {
+      console.log(`🔄 REDIRECTING: Order ${orderData.orderId} marked as FINALIZED - creating directly in production queue`);
+      const finalizedOrder = await storage.createFinalizedOrder(orderData, req.body.finalizedBy);
+      return res.status(201).json(finalizedOrder);
+    }
+    
+    // Only create draft for non-finalized orders
     const draft = await storage.createOrderDraft(orderData);
     res.status(201).json(draft);
   } catch (error) {

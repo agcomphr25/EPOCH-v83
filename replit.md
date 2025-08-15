@@ -8,14 +8,14 @@ Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 Order finalization rules: Orders with "None" or empty stock models cannot be finalized and sent to the Production Queue. The system will block finalization with a clear error message.
 
-## Layup Scheduler Flow Requirements (Updated 2025-08-15)
-**Comprehensive Production Queue Auto-Population Flow:**
-1. **Auto-Add to Production Queue**: All orders with valid stock models (except "None") automatically populate P1 Production Queue
-2. **P1 Purchase Orders**: Generate schedules with predicted due dates and add to production queue  
-3. **Priority Scoring**: Due date priority system, with entry order tiebreaker for same due dates
-4. **Layup Scheduler**: Uses Mon-Thu selection by default, employee production rates, and mold capacities to generate optimal weekly schedules
-5. **Manual Adjustments**: Allow moving orders between days (Mon-Fri visible, but only Mon-Thu scheduled by default)
-6. **Save & Lock**: Once saved, week is locked and orders move to Layup/Plugging department automatically
+## Order Creation & Production Flow (Updated 2025-08-15)
+**Streamlined Order-to-Production Process:**
+1. **Direct Finalization**: Orders created via "Create Order" bypass drafts and go directly to P1 Production Queue (not Layup)
+2. **Auto-Population**: All finalized orders with valid stock models (except "None") automatically appear in P1 Production Queue
+3. **Legacy Draft Process**: Draft orders only created when explicitly saved as drafts, require manual finalization
+4. **Department Flow**: P1 Production Queue → Layup Scheduler → Layup/Plugging → Manufacturing Pipeline
+5. **Layup Scheduler**: Uses Mon-Thu scheduling, employee production rates, and mold capacities for optimal weekly schedules
+6. **Manual Adjustments**: Allow moving orders between days (Mon-Fri visible, but only Mon-Thu scheduled by default)
 
 **Work Day Scheduling Status (2025-08-15):**
 ✅ **FIXED**: Algorithmic scheduler now properly respects selected work days
@@ -31,6 +31,12 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **IMPLEMENTED**: Comprehensive diagnostic tool for troubleshooting camera issues
 ✅ **OPTIMIZED**: iOS/Android-specific camera handling and fallback constraints
 ✅ **VERIFIED**: Working correctly on mobile devices after deployment
+
+**All Orders Search Functionality (2025-08-15):**
+✅ **RESOLVED**: Search issue where new orders weren't appearing in All Orders list
+✅ **FIXED**: Data synchronization problem between order_drafts and all_orders tables
+✅ **ENHANCED**: Direct order creation process bypassing drafts for finalized orders
+✅ **VERIFIED**: Orders now searchable immediately after creation
 
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**

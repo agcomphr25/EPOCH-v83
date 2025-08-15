@@ -5184,7 +5184,100 @@ export class DatabaseStorage implements IStorage {
     })) as AllOrder[];
   }
 
-  // Finalize an order - move from draft to production
+  // Create a finalized order directly (bypassing draft process)
+  async createFinalizedOrder(orderData: InsertOrderDraft, finalizedBy?: string): Promise<AllOrder> {
+    // CRITICAL: Prevent orders with "None" stock model from going to Production Queue
+    if (!orderData.modelId || orderData.modelId.toLowerCase() === 'none' || orderData.modelId.toLowerCase().trim() === '') {
+      console.log(`❌ CREATE BLOCKED: Order ${orderData.orderId} has stock model "${orderData.modelId}" - cannot send to Production Queue`);
+      throw new Error(`Cannot create order ${orderData.orderId}: Orders with "None" or empty stock model cannot be sent to Production Queue. Please select a valid stock model.`);
+    }
+
+    console.log(`✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`);
+
+    // Generate barcode if not provided
+    const barcode = orderData.barcode || `P1-${orderData.orderId}`;
+
+    // Set default currentDepartment to P1 Production Queue (not Layup)
+    const currentDepartment = 'P1 Production Queue';
+
+    // Create the finalized order data directly
+    const finalizedOrderData: InsertAllOrder = {
+      orderId: orderData.orderId,
+      orderDate: orderData.orderDate,
+      dueDate: orderData.dueDate,
+      customerId: orderData.customerId,
+      customerPO: orderData.customerPO || '',
+      fbOrderNumber: orderData.fbOrderNumber || '',
+      agrOrderDetails: orderData.agrOrderDetails || '',
+      isCustomOrder: orderData.isCustomOrder,
+      modelId: orderData.modelId,
+      handedness: orderData.handedness,
+      shankLength: orderData.shankLength,
+      features: orderData.features,
+      featureQuantities: orderData.featureQuantities,
+      discountCode: orderData.discountCode || '',
+      notes: orderData.notes || '',
+      customDiscountType: orderData.customDiscountType || 'percent',
+      customDiscountValue: orderData.customDiscountValue || 0,
+      showCustomDiscount: orderData.showCustomDiscount || false,
+      priceOverride: orderData.priceOverride,
+      shipping: orderData.shipping || 0,
+      tikkaOption: orderData.tikkaOption,
+      status: 'FINALIZED',
+      barcode: barcode,
+      currentDepartment: currentDepartment,
+      departmentHistory: [],
+      scrappedQuantity: 0,
+      totalProduced: 0,
+      layupCompletedAt: null,
+      pluggingCompletedAt: null,
+      cncCompletedAt: null,
+      finishCompletedAt: null,
+      gunsmithCompletedAt: null,
+      paintCompletedAt: null,
+      qcCompletedAt: null,
+      shippingCompletedAt: null,
+      scrapDate: null,
+      scrapReason: null,
+      scrapDisposition: null,
+      scrapAuthorization: null,
+      isReplacement: false,
+      replacedOrderId: null,
+      isPaid: orderData.isPaid || false,
+      paymentType: orderData.paymentType,
+      paymentAmount: orderData.paymentAmount,
+      paymentDate: orderData.paymentDate,
+      paymentTimestamp: orderData.paymentTimestamp,
+      trackingNumber: null,
+      shippingCarrier: 'UPS',
+      shippingMethod: 'Ground',
+      shippedDate: null,
+      estimatedDelivery: null,
+      shippingLabelGenerated: false,
+      customerNotified: false,
+      notificationMethod: null,
+      notificationSentAt: null,
+      deliveryConfirmed: false,
+      deliveryConfirmedAt: null,
+      finalizedBy: finalizedBy || 'System'
+    };
+
+    console.log(`📦 INSERTING ORDER: ${orderData.orderId} directly into all_orders table with department: ${currentDepartment}`);
+
+    // Insert directly into all_orders table
+    const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();
+
+    // Mark the Order ID as used to prevent duplicate assignments
+    await this.markOrderIdAsUsed(orderData.orderId);
+    console.log(`🔒 MARKED ORDER ID: ${orderData.orderId} as used to prevent duplicates`);
+
+    // Log the auto-addition to Production Queue
+    console.log(`🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`);
+
+    return finalizedOrder;
+  }
+
+  // Finalize an order - move from draft to production (legacy method for existing drafts)
   async finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder> {
     // Get the draft order
     const draft = await this.getOrderDraft(orderId);
@@ -5202,7 +5295,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Cannot finalize order ${orderId}: Orders with "None" or empty stock model cannot be sent to Production Queue. Please select a valid stock model.`);
     }
 
-    console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to Production Queue`);
+    console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
     
 
     // Create the finalized order data

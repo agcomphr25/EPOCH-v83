@@ -1047,20 +1047,27 @@ export default function OrderEntry() {
           description: saveAsDraft ? "Order saved as draft" : "Order updated successfully",
         });
       } else {
-        // Create new order
-        response = await apiRequest('/api/orders/draft', {
+        // Create new order - use finalized endpoint for completed orders
+        const endpoint = saveAsDraft ? '/api/orders/draft' : '/api/orders/finalized';
+        response = await apiRequest(endpoint, {
           method: 'POST',
           body: JSON.stringify(orderData)
         });
 
         toast({
           title: "Success", 
-          description: saveAsDraft ? "Order saved as draft" : "Order created successfully",
+          description: saveAsDraft ? "Order saved as draft" : "Order created and added to P1 Production Queue",
         });
       }
 
-      // Invalidate drafts cache so Draft Orders page updates immediately
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      // Invalidate relevant caches based on whether it was saved as draft or finalized
+      if (saveAsDraft) {
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/drafts', 'excludeFinalized'] });
+      } else {
+        // Finalized orders appear in the main All Orders list and Production Queue
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
       // Reset form only if not editing

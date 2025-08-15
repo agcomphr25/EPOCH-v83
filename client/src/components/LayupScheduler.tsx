@@ -574,6 +574,36 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
 
+  // Clean up existing assignments when work days change
+  const cleanUpFridayAssignments = useCallback(() => {
+    if (!selectedWorkDays.includes(5)) {
+      const fridayAssignments = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+        const assignmentDate = new Date(assignment.date);
+        return assignmentDate.getDay() === 5;
+      });
+
+      if (fridayAssignments.length > 0) {
+        console.log(`🧹 Cleaning up ${fridayAssignments.length} Friday assignments due to work day setting`);
+        
+        const cleanedAssignments = { ...orderAssignments };
+        fridayAssignments.forEach(([orderId]) => {
+          console.log(`   - Removing ${orderId} from Friday`);
+          delete cleanedAssignments[orderId];
+        });
+        
+        setOrderAssignments(cleanedAssignments);
+        console.log(`✅ Removed ${fridayAssignments.length} Friday assignments`);
+      }
+    }
+  }, [selectedWorkDays, orderAssignments]);
+
+  // Clean up Friday assignments when work days change
+  useEffect(() => {
+    if (Object.keys(orderAssignments).length > 0) {
+      cleanUpFridayAssignments();
+    }
+  }, [selectedWorkDays]);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -2987,10 +3017,28 @@ export default function LayupScheduler() {
                     ))}
                   </div>
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
                       <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' : 
                         selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
                     </p>
+                    {!selectedWorkDays.includes(5) && Object.entries(orderAssignments).some(([_, assignment]) => {
+                      const assignmentDate = new Date(assignment.date);
+                      return assignmentDate.getDay() === 5;
+                    }) && (
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={cleanUpFridayAssignments}
+                          className="text-orange-600 hover:text-orange-700 text-xs"
+                        >
+                          Remove Existing Friday Assignments
+                        </Button>
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                          Some orders are currently scheduled for Friday. Click to remove them.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </DialogContent>

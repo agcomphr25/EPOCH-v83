@@ -12,6 +12,7 @@ import { formatOrderDetails } from '@/components/OrderTooltip';
 import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 import { useBarcodeInput } from '@/hooks/useBarcodeInput';
 import { CameraScanner } from '@/components/CameraScanner';
+import { MobileCameraDiagnostic } from '@/components/MobileCameraDiagnostic';
 
 interface LineItem {
   type: string;
@@ -77,6 +78,7 @@ interface OrderSummary {
 export function BarcodeScanner() {
   const [location] = useLocation();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   // Device detection for smart UI
   const { isMobile, hasCamera } = useDeviceDetection();
@@ -187,19 +189,32 @@ export function BarcodeScanner() {
 
             {/* Camera scanning option for mobile devices */}
             {hasCamera && (
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCameraScanner(true)}
-                  className="flex-1"
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  {isMobile ? 'Use Camera' : 'Camera Scanner'}
-                </Button>
+              <div className="space-y-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCameraScanner(true)}
+                    className="flex-1"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    {isMobile ? 'Use Camera' : 'Camera Scanner'}
+                  </Button>
+                  {isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowDiagnostic(!showDiagnostic)}
+                      className="text-xs"
+                    >
+                      <Settings className="h-3 w-3 mr-1" />
+                      {showDiagnostic ? 'Hide' : 'Camera'} Diagnostics
+                    </Button>
+                  )}
+                </div>
                 {isMobile && (
                   <div className="flex items-center text-xs text-gray-500 gap-1">
                     <Smartphone className="h-3 w-3" />
-                    <span>Recommended for mobile</span>
+                    <span>Camera issues? Try the diagnostic tool above</span>
                   </div>
                 )}
               </div>
@@ -236,6 +251,13 @@ export function BarcodeScanner() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile Camera Diagnostic Tool */}
+      {isMobile && showDiagnostic && (
+        <div className="mb-6">
+          <MobileCameraDiagnostic />
+        </div>
+      )}
 
       {isLoading && (
         <Card>

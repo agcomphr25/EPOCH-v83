@@ -54,11 +54,20 @@ export function CameraScanner({ onBarcodeDetected, isOpen, onClose }: CameraScan
   }, [videoRef]);
 
   const handleStartScanning = async () => {
+    console.log('📱 Mobile Camera Debug: Start scanning button clicked');
+    console.log('📱 Mobile Camera Debug: Current hasPermission:', hasPermission);
+    
     if (!hasPermission) {
+      console.log('📱 Mobile Camera Debug: Requesting permission first...');
       const granted = await requestPermission();
-      if (!granted) return;
+      console.log('📱 Mobile Camera Debug: Permission request result:', granted);
+      if (!granted) {
+        console.log('📱 Mobile Camera Debug: Permission denied, stopping');
+        return;
+      }
     }
     
+    console.log('📱 Mobile Camera Debug: Starting scanning with permission granted');
     await startScanning();
   };
 
@@ -83,9 +92,21 @@ export function CameraScanner({ onBarcodeDetected, isOpen, onClose }: CameraScan
                 </p>
                 
                 {error && (
-                  <div className="flex items-center gap-2 text-red-600 mb-4 p-3 bg-red-50 rounded-lg">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-sm">{error}</span>
+                  <div className="flex flex-col items-center gap-2 text-red-600 mb-4 p-3 bg-red-50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-sm font-medium">Camera Error</span>
+                    </div>
+                    <span className="text-xs text-center">{error}</span>
+                    <div className="text-xs text-gray-600 mt-2 text-center">
+                      <strong>Try these solutions:</strong>
+                      <ul className="list-disc list-inside mt-1 text-left">
+                        <li>Refresh the page and try again</li>
+                        <li>Check camera permissions in browser settings</li>
+                        <li>Ensure no other apps are using the camera</li>
+                        <li>Try switching between front/back camera if available</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
                 
@@ -102,9 +123,17 @@ export function CameraScanner({ onBarcodeDetected, isOpen, onClose }: CameraScan
             )}
 
             {isInitializing && (
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center h-full p-6">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-                <p className="text-gray-600">Initializing camera...</p>
+                <p className="text-gray-600 mb-2">Initializing camera...</p>
+                <p className="text-xs text-gray-500 text-center max-w-xs">
+                  This may take a few seconds. If it gets stuck, try refreshing the page.
+                </p>
+                <div className="mt-4">
+                  <Button variant="outline" size="sm" onClick={onClose}>
+                    Cancel
+                  </Button>
+                </div>
               </div>
             )}
 

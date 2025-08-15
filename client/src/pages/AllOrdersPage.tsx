@@ -209,7 +209,7 @@ export default function AllOrdersPage() {
     }
   });
 
-  const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
+
 
   if (isLoading) {
     return (

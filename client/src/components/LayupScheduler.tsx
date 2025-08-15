@@ -2407,19 +2407,32 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
-  // Generate date ranges based on view type - Always show Mon-Fri in calendar view
+  // Generate date ranges based on view type - RESPECT WORK DAY SETTINGS
   const dates = useMemo(() => {
     let calculatedDates;
-    if (viewType === 'day') calculatedDates = [currentDate];
-    else if (viewType === 'week') {
-      // Always show Monday through Friday in calendar view
+    if (viewType === 'day') {
+      calculatedDates = [currentDate];
+    } else if (viewType === 'week') {
+      // Show only configured work days (respect selectedWorkDays setting)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      calculatedDates = eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
+      const allWeekDays = eachDayOfInterval({ start, end: addDays(start, 6) }); // All 7 days
+      // Filter to only show selected work days
+      calculatedDates = allWeekDays.filter(date => {
+        const dayOfWeek = date.getDay();
+        return selectedWorkDays.includes(dayOfWeek);
+      });
+      console.log(`📅 WORK DAY FILTER: Showing only work days [${selectedWorkDays.join(', ')}] out of week days`);
     } else {
-      // month - organize by weeks
+      // month - organize by weeks but filter to work days only
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
-      calculatedDates = eachDayOfInterval({ start, end });
+      const allDays = eachDayOfInterval({ start, end });
+      // Filter to only show selected work days
+      calculatedDates = allDays.filter(date => {
+        const dayOfWeek = date.getDay();
+        return selectedWorkDays.includes(dayOfWeek);
+      });
+      console.log(`📅 MONTH WORK DAY FILTER: Showing only work days [${selectedWorkDays.join(', ')}] in month view`);
     }
     
     // DEBUG: Show what dates we're displaying and what assignments exist
@@ -2463,9 +2476,9 @@ export default function LayupScheduler() {
     }
     
     return calculatedDates;
-  }, [viewType, currentDate, orderAssignments]);
+  }, [viewType, currentDate, orderAssignments, selectedWorkDays]);
 
-  // For week-based organization, group dates into work week sections (Mon-Fri only)
+  // For week-based organization, group dates into work week sections based on work day settings
   const weekGroups = useMemo(() => {
     if (viewType !== 'month') return null;
 
@@ -2473,16 +2486,14 @@ export default function LayupScheduler() {
     let currentWeek: Date[] = [];
 
     dates.forEach((date, index) => {
-      // Only include work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
+      // Include dates that are already filtered by work days in the dates array
+      currentWeek.push(date);
+
+      // Complete the week at the last work day of the week or at the end
       const dayOfWeek = date.getDay();
-      const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-
-      if (isWorkDay) {
-        currentWeek.push(date);
-      }
-
-      // Complete the week on Friday (5) or at the end
-      if (dayOfWeek === 5 || index === dates.length - 1) {
+      const maxWorkDay = Math.max(...selectedWorkDays);
+      
+      if (dayOfWeek === maxWorkDay || index === dates.length - 1) {
         if (currentWeek.length > 0) {
           weeks.push(currentWeek);
           currentWeek = [];
@@ -2491,7 +2502,7 @@ export default function LayupScheduler() {
     });
 
     return weeks;
-  }, [dates, viewType]);
+  }, [dates, viewType, selectedWorkDays]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -2512,16 +2523,32 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Check if target date is Friday - allow manual placement but warn user
+    // CRITICAL: Check if target date violates work day settings
     const targetDate = new Date(dateIso);
-    if (targetDate.getDay() === 5) {
-      // Allow Friday manual placement but confirm it's intentional
-      console.log(`⚠️ Manual Friday placement: Order ${orderId} being placed on Friday ${targetDate.toDateString()}`);
+    const targetDayOfWeek = targetDate.getDay();
+    
+    // Get current work days from settings (default Monday-Thursday = [1,2,3,4])
+    const allowedWorkDays = selectedWorkDays;
+    
+    if (!allowedWorkDays.includes(targetDayOfWeek)) {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const targetDayName = dayNames[targetDayOfWeek];
+      const allowedDayNames = allowedWorkDays.map(day => dayNames[day]).join(', ');
+      
+      console.error(`❌ WORK DAY VIOLATION: Cannot manually schedule ${orderId} on ${targetDayName} ${targetDate.toDateString()}`);
+      console.error(`   Allowed work days: ${allowedDayNames} (${allowedWorkDays.join(', ')})`);
+      
+      toast({
+        variant: "destructive",
+        title: "Invalid Work Day",
+        description: `Cannot schedule orders on ${targetDayName}. Allowed work days: ${allowedDayNames}`,
+      });
+      return;
     }
 
     // Simple move - just update the assignment to the new position
-    // This leaves the original slot empty and doesn't auto-fill it
-    console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${dateIso}`);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${targetDate.toDateString()} (${dayNames[targetDayOfWeek]})`);
 
     // Update assignment to new position
     // Apply key normalization to ensure we use Order ID, not FB Order Number
@@ -2532,7 +2559,7 @@ export default function LayupScheduler() {
       [normalizedOrderId]: { moldId: targetMoldId, date: dateIso }
     };
     
-    // Set assignments directly - no Friday validation needed for manual drag-and-drop
+    // Apply work day validation to ensure consistency
     setOrderAssignments(newAssignments);
 
     // Mark as having unsaved changes

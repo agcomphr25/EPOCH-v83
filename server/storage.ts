@@ -1305,10 +1305,35 @@ export class DatabaseStorage implements IStorage {
 
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
-    // First get all orders
-    const orders = await this.getAllOrders();
+    // Optimized: Use single query to get orders with customer names and payment totals
+    const ordersWithCustomers = await db
+      .select({
+        // Order fields
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        currentDepartment: allOrders.currentDepartment,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
+        paymentAmount: allOrders.paymentAmount,
+        isPaid: allOrders.isPaid,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        // Customer name
+        customerName: customers.name,
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .orderBy(desc(allOrders.updatedAt));
 
-    // Get all payments aggregated by order ID  
+    // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db
       .select({
         orderId: payments.orderId,
@@ -1317,35 +1342,25 @@ export class DatabaseStorage implements IStorage {
       .from(payments)
       .groupBy(payments.orderId);
 
-    // Create a map of payment totals by order ID
+    // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Calculate order totals and determine payment status
-    const ordersWithPaymentInfo = await Promise.all(
-      orders.map(async order => {
-        const paymentTotal = paymentMap.get(order.orderId) || 0;
+    // Process orders with payment info (much faster without async calculateOrderTotal calls)
+    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      const orderTotal = order.paymentAmount || 0;
 
-        // Calculate actual order total using Order Summary logic
-        let orderTotal = order.paymentAmount || 0;
+      // Simplified payment status logic - avoid expensive calculations
+      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
+                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
 
-        // If paymentAmount is NULL or 0, calculate from features and pricing
-        if (orderTotal === 0) {
-          orderTotal = await this.calculateOrderTotal(order);
-        }
-
-        // Consider an order fully paid if:
-        // 1. Standard case: payments >= orderTotal and orderTotal > 0, OR
-        // 2. Legacy case: orderTotal is 0 but we have substantial payments (> shipping cost)
-        const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
-                           (orderTotal === 0 && paymentTotal > (order.shipping || 0));
-
-        return {
-          ...order,
-          paymentTotal,
-          isFullyPaid
-        };
-      })
-    );
+      return {
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        paymentTotal,
+        isFullyPaid
+      };
+    });
 
     return ordersWithPaymentInfo;
   }

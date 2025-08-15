@@ -30,6 +30,12 @@ router.get('/', async (req: Request, res: Response) => {
 // Get all orders with payment status for All Orders List with payment column
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {
+    // Add basic caching headers to reduce server load
+    res.set({
+      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      'ETag': `"orders-${Date.now()}"`
+    });
+    
     const orders = await storage.getAllOrdersWithPaymentStatus();
     res.json(orders);
   } catch (error) {

@@ -5,6 +5,27 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   let stockModelId = order.stockModelId || order.modelId;
   let product = 'Unknown Product';
   
+  // CRITICAL: Check for Mesa Precision Summit FIRST, before any other logic
+  // This overrides any existing stockModelId because Mesa orders must go to Mesa molds
+  if (order.features && typeof order.features === 'object') {
+    const features = order.features;
+    
+    // Check action_inlet for Mesa Precision Summit
+    if (features.action_inlet === 'mesa_precision_summit') {
+      console.log(`🏔️ MESA PRECISION SUMMIT (action_inlet): ${order.orderId || order.order_id} → Mesa Universal`);
+      return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
+    }
+    
+    // Check special instructions for Mesa Precision Summit
+    if (features.specialInstructions && typeof features.specialInstructions === 'string') {
+      const instructions = features.specialInstructions.toLowerCase();
+      if (instructions.includes('mesa precision summit') || instructions.includes('mesa_precision_summit')) {
+        console.log(`🏔️ MESA PRECISION SUMMIT (specialInstructions): ${order.orderId || order.order_id} → Mesa Universal`);
+        return { stockModelId: 'mesa_universal', product: 'Mesa Universal' };
+      }
+    }
+  }
+  
   // First try the direct stockModelId field
   if (stockModelId) {
     product = stockModelId;
@@ -30,6 +51,17 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   if (order.features && typeof order.features === 'object') {
     const features = order.features;
     
+    // Check for Mesa Precision Summit in special instructions as well
+    if (features.specialInstructions && typeof features.specialInstructions === 'string') {
+      const instructions = features.specialInstructions.toLowerCase();
+      if (instructions.includes('mesa precision summit') || instructions.includes('mesa_precision_summit')) {
+        stockModelId = 'mesa_universal';
+        product = 'Mesa Universal';
+        console.log(`🏔️ MESA SPECIAL INSTRUCTIONS: ${order.orderId || order.order_id} → Mesa Universal (via specialInstructions)`);
+        return { stockModelId, product };
+      }
+    }
+    
     // Check for specific action inlets that indicate stock model types
     if (features.action_inlet || features.action) {
       const action = features.action_inlet || features.action;
@@ -38,7 +70,14 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
       if (action && typeof action === 'string') {
         const actionLower = action.toLowerCase();
         
-        if (actionLower.includes('terminus') || actionLower.includes('defiance') || 
+        // CRITICAL: Mesa Precision Summit orders should be assigned to Mesa Universal molds
+        if (actionLower.includes('mesa_precision_summit') || actionLower.includes('mesa precision summit')) {
+          stockModelId = 'mesa_universal';
+          product = 'Mesa Universal';
+          console.log(`🏔️ MESA PRECISION SUMMIT: ${order.orderId || order.order_id} → Mesa Universal`);
+          return { stockModelId, product }; // Return immediately to avoid further processing
+        }
+        else if (actionLower.includes('terminus') || actionLower.includes('defiance') || 
             actionLower.includes('impact') || actionLower.includes('big_horn')) {
           stockModelId = 'cf_alpine_hunter'; // Most common CF model
           product = 'CF Alpine Hunter';

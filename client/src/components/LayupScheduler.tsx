@@ -125,7 +125,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       };
     } else if (materialType === 'FG') {
       return {
-        bg: 'bg-orange-600 dark:bg-orange-900/80 hover:bg-orange-700 dark:hover:bg-orange-900/90 border-2 border-orange-700 dark:border-orange-800',
+        bg: 'bg-orange-600 dark:bg-orange-800/80 hover:bg-orange-700 dark:hover:bg-orange-900/90 border-2 border-orange-700 dark:border-orange-800',
         text: 'text-white dark:text-orange-100'
       };
     } else {
@@ -2894,18 +2894,26 @@ export default function LayupScheduler() {
         <div className="px-6 pb-4">
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Work Days
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Work Day Settings</DialogTitle>
-                </DialogHeader>
+              {/* Settings Dropdown Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Settings
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <Calendar className="w-4 h-4 mr-2" />
+                        Work Days
+                      </DropdownMenuItem>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Work Day Settings</DialogTitle>
+                      </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Select which days should be included when generating layup schedules. 
@@ -2949,21 +2957,21 @@ export default function LayupScheduler() {
                         selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
                     </p>
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Mold Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Mold Configuration</DialogTitle>
-                </DialogHeader>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <Cog className="w-4 h-4 mr-2" />
+                        Mold Settings
+                      </DropdownMenuItem>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Mold Configuration</DialogTitle>
+                      </DialogHeader>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {/* Add New Mold Form */}
                   <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">

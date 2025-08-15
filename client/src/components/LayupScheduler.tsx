@@ -472,7 +472,8 @@ function DroppableCell({
   moldInfo,
   getModelDisplayName,
   features,
-  processedOrders
+  processedOrders,
+  selectedWorkDays = [1, 2, 3, 4] // Default Mon-Thu
 }: { 
   moldId: string; 
   date: Date; 
@@ -482,6 +483,7 @@ function DroppableCell({
   getModelDisplayName?: (modelId: string) => string;
   features?: any[];
   processedOrders?: any[];
+  selectedWorkDays?: number[];
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -508,7 +510,8 @@ function DroppableCell({
 
 
 
-  const isFriday = date.getDay() === 5;
+  const dayOfWeek = date.getDay();
+  const isNonWorkDay = !selectedWorkDays.includes(dayOfWeek);
 
   return (
     <div 
@@ -516,8 +519,8 @@ function DroppableCell({
       className={`${cellHeight} border p-1 transition-all duration-200 ${
         isOver 
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-          : isFriday 
-            ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10' 
+          : isNonWorkDay 
+            ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10 opacity-75' 
             : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
       }`}
     >
@@ -542,7 +545,7 @@ function DroppableCell({
       })}
       {orders.length === 0 && (
         <div className="text-xs text-gray-400 text-center py-2 opacity-50">
-          Available
+          {isNonWorkDay ? 'Non-work day' : 'Available'}
         </div>
       )}
     </div>
@@ -2407,32 +2410,27 @@ export default function LayupScheduler() {
   }, [schedule, orderAssignments]);
 
   // Build date columns
-  // Generate date ranges based on view type - RESPECT WORK DAY SETTINGS
+  // Generate date ranges based on view type - SHOW ALL DAYS but mark work vs non-work days
   const dates = useMemo(() => {
     let calculatedDates;
     if (viewType === 'day') {
       calculatedDates = [currentDate];
     } else if (viewType === 'week') {
-      // Show only configured work days (respect selectedWorkDays setting)
+      // Show all weekdays (Monday-Friday) for manual scheduling flexibility
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      const allWeekDays = eachDayOfInterval({ start, end: addDays(start, 6) }); // All 7 days
-      // Filter to only show selected work days
-      calculatedDates = allWeekDays.filter(date => {
-        const dayOfWeek = date.getDay();
-        return selectedWorkDays.includes(dayOfWeek);
-      });
-      console.log(`📅 WORK DAY FILTER: Showing only work days [${selectedWorkDays.join(', ')}] out of week days`);
+      calculatedDates = eachDayOfInterval({ start, end: addDays(start, 4) }); // 5 days (Mon-Fri)
+      console.log(`📅 WEEK VIEW: Showing all weekdays, work days are [${selectedWorkDays.join(', ')}]`);
     } else {
-      // month - organize by weeks but filter to work days only
+      // month - show all weekdays but distinguish work vs non-work days
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       const allDays = eachDayOfInterval({ start, end });
-      // Filter to only show selected work days
+      // Show weekdays only (no weekends) but include non-work days for manual scheduling
       calculatedDates = allDays.filter(date => {
         const dayOfWeek = date.getDay();
-        return selectedWorkDays.includes(dayOfWeek);
+        return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday(1) to Friday(5)
       });
-      console.log(`📅 MONTH WORK DAY FILTER: Showing only work days [${selectedWorkDays.join(', ')}] in month view`);
+      console.log(`📅 MONTH VIEW: Showing all weekdays, work days are [${selectedWorkDays.join(', ')}]`);
     }
     
     // DEBUG: Show what dates we're displaying and what assignments exist
@@ -2478,7 +2476,7 @@ export default function LayupScheduler() {
     return calculatedDates;
   }, [viewType, currentDate, orderAssignments, selectedWorkDays]);
 
-  // For week-based organization, group dates into work week sections based on work day settings
+  // For week-based organization, group dates into work week sections (Mon-Fri)
   const weekGroups = useMemo(() => {
     if (viewType !== 'month') return null;
 
@@ -2486,14 +2484,12 @@ export default function LayupScheduler() {
     let currentWeek: Date[] = [];
 
     dates.forEach((date, index) => {
-      // Include dates that are already filtered by work days in the dates array
+      // Include all weekdays (Mon-Fri)
       currentWeek.push(date);
 
-      // Complete the week at the last work day of the week or at the end
+      // Complete the week on Friday (5) or at the end
       const dayOfWeek = date.getDay();
-      const maxWorkDay = Math.max(...selectedWorkDays);
-      
-      if (dayOfWeek === maxWorkDay || index === dates.length - 1) {
+      if (dayOfWeek === 5 || index === dates.length - 1) {
         if (currentWeek.length > 0) {
           weeks.push(currentWeek);
           currentWeek = [];
@@ -2502,7 +2498,7 @@ export default function LayupScheduler() {
     });
 
     return weeks;
-  }, [dates, viewType, selectedWorkDays]);
+  }, [dates, viewType]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -3604,32 +3600,27 @@ export default function LayupScheduler() {
             >
               {dates.map(date => {
                   const dayOfWeek = date.getDay();
-                  const isFriday = dayOfWeek === 5;
-                  const isSelectedWorkDay = selectedWorkDays.includes(dayOfWeek);
-                  const isSchedulingDay = isSelectedWorkDay;
+                  const isWorkDay = selectedWorkDays.includes(dayOfWeek);
                   
                   return (
                     <div
                       key={date.toISOString()}
                       className={`p-3 border text-center font-semibold text-sm ${
-                        isFriday 
-                          ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20' 
-                          : isSchedulingDay
+                        isWorkDay
                           ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
-                          : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'
+                          : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 opacity-75'
                       }`}
                     >
                       {format(date, 'MM/dd')}
                       <div className={`text-xs mt-1 ${
-                        isFriday 
-                          ? 'text-amber-600 dark:text-amber-400' 
-                          : isSchedulingDay
+                        isWorkDay
                           ? 'text-green-600 dark:text-green-400'
-                          : 'text-gray-500'
+                          : 'text-amber-600 dark:text-amber-400'
                       }`}>
                         {format(date, 'EEE')}
-                        {isFriday && <div className="text-[10px] font-medium">Backup</div>}
-                        {!isFriday && !isSchedulingDay && <div className="text-[10px] font-medium">Disabled</div>}
+                        <div className="text-[10px] font-medium">
+                          {isWorkDay ? 'Work Day' : 'Manual Only'}
+                        </div>
                       </div>
                     </div>
                   );
@@ -3947,6 +3938,7 @@ export default function LayupScheduler() {
                                 getModelDisplayName={getModelDisplayName}
                                 features={features}
                                 processedOrders={processedOrders}
+                                selectedWorkDays={selectedWorkDays}
                               />
                             );
                           });

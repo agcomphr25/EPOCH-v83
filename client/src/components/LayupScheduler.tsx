@@ -586,8 +586,8 @@ export default function LayupScheduler() {
     select: (data) => {
       if (!data || !Array.isArray(data)) return data;
       
-      // Filter out any Friday assignments from database
-      const filteredData = data.filter(assignment => {
+      // Filter out Friday assignments from database based on work days setting
+      const filteredData = selectedWorkDays.includes(5) ? data : data.filter(assignment => {
         const date = new Date(assignment.scheduledDate);
         const isNotFriday = date.getDay() !== 5;
         if (!isNotFriday) {
@@ -636,11 +636,10 @@ export default function LayupScheduler() {
           console.error(`   Mold ID: ${entry.moldId}`);
         }
         
-        // CRITICAL: Skip any Friday assignments from database - they should never exist
-        if (dayOfWeek === 5) {
-          console.error(`🚨 CRITICAL: Skipping Friday assignment for ${entry.orderId} on ${schedDate.toDateString()}`);
-          console.error(`   Database entry that should be cleaned:`, entry);
-          return; // Skip Friday assignments completely
+        // Skip Friday assignments from database based on work days setting
+        if (dayOfWeek === 5 && !selectedWorkDays.includes(5)) {
+          console.log(`🗑️ Skipping Friday assignment for ${entry.orderId} on ${schedDate.toDateString()} (Friday not in work days)`);
+          return; // Skip Friday assignments when Friday is not selected
         }
         
         assignments[entry.orderId] = {
@@ -1494,8 +1493,8 @@ export default function LayupScheduler() {
         
         console.log(`📅 PRODUCTION FLOW: Assigning ${Object.keys(scheduleAssignments).length} orders to schedule`);
         
-        // Apply Friday validation to algorithmic schedule (never allow Friday)
-        const validatedAssignments = validateNoFridayAssignments(scheduleAssignments);
+        // Apply Friday validation to algorithmic schedule based on work days setting
+        const validatedAssignments = selectedWorkDays.includes(5) ? scheduleAssignments : validateNoFridayAssignments(scheduleAssignments);
         setOrderAssignments(validatedAssignments);
         
         // Log mold assignments for verification

@@ -6,6 +6,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
+Order finalization rules: Orders with "None" or empty stock models cannot be finalized and sent to the Production Queue. The system will block finalization with a clear error message.
 
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**

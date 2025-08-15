@@ -5195,6 +5195,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Order ${orderId} is already finalized`);
     }
 
+    // CRITICAL: Prevent orders with "None" stock model from going to Production Queue
+    if (!draft.modelId || draft.modelId.toLowerCase() === 'none' || draft.modelId.toLowerCase().trim() === '') {
+      console.log(`❌ FINALIZE BLOCKED: Order ${orderId} has stock model "${draft.modelId}" - cannot send to Production Queue`);
+      throw new Error(`Cannot finalize order ${orderId}: Orders with "None" or empty stock model cannot be sent to Production Queue. Please select a valid stock model.`);
+    }
+
+    console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to Production Queue`);
+    
+
     // Create the finalized order data
     const finalizedOrderData: InsertAllOrder = {
       orderId: draft.orderId,

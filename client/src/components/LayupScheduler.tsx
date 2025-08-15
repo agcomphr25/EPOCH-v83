@@ -2435,6 +2435,9 @@ export default function LayupScheduler() {
     
     // DEBUG: Show what dates we're displaying and what assignments exist
     console.log('📅 DATES BEING DISPLAYED:', calculatedDates.map(d => `${d.toDateString()} (day ${d.getDay()})`));
+    console.log('🔍 SELECTED WORK DAYS:', selectedWorkDays);
+    console.log('📊 TOTAL ORDERS AVAILABLE:', processedOrders?.length || 0);
+    console.log('📋 CURRENT ASSIGNMENTS COUNT:', Object.keys(orderAssignments).length);
     
     // Show orderAssignments when we're rendering
     if (Object.keys(orderAssignments).length > 0) {
@@ -2526,6 +2529,14 @@ export default function LayupScheduler() {
     // Get current work days from settings (default Monday-Thursday = [1,2,3,4])
     const allowedWorkDays = selectedWorkDays;
     
+    console.log(`🔍 DRAG VALIDATION CHECK:`, {
+      orderId,
+      targetDayOfWeek,
+      targetDate: targetDate.toDateString(),
+      selectedWorkDays,
+      isAllowed: allowedWorkDays.includes(targetDayOfWeek)
+    });
+
     if (!allowedWorkDays.includes(targetDayOfWeek)) {
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const targetDayName = dayNames[targetDayOfWeek];
@@ -2534,11 +2545,8 @@ export default function LayupScheduler() {
       console.error(`❌ WORK DAY VIOLATION: Cannot manually schedule ${orderId} on ${targetDayName} ${targetDate.toDateString()}`);
       console.error(`   Allowed work days: ${allowedDayNames} (${allowedWorkDays.join(', ')})`);
       
-      toast({
-        variant: "destructive",
-        title: "Invalid Work Day",
-        description: `Cannot schedule orders on ${targetDayName}. Allowed work days: ${allowedDayNames}`,
-      });
+      alert(`❌ Cannot schedule orders on ${targetDayName}!\n\nAllowed work days: ${allowedDayNames}`);
+      
       return;
     }
 

@@ -37,6 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -564,6 +565,10 @@ export default function LayupScheduler() {
   const [editingMoldName, setEditingMoldName] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const [showWorkDaysDialog, setShowWorkDaysDialog] = useState(false);
+  const [showMoldSettingsDialog, setShowMoldSettingsDialog] = useState(false);
+  const [showEmployeeSettingsDialog, setShowEmployeeSettingsDialog] = useState(false);
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -2846,7 +2851,7 @@ export default function LayupScheduler() {
     }
   };
 
-  if (moldsLoading || employeesLoading || ordersLoading) {
+  if (moldsLoading || employeesLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-lg">Loading scheduler...</div>
@@ -2895,13 +2900,51 @@ export default function LayupScheduler() {
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
 
-            <Dialog>
-              <DialogTrigger asChild>
+            <Popover open={showSettingsDropdown} onOpenChange={setShowSettingsDropdown}>
+              <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Work Days
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
                 </Button>
-              </DialogTrigger>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="start">
+                <div className="space-y-2">
+                  <button
+                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+                    onClick={() => {
+                      setShowWorkDaysDialog(true);
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Work Days
+                  </button>
+                  <button
+                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+                    onClick={() => {
+                      setShowMoldSettingsDialog(true);
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <Grid3X3 className="w-4 h-4 mr-2" />
+                    Mold Settings
+                  </button>
+                  <button
+                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+                    onClick={() => {
+                      setShowEmployeeSettingsDialog(true);
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Employee Settings
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Work Days Dialog */}
+            <Dialog open={showWorkDaysDialog} onOpenChange={setShowWorkDaysDialog}>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Work Day Settings</DialogTitle>
@@ -2953,13 +2996,8 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Mold Settings
-                </Button>
-              </DialogTrigger>
+            {/* Mold Settings Dialog */}
+            <Dialog open={showMoldSettingsDialog} onOpenChange={setShowMoldSettingsDialog}>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Mold Configuration</DialogTitle>
@@ -3279,13 +3317,8 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Users className="w-4 h-4 mr-2" />
-                  Employee Settings
-                </Button>
-              </DialogTrigger>
+            {/* Employee Settings Dialog */}
+            <Dialog open={showEmployeeSettingsDialog} onOpenChange={setShowEmployeeSettingsDialog}>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Employee Configuration</DialogTitle>

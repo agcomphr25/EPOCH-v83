@@ -37,7 +37,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -126,8 +125,8 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       };
     } else if (materialType === 'FG') {
       return {
-        bg: 'bg-orange-600 dark:bg-orange-900/80 hover:bg-orange-700 dark:hover:bg-orange-900/90 border-2 border-orange-700 dark:border-orange-800',
-        text: 'text-white dark:text-orange-100'
+        bg: 'bg-purple-600 dark:bg-purple-900/70 hover:bg-purple-700 dark:hover:bg-purple-900/90 border-2 border-purple-700 dark:border-purple-800',
+        text: 'text-white dark:text-purple-100'
       };
     } else {
       return {
@@ -565,44 +564,10 @@ export default function LayupScheduler() {
   const [editingMoldName, setEditingMoldName] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
-  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
-  const [showWorkDaysDialog, setShowWorkDaysDialog] = useState(false);
-  const [showMoldSettingsDialog, setShowMoldSettingsDialog] = useState(false);
-  const [showEmployeeSettingsDialog, setShowEmployeeSettingsDialog] = useState(false);
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
-
-  // Clean up existing assignments when work days change
-  const cleanUpFridayAssignments = useCallback(() => {
-    if (!selectedWorkDays.includes(5)) {
-      const fridayAssignments = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        return assignmentDate.getDay() === 5;
-      });
-
-      if (fridayAssignments.length > 0) {
-        console.log(`🧹 Cleaning up ${fridayAssignments.length} Friday assignments due to work day setting`);
-        
-        const cleanedAssignments = { ...orderAssignments };
-        fridayAssignments.forEach(([orderId]) => {
-          console.log(`   - Removing ${orderId} from Friday`);
-          delete cleanedAssignments[orderId];
-        });
-        
-        setOrderAssignments(cleanedAssignments);
-        console.log(`✅ Removed ${fridayAssignments.length} Friday assignments`);
-      }
-    }
-  }, [selectedWorkDays, orderAssignments]);
-
-  // Clean up Friday assignments when work days change
-  useEffect(() => {
-    if (Object.keys(orderAssignments).length > 0) {
-      cleanUpFridayAssignments();
-    }
-  }, [selectedWorkDays]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -2881,7 +2846,7 @@ export default function LayupScheduler() {
     }
   };
 
-  if (moldsLoading || employeesLoading) {
+  if (moldsLoading || employeesLoading || ordersLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-lg">Loading scheduler...</div>
@@ -2905,11 +2870,11 @@ export default function LayupScheduler() {
             
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Total Orders</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders in Production Queue</span>
               </div>
               <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
                 <span className="text-green-700 dark:text-green-300 font-medium">
-                  {orders.filter(o => o.source === 'p1_purchase_order').length} P1 Purchase Orders
+                  {Object.keys(orderAssignments).length} Scheduled Orders
                 </span>
               </div>
               <div className="bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2 rounded-lg">
@@ -2930,51 +2895,13 @@ export default function LayupScheduler() {
           <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex space-x-2">
 
-            <Popover open={showSettingsDropdown} onOpenChange={setShowSettingsDropdown}>
-              <PopoverTrigger asChild>
+            <Dialog>
+              <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Work Days
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56" align="start">
-                <div className="space-y-2">
-                  <button
-                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-                    onClick={() => {
-                      setShowWorkDaysDialog(true);
-                      setShowSettingsDropdown(false);
-                    }}
-                  >
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Work Days
-                  </button>
-                  <button
-                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-                    onClick={() => {
-                      setShowMoldSettingsDialog(true);
-                      setShowSettingsDropdown(false);
-                    }}
-                  >
-                    <Grid3X3 className="w-4 h-4 mr-2" />
-                    Mold Settings
-                  </button>
-                  <button
-                    className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-                    onClick={() => {
-                      setShowEmployeeSettingsDialog(true);
-                      setShowSettingsDropdown(false);
-                    }}
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Employee Settings
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Work Days Dialog */}
-            <Dialog open={showWorkDaysDialog} onOpenChange={setShowWorkDaysDialog}>
+              </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Work Day Settings</DialogTitle>
@@ -3017,35 +2944,22 @@ export default function LayupScheduler() {
                     ))}
                   </div>
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' : 
                         selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
                     </p>
-                    {!selectedWorkDays.includes(5) && Object.entries(orderAssignments).some(([_, assignment]) => {
-                      const assignmentDate = new Date(assignment.date);
-                      return assignmentDate.getDay() === 5;
-                    }) && (
-                      <div className="mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={cleanUpFridayAssignments}
-                          className="text-orange-600 hover:text-orange-700 text-xs"
-                        >
-                          Remove Existing Friday Assignments
-                        </Button>
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                          Some orders are currently scheduled for Friday. Click to remove them.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
 
-            {/* Mold Settings Dialog */}
-            <Dialog open={showMoldSettingsDialog} onOpenChange={setShowMoldSettingsDialog}>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Mold Settings
+                </Button>
+              </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Mold Configuration</DialogTitle>
@@ -3365,8 +3279,13 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            {/* Employee Settings Dialog */}
-            <Dialog open={showEmployeeSettingsDialog} onOpenChange={setShowEmployeeSettingsDialog}>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Users className="w-4 h-4 mr-2" />
+                  Employee Settings
+                </Button>
+              </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Employee Configuration</DialogTitle>

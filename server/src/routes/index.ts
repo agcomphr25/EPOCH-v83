@@ -118,22 +118,30 @@ export function registerRoutes(app: Express): Server {
   
   // Direct algorithmic schedule endpoint for frontend auto-schedule button
   app.post('/api/algorithmic-schedule', async (req, res) => {
-    console.log('🤖 Direct algorithmic schedule endpoint called - redirecting to new algorithmic scheduler');
+    console.log('🏭 LAYUP SCHEDULER FLOW: Algorithmic schedule called for comprehensive flow');
     try {
-      // Redirect to the new algorithmic scheduler endpoint
+      const { maxOrdersPerDay = 50, scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
+      
+      // Use the comprehensive algorithmic scheduler for layup flow
       const fetch = (await import('node-fetch')).default;
       const response = await fetch('http://localhost:5000/api/scheduler/generate-algorithmic-schedule', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(req.body || {})
+        body: JSON.stringify({
+          maxOrdersPerDay,
+          scheduleDays, 
+          workDays, // Ensure Monday-Thursday scheduling [1,2,3,4]
+          priorityWeighting: 'urgent' // Due date priority system
+        })
       });
       
       const result = await response.json();
+      console.log(`🏭 LAYUP SCHEDULER FLOW: Generated ${result.allocations?.length || 0} schedule allocations`);
       res.json(result);
     } catch (error) {
-      console.error('❌ Algorithmic schedule error:', error);
+      console.error('❌ LAYUP SCHEDULER FLOW: Algorithmic schedule error:', error);
       res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error' 

@@ -1090,12 +1090,13 @@ export default function LayupScheduler() {
         current = new Date(current.getTime() + (current.getDay() === 0 ? 1 : -1) * 24 * 60 * 60 * 1000);
       }
 
-      // Add selected work days (Monday = 1, Tuesday = 2, ..., Friday = 5)
-      for (let i = 0; i < 5; i++) {
+      // Add selected work days only (never include Friday unless explicitly selected)
+      for (let i = 0; i < 7; i++) {
         const workDay = new Date(current);
         const dayOfWeek = workDay.getDay();
         
-        // Only include days that are selected by the user
+        // CRITICAL: Only include days that are explicitly selected by the user
+        // This enforces Monday-Thursday [1,2,3,4] by default
         if (selectedWorkDays.includes(dayOfWeek)) {
           workDays.push(workDay);
         }

@@ -243,14 +243,6 @@ export default function AllOrdersList() {
     return colors[department] || 'bg-gray-400';
   };
 
-  const getNextDepartment = (currentDept: string) => {
-    const index = departments.indexOf(currentDept);
-    return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
-  };
-
-  const handlePushToLayupPlugging = (orderId: string) => {
-    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
-  };
   const handleCommunicationOpen = (customer: any, communicationType: string) => {
     setSelectedCustomer({
       ...customer,

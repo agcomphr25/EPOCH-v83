@@ -347,97 +347,55 @@ export function registerRoutes(app: Express): Server {
         stockModelId: o.stockModelId 
       })));
       
-      const moldSettings = molds.map(mold => ({
-        moldId: mold.moldId,
-        enabled: true, // Assume all molds are enabled for now
-        multiplier: 1 // Default multiplier
-      }));
-      
       const employeeSettings = layupEmployees.map((emp: any) => ({
         employeeId: emp.employeeId,
-        rate: emp.rate || 1,
-        hours: emp.hours || 8
+        name: emp.name || `Employee ${emp.employeeId}`,
+        rate: emp.rate || 1.5, // orders per hour
+        hours: emp.hours || 8   // working hours per day
       }));
       
-      // Simple schedule generation - assign orders to first available mold by date
-      console.log('🔧 Creating simple schedule...');
+      console.log('🔧 Employee settings for scheduling:', employeeSettings);
+      
+      // Import and use the proper scheduling algorithm that respects employee production rates
+      const { generateLayupSchedule } = await import('../../../client/src/utils/schedulerUtils');
+      
+      console.log('🔧 Using advanced scheduling algorithm with employee production rates...');
       
       // Clear existing schedule
       await storage.clearLayupSchedule();
       
-      // Generate simple schedule starting from next Monday (or today if it's already Monday-Thursday)
-      const today = new Date();
-      const todayDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      // Prepare mold settings with proper interface matching MoldSettings
+      const moldSettings = molds.map(mold => ({
+        moldId: mold.moldId,
+        modelName: mold.modelName || mold.moldId, // Use moldId as fallback for modelName
+        enabled: true,
+        multiplier: 2, // Default capacity multiplier
+        instanceNumber: 1, // Default instance
+        stockModels: mold.stockModels || [] // Include stock model compatibility
+      }));
       
-      // Calculate days to add to get to next Monday
-      let daysToNextMonday = 0;
-      if (todayDayOfWeek === 0) { // Sunday
-        daysToNextMonday = 1;
-      } else if (todayDayOfWeek === 5) { // Friday
-        daysToNextMonday = 3;
-      } else if (todayDayOfWeek === 6) { // Saturday
-        daysToNextMonday = 2;
-      }
+      console.log('🔧 Mold settings for scheduling:', moldSettings.slice(0, 3));
       
-      const startDate = new Date(today);
-      startDate.setDate(today.getDate() + daysToNextMonday);
+      // Use the sophisticated scheduling algorithm that respects employee production rates
+      const scheduleResults = generateLayupSchedule(orders, moldSettings, employeeSettings);
       
-      console.log('🔧 DEBUG: Today is', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayDayOfWeek], 'Days to add:', daysToNextMonday);
-      console.log('🔧 DEBUG: Starting schedule from:', startDate.toDateString(), '(' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][startDate.getDay()] + ')');
+      console.log('🔧 Advanced scheduler generated', scheduleResults.length, 'schedule entries');
+      console.log('🔧 First few schedule results:', scheduleResults.slice(0, 3).map(r => ({
+        orderId: r.orderId,
+        date: r.scheduledDate.toDateString(),
+        moldId: r.moldId,
+        employeeCount: r.employeeAssignments.length
+      })));
+      
       const createdEntries = [];
       
-      // Take first 20 orders to avoid overwhelming the system
-      const ordersToSchedule = orders.slice(0, 20);
-      const availableMolds = molds.length > 0 ? molds : [{ moldId: 'DEFAULT-1' }];
-      const defaultMoldId = availableMolds[0].moldId;
-      
-      console.log('🔧 Scheduling', ordersToSchedule.length, 'orders using mold:', defaultMoldId);
-      
-      // Helper function to get next work day (Monday-Thursday only)
-      const getNextWorkDay = (fromDate: Date, dayOffset: number) => {
-        const date = new Date(fromDate);
-        let workDaysAdded = 0;
-        let currentDayOffset = 0;
-        
-        while (workDaysAdded < dayOffset) {
-          currentDayOffset++;
-          const testDate = new Date(fromDate);
-          testDate.setDate(fromDate.getDate() + currentDayOffset);
-          
-          const dayOfWeek = testDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-          
-          // Only count Monday (1) through Thursday (4) as work days - NEVER Friday (5)
-          if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-            workDaysAdded++;
-          }
-        }
-        
-        const finalDate = new Date(fromDate);
-        finalDate.setDate(fromDate.getDate() + currentDayOffset);
-        
-        // Double-check: ensure we never return a Friday
-        const finalDayOfWeek = finalDate.getDay();
-        if (finalDayOfWeek === 5) {
-          console.error(`❌ CRITICAL: getNextWorkDay attempted to return a Friday! Date: ${finalDate.toDateString()}`);
-          // Skip to next Monday if we somehow land on Friday
-          const daysToNextMonday = 3; // Friday + 3 = Monday
-          finalDate.setDate(finalDate.getDate() + daysToNextMonday);
-        }
-        
-        return finalDate;
-      };
-
-      for (let i = 0; i < ordersToSchedule.length; i++) {
-        const order = ordersToSchedule[i];
-        
-        // Schedule orders only on Monday-Thursday, skip weekends and Fridays
-        const scheduleDate = getNextWorkDay(startDate, i);
-        
+      // Convert schedule results to database entries
+      for (const result of scheduleResults) {
         const scheduleEntry = {
-          orderId: order.orderId,
-          scheduledDate: scheduleDate,
-          moldId: defaultMoldId,
-          employeeAssignments: layupEmployees.slice(0, 2), // Assign first 2 employees
+          orderId: result.orderId,
+          scheduledDate: result.scheduledDate,
+          moldId: result.moldId,
+          employeeAssignments: result.employeeAssignments,
           isOverride: false
         };
         

@@ -38,6 +38,13 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **ENHANCED**: Direct order creation process bypassing drafts for finalized orders
 ✅ **VERIFIED**: Orders now searchable immediately after creation
 
+**Layup Scheduler Architecture Separation (2025-08-16):**
+✅ **IMPLEMENTED**: Separated priority logic into dedicated OrderPriorityService module
+✅ **CREATED**: LayupSchedulerService for scheduling operations isolated from UI concerns
+✅ **ENHANCED**: Clean separation between business logic and display components
+✅ **IMPROVED**: Maintainability for complex rules between regular orders and PO orders
+✅ **VERIFIED**: Simplified debugging and testing with modular architecture
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 

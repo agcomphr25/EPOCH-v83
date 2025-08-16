@@ -81,6 +81,7 @@ import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PaymentManagement from "./pages/PaymentManagement";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
+import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -240,6 +241,7 @@ function App() {
                   <Route path="/layup-scheduler" component={LayupSchedulerPage} />
                   <Route path="/enhanced-layup-scheduler" component={EnhancedLayupSchedulerPage} />
                   <Route path="/work-day-scheduler" component={() => <WorkDayAwareScheduler />} />
+                  <Route path="/simplified-layup-scheduler" component={SimplifiedLayupScheduler} />
                   <Route path="/p2-layup-scheduler" component={P2LayupSchedulerPage} />
                   <Route path="/production-queue" component={ProductionQueueManager} />
                   

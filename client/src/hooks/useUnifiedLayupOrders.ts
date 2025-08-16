@@ -53,8 +53,10 @@ export function useUnifiedLayupOrders() {
       return data;
     },
     retry: 3,
-    refetchInterval: 30000,
-    staleTime: 10000, // Consider data fresh for 10 seconds
+    refetchInterval: 5 * 60 * 1000, // Reduced to 5 minutes instead of 30 seconds
+    staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
+    refetchOnWindowFocus: false, // Don't refetch when user returns to tab
+    refetchOnMount: true, // Only refetch when component mounts
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {

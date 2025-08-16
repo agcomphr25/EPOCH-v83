@@ -41,8 +41,8 @@ import { getDisplayOrderId, validateNoFridayAssignments } from '@/lib/orderUtils
 import { useToast } from '@/hooks/use-toast';
 
 
-// Draggable Order Item Component with responsive sizing
-function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) {
+// Draggable Order Item Component with responsive sizing - memoized for performance
+const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) => {
   const {
     attributes,
     listeners,
@@ -461,7 +461,7 @@ function DraggableOrderItem({ order, priority, totalOrdersInCell, moldInfo, getM
       </div>
     </div>
   );
-}
+});
 
 // Droppable Cell Component with responsive height
 function DroppableCell({ 

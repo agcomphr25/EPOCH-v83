@@ -144,7 +144,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       style={style}
       {...attributes}
       {...listeners}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md cursor-grab transition-all duration-200`}
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md cursor-grab active:cursor-grabbing transition-all duration-200 touch-manipulation select-none`}
     >
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
@@ -2298,7 +2298,7 @@ export default function LayupScheduler() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 3, // Reduced from 8 to make dragging more responsive
       },
     })
   );

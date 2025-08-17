@@ -201,14 +201,17 @@ export function registerRoutes(app: Express): Server {
       // Combine both order types into unified production queue with enhanced stock model inference
       const combinedQueue = [
         ...unscheduledOrders.map(order => {
+          // Determine correct source type based on order characteristics
+          const sourceType = order.customerPO || order.poId || order.productionOrderId ? 'production_order' : 'main_orders';
+          
           const { stockModelId, product } = inferStockModelFromFeatures({
             ...order,
-            source: 'p1_purchase_order'
+            source: sourceType
           });
           
           return {
             ...order,
-            source: 'p1_purchase_order',
+            source: sourceType,
             priorityScore: calculatePriorityScore(order.dueDate),
             orderId: order.orderId,
             stockModelId,

@@ -113,44 +113,41 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   const modelId = order.stockModelId || order.modelId;
   const materialType = getMaterialType(modelId || '');
 
-  // Debug logging for material type detection
-  if (['AG079', 'AG073', 'AG072', 'AG070'].includes(order.orderId)) {
+  // Debug logging for material type detection (can be removed after verification)
+  if (['AG079', 'AG073', 'AG072', 'AG070', 'AG078'].includes(order.orderId)) {
     console.log(`🎨 CARD COLOR DEBUG for ${order.orderId}:`, {
-      stockModelId: order.stockModelId,
-      modelId: order.modelId,
-      model_id: order.model_id,
-      finalModelId: modelId,
-      materialType: materialType,
       source: order.source,
-      'modelId.startsWith("cf_")': modelId?.startsWith('cf_'),
-      'modelId.startsWith("fg_")': modelId?.startsWith('fg_'),
-      rawOrder: { ...order }
+      modelId: modelId,
+      materialType: materialType,
+      expectedColor: 
+        order.source === 'production_order' ? 'PURPLE (Purchase Order)' :
+        materialType === 'CF' ? 'DEEP ORANGE (CF)' :
+        materialType === 'FG' ? 'LIGHT ORANGE (FG)' : 'GRAY (Unknown)'
     });
   }
 
   // Determine card styling based on source and material
   const getCardStyling = () => {
-    if (order.source === 'p1_purchase_order') {
-      return {
-        bg: 'bg-orange-100 dark:bg-orange-800/50 hover:bg-orange-200 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
-        text: 'text-orange-800 dark:text-orange-200'
-      };
-    } else if (order.source === 'production_order') {
+    // Check if this is a purchase order (has poId or productionOrderId)
+    if (order.poId || order.productionOrderId || order.source === 'production_order') {
       return {
         bg: 'bg-purple-100 dark:bg-purple-800/50 hover:bg-purple-200 dark:hover:bg-purple-800/70 border-2 border-purple-300 dark:border-purple-600',
         text: 'text-purple-800 dark:text-purple-200'
       };
-    } else if (materialType === 'FG') {
+    } else if (materialType === 'CF') {
+      // CF cards: Deep orange (orange-800)
       return {
         bg: 'bg-orange-800 dark:bg-orange-900/80 hover:bg-orange-900 dark:hover:bg-orange-950/90 border-2 border-orange-900 dark:border-orange-950',
         text: 'text-white dark:text-orange-100'
       };
-    } else if (materialType === 'CF') {
+    } else if (materialType === 'FG') {
+      // FG cards: Light orange (orange-200)
       return {
         bg: 'bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
         text: 'text-orange-800 dark:text-orange-200'
       };
     } else {
+      // Default/unknown material
       return {
         bg: 'bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800/70 border-2 border-gray-300 dark:border-gray-600',
         text: 'text-gray-800 dark:text-gray-200'

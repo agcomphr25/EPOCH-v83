@@ -3965,6 +3965,15 @@ export default function LayupScheduler() {
                               .filter(order => order !== undefined) as any[];
 
                             const dropId = `${mold.moldId}|${dateString}`;
+                            const dayOfWeek = date.getDay();
+                            const isFriday = dayOfWeek === 5;
+                            const isWorkDay = selectedWorkDays.includes(dayOfWeek);
+                            const hasOrders = cellOrders.length > 0;
+
+                            // Hide empty cells on work week columns (Mon-Thu), but always show Friday for manual drops
+                            if (!hasOrders && !isFriday && isWorkDay) {
+                              return null;
+                            }
 
                             return (
                               <DroppableCell

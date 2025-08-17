@@ -325,7 +325,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`❌ Unable to schedule: ${totalProcessed - totalScheduled}`);
     console.log(`📊 Success rate: ${successRate.toFixed(1)}%`);
     console.log(`🏗️ Work days in schedule: ${workDates.length}`);
-    console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (enforced max: 20)`);
+    console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (based on employee rates)`);
 
     // Analyze failed orders
     const unscheduledOrders = prioritizedOrders.slice(totalScheduled);

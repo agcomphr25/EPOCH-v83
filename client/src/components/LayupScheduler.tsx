@@ -127,7 +127,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       };
     } else if (materialType === 'FG') {
       return {
-        bg: 'bg-orange-600 dark:bg-orange-800/80 hover:bg-orange-700 dark:hover:bg-orange-900/90 border-2 border-orange-700 dark:border-orange-800',
+        bg: 'bg-orange-800 dark:bg-orange-900/80 hover:bg-orange-900 dark:hover:bg-orange-950/90 border-2 border-orange-900 dark:border-orange-950',
         text: 'text-white dark:text-orange-100'
       };
     } else {

@@ -113,6 +113,21 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   const modelId = order.stockModelId || order.modelId;
   const materialType = getMaterialType(modelId || '');
 
+  // Debug logging for material type detection
+  if (['AG079', 'AG073', 'AG072', 'AG070'].includes(order.orderId)) {
+    console.log(`🎨 CARD COLOR DEBUG for ${order.orderId}:`, {
+      stockModelId: order.stockModelId,
+      modelId: order.modelId,
+      model_id: order.model_id,
+      finalModelId: modelId,
+      materialType: materialType,
+      source: order.source,
+      'modelId.startsWith("cf_")': modelId?.startsWith('cf_'),
+      'modelId.startsWith("fg_")': modelId?.startsWith('fg_'),
+      rawOrder: { ...order }
+    });
+  }
+
   // Determine card styling based on source and material
   const getCardStyling = () => {
     if (order.source === 'p1_purchase_order') {

@@ -212,6 +212,7 @@ export function registerRoutes(app: Express): Server {
             priorityScore: calculatePriorityScore(order.dueDate),
             orderId: order.orderId,
             stockModelId,
+            modelId: stockModelId, // Ensure modelId matches stockModelId for consistent material detection
             product,
             stockModelName: product
           };

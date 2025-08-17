@@ -54,9 +54,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`  ${emp.employee_id}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
     });
 
-    // CRITICAL FIX: Use realistic employee capacity (20 orders/day max)
-    const actualDailyCapacity = Math.min(Math.floor(totalDailyCapacity) || 20, 20);
-    console.log(`🎯 ENFORCED realistic daily capacity: ${actualDailyCapacity} orders/day (employee capacity: ${totalDailyCapacity})`);
+    // Use actual employee capacity - sum of all employee daily rates
+    const actualDailyCapacity = Math.floor(totalDailyCapacity) || 20;
+    console.log(`🎯 Using employee-based daily capacity: ${actualDailyCapacity} orders/day (calculated from employee rates: ${totalDailyCapacity})`);
 
     // Fetch active molds with capacity and stock models
     const moldsResult = await pool.query(`

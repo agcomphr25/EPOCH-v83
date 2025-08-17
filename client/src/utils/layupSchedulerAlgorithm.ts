@@ -121,16 +121,22 @@ export function calculateDailyCapacity(
     return 0;
   }
 
-  // Calculate theoretical capacity based on molds and employee hours
-  const totalEmployeeHours = activeEmployees.reduce((sum, emp) => sum + emp.dailyHours, 0);
-  const averageEmployeeRate = activeEmployees.reduce((sum, emp) => sum + emp.rate, 0) / activeEmployees.length;
+  // Calculate total daily production capacity based on actual employee rates
+  // Each employee has a 'rate' which represents orders per day
+  const totalEmployeeDailyCapacity = activeEmployees.reduce((sum, emp) => {
+    // emp.rate is orders per day for each employee
+    return sum + emp.rate;
+  }, 0);
   
-  // Capacity is limited by the number of molds available
-  const moldConstrainedCapacity = activeMolds.length * 8; // Assume 8 orders per mold per day max
-  const employeeConstrainedCapacity = totalEmployeeHours * averageEmployeeRate;
+  console.log(`👥 DAILY CAPACITY CALCULATION:`, {
+    activeEmployees: activeEmployees.map(e => ({ id: e.employeeId, rate: e.rate })),
+    totalEmployeeDailyCapacity,
+    activeMolds: activeMolds.length
+  });
   
-  // Return the limiting factor with a 20% efficiency buffer
-  return Math.floor(Math.min(moldConstrainedCapacity, employeeConstrainedCapacity) * 0.8);
+  // For now, use employee capacity as the limiting factor
+  // Molds are generally not the constraint in layup operations
+  return Math.floor(totalEmployeeDailyCapacity);
 }
 
 /**

@@ -168,14 +168,11 @@ export class LayupSchedulerService {
 
     // Adjust based on order type
     switch (order.orderType) {
-      case 'mesa_universal':
-        baseHours = 6; // Mesa Universal typically takes longer
-        break;
       case 'production_order':
-        baseHours = 5;
+        baseHours = 5; // All production orders (including Mesa Universal and PO orders)
         break;
-      case 'po_order':
-        baseHours = 4.5;
+      case 'needs_information':
+        baseHours = 0; // Cannot schedule orders that need more information
         break;
       default:
         baseHours = 4;

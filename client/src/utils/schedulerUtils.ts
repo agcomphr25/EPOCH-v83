@@ -63,12 +63,8 @@ export function generateLayupSchedule(
 
   // 2. Enhanced sorting for Mesa Universal priority scheduling
   const sortedOrders = [...orders].sort((a, b) => {
-    // Priority 1: Mesa Universal orders (highest priority)
-    const aMesaUniversal = (a.stockModelId === 'mesa_universal' || a.product === 'Mesa - Universal');
-    const bMesaUniversal = (b.stockModelId === 'mesa_universal' || b.product === 'Mesa - Universal');
-
-    if (aMesaUniversal && !bMesaUniversal) return -1; // Mesa Universal first
-    if (!aMesaUniversal && bMesaUniversal) return 1;  // Mesa Universal first
+    // REMOVED: Mesa Universal no longer gets special priority - it's just another PO order
+    // All orders are now prioritized equally by due date and priority score
 
     // Priority 2: Production orders have priority scores 20-35 (urgent), regular orders 50+
     const aPriority = a.priorityScore || 99; // Default to lowest priority if not set

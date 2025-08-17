@@ -45,6 +45,15 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **IMPROVED**: Maintainability for complex rules between regular orders and PO orders
 ✅ **VERIFIED**: Simplified debugging and testing with modular architecture
 
+**Priority System Correction (2025-08-17):**
+✅ **CORRECTED**: Mesa Universal orders are PO orders, not highest priority
+✅ **UNIFIED**: Regular orders and PO orders (including Mesa Universal) have same base priority (50)
+✅ **REMOVED**: Incorrect 1-4 scoring system that misclassified order types
+✅ **IMPLEMENTED**: Two-tier system: production_order (50) vs needs_information (99)
+✅ **ENHANCED**: Urgency bonus system (-10 to +5) based on due date proximity
+✅ **ELIMINATED**: Automatic fallback to FG Alpine Hunter for unclear orders
+✅ **CREATED**: Queue system for orders needing more information instead of auto-assignment
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 

@@ -113,11 +113,10 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
         product = 'CF Alpine Hunter';
         console.log(`🎯 PAINT INFERENCE: ${features.paint_options} → CF Alpine Hunter`);
       }
-      // Otherwise default to FG
+      // REMOVED: No automatic defaults - let orders with unclear stock models be flagged
       else {
-        stockModelId = 'fg_alpine_hunter';
-        product = 'FG Alpine Hunter';
-        console.log(`🎯 DEFAULT INFERENCE: → FG Alpine Hunter`);
+        // Don't assign a default - leave it to be handled as 'needs_information'
+        console.log(`❓ UNCLEAR STOCK MODEL: ${order.orderId || order.order_id} → No clear inference possible`);
       }
     }
   }
@@ -141,10 +140,12 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
     console.log(`🔧 FIXED: Setting stockModelId from product: "${product}" → "${stockModelId}"`);
   }
   
-  // Final fallback
+  // REMOVED: No automatic fallback - orders need proper classification
+  // If no clear stock model can be determined, mark as needs information
   if (!stockModelId || stockModelId === 'UNPROCESSED') {
-    stockModelId = 'fg_alpine_hunter';
-    product = 'FG Alpine Hunter';
+    console.log(`❓ NEEDS INFORMATION: ${order.orderId || order.order_id} → No clear stock model identified`);
+    stockModelId = 'needs_information';
+    product = 'Needs Information';
   }
   
   return { stockModelId, product };

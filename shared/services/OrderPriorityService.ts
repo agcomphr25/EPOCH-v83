@@ -3,15 +3,13 @@ import { Order } from '../schema';
 export interface PriorityOrder extends Order {
   priorityScore: number;
   priorityReason: string;
-  orderType: 'mesa_universal' | 'production_order' | 'regular_order' | 'po_order';
+  orderType: 'production_order' | 'needs_information';
   urgencyLevel: 'critical' | 'high' | 'medium' | 'low';
 }
 
 export interface PriorityRules {
-  mesaUniversalBase: number;
   productionOrderBase: number;
-  regularOrderBase: number;
-  poOrderBase: number;
+  needsInformationBase: number;
   urgencyBonus: {
     critical: number;
     high: number;
@@ -26,10 +24,8 @@ export class OrderPriorityService {
 
   constructor(rules?: Partial<PriorityRules>) {
     this.rules = {
-      mesaUniversalBase: 10,
-      productionOrderBase: 20,
-      regularOrderBase: 50,
-      poOrderBase: 30,
+      productionOrderBase: 50, // Regular orders and PO orders (including Mesa Universal) are same priority
+      needsInformationBase: 99, // Orders lacking required info go to end of queue
       urgencyBonus: {
         critical: -10,
         high: -5,
@@ -45,23 +41,17 @@ export class OrderPriorityService {
    * Determines the order type based on order properties
    */
   private determineOrderType(order: Order): PriorityOrder['orderType'] {
-    // Mesa Universal orders (highest priority)
-    if (order.stockModelId?.toLowerCase().includes('mesa universal')) {
-      return 'mesa_universal';
+    // Check if order has sufficient information to be scheduled
+    if (!order.stockModelId || 
+        order.stockModelId.toLowerCase() === 'none' ||
+        order.stockModelId.toLowerCase() === 'unprocessed' ||
+        order.stockModelId.toLowerCase() === 'universal') {
+      return 'needs_information';
     }
 
-    // Production orders (from manufacturing pipeline)
-    if (order.currentDepartment === 'Production' || order.poId) {
-      return 'production_order';
-    }
-
-    // PO orders (purchase orders)
-    if (order.poId || order.orderId?.startsWith('PO-')) {
-      return 'po_order';
-    }
-
-    // Regular orders
-    return 'regular_order';
+    // All orders with valid stock models are production orders
+    // This includes: regular orders, PO orders, Mesa Universal orders
+    return 'production_order';
   }
 
   /**
@@ -89,17 +79,14 @@ export class OrderPriorityService {
 
     // Base score by order type
     switch (orderType) {
-      case 'mesa_universal':
-        baseScore = this.rules.mesaUniversalBase;
-        break;
       case 'production_order':
         baseScore = this.rules.productionOrderBase;
         break;
-      case 'po_order':
-        baseScore = this.rules.poOrderBase;
+      case 'needs_information':
+        baseScore = this.rules.needsInformationBase;
         break;
-      case 'regular_order':
-        baseScore = this.rules.regularOrderBase;
+      default:
+        baseScore = this.rules.productionOrderBase;
         break;
     }
 
@@ -123,10 +110,8 @@ export class OrderPriorityService {
    */
   private generatePriorityReason(orderType: PriorityOrder['orderType'], urgencyLevel: PriorityOrder['urgencyLevel']): string {
     const typeReasons = {
-      mesa_universal: 'Mesa Universal (highest priority)',
-      production_order: 'Production order',
-      po_order: 'Purchase order',
-      regular_order: 'Regular order',
+      production_order: 'Production order (ready for scheduling)',
+      needs_information: 'Needs more information to schedule',
     };
 
     const urgencyReasons = {

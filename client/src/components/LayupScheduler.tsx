@@ -130,10 +130,15 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         bg: 'bg-orange-800 dark:bg-orange-900/80 hover:bg-orange-900 dark:hover:bg-orange-950/90 border-2 border-orange-900 dark:border-orange-950',
         text: 'text-white dark:text-orange-100'
       };
-    } else {
+    } else if (materialType === 'CF') {
       return {
         bg: 'bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
         text: 'text-orange-800 dark:text-orange-200'
+      };
+    } else {
+      return {
+        bg: 'bg-gray-100 dark:bg-gray-800/50 hover:bg-gray-200 dark:hover:bg-gray-800/70 border-2 border-gray-300 dark:border-gray-600',
+        text: 'text-gray-800 dark:text-gray-200'
       };
     }
   };

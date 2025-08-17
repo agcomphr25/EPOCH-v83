@@ -5,9 +5,9 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   let stockModelId = order.stockModelId || order.modelId;
   let product = 'Unknown Product';
   
-  // CRITICAL: Check for Mesa Precision Summit FIRST, before any other logic
-  // This overrides any existing stockModelId because Mesa orders must go to Mesa molds
-  if (order.features && typeof order.features === 'object') {
+  // FIXED: Only check for Mesa Precision Summit if no valid model ID exists
+  // Don't override existing valid model IDs like 'privateer-tikka'
+  if (!stockModelId && order.features && typeof order.features === 'object') {
     const features = order.features;
     
     // Check action_inlet for Mesa Precision Summit
@@ -26,9 +26,10 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
     }
   }
   
-  // First try the direct stockModelId field
-  if (stockModelId) {
+  // PRIORITY: Respect existing valid stockModelId field first
+  if (stockModelId && stockModelId !== 'universal' && stockModelId !== 'UNPROCESSED') {
     product = stockModelId;
+    console.log(`✅ EXISTING MODEL ID: ${order.orderId || order.order_id} → ${stockModelId} (preserved)`);
     return { stockModelId, product };
   }
   

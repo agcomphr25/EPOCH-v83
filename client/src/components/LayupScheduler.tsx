@@ -2550,17 +2550,28 @@ export default function LayupScheduler() {
       return;
     }
 
-    // Simple move - just update the assignment to the new position
+    // PRESERVE ORIGINAL MOLD - only change the date when dragging between cells
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    console.log(`🎯 Moving order ${orderId} to ${targetMoldId} on ${targetDate.toDateString()} (${dayNames[targetDayOfWeek]})`);
-
-    // Update assignment to new position
+    
     // Apply key normalization to ensure we use Order ID, not FB Order Number
     const normalizedOrderId = normalizeOrderKey(orderId);
     
+    // Get the current assignment to preserve the original mold
+    const currentAssignment = orderAssignments[normalizedOrderId];
+    const originalMoldId = currentAssignment?.moldId;
+    
+    if (!originalMoldId) {
+      console.warn(`❌ No original mold assignment found for order ${orderId}`);
+      return;
+    }
+    
+    console.log(`🎯 Moving order ${orderId} from ${originalMoldId} to same mold on ${targetDate.toDateString()} (${dayNames[targetDayOfWeek]})`);
+    console.log(`   PRESERVING original mold: ${originalMoldId} (not changing to ${targetMoldId})`);
+
+    // Update assignment - PRESERVE original mold, only change date
     const newAssignments = {
       ...orderAssignments,
-      [normalizedOrderId]: { moldId: targetMoldId, date: dateIso }
+      [normalizedOrderId]: { moldId: originalMoldId, date: dateIso }
     };
     
     // Apply work day validation to ensure consistency
@@ -2572,7 +2583,7 @@ export default function LayupScheduler() {
     // Show success toast
     toast({
       title: "Order Moved",
-      description: `Order ${orderId} moved to ${targetMoldId} on ${new Date(dateIso).toLocaleDateString()}`,
+      description: `Order ${orderId} moved to ${new Date(dateIso).toLocaleDateString()} (mold preserved: ${originalMoldId})`,
     });
   };
 

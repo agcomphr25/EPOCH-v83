@@ -3811,15 +3811,8 @@ export default function LayupScheduler() {
                     return activeMolds.map(mold => (
                       <React.Fragment key={mold.moldId}>
                         {(() => {
-                          // Only show dates that have orders assigned to this mold
-                          const datesWithOrders = dates.filter(date => {
-                            const dateStr = date.toISOString().split('T')[0];
-                            return Object.values(orderAssignments).some(assignment => 
-                              assignment.moldId === mold.moldId && assignment.date.split('T')[0] === dateStr
-                            );
-                          });
-                          
-                          return datesWithOrders.map(date => {
+                          // Show ALL dates for this mold to ensure complete grid structure
+                          return dates.map(date => {
                             const dateString = date.toISOString();
 
                             // Get orders assigned to this mold/date combination

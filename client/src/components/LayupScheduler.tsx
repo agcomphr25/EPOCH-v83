@@ -2419,12 +2419,23 @@ export default function LayupScheduler() {
     if (viewType === 'day') {
       calculatedDates = [currentDate];
     } else if (viewType === 'week') {
-      // FIXED: Show only selected work days instead of hardcoded Mon-Fri
+      // Show selected work days + Friday for manual drops (even if Friday not in work days)
       const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
       const allWeekDays = eachDayOfInterval({ start, end: addDays(start, 6) }); // 7 days
-      // Filter to only show selected work days (typically Mon-Thu)
-      calculatedDates = allWeekDays.filter(date => selectedWorkDays.includes(date.getDay()));
-      console.log(`📅 WEEK VIEW: Showing only selected work days [${selectedWorkDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
+      
+      // Include selected work days
+      let datesSet = new Set(allWeekDays.filter(date => selectedWorkDays.includes(date.getDay())));
+      
+      // Always add Friday for manual drops (day 5), even if not in selectedWorkDays
+      const friday = allWeekDays.find(date => date.getDay() === 5);
+      if (friday) {
+        datesSet.add(friday);
+      }
+      
+      // Convert back to array and sort by day of week
+      calculatedDates = Array.from(datesSet).sort((a, b) => a.getDay() - b.getDay());
+      
+      console.log(`📅 WEEK VIEW: Showing work days + Friday for manual drops [${calculatedDates.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]).join(', ')}]`);
     } else {
       // month - show only selected work days
       const start = startOfMonth(currentDate);
@@ -2549,7 +2560,10 @@ export default function LayupScheduler() {
       isAllowed: allowedWorkDays.includes(targetDayOfWeek)
     });
 
-    if (!allowedWorkDays.includes(targetDayOfWeek)) {
+    // Allow Friday drops for manual scheduling even if not in work days
+    const isFridayManualDrop = targetDayOfWeek === 5;
+    
+    if (!allowedWorkDays.includes(targetDayOfWeek) && !isFridayManualDrop) {
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const targetDayName = dayNames[targetDayOfWeek];
       const allowedDayNames = allowedWorkDays.map(day => dayNames[day]).join(', ');
@@ -2557,9 +2571,14 @@ export default function LayupScheduler() {
       console.error(`❌ WORK DAY VIOLATION: Cannot manually schedule ${orderId} on ${targetDayName} ${targetDate.toDateString()}`);
       console.error(`   Allowed work days: ${allowedDayNames} (${allowedWorkDays.join(', ')})`);
       
-      alert(`❌ Cannot schedule orders on ${targetDayName}!\n\nAllowed work days: ${allowedDayNames}`);
+      alert(`❌ Cannot schedule orders on ${targetDayName}!\n\nAllowed work days: ${allowedDayNames} or Friday for manual drops`);
       
       return;
+    }
+    
+    // Show warning for Friday drops but allow them
+    if (isFridayManualDrop && !allowedWorkDays.includes(5)) {
+      console.log(`🔔 Manual Friday drop: ${orderId} scheduled on Friday ${targetDate.toDateString()}`);
     }
 
     // PRESERVE ORIGINAL MOLD - only change the date when dragging between cells
@@ -3849,10 +3868,10 @@ export default function LayupScheduler() {
                                   }
                                 }
                                 
-                                // FRIDAY PROTECTION: Prevent ANY Friday matches for all orders
+                                // FRIDAY HANDLING: Show Friday assignments for manual drops
                                 if (cellDate.getDay() === 5) {
-                                  console.warn(`🚨 FRIDAY PROTECTION: Blocking ${orderId} from Friday column`);
-                                  return false; // Force no match on Friday for any order
+                                  console.log(`📅 Friday assignment found: ${orderId} on ${cellDate.toDateString()}`);
+                                  // Allow Friday assignments to be shown
                                 }
                                 
                                 // DEBUG: Specific check for AI141 and AG822 (AI266)

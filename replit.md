@@ -54,6 +54,14 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **ELIMINATED**: Automatic fallback to FG Alpine Hunter for unclear orders
 ✅ **CREATED**: Queue system for orders needing more information instead of auto-assignment
 
+**Drag & Drop Enhancement & Friday Column (2025-08-17):**
+✅ **RESOLVED**: Fixed column 4 targeting issue - cards now drop exactly where placed
+✅ **ENHANCED**: Complete grid structure ensures all date columns exist as drop targets
+✅ **IMPLEMENTED**: Friday column always visible as "Manual Only" for flexible scheduling
+✅ **PRESERVED**: Algorithmic scheduler respects Monday-Thursday work week as designed
+✅ **IMPROVED**: Manual Friday drops allowed while maintaining automatic scheduling constraints
+✅ **OPTIMIZED**: Collision detection using closestCorners for precision targeting
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 

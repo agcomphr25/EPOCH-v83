@@ -16,6 +16,8 @@ import {
   useSensors,
   useDroppable,
   useDraggable,
+  closestCenter,
+  closestCorners,
 } from '@dnd-kit/core';
 // SortableContext removed - using basic drag and drop instead
 import { CSS } from '@dnd-kit/utilities';
@@ -2507,12 +2509,22 @@ export default function LayupScheduler() {
     const { active, over } = event;
     setActiveId(null);
 
-    if (!over) return;
+    if (!over) {
+      console.log('❌ No drop target detected');
+      return;
+    }
 
     const orderId = active.id as string;
     const dropTargetId = over.id as string;
 
-    console.log('🎯 DRAG END DEBUG:', { orderId, dropTargetId, over: over.id });
+    console.log('🎯 DRAG END DEBUG:', { 
+      orderId, 
+      dropTargetId, 
+      activeId: active.id,
+      overId: over.id,
+      overData: over.data.current,
+      activeData: active.data.current 
+    });
 
     // Parse the drop target ID (format: moldId|dateISO)
     const [targetMoldId, dateIso] = dropTargetId.split('|');
@@ -3655,6 +3667,7 @@ export default function LayupScheduler() {
           sensors={sensors} 
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          collisionDetection={closestCorners}
         >
           <div className="px-6 pb-6">
             {viewType === 'week' || viewType === 'day' ? (

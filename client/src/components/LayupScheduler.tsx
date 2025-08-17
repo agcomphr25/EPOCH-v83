@@ -514,41 +514,53 @@ function DroppableCell({
 
   const dayOfWeek = date.getDay();
   const isNonWorkDay = !selectedWorkDays.includes(dayOfWeek);
+  const isFriday = dayOfWeek === 5;
+  const isWorkDay = selectedWorkDays.includes(dayOfWeek);
+  const hasOrders = orders.length > 0;
+  
+  // Hide empty cells on work week columns (Mon-Thu), but always show Friday for manual drops
+  const shouldHideEmptyCell = !hasOrders && !isFriday && isWorkDay;
 
   return (
     <div 
       ref={setNodeRef}
       className={`${cellHeight} border p-1 transition-all duration-200 ${
-        isOver 
-          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-          : isNonWorkDay 
-            ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10 opacity-75' 
-            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+        shouldHideEmptyCell 
+          ? 'border-transparent bg-transparent opacity-0 pointer-events-none' 
+          : isOver 
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+            : isNonWorkDay 
+              ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10 opacity-75' 
+              : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
       }`}
     >
-      {orders.length > 0 && (
-        <div className="text-xs text-gray-500 mb-1">
-          {orders.length} order(s)
-        </div>
-      )}
-      {orders.map((order, idx) => {
-        return (
-          <DraggableOrderItem
-            key={order?.orderId || `order-${idx}`}
-            order={order}
-            priority={order?.priorityScore || 0}
-            totalOrdersInCell={orders.length}
-            moldInfo={moldInfo}
-            getModelDisplayName={getModelDisplayName}
-            features={features}
-            processedOrders={processedOrders}
-          />
-        );
-      })}
-      {orders.length === 0 && (
-        <div className="text-xs text-gray-400 text-center py-2 opacity-50">
-          {isNonWorkDay ? 'Non-work day' : 'Available'}
-        </div>
+      {!shouldHideEmptyCell && (
+        <>
+          {orders.length > 0 && (
+            <div className="text-xs text-gray-500 mb-1">
+              {orders.length} order(s)
+            </div>
+          )}
+          {orders.map((order, idx) => {
+            return (
+              <DraggableOrderItem
+                key={order?.orderId || `order-${idx}`}
+                order={order}
+                priority={order?.priorityScore || 0}
+                totalOrdersInCell={orders.length}
+                moldInfo={moldInfo}
+                getModelDisplayName={getModelDisplayName}
+                features={features}
+                processedOrders={processedOrders}
+              />
+            );
+          })}
+          {orders.length === 0 && (
+            <div className="text-xs text-gray-400 text-center py-2 opacity-50">
+              {isNonWorkDay ? 'Non-work day' : 'Available'}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -3965,15 +3977,6 @@ export default function LayupScheduler() {
                               .filter(order => order !== undefined) as any[];
 
                             const dropId = `${mold.moldId}|${dateString}`;
-                            const dayOfWeek = date.getDay();
-                            const isFriday = dayOfWeek === 5;
-                            const isWorkDay = selectedWorkDays.includes(dayOfWeek);
-                            const hasOrders = cellOrders.length > 0;
-
-                            // Hide empty cells on work week columns (Mon-Thu), but always show Friday for manual drops
-                            if (!hasOrders && !isFriday && isWorkDay) {
-                              return null;
-                            }
 
                             return (
                               <DroppableCell

@@ -681,21 +681,34 @@ export default function LayupScheduler() {
     select: (data) => {
       if (!data || !Array.isArray(data)) return data;
 
+      console.log(`🔍 RAW SCHEDULE DATA FROM DATABASE: ${data.length} total entries`);
+      
+      // Debug: Show first few entries with detailed date parsing
+      data.slice(0, 5).forEach((assignment, index) => {
+        const date = new Date(assignment.scheduledDate);
+        const dayOfWeek = date.getDay();
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+        console.log(`  Entry ${index}: ${assignment.orderId} → ${assignment.scheduledDate} → ${date.toDateString()} (${dayName}, day ${dayOfWeek})`);
+      });
+
       // Filter out assignments for days not in selectedWorkDays
       const filteredData = data.filter(assignment => {
         const date = new Date(assignment.scheduledDate);
         const dayOfWeek = date.getDay();
         const isWorkDay = selectedWorkDays.includes(dayOfWeek);
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+        
         if (!isWorkDay) {
-          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
           console.log(`🗑️ DATABASE FILTER: Removing ${dayName} assignment - ${assignment.orderId} on ${date.toDateString()}`);
+        } else {
+          console.log(`✅ DATABASE FILTER: Keeping ${dayName} assignment - ${assignment.orderId} on ${date.toDateString()}`);
         }
+        
         return isWorkDay;
       });
 
-      if (filteredData.length !== data.length) {
-        console.log(`📋 Database filter: Removed ${data.length - filteredData.length} Friday assignments from database, kept ${filteredData.length} Monday-Thursday assignments`);
-      }
+      console.log(`📋 Database filter: Removed ${data.length - filteredData.length} non-work-day assignments, kept ${filteredData.length} work-day assignments`);
+      console.log(`📋 Selected work days: ${selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`);
 
       return filteredData;
     }
@@ -704,28 +717,39 @@ export default function LayupScheduler() {
   // Update local assignments when schedule data loads
   useEffect(() => {
     if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
-      console.log('🔍 DEBUG: Loading existing schedule from database:', existingSchedule.length, 'entries');
+      console.log('🔍 ASSIGNMENT LOADING DEBUG: Loading existing schedule from database:', existingSchedule.length, 'entries');
 
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
+      let mondayCount = 0;
+      let tuesdayCount = 0;
+      let wednesdayCount = 0;
+      let thursdayCount = 0;
+      let fridayCount = 0;
+      let skippedCount = 0;
+
       (existingSchedule as any[]).forEach((entry: any) => {
         const schedDate = new Date(entry.scheduledDate);
         const dayOfWeek = schedDate.getDay();
         const dateStr = entry.scheduledDate;
+        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+
+        // Count by day
+        if (dayOfWeek === 1) mondayCount++;
+        else if (dayOfWeek === 2) tuesdayCount++;
+        else if (dayOfWeek === 3) wednesdayCount++;
+        else if (dayOfWeek === 4) thursdayCount++;
+        else if (dayOfWeek === 5) fridayCount++;
 
         // MESA DEBUG: Extra logging for Mesa orders
         const isMesaOrder = entry.moldId && entry.moldId.includes('Mesa');
-        if (isMesaOrder) {
-          console.log(`🏔️ MESA ORDER LOADING: ${entry.orderId} → ${entry.moldId}`);
-          console.log(`   Raw date: ${entry.scheduledDate}`);
-          console.log(`   Parsed date: ${schedDate.toDateString()} (day ${dayOfWeek})`);
-        } else {
-          console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
+        if (isMesaOrder || dayOfWeek === 1) { // Log Monday and Mesa orders
+          console.log(`📅 ${dayName} ORDER: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
         }
 
         // Skip assignments for days not in selectedWorkDays
         if (!selectedWorkDays.includes(dayOfWeek)) {
-          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-          console.log(`🗑️ Skipping ${dayName} assignment for ${entry.orderId} on ${schedDate.toDateString()} (${dayName} not in work days)`);
+          console.log(`🗑️ SKIPPING ${dayName}: ${entry.orderId} (day ${dayOfWeek} not in selectedWorkDays ${selectedWorkDays})`);
+          skippedCount++;
           return;
         }
 
@@ -733,41 +757,33 @@ export default function LayupScheduler() {
           moldId: entry.moldId,
           date: entry.scheduledDate
         };
-
-        // MESA DEBUG: Confirm Mesa order was added to assignments
-        if (entry.moldId && entry.moldId.includes('Mesa')) {
-          console.log(`✅ MESA ORDER ADDED TO ASSIGNMENTS: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
-        }
       });
 
-      console.log('📦 Total assignments loaded:', Object.keys(assignments).length);
+      console.log('📊 ASSIGNMENT LOADING SUMMARY:');
+      console.log(`   Monday: ${mondayCount} total in DB`);
+      console.log(`   Tuesday: ${tuesdayCount} total in DB`);
+      console.log(`   Wednesday: ${wednesdayCount} total in DB`);
+      console.log(`   Thursday: ${thursdayCount} total in DB`);
+      console.log(`   Friday: ${fridayCount} total in DB`);
+      console.log(`   Skipped: ${skippedCount} (not in selectedWorkDays)`);
+      console.log(`   Final assignments loaded: ${Object.keys(assignments).length}`);
+      console.log(`   Selected work days: ${selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`);
 
-      // COUNT Mesa orders specifically
-      const mesaAssignments = Object.entries(assignments).filter(([_, assignment]) => assignment.moldId.includes('Mesa'));
-      console.log(`🏔️ MESA ASSIGNMENTS LOADED: ${mesaAssignments.length} Mesa orders in assignments`);
-      mesaAssignments.slice(0, 5).forEach(([orderId, assignment]) => {
-        console.log(`   🏔️ ${orderId} → ${assignment.moldId} on ${assignment.date}`);
-      });
-
-      // DEBUG: Show what's actually in orderAssignments
-      console.log('🔍 DEBUGGING orderAssignments contents (first 10):');
-      Object.entries(assignments).slice(0, 10).forEach(([orderId, assignment]) => {
+      // COUNT Monday assignments specifically
+      const mondayAssignments = Object.entries(assignments).filter(([_, assignment]) => {
         const assignmentDate = new Date(assignment.date);
-        const dayOfWeek = assignmentDate.getDay();
-        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-        const isMesa = assignment.moldId.includes('Mesa') ? '🏔️ MESA' : '📅';
-        console.log(`   ${isMesa} ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
-
-        if (dayOfWeek === 5) {
-          const errorMsg = `❌ FRIDAY FROM DATABASE: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`;
-          console.error(errorMsg);
-          setDebugInfo(prev => [...prev, errorMsg]);
-        }
+        return assignmentDate.getDay() === 1;
+      });
+      console.log(`🔍 MONDAY ASSIGNMENTS IN FINAL STATE: ${mondayAssignments.length} Monday orders`);
+      mondayAssignments.slice(0, 10).forEach(([orderId, assignment]) => {
+        console.log(`   📅 ${orderId} → ${assignment.moldId} on ${new Date(assignment.date).toDateString()}`);
       });
 
       setOrderAssignments(assignments);
+    } else {
+      console.log('🔍 ASSIGNMENT LOADING DEBUG: No schedule data to load');
     }
-  }, [existingSchedule]);
+  }, [existingSchedule, selectedWorkDays]);
 
   // Save functionality
   const [isSaving, setIsSaving] = useState(false);

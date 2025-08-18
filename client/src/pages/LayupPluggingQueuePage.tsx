@@ -258,9 +258,31 @@ export default function LayupPluggingQueuePage() {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, 1 = next week, -1 = previous week
   const queryClient = useQueryClient();
   
+  // Calculate week info first  
+  const weekInfo = useMemo(() => {
+    const today = new Date();
+    const baseStart = startOfWeek(today, { weekStartsOn: 1 });
+    const weekStart = addDays(baseStart, currentWeekOffset * 7);
+    const weekEnd = addDays(weekStart, 4);
+    
+    const getWeekLabel = () => {
+      if (currentWeekOffset === 0) return 'Current Week';
+      if (currentWeekOffset === 1) return 'Next Week';
+      if (currentWeekOffset === -1) return 'Previous Week';
+      return `${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset} weeks`;
+    };
+
+    return {
+      label: getWeekLabel(),
+      start: weekStart,
+      end: weekEnd,
+      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`
+    };
+  }, [currentWeekOffset]);
+  
   // Get layup schedule assignments filtered by selected week
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
-    queryKey: ['layup-schedule', currentWeekOffset, weekInfo.start.toISOString(), weekInfo.end.toISOString()],
+    queryKey: ['layup-schedule', currentWeekOffset],
     queryFn: async () => {
       const response = await fetch(`/api/layup-schedule?weekStart=${weekInfo.start.toISOString()}&weekEnd=${weekInfo.end.toISOString()}`);
       if (!response.ok) {
@@ -323,27 +345,7 @@ export default function LayupPluggingQueuePage() {
     return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
   }, [currentWeekOffset]);
 
-  // Calculate week display info
-  const weekInfo = useMemo(() => {
-    const today = new Date();
-    const baseStart = startOfWeek(today, { weekStartsOn: 1 });
-    const weekStart = addDays(baseStart, currentWeekOffset * 7);
-    const weekEnd = addDays(weekStart, 4);
-    
-    const getWeekLabel = () => {
-      if (currentWeekOffset === 0) return 'Current Week';
-      if (currentWeekOffset === 1) return 'Next Week';
-      if (currentWeekOffset === -1) return 'Previous Week';
-      return `${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset} weeks`;
-    };
 
-    return {
-      label: getWeekLabel(),
-      start: weekStart,
-      end: weekEnd,
-      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`
-    };
-  }, [currentWeekOffset]);
 
   // Display orders exactly as scheduled in the layup scheduler
   const currentWeekOrdersByDate = useMemo(() => {

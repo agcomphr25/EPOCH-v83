@@ -43,6 +43,9 @@ router.post('/save', async (req: Request, res: Response) => {
           continue;
         }
 
+        // Convert scheduledDate to Date object if it's a string
+        const processedScheduledDate = typeof scheduledDate === 'string' ? new Date(scheduledDate) : scheduledDate;
+
         // Insert schedule entry
         await pool.query(`
           INSERT INTO layup_schedule (
@@ -51,7 +54,7 @@ router.post('/save', async (req: Request, res: Response) => {
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
           orderId,
-          scheduledDate,
+          processedScheduledDate,
           moldId || 'auto',
           JSON.stringify(employeeAssignments || []),
           true, // This is a manual schedule save
@@ -82,7 +85,7 @@ router.post('/save', async (req: Request, res: Response) => {
             END,
             updated_at = $1
           WHERE order_id = $3 OR orderId = $3
-        `, [new Date().toISOString(), scheduledDate, orderId]);
+        `, [new Date().toISOString(), processedScheduledDate.toISOString(), orderId]);
 
         if (progressResult.rowCount && progressResult.rowCount > 0) {
           progressedCount++;

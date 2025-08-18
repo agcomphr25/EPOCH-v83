@@ -266,7 +266,14 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('🔧 LAYUP SCHEDULE CREATE CALLED', req.body);
       const { storage } = await import('../../storage');
-      const result = await storage.createLayupSchedule(req.body);
+      
+      // Convert scheduledDate string to Date object if needed
+      const data = { ...req.body };
+      if (data.scheduledDate && typeof data.scheduledDate === 'string') {
+        data.scheduledDate = new Date(data.scheduledDate);
+      }
+      
+      const result = await storage.createLayupSchedule(data);
       console.log('🔧 Created layup schedule entry:', result);
       res.json(result);
     } catch (error) {

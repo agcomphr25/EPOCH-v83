@@ -62,8 +62,8 @@ export default function AllOrdersList() {
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status', 'v2'], // Cache busting
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
-    refetchInterval: 5000, // Refresh every 5 seconds for faster updates
-    staleTime: 1000 // Data becomes stale after 1 second
+    refetchInterval: 1000, // Refresh every 1 second for immediate updates
+    staleTime: 500 // Data becomes stale after 0.5 seconds
   });
 
 

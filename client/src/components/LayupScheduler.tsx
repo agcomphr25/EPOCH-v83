@@ -2129,8 +2129,14 @@ export default function LayupScheduler() {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
             }
 
-            // Sort dates and create daily sections
-            const sortedDates = Array.from(assignmentMap.keys()).sort();
+            // Sort dates and filter to only include Monday-Friday (days 1-5)
+            const sortedDates = Array.from(assignmentMap.keys())
+              .sort()
+              .filter(dateStr => {
+                const date = new Date(dateStr);
+                const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+                return dayOfWeek >= 1 && dayOfWeek <= 5; // Only Monday through Friday
+              });
             
             return sortedDates.map(dateStr => {
               const date = new Date(dateStr);

@@ -2117,11 +2117,54 @@ export default function LayupScheduler() {
                 return '<tr><th colspan="2">No Orders Scheduled</th></tr>';
               }
 
-              // Create header row
+              // Get molds that have orders assigned and build mold-date-orders map
+              const moldDateOrdersMap = new Map();
+              
+              activeMolds.forEach(mold => {
+                datesWithOrders.forEach(date => {
+                  const dateString = date.toISOString();
+                  const cellDateOnly = dateString.split('T')[0];
+                  
+                  const cellOrders = Object.entries(orderAssignments)
+                    .filter(([orderId, assignment]) => {
+                      const assignmentDateOnly = assignment.date.split('T')[0];
+                      return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                    })
+                    .map(([orderId]) => orders.find(o => o.orderId === orderId))
+                    .filter(order => order !== undefined);
+
+                  if (cellOrders.length > 0) {
+                    const key = `${mold.moldId}-${cellDateOnly}`;
+                    moldDateOrdersMap.set(key, { mold, date, orders: cellOrders });
+                  }
+                });
+              });
+
+              // Get only molds that have at least one order
+              const moldsWithOrders = activeMolds.filter(mold => {
+                return datesWithOrders.some(date => {
+                  const dateString = date.toISOString();
+                  const cellDateOnly = dateString.split('T')[0];
+                  const key = `${mold.moldId}-${cellDateOnly}`;
+                  return moldDateOrdersMap.has(key);
+                });
+              });
+
+              // Get only dates that have at least one order for molds with orders
+              const activeDates = datesWithOrders.filter(date => {
+                const dateString = date.toISOString();
+                const cellDateOnly = dateString.split('T')[0];
+                return moldsWithOrders.some(mold => {
+                  const key = `${mold.moldId}-${cellDateOnly}`;
+                  return moldDateOrdersMap.has(key);
+                });
+              });
+
+              // Create header row with only active dates
               const headerRow = `
                 <tr>
                   <th class="mold-header">Mold</th>
-                  ${datesWithOrders.map(date => {
+                  ${activeDates.map(date => {
                     const isFriday = date.getDay() === 5;
                     return `
                       <th class="${isFriday ? 'friday' : ''}">
@@ -2134,41 +2177,25 @@ export default function LayupScheduler() {
                 </tr>
               `;
 
-              // Create mold rows - only for molds that have orders
-              const moldRows = activeMolds.filter(mold => {
-                // Check if this mold has any orders
-                return datesWithOrders.some(date => {
-                  const dateString = date.toISOString();
-                  const cellDateOnly = dateString.split('T')[0];
-                  
-                  return Object.entries(orderAssignments).some(([orderId, assignment]) => {
-                    const assignmentDateOnly = assignment.date.split('T')[0];
-                    return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                  });
-                });
-              }).map(mold => {
+              // Create mold rows - only for molds with orders, only showing active dates
+              const moldRows = moldsWithOrders.map(mold => {
                 return `
                   <tr>
                     <td class="mold-header">
                       ${mold.moldId}<br><small>#${mold.instanceNumber}</small>
                     </td>
-                    ${datesWithOrders.map(date => {
+                    ${activeDates.map(date => {
                       const dateString = date.toISOString();
                       const cellDateOnly = dateString.split('T')[0];
                       const isFriday = date.getDay() === 5;
+                      const key = `${mold.moldId}-${cellDateOnly}`;
+                      const cellData = moldDateOrdersMap.get(key);
 
-                      const cellOrders = Object.entries(orderAssignments)
-                        .filter(([orderId, assignment]) => {
-                          const assignmentDateOnly = assignment.date.split('T')[0];
-                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
-                        })
-                        .map(([orderId]) => orders.find(o => o.orderId === orderId))
-                        .filter(order => order !== undefined);
-
-                      if (cellOrders.length === 0) {
-                        return '<td class="cell"></td>';
+                      if (!cellData) {
+                        return '<td class="cell"></td>'; // Empty cell for this mold-date combo
                       }
 
+                      const cellOrders = cellData.orders;
                       return `
                         <td class="cell ${isFriday ? 'friday' : ''}">
                           <div class="order-count">${cellOrders.length} order(s)</div>

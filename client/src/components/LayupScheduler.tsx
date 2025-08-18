@@ -1310,19 +1310,11 @@ export default function LayupScheduler() {
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
-      // Get the stock model ID from the order
-      let modelId = order.stockModelId || order.modelId;
-      
-      // If no modelId found, try intelligent detection based on features/product
-      if (!modelId && order.features) {
-        // Try to detect stock model from features
-        if (order.product?.includes('Mesa') || order.features['mesa_universal']) {
-          modelId = 'mesa_universal';
-        }
-      }
+      // Use the intelligent stock model detection function defined above
+      let modelId = getOrderStockModelId(order);
 
-      if (!modelId) {
-        console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
+      if (!modelId || modelId === 'unknown') {
+        console.log('⚠️ Order has no valid modelId:', order.orderId, 'Source:', order.source, 'Detected model:', modelId);
         return [];
       }
 

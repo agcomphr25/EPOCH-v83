@@ -250,12 +250,22 @@ export function registerRoutes(app: Express): Server {
     return 50; // Further out
   }
 
-  // Layup Schedule API endpoints - missing route handler
+  // Layup Schedule API endpoints - with date filtering support
   app.get('/api/layup-schedule', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const scheduleData = await storage.getAllLayupSchedule();
-      res.json(scheduleData);
+      const { weekStart, weekEnd } = req.query;
+      
+      // If date range provided, filter by dates
+      if (weekStart && weekEnd) {
+        console.log(`📅 Filtering layup schedule by date range: ${weekStart} to ${weekEnd}`);
+        const scheduleData = await storage.getLayupScheduleByDateRange(weekStart as string, weekEnd as string);
+        res.json(scheduleData);
+      } else {
+        // Default: return all schedule data
+        const scheduleData = await storage.getAllLayupSchedule();
+        res.json(scheduleData);
+      }
     } catch (error) {
       console.error('❌ Layup schedule fetch error:', error);
       res.status(500).json({ error: "Failed to fetch layup schedule" });

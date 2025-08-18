@@ -255,13 +255,14 @@ function QueueOrderItem({ order, getModelDisplayName, processedOrders }: {
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, 1 = next week, -1 = previous week
   const queryClient = useQueryClient();
   
-  // Get current week's layup schedule assignments (SCHEDULED orders from Layup Scheduler)
+  // Get layup schedule assignments filtered by selected week
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
-    queryKey: ['layup-schedule'],
+    queryKey: ['layup-schedule', currentWeekOffset, weekInfo.start.toISOString(), weekInfo.end.toISOString()],
     queryFn: async () => {
-      const response = await fetch('/api/layup-schedule');
+      const response = await fetch(`/api/layup-schedule?weekStart=${weekInfo.start.toISOString()}&weekEnd=${weekInfo.end.toISOString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch layup schedule');
       }
@@ -314,19 +315,35 @@ export default function LayupPluggingQueuePage() {
     },
   });
 
-  // Calculate current week dates (Monday-Friday)
+  // Calculate week dates based on current offset (Monday-Friday)
   const currentWeekDates = useMemo(() => {
     const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
+    const baseStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
+    const start = addDays(baseStart, currentWeekOffset * 7); // Offset by weeks
     return eachDayOfInterval({ start, end: addDays(start, 4) }); // Mon-Fri
-  }, []);
+  }, [currentWeekOffset]);
 
-  // Calculate next week dates
-  const nextWeekDates = useMemo(() => {
+  // Calculate week display info
+  const weekInfo = useMemo(() => {
     const today = new Date();
-    const nextWeekStart = addDays(startOfWeek(today, { weekStartsOn: 1 }), 7);
-    return eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
-  }, []);
+    const baseStart = startOfWeek(today, { weekStartsOn: 1 });
+    const weekStart = addDays(baseStart, currentWeekOffset * 7);
+    const weekEnd = addDays(weekStart, 4);
+    
+    const getWeekLabel = () => {
+      if (currentWeekOffset === 0) return 'Current Week';
+      if (currentWeekOffset === 1) return 'Next Week';
+      if (currentWeekOffset === -1) return 'Previous Week';
+      return `${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset} weeks`;
+    };
+
+    return {
+      label: getWeekLabel(),
+      start: weekStart,
+      end: weekEnd,
+      dateRange: `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd, yyyy')}`
+    };
+  }, [currentWeekOffset]);
 
   // Display orders exactly as scheduled in the layup scheduler
   const currentWeekOrdersByDate = useMemo(() => {
@@ -502,38 +519,35 @@ export default function LayupPluggingQueuePage() {
     })));
   }, [currentSchedule, currentWeekDates, availableOrders, processedOrders, scheduleLoading, ordersLoading, currentWeekOrders, currentWeekOrdersByDate]);
 
-  // Calculate next week layup count
+  // Calculate next week layup count (relative to currently viewed week)
   const nextWeekLayupCount = useMemo(() => {
-    if (!Array.isArray(currentSchedule) || !nextWeekDates.length) {
+    if (!Array.isArray(currentSchedule)) {
       return 0;
     }
 
     try {
+      const today = new Date();
+      const baseStart = startOfWeek(today, { weekStartsOn: 1 });
+      const nextWeekStart = addDays(baseStart, (currentWeekOffset + 1) * 7);
+      const nextWeekDates = eachDayOfInterval({ start: nextWeekStart, end: addDays(nextWeekStart, 4) });
       const nextWeekDateStrings = nextWeekDates.map(date => date.toISOString().split('T')[0]);
-      console.log('🔍 Next week date strings:', nextWeekDateStrings);
       
       const nextWeekOrders = currentSchedule.filter((scheduleItem: any) => {
         if (!scheduleItem?.scheduledDate) return false;
         try {
           const scheduledDate = new Date(scheduleItem.scheduledDate).toISOString().split('T')[0];
-          const isNextWeek = nextWeekDateStrings.includes(scheduledDate);
-          if (isNextWeek) {
-            console.log('🔍 Found next week order:', scheduleItem.orderId, scheduledDate);
-          }
-          return isNextWeek;
+          return nextWeekDateStrings.includes(scheduledDate);
         } catch (dateError) {
-          console.warn('🔍 Date parsing error for next week calculation:', scheduleItem, dateError);
           return false;
         }
       });
 
-      console.log('🔍 Next week layup count:', nextWeekOrders.length);
       return nextWeekOrders.length;
     } catch (error) {
       console.error('🔍 Error calculating next week layup count:', error);
       return 0;
     }
-  }, [currentSchedule, nextWeekDates]);
+  }, [currentSchedule, currentWeekOffset]);
 
   // Calculate barcode queue count (orders that completed layup/plugging)
   const barcodeQueueCount = useMemo(() => {
@@ -618,20 +632,22 @@ export default function LayupPluggingQueuePage() {
       
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Next Week Layup Count - Left Corner as requested */}
+        {/* Current View Summary */}
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Next Week Layup Schedule
+              {currentWeekOffset === 0 ? 'Current Week Schedule' : 
+               currentWeekOffset === 1 ? 'Next Week Schedule' :
+               `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {nextWeekLayupCount}
+              {currentWeekOrders.length}
             </div>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-              Orders scheduled for {format(nextWeekDates[0], 'MMM d')} - {format(nextWeekDates[4], 'MMM d')}
+              Orders scheduled for {weekInfo.dateRange}
             </p>
             <div className="text-xs text-blue-500 mt-2">
               Generated from Layup Scheduler
@@ -701,44 +717,78 @@ export default function LayupPluggingQueuePage() {
       {/* Spacer for sticky bottom bar */}
       {selectedOrders.length > 0 && <div className="h-24"></div>}
       
-      {/* Current Week Layup Queue - Day by Day View */}
+      {/* Week Layup Queue - Day by Day View */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-            <span>Layup/Plugging Manager - Generated from Scheduler</span>
-            <div className="flex items-center gap-2 flex-wrap">
-              {currentWeekOrders.length > 0 && (
-                <div className="flex items-center gap-2 mr-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
-                    disabled={selectedOrders.length === currentWeekOrders.length}
-                  >
-                    Select All ({currentWeekOrders.length})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedOrders([])}
-                    disabled={selectedOrders.length === 0}
-                  >
-                    Clear ({selectedOrders.length})
-                  </Button>
-                </div>
-              )}
-              <Badge variant="outline" className="text-sm">
-                Week: {format(currentWeekDates[0], 'MMM d')} - {format(currentWeekDates[4], 'MMM d')}
+            <div className="flex items-center gap-3">
+              <span>Layup/Plugging Manager</span>
+              <Badge variant="secondary" className="text-sm">
+                {weekInfo.label}
               </Badge>
+            </div>
+            
+            {/* Week Navigation Controls */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
+                disabled={scheduleLoading}
+              >
+                ← Previous Week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentWeekOffset(0)}
+                disabled={currentWeekOffset === 0 || scheduleLoading}
+              >
+                Current Week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
+                disabled={scheduleLoading}
+              >
+                Next Week →
+              </Button>
+            </div>
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            {weekInfo.dateRange} • Generated from Layup Scheduler
+          </p>
+        </CardHeader>
+        <CardContent>
+          {/* Selection Controls */}
+          {currentWeekOrders.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <div className="flex items-center gap-2 mr-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOrders(currentWeekOrders.map(o => o.orderId))}
+                  disabled={selectedOrders.length === currentWeekOrders.length}
+                >
+                  Select All ({currentWeekOrders.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOrders([])}
+                  disabled={selectedOrders.length === 0}
+                >
+                  Clear ({selectedOrders.length})
+                </Button>
+              </div>
               {selectedOrders.length > 0 && (
                 <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                   {selectedOrders.length} Selected
                 </Badge>
               )}
             </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          )}
           {currentWeekOrders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />

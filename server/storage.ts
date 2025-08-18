@@ -3443,6 +3443,17 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(layupSchedule).orderBy(layupSchedule.scheduledDate);
   }
 
+  async getLayupScheduleByDateRange(startDate: string, endDate: string): Promise<LayupSchedule[]> {
+    return await db.select().from(layupSchedule)
+      .where(
+        and(
+          gte(layupSchedule.scheduledDate, new Date(startDate)),
+          lte(layupSchedule.scheduledDate, new Date(endDate))
+        )
+      )
+      .orderBy(layupSchedule.scheduledDate);
+  }
+
   async getLayupScheduleByOrder(orderId: string): Promise<LayupSchedule[]> {
     return await db.select().from(layupSchedule).where(eq(layupSchedule.orderId, orderId));
   }

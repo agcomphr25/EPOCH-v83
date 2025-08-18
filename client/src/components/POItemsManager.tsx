@@ -65,6 +65,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
   const [discountCode, setDiscountCode] = useState('');
   const [discountDetails, setDiscountDetails] = useState<any>(null);
+  const [isFlattop, setIsFlattop] = useState(false);
 
   // Form data state for simple form fields
   const [formData, setFormData] = useState({
@@ -298,6 +299,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
     setNotes('');
     setDiscountCode('');
     setDiscountAmount(0);
+    setIsFlattop(false);
     setEditingItem(null);
   };
 
@@ -335,7 +337,8 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
         features: features,
         priceOverride: priceOverride,
         discountCode: discountCode,
-        discountAmount: discountAmount
+        discountAmount: discountAmount,
+        isFlattop: isFlattop
       } : {},
       notes: formData.notes
     };
@@ -520,7 +523,8 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
         featuresPrice: featuresPrice,
         priceOverride: priceOverride,
         discountCode: discountCode,
-        discountAmount: discountAmount
+        discountAmount: discountAmount,
+        isFlattop: isFlattop
       },
       notes: notes
     };
@@ -542,6 +546,7 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
       setShowPriceOverride(!!specs.priceOverride);
       setDiscountCode(specs.discountCode || '');
       setDiscountAmount(specs.discountAmount || 0);
+      setIsFlattop(specs.isFlattop || false);
     }
     setModelId(item.itemId);
     setQuantity(item.quantity);
@@ -597,24 +602,53 @@ export default function POItemsManager({ poId, poNumber, customerId }: POItemsMa
                 </div>
 
                 {formData.itemType === 'stock_model' && (
-                  <div>
-                    <Label htmlFor="stockModel">Stock Model</Label>
-                    <Select 
-                      value={formData.itemId} 
-                      onValueChange={(value) => handleItemSelection('stock_model', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a stock model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stockModels.map(model => (
-                          <SelectItem key={model.id} value={model.id}>
-                            {model.displayName} - ${model.price}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <>
+                    <div>
+                      <Label htmlFor="stockModel">Stock Model</Label>
+                      <Select 
+                        value={formData.itemId} 
+                        onValueChange={(value) => handleItemSelection('stock_model', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a stock model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stockModels.map(model => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName} - ${model.price}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Flattop Option */}
+                    <div className="flex items-center space-x-2 p-3 border rounded-lg bg-yellow-50">
+                      <Checkbox 
+                        id="flattop-checkbox-po"
+                        checked={isFlattop}
+                        onCheckedChange={(checked) => {
+                          setIsFlattop(!!checked);
+                          if (checked) {
+                            // Clear features that are not available for flattop in formData
+                            setFormData(prev => ({
+                              ...prev,
+                              // Clear any machining-related specifications if stored in formData
+                            }));
+                          }
+                        }}
+                      />
+                      <Label 
+                        htmlFor="flattop-checkbox-po" 
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Flattop
+                      </Label>
+                      <span className="text-xs text-muted-foreground">
+                        (Stock not machined for Action Length, Action Inlet, Bottom Metal, or Barrel Inlet)
+                      </span>
+                    </div>
+                  </>
                 )}
 
                 {formData.itemType === 'feature_item' && (

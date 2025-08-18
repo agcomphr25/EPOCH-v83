@@ -5441,12 +5441,23 @@ export class DatabaseStorage implements IStorage {
 
 
   // Department-based order methods
-  async getOrdersByDepartment(department: string): Promise<any[]> {
-    // This method seems to be a duplicate or less specific version of getOrdersByDepartment logic within other methods.
-    // It's best to consolidate or ensure it has a unique purpose.
-    // For now, returning an empty array as a placeholder to avoid breaking if it's called.
-    console.warn('getOrdersByDepartment called directly, consider using more specific methods.');
-    return [];
+  async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
+    try {
+      console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
+
+      // Query the allOrders table for orders in the specified department
+      const orders = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.currentDepartment, department))
+        .orderBy(allOrders.dueDate);
+
+      console.log(`🏭 Found ${orders.length} orders in department "${department}"`);
+      return orders;
+    } catch (error) {
+      console.error(`🏭 Error fetching orders for department "${department}":`, error);
+      return [];
+    }
   }
 
 

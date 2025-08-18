@@ -2227,7 +2227,7 @@ export default function LayupScheduler() {
                 const inCurrentWeek = date >= weekStart && date <= weekThursday;
                 
                 console.log(`🖨️ DATE FILTER: ${dateStr} (${dayName}, day ${dayOfWeek}) - WorkDay: ${isWorkDay}, InWeek: ${inCurrentWeek}, Include: ${isWorkDay && inCurrentWeek}`);
-                console.log(`   Date comparison: ${date.toISOString()} vs Week: ${weekStart.toISOString()} to ${weekEnd.toISOString()}`);
+                console.log(`   Date comparison: ${date.toISOString()} vs Week: ${weekStart.toISOString()} to ${weekThursday.toISOString()}`);
                 
                 // Only Monday through Friday AND within current week
                 return isWorkDay && inCurrentWeek;

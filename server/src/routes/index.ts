@@ -202,7 +202,9 @@ export function registerRoutes(app: Express): Server {
       const combinedQueue = [
         ...unscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
-          const sourceType = order.customerPO || order.poId || order.productionOrderId ? 'production_order' : 'main_orders';
+          // Only treat as production_order if it has poId or productionOrderId
+          // customerPO field is unreliable - often contains customer names instead of PO numbers
+          const sourceType = order.poId || order.productionOrderId ? 'production_order' : 'main_orders';
           
           const { stockModelId, product } = inferStockModelFromFeatures({
             ...order,

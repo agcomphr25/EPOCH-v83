@@ -1310,56 +1310,45 @@ export default function LayupScheduler() {
 
     // Find compatible molds for each order
     const getCompatibleMolds = (order: any) => {
-      let modelId = getOrderStockModelId(order);
+      // Get the stock model ID from the order
+      let modelId = order.stockModelId || order.modelId;
+      
+      // If no modelId found, try intelligent detection based on features/product
+      if (!modelId && order.features) {
+        // Try to detect stock model from features
+        if (order.product?.includes('Mesa') || order.features['mesa_universal']) {
+          modelId = 'mesa_universal';
+        }
+      }
 
       if (!modelId) {
         console.log('⚠️ Order has no modelId:', order.orderId, 'Source:', order.source);
         return [];
       }
 
-      // Extra debugging for production orders and P1 purchase orders
-      if (order.source === 'production_order' || order.source === 'p1_purchase_order') {
-        console.log('🏭 DETAILED PRODUCTION/P1 ORDER COMPATIBILITY CHECK:', {
-          orderId: order.orderId,
-          product: order.product,
-          modelId,
-          stockModelId: order.stockModelId,
-          source: order.source,
-          availableMolds: molds.filter(m => m.enabled).map(m => m.moldId),
-          moldsWithModelId: molds.filter(m => m.enabled && m.stockModels?.includes(modelId)).map(m => m.moldId),
-          allEnabledMolds: molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels }))
-        });
-      }
+      console.log(`🔍 Checking compatibility for Order ${order.orderId} with stock model: ${modelId}`);
 
       const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
+        
+        // STRICT RULE: Molds must have explicit stock model restrictions to be compatible
+        // Empty or undefined stockModels means the mold is not configured properly
         if (!mold.stockModels || mold.stockModels.length === 0) {
-          console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
-          return true; // No restrictions
+          console.log(`❌ Mold ${mold.moldId} has no stock model restrictions configured - REJECTING`);
+          return false;
         }
 
-        // Direct exact match first
+        // Check for exact match first
         const exactMatch = mold.stockModels.includes(modelId);
         if (exactMatch) {
-          console.log(`🎯 EXACT MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
+          console.log(`✅ EXACT MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
           return true;
         }
 
-        // Strict partial matching - only allow clear subset/superset relationships
-        const strictPartialMatch = mold.stockModels.some((sm: string) => {
-          const smLower = sm.toLowerCase();
-          const modelIdLower = modelId.toLowerCase();
-
-          // Only match if one is clearly contained in the other with proper word boundaries
-          const isStrictMatch = smLower === modelIdLower ||
-                               (smLower.includes(modelIdLower) && smLower.includes('_' + modelIdLower)) ||
-                               (modelIdLower.includes(smLower) && modelIdLower.includes('_' + smLower));
-
-          return isStrictMatch;
-        });
-
-        if (strictPartialMatch) {
-          console.log(`🎯 STRICT PARTIAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
+        // Check for universal compatibility
+        const hasUniversal = mold.stockModels.includes('universal');
+        if (hasUniversal) {
+          console.log(`✅ UNIVERSAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId} (universal)`);
           return true;
         }
 
@@ -1369,6 +1358,12 @@ export default function LayupScheduler() {
       });
 
       console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
+      
+      // If no compatible molds found, this order should NOT be scheduled
+      if (compatibleMolds.length === 0) {
+        console.warn(`⚠️ SCHEDULING BLOCKED: Order ${order.orderId} (${modelId}) has no compatible molds - removing from schedule`);
+      }
+      
       return compatibleMolds;
     };
 
@@ -1409,7 +1404,15 @@ export default function LayupScheduler() {
       moldNextDate[mold.moldId] = 0;
     });
 
-    sortedOrders.forEach((order, index) => {
+    // Filter orders to only include those with compatible molds
+    const schedulableOrders = sortedOrders.filter(order => {
+      const compatibleMolds = getCompatibleMolds(order);
+      return compatibleMolds.length > 0;
+    });
+
+    console.log(`📦 Filtered orders: ${sortedOrders.length} total → ${schedulableOrders.length} schedulable (${sortedOrders.length - schedulableOrders.length} excluded due to no compatible molds)`);
+
+    schedulableOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
 
       // Special logging for production orders and P1 purchase orders

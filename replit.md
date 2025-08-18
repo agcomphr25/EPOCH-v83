@@ -69,6 +69,13 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **IMPLEMENTED**: CF cards show orange-200, FG cards show orange-600, PO cards show purple
 ✅ **RESOLVED**: All 594 orders now display with correct colors and classifications
 
+**Schedule Save Button Fix (2025-08-18):**
+✅ **RESOLVED**: Date handling error preventing layup schedule saves (toISOString error)
+✅ **FIXED**: Single schedule entry endpoint (/api/layup-schedule) date conversion
+✅ **FIXED**: Bulk schedule save endpoint (/api/layup-schedule/save) date conversion
+✅ **ENHANCED**: Proper Date object handling for database insertion
+✅ **CONFIRMED**: Save Schedule button locks weekly schedule and progresses orders to Layup/Plugging department
+
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**
 

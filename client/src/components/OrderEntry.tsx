@@ -1162,8 +1162,18 @@ export default function OrderEntry() {
                     id="orderDate"
                     name="orderDate"
                     type="date"
-                    value={orderDate.toISOString().split('T')[0]}
-                    onChange={(e) => setOrderDate(new Date(e.target.value))}
+                    value={orderDate && !isNaN(orderDate.getTime()) ? orderDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value;
+                      if (dateValue) {
+                        const newDate = new Date(dateValue);
+                        if (!isNaN(newDate.getTime())) {
+                          setOrderDate(newDate);
+                        }
+                      } else {
+                        setOrderDate(new Date());
+                      }
+                    }}
                   />
                 </div>
                 <div>
@@ -1172,8 +1182,19 @@ export default function OrderEntry() {
                     id="dueDate"
                     name="dueDate"
                     type="date"
-                    value={dueDate.toISOString().split('T')[0]}
-                    onChange={(e) => setDueDate(new Date(e.target.value))}
+                    value={dueDate && !isNaN(dueDate.getTime()) ? dueDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value;
+                      if (dateValue) {
+                        const newDate = new Date(dateValue);
+                        if (!isNaN(newDate.getTime())) {
+                          setDueDate(newDate);
+                        }
+                      } else {
+                        // If cleared, set to default 98 days from now
+                        setDueDate(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
+                      }
+                    }}
                   />
                 </div>
               </div>

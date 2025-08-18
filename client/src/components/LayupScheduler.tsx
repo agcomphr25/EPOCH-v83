@@ -45,7 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 
 
 // Draggable Order Item Component with responsive sizing - memoized for performance
-const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[] }) => {
+const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean }) => {
   const {
     attributes,
     listeners,
@@ -58,7 +58,8 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       type: 'order',
       orderId: order.orderId,
       source: order.source
-    }
+    },
+    disabled: isLocked || false
   });
 
   const style = {
@@ -174,8 +175,10 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md cursor-grab active:cursor-grabbing transition-all duration-200 touch-manipulation select-none`}
+      {...(isLocked ? {} : listeners)}
+      className={`${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
+        isLocked ? 'cursor-default opacity-75 border-dashed' : 'cursor-grab active:cursor-grabbing'
+      }`}
     >
       <div className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}>
         <div className="flex items-center font-bold">
@@ -504,7 +507,8 @@ function DroppableCell({
   getModelDisplayName,
   features,
   processedOrders,
-  selectedWorkDays = [1, 2, 3, 4] // Default Mon-Thu
+  selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
+  isScheduleLocked = false
 }: { 
   moldId: string; 
   date: Date; 
@@ -515,6 +519,7 @@ function DroppableCell({
   features?: any[];
   processedOrders?: any[];
   selectedWorkDays?: number[];
+  isScheduleLocked?: boolean;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -581,6 +586,7 @@ function DroppableCell({
                 getModelDisplayName={getModelDisplayName}
                 features={features}
                 processedOrders={processedOrders}
+                isLocked={isScheduleLocked}
               />
             );
           })}
@@ -614,6 +620,7 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
+  const [isScheduleLocked, setIsScheduleLocked] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -2615,6 +2622,12 @@ export default function LayupScheduler() {
     const { active, over } = event;
     setActiveId(null);
 
+    // Prevent any drag operations when schedule is locked
+    if (isScheduleLocked) {
+      console.log('🔒 Schedule is locked - drag operation blocked');
+      return;
+    }
+
     if (!over) {
       console.log('❌ No drop target detected');
       return;
@@ -3643,23 +3656,46 @@ export default function LayupScheduler() {
           </div>
 
           <div className="flex items-center space-x-2">
-            {hasUnsavedScheduleChanges && (
+            {Object.keys(orderAssignments).length > 0 && (
               <Button
-                variant="default"
+                variant={isScheduleLocked ? "destructive" : "default"}
                 size="sm"
-                onClick={handleSaveSchedule}
+                onClick={() => {
+                  if (isScheduleLocked) {
+                    setIsScheduleLocked(false);
+                    toast({
+                      title: "Schedule Unlocked",
+                      description: "You can now reschedule orders by dragging them to different days",
+                    });
+                  } else {
+                    handleSaveSchedule();
+                    setIsScheduleLocked(true);
+                  }
+                }}
                 disabled={isSaving}
-                className="mr-2 bg-green-600 hover:bg-green-700 text-white"
+                className={`mr-2 ${isScheduleLocked 
+                  ? 'bg-red-600 hover:bg-red-700 text-white' 
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
               >
                 {isSaving ? (
                   <>
                     <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    Saving...
+                    Locking...
                   </>
                 ) : (
                   <>
-                    <Zap className="w-4 h-4 mr-2" />
-                    Save Schedule
+                    {isScheduleLocked ? (
+                      <>
+                        <ArrowRight className="w-4 h-4 mr-2" />
+                        Unlock to Reschedule
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Lock & Push to Dept
+                      </>
+                    )}
                   </>
                 )}
               </Button>
@@ -3811,53 +3847,79 @@ export default function LayupScheduler() {
                         <>
                           <Button 
                             onClick={async () => {
-                              try {
-                                // Prepare schedule entries for saving (without moving orders)
-                                const scheduleEntries = Object.entries(orderAssignments).map(([orderId, assignment]) => ({
-                                  orderId,
-                                  scheduledDate: assignment.date,
-                                  moldId: assignment.moldId,
-                                  employeeId: null, // Assignment object doesn't include employeeId in this context
-                                  isOverride: false // Manual schedule save, always treated as override
-                                }));
-
-                                console.log('💾 Saving weekly schedule only:', scheduleEntries.length, 'entries');
-                                
-                                // Save schedule entries only (no department changes)
-                                const response = await fetch('/api/layup-schedule/save', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    scheduleEntries,
-                                    weekStart: dates[0].toISOString(),
-                                    workDays: selectedWorkDays
-                                  })
+                              if (isScheduleLocked) {
+                                // Unlock the schedule
+                                setIsScheduleLocked(false);
+                                toast({
+                                  title: "Schedule Unlocked",
+                                  description: "You can now reschedule orders by dragging them to different days",
                                 });
-                                
-                                const result = await response.json();
-                                
-                                if (result.success) {
-                                  console.log('✅ Weekly schedule saved successfully');
+                              } else {
+                                // Save and lock the schedule
+                                try {
+                                  // Prepare schedule entries for saving (without moving orders)
+                                  const scheduleEntries = Object.entries(orderAssignments).map(([orderId, assignment]) => ({
+                                    orderId,
+                                    scheduledDate: assignment.date,
+                                    moldId: assignment.moldId,
+                                    employeeId: null, // Assignment object doesn't include employeeId in this context
+                                    isOverride: false // Manual schedule save, always treated as override
+                                  }));
+
+                                  console.log('💾 Saving weekly schedule only:', scheduleEntries.length, 'entries');
                                   
-                                  // Show success feedback
-                                  alert(`Successfully saved weekly schedule with ${scheduleEntries.length} order assignments!`);
+                                  // Save schedule entries only (no department changes)
+                                  const response = await fetch('/api/layup-schedule/save', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      scheduleEntries,
+                                      weekStart: dates[0].toISOString(),
+                                      workDays: selectedWorkDays
+                                    })
+                                  });
                                   
-                                  // Keep the schedule visible (don't clear orderAssignments)
-                                  // This allows viewing the saved schedule and making adjustments
-                                } else {
-                                  console.error('❌ Failed to save schedule:', result.error);
-                                  alert('Failed to save schedule: ' + result.error);
+                                  const result = await response.json();
+                                  
+                                  if (result.success) {
+                                    console.log('✅ Weekly schedule saved successfully');
+                                    setIsScheduleLocked(true);
+                                    
+                                    // Show success feedback
+                                    toast({
+                                      title: "Schedule Locked",
+                                      description: `Schedule saved with ${scheduleEntries.length} order assignments. Orders are locked in place.`,
+                                    });
+                                    
+                                    // Keep the schedule visible (don't clear orderAssignments)
+                                    // This allows viewing the saved schedule and making adjustments
+                                  } else {
+                                    console.error('❌ Failed to save schedule:', result.error);
+                                    alert('Failed to save schedule: ' + result.error);
+                                  }
+                                } catch (error) {
+                                  console.error('❌ Error saving schedule:', error);
+                                  alert('Error saving schedule. Please try again.');
                                 }
-                              } catch (error) {
-                                console.error('❌ Error saving schedule:', error);
-                                alert('Error saving schedule. Please try again.');
                               }
                             }}
-                            className="bg-green-600 hover:bg-green-700"
+                            className={`${isScheduleLocked 
+                              ? 'bg-red-600 hover:bg-red-700' 
+                              : 'bg-green-600 hover:bg-green-700'
+                            }`}
                             size="sm"
                           >
-                            <Save className="w-4 h-4 mr-1" />
-                            Save Schedule ({Object.keys(orderAssignments).length} orders)
+                            {isScheduleLocked ? (
+                              <>
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                                Unlock Schedule ({Object.keys(orderAssignments).length} orders)
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-4 h-4 mr-1" />
+                                Lock Schedule ({Object.keys(orderAssignments).length} orders)
+                              </>
+                            )}
                           </Button>
                           <Button 
                             onClick={() => setOrderAssignments({})}
@@ -4090,6 +4152,7 @@ export default function LayupScheduler() {
                                 features={features}
                                 processedOrders={processedOrders}
                                 selectedWorkDays={selectedWorkDays}
+                                isScheduleLocked={isScheduleLocked}
                               />
                             );
                           });

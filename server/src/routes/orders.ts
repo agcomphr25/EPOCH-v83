@@ -632,12 +632,56 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     const { orderId } = req.params;
     const { nextDepartment } = req.body;
 
-    console.log(`🏭 Progressing order ${orderId}${nextDepartment ? ` to ${nextDepartment}` : ''}`);
+    console.log(`🏭 Progressing order ${orderId} to ${nextDepartment}`);
 
-    // Use the proper progressOrder method from storage that handles the department flow logic
-    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+    // Try to find order in finalized orders first
+    let existingOrder = await storage.getFinalizedOrderById(orderId);
+    let isFinalized = true;
 
-    console.log(`✅ Successfully progressed order ${orderId} to ${updatedOrder.currentDepartment}`);
+    if (!existingOrder) {
+      // If not found in finalized orders, try draft orders
+      existingOrder = await storage.getOrderDraft(orderId);
+      isFinalized = false;
+    }
+
+    if (!existingOrder) {
+      console.error(`❌ Order ${orderId} not found in either finalized or draft orders`);
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+
+    console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment} (${isFinalized ? 'finalized' : 'draft'})`);
+
+    // Prepare completion timestamp update based on current department
+    const completionUpdates: any = {};
+    const now = new Date();
+
+    switch (existingOrder.currentDepartment) {
+      case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+      case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
+      case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
+      case 'CNC': completionUpdates.cncCompletedAt = now; break;
+      case 'Finish': completionUpdates.finishCompletedAt = now; break;
+      case 'Gunsmith': completionUpdates.gunsmithCompletedAt = now; break;
+      case 'Paint': completionUpdates.paintCompletedAt = now; break;
+      case 'Shipping QC': completionUpdates.shippingQcCompletedAt = now; break;
+      case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
+    }
+
+    // Update the appropriate table
+    let updatedOrder;
+    if (isFinalized) {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, {
+        currentDepartment: nextDepartment,
+        ...completionUpdates
+      });
+    } else {
+      updatedOrder = await storage.updateOrderDraft(orderId, {
+        currentDepartment: nextDepartment,
+        ...completionUpdates
+      });
+    }
+
+    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);
     res.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error('Progress order error:', error);
@@ -725,11 +769,20 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       }
     }
 
+    // Remove order from production queue if it exists there
+    try {
+      await storage.deleteProductionQueueItem(orderId);
+      console.log('🔧 Removed order from production queue:', orderId);
+    } catch (productionQueueError) {
+      console.log('🔧 Order was not in production queue or removal failed:', productionQueueError);
+      // Don't fail the cancellation if production queue removal fails
+    }
+
     console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);
 
     res.json({ 
       success: true, 
-      message: 'Order cancelled successfully',
+      message: 'Order cancelled successfully and removed from production queue',
       order: updatedOrder
     });
 

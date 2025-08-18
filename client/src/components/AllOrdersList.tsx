@@ -125,6 +125,7 @@ export default function AllOrdersList() {
       toast.success('Order progressed successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
     },
     onError: (error) => {
       toast.error(`Failed to progress order: ${error.message}`);
@@ -161,6 +162,25 @@ export default function AllOrdersList() {
     },
     onError: (error) => {
       toast.error(`Failed to create replacement: ${error.message}`);
+    }
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string, reason?: string }) => {
+      return apiRequest(`/api/orders/cancel/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+    },
+    onSuccess: () => {
+      toast.success('Order cancelled successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+    },
+    onError: (error) => {
+      toast.error(`Failed to cancel order: ${error.message}`);
     }
   });
 

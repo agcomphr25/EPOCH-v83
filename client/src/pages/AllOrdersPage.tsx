@@ -80,16 +80,21 @@ export default function AllOrdersPage() {
         body: JSON.stringify({ nextDepartment })
       });
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       console.log(`✅ Order ${variables.orderId} progressed successfully`);
       toast({
         title: "Success",
         description: "Order progressed successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      
+      // Force immediate refetch of all related queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] }),
+        queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] })
+      ]);
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -104,7 +109,8 @@ export default function AllOrdersPage() {
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status', 'v2'],
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
-    refetchInterval: 30000
+    refetchInterval: 5000, // Refresh every 5 seconds for faster updates
+    staleTime: 1000 // Data becomes stale after 1 second
   });
 
   // Cancel order mutation
@@ -397,9 +403,10 @@ export default function AllOrdersPage() {
                                 size="sm"
                                 onClick={() => handleProgressOrder(order.orderId, nextDept)}
                                 disabled={progressOrderMutation.isPending}
+                                className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
                               >
                                 <ArrowRight className="w-4 h-4 mr-1" />
-                                {nextDept}
+                                {progressOrderMutation.isPending ? 'Progressing...' : nextDept}
                               </Button>
                             )}
                             

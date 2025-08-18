@@ -62,7 +62,8 @@ export default function AllOrdersList() {
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status', 'v2'], // Cache busting
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds for faster updates
+    staleTime: 1000 // Data becomes stale after 1 second
   });
 
 
@@ -522,9 +523,10 @@ export default function AllOrdersList() {
                             size="sm"
                             onClick={() => handleProgressOrder(order.orderId, nextDept)}
                             disabled={progressOrderMutation.isPending}
+                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            {nextDept}
+                            {progressOrderMutation.isPending ? 'Progressing...' : nextDept}
                           </Button>
                         )}
 

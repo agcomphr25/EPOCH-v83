@@ -1026,14 +1026,22 @@ export class DatabaseStorage implements IStorage {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           // Find the highest sequence number for current year-month prefix
-          // Check both actual orders and active reservations
-          const [orderResult, reservationResult] = await Promise.all([
-            // Get highest sequence from actual orders
+          // Check draft orders, finalized orders, and active reservations
+          const [draftOrderResult, finalizedOrderResult, reservationResult] = await Promise.all([
+            // Get highest sequence from draft orders
             db
               .select({ orderId: orderDrafts.orderId })
               .from(orderDrafts)
               .where(like(orderDrafts.orderId, `${currentPrefix}%`))
               .orderBy(desc(orderDrafts.orderId))
+              .limit(1),
+
+            // Get highest sequence from finalized orders
+            db
+              .select({ orderId: allOrders.orderId })
+              .from(allOrders)
+              .where(like(allOrders.orderId, `${currentPrefix}%`))
+              .orderBy(desc(allOrders.orderId))
               .limit(1),
 
             // Get highest sequence from active reservations
@@ -1053,9 +1061,17 @@ export class DatabaseStorage implements IStorage {
 
           let maxSequence = 0;
 
-          // Check highest sequence from orders
-          if (orderResult.length > 0) {
-            const parsed = parseOrderId(orderResult[0].orderId);
+          // Check highest sequence from draft orders
+          if (draftOrderResult.length > 0) {
+            const parsed = parseOrderId(draftOrderResult[0].orderId);
+            if (parsed && parsed.prefix === currentPrefix) {
+              maxSequence = Math.max(maxSequence, parsed.sequence);
+            }
+          }
+
+          // Check highest sequence from finalized orders
+          if (finalizedOrderResult.length > 0) {
+            const parsed = parseOrderId(finalizedOrderResult[0].orderId);
             if (parsed && parsed.prefix === currentPrefix) {
               maxSequence = Math.max(maxSequence, parsed.sequence);
             }
@@ -1096,20 +1112,38 @@ export class DatabaseStorage implements IStorage {
       }
 
       // If all retries failed, try to find the next sequence number manually
-      // Query database directly for highest sequence number
+      // Query database directly for highest sequence number from both tables
       try {
-        const orderResult = await db
-          .select({ orderId: orderDrafts.orderId })
-          .from(orderDrafts)
-          .where(like(orderDrafts.orderId, `${currentPrefix}%`))
-          .orderBy(desc(orderDrafts.orderId))
-          .limit(1);
+        const [draftOrderResult, finalizedOrderResult] = await Promise.all([
+          db
+            .select({ orderId: orderDrafts.orderId })
+            .from(orderDrafts)
+            .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+            .orderBy(desc(orderDrafts.orderId))
+            .limit(1),
+          db
+            .select({ orderId: allOrders.orderId })
+            .from(allOrders)
+            .where(like(allOrders.orderId, `${currentPrefix}%`))
+            .orderBy(desc(allOrders.orderId))
+            .limit(1)
+        ]);
 
         let maxSequence = 0;
-        if (orderResult.length > 0) {
-          const parsed = parseOrderId(orderResult[0].orderId);
+        
+        // Check draft orders
+        if (draftOrderResult.length > 0) {
+          const parsed = parseOrderId(draftOrderResult[0].orderId);
           if (parsed && parsed.prefix === currentPrefix) {
-            maxSequence = parsed.sequence;
+            maxSequence = Math.max(maxSequence, parsed.sequence);
+          }
+        }
+        
+        // Check finalized orders
+        if (finalizedOrderResult.length > 0) {
+          const parsed = parseOrderId(finalizedOrderResult[0].orderId);
+          if (parsed && parsed.prefix === currentPrefix) {
+            maxSequence = Math.max(maxSequence, parsed.sequence);
           }
         }
 

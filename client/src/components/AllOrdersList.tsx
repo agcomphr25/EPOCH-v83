@@ -122,13 +122,18 @@ export default function AllOrdersList() {
         body: JSON.stringify({ nextDepartment })
       });
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       console.log(`✅ Order ${variables.orderId} progressed successfully`);
       toast.success('Order progressed successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      
+      // Force immediate refetch of all related queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] }),
+        queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] })
+      ]);
     },
     onError: (error, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);

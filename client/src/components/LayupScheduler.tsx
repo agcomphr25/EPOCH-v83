@@ -2166,10 +2166,21 @@ export default function LayupScheduler() {
               .filter(dateStr => {
                 const date = new Date(dateStr);
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+                const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+                const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+                const inCurrentWeek = date >= currentWeekStart && date <= currentWeekEnd;
+                
+                console.log(`🖨️ DATE FILTER: ${dateStr} (${dayName}, day ${dayOfWeek}) - WorkDay: ${isWorkDay}, InWeek: ${inCurrentWeek}, Include: ${isWorkDay && inCurrentWeek}`);
+                
                 // Only Monday through Friday AND within current week
-                return dayOfWeek >= 1 && dayOfWeek <= 5 && 
-                       date >= currentWeekStart && date <= currentWeekEnd;
+                return isWorkDay && inCurrentWeek;
               });
+              
+            console.log('🖨️ FINAL SORTED DATES FOR PRINT:', sortedDates.map(dateStr => {
+              const date = new Date(dateStr);
+              const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+              return `${dateStr} (${dayName})`;
+            }));
             
             return sortedDates.map(dateStr => {
               const date = new Date(dateStr);

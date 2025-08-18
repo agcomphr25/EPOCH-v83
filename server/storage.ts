@@ -1095,20 +1095,44 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // If all retries failed, fall back to timestamp-based ID
-      const fallbackId = currentPrefix + String(Date.now() % 10000).padStart(4, '0');
-      console.warn(`All Order ID generation attempts failed, using fallback: ${fallbackId}`);
-      return fallbackId;
+      // If all retries failed, try to find the next sequence number manually
+      // Query database directly for highest sequence number
+      try {
+        const orderResult = await db
+          .select({ orderId: orderDrafts.orderId })
+          .from(orderDrafts)
+          .where(like(orderDrafts.orderId, `${currentPrefix}%`))
+          .orderBy(desc(orderDrafts.orderId))
+          .limit(1);
+
+        let maxSequence = 0;
+        if (orderResult.length > 0) {
+          const parsed = parseOrderId(orderResult[0].orderId);
+          if (parsed && parsed.prefix === currentPrefix) {
+            maxSequence = parsed.sequence;
+          }
+        }
+
+        // Generate next sequential ID without reservation (fallback only)
+        const fallbackSequence = maxSequence + 1;
+        const fallbackId = formatOrderId(currentPrefix, fallbackSequence);
+        console.warn(`All Order ID generation attempts failed, using sequential fallback: ${fallbackId}`);
+        return fallbackId;
+      } catch (fallbackError) {
+        console.error('Fallback ID generation also failed:', fallbackError);
+        // Ultimate fallback - use next available sequence starting from 001
+        const fallbackId = currentPrefix + '001';
+        console.warn(`Using emergency fallback: ${fallbackId}`);
+        return fallbackId;
+      }
 
     } catch (error) {
       console.error("Error in Order ID generation:", error);
-      // Ultimate fallback
+      // Ultimate fallback - use current prefix with 001
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const yearLetter = String.fromCharCode(65 + (year - 2025));
-      const monthLetter = String.fromCharCode(65 + month);
-      const fallbackId = yearLetter + monthLetter + String(Date.now() % 1000).padStart(3, '0');
+      const currentPrefix = getCurrentYearMonthPrefix(now);
+      const fallbackId = currentPrefix + '001';
+      console.warn(`Using ultimate fallback: ${fallbackId}`);
       return fallbackId;
     }
   }

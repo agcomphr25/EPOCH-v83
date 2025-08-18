@@ -384,6 +384,22 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
         } else {
           const errorText = await streetResponse.text();
           console.log('🔧 Street API error:', streetResponse.status, errorText);
+          
+          // If Street API fails (like 402 subscription error), try to extract ZIP from the search text
+          const zipMatch = search.match(/\b(\d{5}(?:-\d{4})?)\b/);
+          if (zipMatch) {
+            console.log('🔧 Extracted ZIP code from search text:', zipMatch[1]);
+            return res.json({ 
+              fullAddress: {
+                delivery_line_1: street,
+                components: {
+                  city_name: city,
+                  state_abbreviation: state,
+                  zipcode: zipMatch[1]
+                }
+              }
+            });
+          }
         }
       }
     }
@@ -412,14 +428,25 @@ router.post('/address-autocomplete-bypass', async (req: Request, res: Response) 
     console.log('🔧 SmartyStreets raw response:', data);
     
     // Transform SmartyStreets autocomplete response
-    const suggestions = data.suggestions?.map((item: any) => ({
-      text: item.text,
-      streetLine: item.street_line,
-      city: item.city,
-      state: item.state,
-      zipCode: item.zipcode,
-      entries: item.entries
-    })) || [];
+    const suggestions = data.suggestions?.map((item: any) => {
+      // Extract ZIP code from text if zipcode field is empty but text contains it
+      let zipCode = item.zipcode;
+      if (!zipCode && item.text) {
+        const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
+        if (zipMatch) {
+          zipCode = zipMatch[1];
+        }
+      }
+      
+      return {
+        text: item.text,
+        streetLine: item.street_line,
+        city: item.city,
+        state: item.state,
+        zipCode: zipCode,
+        entries: item.entries
+      };
+    }) || [];
     
     console.log('🔧 Transformed suggestions:', suggestions);
     console.log('🔧 Sending response with suggestions count:', suggestions.length);

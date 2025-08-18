@@ -217,6 +217,12 @@ export default function OrdersList() {
     const departmentFlow = [
       'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
     ];
+    
+    // Handle combined "Layup/Plugging" department
+    if (currentDepartment === 'Layup/Plugging') {
+      return 'CNC'; // After Layup/Plugging, next is CNC
+    }
+    
     const currentIndex = departmentFlow.indexOf(currentDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
       return departmentFlow[currentIndex + 1];

@@ -1267,7 +1267,8 @@ export class DatabaseStorage implements IStorage {
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
-      product: order.modelId || 'Unknown Product'
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
     })) as AllOrder[];
   }
 
@@ -1295,14 +1296,14 @@ export class DatabaseStorage implements IStorage {
             if (Array.isArray(value)) {
               // Handle multi-select features
               value.forEach(optionValue => {
-                const option = feature.options.find(opt => opt.value === optionValue);
+                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
                 if (option?.price) {
                   total += option.price;
                 }
               });
             } else {
               // Handle single-select features
-              const option = feature.options.find(opt => opt.value === value);
+              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
               if (option?.price) {
                 total += option.price;
               }
@@ -1520,18 +1521,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined> {
-    try {
-      const orders = await db.select()
-        .from(allOrders)
-        .where(eq(allOrders.orderId, orderId));
 
-      return orders[0] || undefined;
-    } catch (error) {
-      console.error('Error getting finalized order by ID:', error);
-      throw error;
-    }
-  }
 
 
   // Get multiple orders by IDs
@@ -5440,43 +5430,6 @@ export class DatabaseStorage implements IStorage {
   }
 
 
-  // Department-based order methods
-  async getOrdersByDepartment(department: string): Promise<any[]> {
-    try {
-      console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
-
-      // Query the allOrders table with customer info for orders in the specified department
-      const orders = await db
-        .select({
-          id: allOrders.id,
-          orderId: allOrders.orderId,
-          orderDate: allOrders.orderDate,
-          dueDate: allOrders.dueDate,
-          customerId: allOrders.customerId,
-          customerName: customers.name,
-          customerEmail: customers.email,
-          modelId: allOrders.modelId,
-          handedness: allOrders.handedness,
-          features: allOrders.features,
-          totalPrice: allOrders.totalPrice,
-          notes: allOrders.notes,
-          status: allOrders.status,
-          currentDepartment: allOrders.currentDepartment,
-          createdAt: allOrders.createdAt,
-          updatedAt: allOrders.updatedAt
-        })
-        .from(allOrders)
-        .leftJoin(customers, eq(allOrders.customerId, customers.id))
-        .where(eq(allOrders.currentDepartment, department))
-        .orderBy(allOrders.dueDate);
-
-      console.log(`🏭 Found ${orders.length} orders in department "${department}"`);
-      return orders;
-    } catch (error) {
-      console.error(`🏭 Error fetching orders for department "${department}":`, error);
-      return [];
-    }
-  }
 
 
 }

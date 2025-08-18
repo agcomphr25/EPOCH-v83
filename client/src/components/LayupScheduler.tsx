@@ -135,16 +135,16 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
         text: 'text-purple-800 dark:text-purple-200'
       };
     } else if (materialType === 'CF') {
-      // CF cards: Deep orange (orange-800)
-      return {
-        bg: 'bg-orange-800 dark:bg-orange-900/80 hover:bg-orange-900 dark:hover:bg-orange-950/90 border-2 border-orange-900 dark:border-orange-950',
-        text: 'text-white dark:text-orange-100'
-      };
-    } else if (materialType === 'FG') {
-      // FG cards: Light orange (orange-200)
+      // CF cards: Orange-200 (light orange)
       return {
         bg: 'bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 border-orange-300 dark:border-orange-600',
         text: 'text-orange-800 dark:text-orange-200'
+      };
+    } else if (materialType === 'FG') {
+      // FG cards: Orange-600 (darker orange)
+      return {
+        bg: 'bg-orange-600 dark:bg-orange-700/80 hover:bg-orange-700 dark:hover:bg-orange-800/90 border-2 border-orange-700 dark:border-orange-800',
+        text: 'text-white dark:text-orange-100'
       };
     } else {
       // Default/unknown material

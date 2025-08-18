@@ -1116,7 +1116,7 @@ export default function LayupScheduler() {
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
 
-      // Auto-trigger scheduling if no assignments exist yet
+      // Auto-triggering scheduling if no assignments exist yet
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
         console.log('🎯 Auto-scheduling temporarily disabled to prevent React render errors');
@@ -1322,7 +1322,7 @@ export default function LayupScheduler() {
 
       const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
-        
+
         // STRICT RULE: Molds must have explicit stock model restrictions to be compatible
         // Empty or undefined stockModels means the mold is not configured properly
         if (!mold.stockModels || mold.stockModels.length === 0) {
@@ -1350,12 +1350,12 @@ export default function LayupScheduler() {
       });
 
       console.log(`🎯 Order ${order.orderId} (${modelId}) → ${compatibleMolds.length} compatible molds:`, compatibleMolds.map(m => m.moldId));
-      
+
       // If no compatible molds found, this order should NOT be scheduled
       if (compatibleMolds.length === 0) {
         console.warn(`⚠️ SCHEDULING BLOCKED: Order ${order.orderId} (${modelId}) has no compatible molds - removing from schedule`);
       }
-      
+
       return compatibleMolds;
     };
 
@@ -1404,7 +1404,7 @@ export default function LayupScheduler() {
         return false;
       }
       // Exclude orders with canceled in the notes or special instructions
-      if (order.specialInstructions?.toLowerCase().includes('cancel') || 
+      if (order.specialInstructions?.toLowerCase().includes('cancel') ||
           order.notes?.toLowerCase().includes('cancel')) {
         console.log(`🚫 Excluding order with cancel in notes: ${order.orderId}`);
         return false;
@@ -2421,7 +2421,7 @@ export default function LayupScheduler() {
     return model?.name || modelId;
   };
 
-  // Helper to get order's model ID for compatibility checks  
+  // Helper to get order's model ID for compatibility checks
   const getOrderModelId = (order: any) => {
     // Prioritize stockModelId, then modelId
     return order.stockModelId || order.modelId;
@@ -3291,175 +3291,6 @@ export default function LayupScheduler() {
               </DialogContent>
             </Dialog>
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Users className="w-4 h-4 mr-2" />
-                  Employee Settings
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Employee Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {/* Add New Employee Form */}
-                  <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <Plus className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Add New Employee</span>
-                    </div>
-                    <div className="mb-3">
-                      <Input
-                        placeholder="Employee ID (e.g., EMP004)"
-                        value={newEmployee.employeeId}
-                        onChange={(e) => setNewEmployee(prev => ({...prev, employeeId: e.target.value}))}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Rate:</label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          placeholder="1.5"
-                          value={newEmployee.rate}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, rate: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">units/hr</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm">Hours:</label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          placeholder="8"
-                          value={newEmployee.hours}
-                          min={1}
-                          max={12}
-                          onChange={(e) => setNewEmployee(prev => ({...prev, hours: +e.target.value}))}
-                          className="w-20"
-                        />
-                        <span className="text-xs">hrs/day</span>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={handleAddEmployee}
-                      className="mt-3"
-                      size="sm"
-                      disabled={!newEmployee.employeeId.trim()}
-                    >
-                      Add Employee
-                    </Button>
-                  </div>
-
-                  <Separator />
-
-                  {/* Existing Employees */}
-                  {employees.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No employees configured yet. Use the form above to add your first employee.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {employees.map(emp => {
-                        const changes = employeeChanges[emp.employeeId];
-                        const currentRate = changes?.rate ?? emp.rate;
-                        const currentHours = changes?.hours ?? emp.hours;
-
-                        return (
-                          <div key={emp.employeeId} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-                            <div className="flex items-center justify-between mb-3">
-                              <div>
-                                <div className="font-medium text-base">{emp.name}</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                  Employee ID: {emp.employeeId} | Department: {emp.department}
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Badge variant={emp.isActive ? "default" : "secondary"}>
-                                  {emp.isActive ? "Active" : "Inactive"}
-                                </Badge>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toggleEmployeeStatus(emp.employeeId, !emp.isActive)}
-                                  className={emp.isActive ? "text-orange-600 hover:text-orange-700" : "text-green-600 hover:text-green-700"}
-                                >
-                                  {emp.isActive ? "Mark Inactive" : "Reactivate"}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => deleteEmployee(emp.employeeId)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Production Rate:</label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  value={currentRate}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'rate', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">units/hr</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <label className="text-sm font-medium">Daily Hours:</label>
-                                <Input
-                                  type="number"
-                                  step="0.5"
-                                  value={currentHours}
-                                  min={1}
-                                  max={12}
-                                  onChange={(e) =>
-                                    handleEmployeeChange(emp.employeeId, 'hours', +e.target.value)
-                                  }
-                                  className="w-24"
-                                />
-                                <span className="text-sm text-gray-600">hrs/day</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Save Button */}
-                      {hasUnsavedChanges && (
-                        <div className="flex justify-center pt-4 border-t">
-                          <Button
-                            onClick={handleSaveEmployeeChanges}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                          >
-                            Save Changes
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {employees.length > 0 && (
-                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling.
-                        The system will automatically distribute work based on these settings.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-
-
             <Button
               variant={viewType === 'day' ? 'default' : 'outline'}
               size="sm"
@@ -3834,6 +3665,19 @@ export default function LayupScheduler() {
 
                     // Use only relevant molds
                     const activeMolds = sortedMolds.map(({ mold }) => mold);
+
+                    // Debug Monday assignments specifically
+                    const mondayDate = dates.find(date => date.getDay() === 1);
+                    if (mondayDate) {
+                      const mondayDateStr = mondayDate.toISOString().split('T')[0];
+                      const mondayAssignments = Object.entries(orderAssignments).filter(([_, assignment]) => {
+                        return assignment.date.split('T')[0] === mondayDateStr;
+                      });
+                      console.log(`📅 MONDAY DEBUG: Date ${mondayDateStr}, ${mondayAssignments.length} assignments found`);
+                      mondayAssignments.forEach(([orderId, assignment]) => {
+                        console.log(`   📅 ${orderId} → ${assignment.moldId}`);
+                      });
+                    }
 
                     return activeMolds.map(mold => (
                       <React.Fragment key={mold.moldId}>

@@ -54,6 +54,21 @@ export function useUnifiedLayupOrders() {
         fullResponse: data
       });
       
+      // Debug specific problematic orders
+      if (data && Array.isArray(data)) {
+        const problemOrders = data.filter(order => ['AH009', 'AG706'].includes(order.orderId));
+        if (problemOrders.length > 0) {
+          console.log('🐛 PROBLEM ORDERS FOUND IN API RESPONSE:', problemOrders.map(order => ({
+            orderId: order.orderId,
+            modelId: order.modelId,
+            stockModelId: order.stockModelId,
+            product: order.product,
+            source: order.source,
+            currentDepartment: order.currentDepartment
+          })));
+        }
+      }
+      
       if (!data) {
         console.error('❌ No data received from API - data is falsy');
         return [];

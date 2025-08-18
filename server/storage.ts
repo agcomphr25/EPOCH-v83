@@ -1394,7 +1394,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
 
-      // Query the allOrders table for orders in the specified department
+      // Query the allOrders table with customer info for orders in the specified department
       const orders = await db
         .select({
           id: allOrders.id,
@@ -1402,6 +1402,8 @@ export class DatabaseStorage implements IStorage {
           orderDate: allOrders.orderDate,
           dueDate: allOrders.dueDate,
           customerId: allOrders.customerId,
+          customerName: customers.name,
+          customerEmail: customers.email,
           customerPO: allOrders.customerPO,
           fbOrderNumber: allOrders.fbOrderNumber,
           agrOrderDetails: allOrders.agrOrderDetails,
@@ -1451,6 +1453,7 @@ export class DatabaseStorage implements IStorage {
           updatedAt: allOrders.updatedAt
         })
         .from(allOrders)
+        .leftJoin(customers, eq(allOrders.customerId, customers.id))
         .where(
           and(
             eq(allOrders.currentDepartment, department),
@@ -1485,7 +1488,7 @@ export class DatabaseStorage implements IStorage {
       // Enrich orders with customer names and stock model display names
       const enrichedOrders = orders.map(order => ({
         ...order,
-        customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+        customer: order.customerName || 'Unknown Customer',
         productName: stockModelMap.get(order.modelId || '') || order.modelId || 'Unknown Product',
         stockModelId: order.modelId,
         priority: 50 // Default priority

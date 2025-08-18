@@ -74,19 +74,25 @@ export default function AllOrdersPage() {
   // Progress order mutation
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
+      console.log(`🔄 Progressing order ${orderId} to ${nextDepartment || 'next department'}`);
       return apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
         body: JSON.stringify({ nextDepartment })
       });
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      console.log(`✅ Order ${variables.orderId} progressed successfully`);
       toast({
         title: "Success",
         description: "Order progressed successfully",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
+      console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
       toast({
         title: "Error",
         description: "Failed to progress order: " + (error.message || 'Unknown error'),
@@ -111,6 +117,9 @@ export default function AllOrdersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
       toast({
         title: "Order Cancelled",
         description: "The order has been cancelled successfully.",

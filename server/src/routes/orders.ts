@@ -730,34 +730,55 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
     const { orderId } = req.params;
     const { reason } = req.body;
 
-    // Use Drizzle to update the order
-    const { db } = storage;
-    const { allOrders } = await import('@shared/schema');
-    const { eq } = await import('drizzle-orm');
+    console.log('🔧 CANCEL ORDER ROUTE CALLED');
+    console.log('🔧 Order ID:', orderId);
+    console.log('🔧 Cancel reason:', reason);
 
-    const updatedOrders = await db
-      .update(allOrders)
-      .set({
-        isCancelled: true,
-        cancelledAt: new Date(),
-        cancelReason: reason || 'No reason provided',
-        updatedAt: new Date()
-      })
-      .where(eq(allOrders.orderId, orderId))
-      .returning();
-    
-    if (updatedOrders.length === 0) {
+    // Try to cancel the order (check if it exists first)
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      console.log('🔧 Order not found:', orderId);
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    console.log('🔧 Found order:', order.id, order.status);
+
+    // Update the order with cancellation information
+    const updateData = {
+      isCancelled: true,
+      cancelledAt: new Date(),
+      cancelReason: reason || 'No reason provided',
+      status: 'CANCELLED',
+      updatedAt: new Date()
+    };
+
+    let updatedOrder;
+    try {
+      // Try updating in finalized orders first
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+      console.log('🔧 Updated finalized order successfully');
+    } catch (finalizedError) {
+      console.log('🔧 Failed to update finalized order, trying draft orders:', finalizedError);
+      try {
+        // If not found in finalized orders, try draft orders
+        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+        console.log('🔧 Updated draft order successfully');
+      } catch (draftError) {
+        console.error('🔧 Failed to update both finalized and draft orders:', draftError);
+        throw new Error('Order not found in either finalized or draft orders');
+      }
+    }
+
+    console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);
 
     res.json({ 
       success: true, 
       message: 'Order cancelled successfully',
-      order: updatedOrders[0]
+      order: updatedOrder
     });
 
   } catch (error) {
-    console.error('Error cancelling order:', error);
+    console.error('🔧 Error cancelling order:', error);
     res.status(500).json({ error: 'Failed to cancel order' });
   }
 });

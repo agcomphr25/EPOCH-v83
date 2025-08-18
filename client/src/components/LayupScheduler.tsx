@@ -2234,13 +2234,13 @@ export default function LayupScheduler() {
               });
               
             console.log('🖨️ FINAL SORTED DATES FOR PRINT:', sortedDates.map(dateStr => {
-              const date = new Date(dateStr);
+              const date = new Date(dateStr + 'T12:00:00'); // Add noon for consistent timezone handling
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
               return `${dateStr} (${dayName})`;
             }));
             
             return sortedDates.map(dateStr => {
-              const date = new Date(dateStr);
+              const date = new Date(dateStr + 'T12:00:00'); // Add noon for consistent timezone handling
               const dayData = assignmentMap.get(dateStr);
               const isFriday = date.getDay() === 5;
               

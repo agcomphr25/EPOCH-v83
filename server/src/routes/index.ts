@@ -192,6 +192,11 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { inferStockModelFromFeatures } = await import('../utils/stockModelInference');
       
+      // AUTOMATIC CLEANUP: Remove orphaned layup schedule entries 
+      // (orders that have progressed beyond P1 Production Queue and Layup departments)
+      console.log('🧹 CLEANUP: Removing orphaned layup schedule entries...');
+      await cleanupOrphanedLayupScheduleEntries(storage);
+      
       // Get all orders that haven't entered production yet (P1 Production Queue)
       const allOrders = await storage.getAllOrders();
       const unscheduledOrders = allOrders.filter(order => 
@@ -248,6 +253,34 @@ export function registerRoutes(app: Express): Server {
     if (daysUntilDue <= 7) return 10; // Due within week
     if (daysUntilDue <= 30) return 30; // Due within month
     return 50; // Further out
+  }
+
+  // Helper function to clean up orphaned layup schedule entries
+  async function cleanupOrphanedLayupScheduleEntries(storage: any) {
+    try {
+      const { db } = await import('../../db');
+      
+      // Use raw SQL for reliable cleanup - remove entries where orders have progressed beyond P1/Layup
+      const result = await db.execute(`
+        DELETE FROM layup_schedule 
+        WHERE order_id IN (
+          SELECT ls.order_id 
+          FROM layup_schedule ls 
+          LEFT JOIN all_orders ao ON ls.order_id = ao.order_id 
+          WHERE ao.current_department NOT IN ('P1 Production Queue', 'Layup')
+        )
+      `);
+      
+      const deletedCount = result.rowCount || 0;
+      if (deletedCount > 0) {
+        console.log(`✅ CLEANUP: Removed ${deletedCount} orphaned layup schedule entries`);
+      } else {
+        console.log('✅ CLEANUP: No orphaned layup schedule entries found');
+      }
+    } catch (error) {
+      console.error('❌ CLEANUP ERROR:', error);
+      // Don't throw - let the main API continue working even if cleanup fails
+    }
   }
 
   // Layup Schedule API endpoints - with date filtering support

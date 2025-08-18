@@ -57,9 +57,22 @@ export default function ProductionQueuePage() {
     return reasons;
   };
 
-  // Split orders into regular and needing attention
-  const regularOrders = orders.filter((order: any) => needsAttention(order).length === 0);
-  const attentionOrders = orders.filter((order: any) => needsAttention(order).length > 0);
+  // Filter out canceled orders first, then split into regular and needing attention
+  const activeOrders = orders.filter((order: any) => {
+    // Exclude canceled orders
+    if (order.status === 'canceled' || order.status === 'cancelled') {
+      return false;
+    }
+    // Exclude orders with canceled in the notes or special instructions
+    if (order.specialInstructions?.toLowerCase().includes('cancel') || 
+        order.notes?.toLowerCase().includes('cancel')) {
+      return false;
+    }
+    return true;
+  });
+
+  const regularOrders = activeOrders.filter((order: any) => needsAttention(order).length === 0);
+  const attentionOrders = activeOrders.filter((order: any) => needsAttention(order).length > 0);
 
   // Mutation to progress orders to next department
   const progressOrdersMutation = useMutation({

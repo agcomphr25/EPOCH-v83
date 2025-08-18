@@ -1396,8 +1396,23 @@ export default function LayupScheduler() {
       moldNextDate[mold.moldId] = 0;
     });
 
-    // Filter orders to only include those with compatible molds
-    const schedulableOrders = sortedOrders.filter(order => {
+    // Filter orders to exclude canceled orders and only include those with compatible molds
+    const activeOrders = sortedOrders.filter(order => {
+      // Exclude canceled orders
+      if (order.status === 'canceled' || order.status === 'cancelled') {
+        console.log(`🚫 Excluding canceled order: ${order.orderId}`);
+        return false;
+      }
+      // Exclude orders with canceled in the notes or special instructions
+      if (order.specialInstructions?.toLowerCase().includes('cancel') || 
+          order.notes?.toLowerCase().includes('cancel')) {
+        console.log(`🚫 Excluding order with cancel in notes: ${order.orderId}`);
+        return false;
+      }
+      return true;
+    });
+
+    const schedulableOrders = activeOrders.filter(order => {
       const compatibleMolds = getCompatibleMolds(order);
       return compatibleMolds.length > 0;
     });

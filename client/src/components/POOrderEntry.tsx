@@ -57,6 +57,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
   const [discountOptions, setDiscountOptions] = useState<{value: string; label: string}[]>([]);
   const [discountCode, setDiscountCode] = useState('');
   const [discountDetails, setDiscountDetails] = useState<any>(null);
+  const [isFlattop, setIsFlattop] = useState(false);
 
   // Data queries
   const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery({
@@ -352,7 +353,8 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
         featuresPrice: featuresPrice,
         priceOverride: priceOverride,
         discountCode: discountCode,
-        discountAmount: discountAmount
+        discountAmount: discountAmount,
+        isFlattop: isFlattop
       },
       notes: notes
     };
@@ -367,6 +369,7 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
     
     switch (featureDef.type) {
       case 'dropdown':
+        const isRestrictedForFlattop = isFlattop && ['action_length', 'action_inlet', 'bottom_metal', 'barrel_inlet'].includes(featureDef.id);
         return (
           <div key={featureDef.id} className="space-y-2">
             <Label>{featureDef.displayName}</Label>
@@ -376,9 +379,10 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                 ...prev, 
                 [featureDef.id]: value 
               }))}
+              disabled={isRestrictedForFlattop}
             >
-              <SelectTrigger>
-                <SelectValue placeholder={`Select ${featureDef.displayName}`} />
+              <SelectTrigger className={isRestrictedForFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                <SelectValue placeholder={isRestrictedForFlattop ? "Not Available (Flattop)" : `Select ${featureDef.displayName}`} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">No selection</SelectItem>
@@ -514,6 +518,36 @@ export default function POOrderEntry({ poId, isOpen, onClose, onSuccess }: POOrd
                 </Command>
               </PopoverContent>
             </Popover>
+          </div>
+
+          {/* Flattop Option */}
+          <div className="flex items-center space-x-2 p-3 border rounded-lg bg-yellow-50">
+            <Checkbox 
+              id="flattop-checkbox"
+              checked={isFlattop}
+              onCheckedChange={(checked) => {
+                setIsFlattop(!!checked);
+                if (checked) {
+                  // Clear features that are not available for flattop
+                  setFeatures(prev => ({
+                    ...prev,
+                    action_length: undefined,
+                    action_inlet: undefined,
+                    bottom_metal: undefined,
+                    barrel_inlet: undefined
+                  }));
+                }
+              }}
+            />
+            <Label 
+              htmlFor="flattop-checkbox" 
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Flattop
+            </Label>
+            <span className="text-xs text-muted-foreground">
+              (Stock not machined for Action Length, Action Inlet, Bottom Metal, or Barrel Inlet)
+            </span>
           </div>
 
           {/* Chalk Model Indicator */}

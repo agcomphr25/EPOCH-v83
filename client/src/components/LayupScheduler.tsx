@@ -725,12 +725,10 @@ export default function LayupScheduler() {
       let wednesdayCount = 0;
       let thursdayCount = 0;
       let fridayCount = 0;
-      let skippedCount = 0;
 
       (existingSchedule as any[]).forEach((entry: any) => {
         const schedDate = new Date(entry.scheduledDate);
         const dayOfWeek = schedDate.getDay();
-        const dateStr = entry.scheduledDate;
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
 
         // Count by day
@@ -740,50 +738,31 @@ export default function LayupScheduler() {
         else if (dayOfWeek === 4) thursdayCount++;
         else if (dayOfWeek === 5) fridayCount++;
 
-        // MESA DEBUG: Extra logging for Mesa orders
-        const isMesaOrder = entry.moldId && entry.moldId.includes('Mesa');
-        if (isMesaOrder || dayOfWeek === 1) { // Log Monday and Mesa orders
-          console.log(`📅 ${dayName} ORDER: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
-        }
-
-        // Skip assignments for days not in selectedWorkDays
-        if (!selectedWorkDays.includes(dayOfWeek)) {
-          console.log(`🗑️ SKIPPING ${dayName}: ${entry.orderId} (day ${dayOfWeek} not in selectedWorkDays ${selectedWorkDays})`);
-          skippedCount++;
-          return;
-        }
-
+        // ALWAYS load assignments regardless of selectedWorkDays to show existing schedule
         assignments[entry.orderId] = {
           moldId: entry.moldId,
           date: entry.scheduledDate
         };
+
+        // Log Monday orders specifically
+        if (dayOfWeek === 1) {
+          console.log(`📅 MONDAY ORDER LOADED: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
+        }
       });
 
       console.log('📊 ASSIGNMENT LOADING SUMMARY:');
-      console.log(`   Monday: ${mondayCount} total in DB`);
-      console.log(`   Tuesday: ${tuesdayCount} total in DB`);
-      console.log(`   Wednesday: ${wednesdayCount} total in DB`);
-      console.log(`   Thursday: ${thursdayCount} total in DB`);
-      console.log(`   Friday: ${fridayCount} total in DB`);
-      console.log(`   Skipped: ${skippedCount} (not in selectedWorkDays)`);
-      console.log(`   Final assignments loaded: ${Object.keys(assignments).length}`);
-      console.log(`   Selected work days: ${selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`);
-
-      // COUNT Monday assignments specifically
-      const mondayAssignments = Object.entries(assignments).filter(([_, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        return assignmentDate.getDay() === 1;
-      });
-      console.log(`🔍 MONDAY ASSIGNMENTS IN FINAL STATE: ${mondayAssignments.length} Monday orders`);
-      mondayAssignments.slice(0, 10).forEach(([orderId, assignment]) => {
-        console.log(`   📅 ${orderId} → ${assignment.moldId} on ${new Date(assignment.date).toDateString()}`);
-      });
+      console.log(`   Monday: ${mondayCount} orders loaded`);
+      console.log(`   Tuesday: ${tuesdayCount} orders loaded`);
+      console.log(`   Wednesday: ${wednesdayCount} orders loaded`);
+      console.log(`   Thursday: ${thursdayCount} orders loaded`);
+      console.log(`   Friday: ${fridayCount} orders loaded`);
+      console.log(`   Total assignments loaded: ${Object.keys(assignments).length}`);
 
       setOrderAssignments(assignments);
     } else {
       console.log('🔍 ASSIGNMENT LOADING DEBUG: No schedule data to load');
     }
-  }, [existingSchedule, selectedWorkDays]);
+  }, [existingSchedule]);
 
   // Save functionality
   const [isSaving, setIsSaving] = useState(false);
@@ -3708,10 +3687,17 @@ export default function LayupScheduler() {
                                 const assignmentDate = new Date(assignment.date);
                                 const cellDate = new Date(dateString);
 
-                                // Force UTC comparison to avoid timezone issues
+                                // Use date-only comparison to avoid timezone issues
                                 const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
                                 const cellDateStr = cellDate.toISOString().split('T')[0];
-                                const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
+                                const moldMatch = assignment.moldId === mold.moldId;
+                                const dateMatch = assignmentDateStr === cellDateStr;
+                                const isMatch = moldMatch && dateMatch;
+
+                                // Debug Monday assignments specifically
+                                if (cellDate.getDay() === 1 && isMatch) {
+                                  console.log(`✅ MONDAY MATCH: ${orderId} → ${assignment.moldId} on ${cellDateStr}`);
+                                }
 
                                 // AGGRESSIVE DEBUG: Log every match attempt for problematic orders
                                 if (orderId === 'AI141' || orderId === 'AH005' || orderId === 'AG822') {
@@ -3804,13 +3790,23 @@ export default function LayupScheduler() {
                                 return isMatch;
                               })
                               .map(([orderId]) => {
-                                const order = processedOrders.find(o => o.orderId === orderId);
+                                // First try to find in processedOrders
+                                let order = processedOrders.find(o => o.orderId === orderId);
+                                
+                                // If not found, try in original orders array
                                 if (!order) {
-                                  // Return a placeholder card that will be visible to show the scheduled order
+                                  order = orders.find(o => o.orderId === orderId);
+                                }
+                                
+                                if (!order) {
+                                  // Log missing order for debugging
+                                  console.warn(`⚠️ Order ${orderId} not found in processedOrders or orders arrays`);
+                                  
+                                  // Return a placeholder that shows the order is scheduled but missing from queue
                                   return {
                                     orderId: orderId,
                                     product: `SCHEDULED: ${orderId}`,
-                                    customer: 'Mesa Order',
+                                    customer: 'Order Missing from Queue',
                                     quantity: 1,
                                     id: orderId,
                                     orderDate: new Date().toISOString(),

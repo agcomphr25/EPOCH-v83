@@ -2198,15 +2198,15 @@ export default function LayupScheduler() {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
             }
 
-            // Filter dates to only include current week (Monday-Friday)
+            // Filter dates to only include current week (Monday-Thursday only for production schedule)
             const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
-            const currentWeekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
+            const currentWeekThursday = addDays(currentWeekStart, 3); // Thursday (Monday + 3 days)
             
             // Debug: Show current week calculation
             console.log('🖨️ CURRENT WEEK DEBUG:', {
               currentDate: currentDate.toString(),
               weekStart: currentWeekStart.toString(),
-              weekEnd: currentWeekEnd.toString(),
+              weekThursday: currentWeekThursday.toString(),
               today: new Date().toString()
             });
             
@@ -2216,15 +2216,15 @@ export default function LayupScheduler() {
                 const date = new Date(dateStr + 'T12:00:00'); // Add noon time to avoid timezone issues
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
                 const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-                const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+                const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 4; // Monday (1) through Thursday (4) only
                 
                 // Compare dates using the same noon approach to avoid timezone issues
                 const weekStart = new Date(currentWeekStart);
                 weekStart.setHours(12, 0, 0, 0);
-                const weekEnd = new Date(currentWeekEnd);
-                weekEnd.setHours(12, 0, 0, 0);
+                const weekThursday = new Date(currentWeekThursday);
+                weekThursday.setHours(12, 0, 0, 0);
                 
-                const inCurrentWeek = date >= weekStart && date <= weekEnd;
+                const inCurrentWeek = date >= weekStart && date <= weekThursday;
                 
                 console.log(`🖨️ DATE FILTER: ${dateStr} (${dayName}, day ${dayOfWeek}) - WorkDay: ${isWorkDay}, InWeek: ${inCurrentWeek}, Include: ${isWorkDay && inCurrentWeek}`);
                 console.log(`   Date comparison: ${date.toISOString()} vs Week: ${weekStart.toISOString()} to ${weekEnd.toISOString()}`);

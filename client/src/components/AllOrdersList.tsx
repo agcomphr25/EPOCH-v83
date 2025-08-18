@@ -43,6 +43,7 @@ const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [showCancelled, setShowCancelled] = useState(false);
   const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model'>('orderDate');
   const [scrapModalOrder, setScrapModalOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -194,17 +195,31 @@ export default function AllOrdersList() {
 
 
   const filteredOrders = (orders || []).filter((order: any) => {
-    // Don't show cancelled orders
-    if (order.status === 'CANCELLED' || order.isCancelled) {
-      return false;
+    // Show cancelled orders only when specifically viewing cancelled orders
+    const isCancelled = order.status === 'CANCELLED' || order.isCancelled === true;
+    
+    if (showCancelled) {
+      // When showing cancelled orders, only show cancelled ones
+      if (!isCancelled) {
+        return false;
+      }
+    } else {
+      // When showing active orders, exclude cancelled ones
+      if (isCancelled) {
+        console.log(`🚫 Filtering out cancelled order: ${order.orderId}, status: ${order.status}, isCancelled: ${order.isCancelled}`);
+        return false;
+      }
     }
 
-    // Department filter
-    const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+    // Department filter (only apply to non-cancelled orders)
+    if (!showCancelled) {
+      const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
+      if (!departmentMatch) return false;
+    }
 
     // Search filter - search in multiple fields
     if (!searchTerm.trim()) {
-      return departmentMatch;
+      return true;
     }
 
     const searchLower = searchTerm.toLowerCase();
@@ -219,7 +234,7 @@ export default function AllOrdersList() {
 
     const searchMatch = searchFields.some(field => field?.includes(searchLower));
 
-    return departmentMatch && searchMatch;
+    return searchMatch;
   });
 
   // Sort orders based on selected sort option
@@ -308,8 +323,20 @@ export default function AllOrdersList() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            All Orders ({sortedOrders.length})
+            {showCancelled ? 'Cancelled Orders' : 'All Orders'} ({sortedOrders.length})
             <div className="flex items-center gap-4">
+              {/* Toggle between Active and Cancelled Orders */}
+              <Button
+                variant={showCancelled ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowCancelled(!showCancelled);
+                  setSelectedDepartment('all'); // Reset department filter when switching
+                }}
+                className="flex items-center gap-2"
+              >
+                {showCancelled ? 'Show Active Orders' : 'Show Cancelled Orders'}
+              </Button>
               {/* Search Input */}
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -331,21 +358,23 @@ export default function AllOrdersList() {
                 )}
               </div>
 
-              {/* Department Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Department:</span>
-                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Department Filter - only show for active orders */}
+              {!showCancelled && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Department:</span>
+                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="All Departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map(dept => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Sort By */}
               <div className="flex items-center gap-2">

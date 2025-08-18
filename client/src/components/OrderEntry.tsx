@@ -56,7 +56,7 @@ interface MiscItem {
 export default function OrderEntry() {
   console.log("OrderEntry component rendering...");
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -1076,6 +1076,14 @@ export default function OrderEntry() {
         queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       }
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+
+      // Navigate to All Orders page after successful creation (not for drafts or edits)
+      if (!saveAsDraft && !isEditMode) {
+        // Small delay to ensure toast is visible before navigation
+        setTimeout(() => {
+          setLocation('/orders-list');
+        }, 1000);
+      }
 
       // Reset form only if not editing
       if (!isEditMode) {

@@ -296,15 +296,21 @@ export default function LayupPluggingQueuePage() {
   // Get ALL orders to find details for scheduled orders
   const { orders: availableOrders, loading: ordersLoading } = useUnifiedLayupOrders();
   
-  // Build processed orders from the SCHEDULE, not the raw queue
+  // Build processed orders from BOTH schedule AND department filtering
   const processedOrders = useMemo(() => {
     if (!currentSchedule || currentSchedule.length === 0 || availableOrders.length === 0) return [];
     
-    // Map scheduled orders to their full order details
+    // Map scheduled orders to their full order details, but filter by department
     const scheduledOrdersWithDetails = currentSchedule.map((scheduleEntry: any) => {
       const orderDetails = availableOrders.find((order: any) => order.orderId === scheduleEntry.orderId);
       if (!orderDetails) {
         console.warn(`⚠️ Scheduled order ${scheduleEntry.orderId} not found in available orders`);
+        return null;
+      }
+      
+      // Only include orders that are actually in the Layup/Plugging department
+      if (orderDetails.currentDepartment !== 'Layup/Plugging') {
+        console.log(`🔍 Skipping order ${scheduleEntry.orderId} - not in Layup/Plugging department (current: ${orderDetails.currentDepartment})`);
         return null;
       }
       
@@ -317,7 +323,16 @@ export default function LayupPluggingQueuePage() {
       };
     }).filter(Boolean);
     
-    console.log(`📋 Department Manager: Found ${scheduledOrdersWithDetails.length} scheduled orders out of ${currentSchedule.length} schedule entries`);
+    // Debug department status
+    const departmentCounts = availableOrders.reduce((acc: any, order: any) => {
+      const dept = order.currentDepartment || 'undefined';
+      acc[dept] = (acc[dept] || 0) + 1;
+      return acc;
+    }, {});
+    
+    console.log(`📋 Department Manager: Found ${scheduledOrdersWithDetails.length} orders in Layup/Plugging department out of ${currentSchedule.length} schedule entries`);
+    console.log(`📋 Available orders count: ${availableOrders.length}, Department breakdown:`, departmentCounts);
+    
     return scheduledOrdersWithDetails;
   }, [currentSchedule, availableOrders]);
 

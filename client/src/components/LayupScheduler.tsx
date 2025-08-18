@@ -1953,6 +1953,29 @@ export default function LayupScheduler() {
               text-align: center;
               line-height: 1.1;
             }
+            .order-id { 
+              font-size: 10px; 
+              font-weight: bold; 
+            }
+            .model-name { 
+              font-size: 12px; 
+              font-weight: bold; 
+              margin: 1px 0;
+            }
+            .action-length { 
+              font-size: 12px; 
+              font-weight: bold; 
+              background: #f0f0f0;
+              border-radius: 2px;
+              padding: 1px 2px;
+              margin: 1px 0;
+            }
+            .mold-info { 
+              font-size: 12px; 
+              font-weight: bold; 
+              color: #444;
+              margin: 1px 0;
+            }
             .order-card.p1_po { 
               background: #fff5e6; 
               border-color: #ffc069;
@@ -2224,7 +2247,13 @@ export default function LayupScheduler() {
                           </div>
                           
                           <div class="orders-list">
-                            ${orders.map((order: any, index: number) => {
+                            ${orders.sort((a: any, b: any) => {
+                              // Sort by priority score (lower = higher priority), then by order ID
+                              const aPriority = a.priorityScore || 99;
+                              const bPriority = b.priorityScore || 99;
+                              if (aPriority !== bPriority) return aPriority - bPriority;
+                              return (a.orderId || '').localeCompare(b.orderId || '');
+                            }).map((order: any, index: number) => {
                               const modelId = order.stockModelId || order.modelId;
                               const materialType = getMaterialType(modelId || '');
                               const isProduction = order.source === 'production_order';

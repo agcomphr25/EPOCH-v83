@@ -1,119 +1,12 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It provides end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The system aims to streamline operations for customizable product manufacturers, enhancing efficiency and scalability. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities and deployable to both web and mobile platforms via Capacitor. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers, enabling them to scale operations efficiently and competitively.
+EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. It provides end-to-end order management, inventory tracking, employee portal functionality, and quality control workflows. The system aims to streamline operations, enhance efficiency, and improve scalability for customizable product manufacturers. It is a full-stack TypeScript application with a React frontend and Express backend, featuring Progressive Web App (PWA) capabilities and deployable to both web and mobile platforms via Capacitor. The project's vision is to become the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 Order finalization rules: Orders with "None" or empty stock models cannot be finalized and sent to the Production Queue. The system will block finalization with a clear error message.
-
-## Order Creation & Production Flow (Updated 2025-08-15)
-**Streamlined Order-to-Production Process:**
-1. **Direct Finalization**: Orders created via "Create Order" bypass drafts and go directly to P1 Production Queue (not Layup)
-2. **Auto-Population**: All finalized orders with valid stock models (except "None") automatically appear in P1 Production Queue
-3. **Legacy Draft Process**: Draft orders only created when explicitly saved as drafts, require manual finalization
-4. **Department Flow**: P1 Production Queue → Layup Scheduler → Layup/Plugging → Manufacturing Pipeline
-5. **Layup Scheduler**: Uses Mon-Thu scheduling, employee production rates, and mold capacities for optimal weekly schedules
-6. **Manual Adjustments**: Allow moving orders between days (Mon-Fri visible, but only Mon-Thu scheduled by default)
-
-**Work Day Scheduling Status (2025-08-15):**
-✅ **FIXED**: Algorithmic scheduler now properly respects selected work days
-✅ **VERIFIED**: Orders are distributed across Monday-Thursday as configured  
-✅ **WORKING**: No Friday assignments are being made
-✅ **COMPLETE**: Comprehensive production queue flow is functional
-✅ **VALIDATED**: Database queries confirm no Friday (day 5) schedules exist
-✅ **CONFIRMED**: All logic preventing Friday scheduling is working correctly
-
-**Mobile Barcode Scanning Status (2025-08-15):**
-✅ **RESOLVED**: Mobile camera "stuck on Use Camera" issue fixed
-✅ **ENHANCED**: Added mobile-specific video constraints and initialization
-✅ **IMPLEMENTED**: Comprehensive diagnostic tool for troubleshooting camera issues
-✅ **OPTIMIZED**: iOS/Android-specific camera handling and fallback constraints
-✅ **VERIFIED**: Working correctly on mobile devices after deployment
-
-**All Orders Search Functionality (2025-08-15):**
-✅ **RESOLVED**: Search issue where new orders weren't appearing in All Orders list
-✅ **FIXED**: Data synchronization problem between order_drafts and all_orders tables
-✅ **ENHANCED**: Direct order creation process bypassing drafts for finalized orders
-✅ **VERIFIED**: Orders now searchable immediately after creation
-
-**Layup Scheduler Architecture Separation (2025-08-16):**
-✅ **IMPLEMENTED**: Separated priority logic into dedicated OrderPriorityService module
-✅ **CREATED**: LayupSchedulerService for scheduling operations isolated from UI concerns
-✅ **ENHANCED**: Clean separation between business logic and display components
-✅ **IMPROVED**: Maintainability for complex rules between regular orders and PO orders
-✅ **VERIFIED**: Simplified debugging and testing with modular architecture
-
-**Priority System Correction (2025-08-17):**
-✅ **CORRECTED**: Mesa Universal orders are PO orders, not highest priority
-✅ **UNIFIED**: Regular orders and PO orders (including Mesa Universal) have same base priority (50)
-✅ **REMOVED**: Incorrect 1-4 scoring system that misclassified order types
-✅ **IMPLEMENTED**: Two-tier system: production_order (50) vs needs_information (99)
-✅ **ENHANCED**: Urgency bonus system (-10 to +5) based on due date proximity
-✅ **ELIMINATED**: Automatic fallback to FG Alpine Hunter for unclear orders
-✅ **CREATED**: Queue system for orders needing more information instead of auto-assignment
-
-**Drag & Drop Enhancement & Friday Column (2025-08-17):**
-✅ **RESOLVED**: Fixed column 4 targeting issue - cards now drop exactly where placed
-✅ **ENHANCED**: Complete grid structure ensures all date columns exist as drop targets
-✅ **IMPLEMENTED**: Friday column always visible as "Manual Only" for flexible scheduling
-✅ **PRESERVED**: Algorithmic scheduler respects Monday-Thursday work week as designed
-✅ **IMPROVED**: Manual Friday drops allowed while maintaining automatic scheduling constraints
-✅ **OPTIMIZED**: Collision detection using closestCorners for precision targeting
-
-**Card Color Classification Fix (2025-08-18):**
-✅ **FIXED**: Incorrect purchase order classification removing false PO badges
-✅ **CORRECTED**: Backend logic now distinguishes customer names from actual PO numbers
-✅ **UPDATED**: Material detection logic handles all model ID patterns (alpine_hunter_tikka, privateer-tikka, apr_hunter, etc.)
-✅ **IMPLEMENTED**: CF cards show orange-200, FG cards show orange-600, PO cards show purple
-✅ **RESOLVED**: All 594 orders now display with correct colors and classifications
-
-**Schedule Save Button Fix (2025-08-18):**
-✅ **RESOLVED**: Date handling error preventing layup schedule saves (toISOString error)
-✅ **FIXED**: Single schedule entry endpoint (/api/layup-schedule) date conversion
-✅ **FIXED**: Bulk schedule save endpoint (/api/layup-schedule/save) date conversion
-✅ **ENHANCED**: Proper Date object handling for database insertion
-✅ **UPDATED**: Save Schedule now only saves the weekly schedule without moving orders to departments
-
-**Department Progression Logic Standardization (2025-08-18):**
-✅ **UNIFIED**: Both OrdersList.tsx and AllOrdersList.tsx now use identical department flow arrays
-✅ **STANDARDIZED**: Department progression: P1 Production Queue → Layup/Plugging → Barcode → CNC → Finish → Gunsmith → Paint → Shipping QC → Shipping
-✅ **FIXED**: AG367 department progression button visibility by handling "Layup/Plugging" combined department
-✅ **SIMPLIFIED**: Removed special case handling since "Layup/Plugging" is now in standard flow
-
-**Print Layout Optimization (2025-08-18):**
-✅ **IMPLEMENTED**: Smart print filtering that only shows molds and dates with assigned orders
-✅ **REMOVED**: Empty cells from print view for cleaner, more readable schedules
-✅ **ENHANCED**: Compact table structure showing only relevant information
-✅ **REBUILT**: Complete print table logic to eliminate all empty cells and create truly clean layouts
-✅ **REDESIGNED**: Daily-focused production floor layout with completion checkboxes, customer info, and mold assignments
-✅ **FIXED**: "currentWeek is not defined" error - print function now uses currentDate state variable
-✅ **VERIFIED**: Print button correctly displays the week currently visible in scheduler
-
-## Interface Components Reference
-**IMPORTANT: Multiple Order List Interfaces Exist**
-
-The system has several different order list components. When the user refers to "All Orders" interface, clarify which specific component they're viewing:
-
-1. **OrdersList.tsx** (`client/src/pages/OrdersList.tsx`)
-   - Primary orders interface accessed via main navigation
-   - Features: Department filter, Sort by (Order Date, Due Date, Order ID, Customer, Model, Department), Order dropdown (Newest/Oldest First)
-   - Table columns: Order ID, Current Department, Customer, Model, Order Date, Due Date, Actions
-   - Has kickback badges, payment status, and comprehensive search
-
-2. **AllOrdersPage.tsx** (`client/src/pages/AllOrdersPage.tsx`)
-   - Alternative orders page with simpler interface
-   - Features: Department filter, Sort by (Order Date, Due Date, Customer, Model)
-   - Different table layout and functionality
-
-3. **AllOrdersList.tsx** (`client/src/components/AllOrdersList.tsx`)  
-   - Component version with enhanced features
-   - Features: Search, Department filter, Sort by (Order Date, Due Date, Customer, Model)
-   - Table columns: Order ID, Payment Status, Order Date, Customer, Product, Current Department, Due Date, Status, Actions
-   - Includes payment badges, kickback tracking, communication tools
-
-**Best Practice**: When user mentions "All Orders", ask them to specify which interface they're referring to by describing visible features (e.g., "the one with Payment Status column" or "the one with the Order dropdown showing Newest First").
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
@@ -133,17 +26,17 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Backend**: Express.js with TypeScript, utilizing TanStack Query for server state management, Zod for runtime validation, and Axios for external API calls.
 -   **Database**: PostgreSQL managed via Neon serverless, with Drizzle ORM for type-safe database operations and Drizzle-kit for schema migrations.
 -   **Core Features**:
-    -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders.
-    -   **Layup Scheduler**: Comprehensive auto-scheduling system with production queue auto-population, priority scoring by due date and entry order, Monday-Thursday default scheduling with Friday visibility for manual adjustments. Features drag-and-drop, mold matching, employee capacity management, and automatic department progression when schedules are saved and locked.
-    -   **Production Queue Manager**: Auto-populate production queue from finalized orders with valid stock models, calculate priority scores based on due date urgency, manage queue positions with manual priority adjustments, and provide comprehensive production flow management.
-    -   **Department Manager**: Enhanced navigation with department-specific views (e.g., Shipping QC, Shipping). Displays comprehensive order details via tooltips.
+    -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders. Includes streamlined order-to-production process with direct finalization and auto-population to P1 Production Queue.
+    -   **Layup Scheduler**: Comprehensive auto-scheduling system with production queue auto-population, priority scoring, Monday-Thursday default scheduling with Friday visibility for manual adjustments. Features drag-and-drop, mold matching, employee capacity management, and automatic department progression. Includes lock/unlock functionality for schedules.
+    -   **Production Queue Manager**: Auto-populates production queue from finalized orders, calculates priority scores based on due date urgency, manages queue positions with manual adjustments, and provides comprehensive production flow management.
+    -   **Department Manager**: Enhanced navigation with department-specific views and comprehensive order details via tooltips. Standardized department progression: P1 Production Queue → Layup/Plugging → Barcode → CNC → Finish → Gunsmith → Paint → Shipping QC → Shipping.
     -   **Customer Management**: Comprehensive CRM with CSV import/update, integrated address validation, and enhanced contact/address display.
     -   **Inventory Management**: Enhanced with search, BOM integration, and part number display.
     -   **P1 & P2 Systems**: Distinct modules for P1 (regular) and P2 (OEM/supplier) orders, customers, purchase orders, and production order generation based on BOMs.
     -   **Barcode System**: Integrated P1 order barcode generation (Code 39) with scanner integration and Avery label printing.
     -   **Employee Management**: Full CRUD API for employee profiles, certifications, performance evaluations, and document management, including a secure employee portal with time clock and checklist functionality.
     -   **Quality Control**: Workflows for digital signature capture, validation, and comprehensive submissions management for checklists.
-    -   **Reporting**: Enhanced sales order PDF generation with customer information and readable feature names.
+    -   **Reporting**: Enhanced sales order PDF generation with customer information and readable feature names. Includes smart print filtering for production schedules.
     -   **Payment Tracking**: Integrated 'PAID' badge functionality with consistent payment data across the system.
     -   **Shipping Integration**: Full UPS API integration for label creation, rate calculation, and tracking.
     -   **Centralized Configuration**: `shared/company-config.ts` centralizes company information and certification templates.

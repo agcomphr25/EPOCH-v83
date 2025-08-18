@@ -103,10 +103,21 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
 
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
+    // Direct CF prefixes
     if (modelId.startsWith('cf_')) return 'CF';
+    // Direct FG prefixes
     if (modelId.startsWith('fg_')) return 'FG';
+    // Exact FG match
+    if (modelId === 'fg') return 'FG';
+    // Material keywords
     if (modelId.includes('carbon')) return 'CF';
     if (modelId.includes('fiberglass')) return 'FG';
+    // FG suffix patterns
+    if (modelId.endsWith('_fg')) return 'FG';
+    // Default patterns for common models
+    if (modelId.includes('alpine_hunter_tikka') && !modelId.endsWith('_fg')) return 'CF';
+    if (modelId.includes('privateer-tikka') && !modelId.endsWith('_fg')) return 'CF';
+    if (modelId.includes('apr_hunter')) return 'CF';
     return null;
   };
 

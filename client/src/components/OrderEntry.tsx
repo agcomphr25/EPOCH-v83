@@ -77,6 +77,7 @@ export default function OrderEntry() {
   const [fbOrderNumber, setFbOrderNumber] = useState('');
   const [hasAGROrder, setHasAGROrder] = useState(false);
   const [agrOrderDetails, setAgrOrderDetails] = useState('');
+  const [isFlattop, setIsFlattop] = useState(false);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -747,6 +748,7 @@ export default function OrderEntry() {
         setFbOrderNumber(order.fbOrderNumber || '');
         setAgrOrderDetails(order.agrOrderDetails || '');
         setHasAGROrder(!!order.agrOrderDetails);
+        setIsFlattop(order.isFlattop || false);
         setShipping(order.shipping || 36.95);
         setIsCustomOrder(order.isCustomOrder === 'yes');
         // Load notes from either the dedicated notes column or features.specialInstructions for backward compatibility
@@ -1019,6 +1021,7 @@ export default function OrderEntry() {
         customerPO: hasCustomerPO ? customerPO : '',
         fbOrderNumber,
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
+        isFlattop,
         shipping,
         status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
@@ -1101,6 +1104,7 @@ export default function OrderEntry() {
     setFbOrderNumber('');
     setHasAGROrder(false);
     setAgrOrderDetails('');
+    setIsFlattop(false);
     setDiscountCode('');
     setCustomDiscountType('percent');
     setCustomDiscountValue(0);
@@ -1263,6 +1267,36 @@ export default function OrderEntry() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Flattop Option */}
+              <div className="flex items-center space-x-2 p-3 border rounded-lg bg-yellow-50">
+                <Checkbox 
+                  id="flattop-checkbox"
+                  checked={isFlattop}
+                  onCheckedChange={(checked) => {
+                    setIsFlattop(!!checked);
+                    if (checked) {
+                      // Clear features that are not available for flattop
+                      setFeatures(prev => ({
+                        ...prev,
+                        action_length: undefined,
+                        action_inlet: undefined,
+                        bottom_metal: undefined,
+                        barrel_inlet: undefined
+                      }));
+                    }
+                  }}
+                />
+                <Label 
+                  htmlFor="flattop-checkbox" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Flattop
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                  (Stock not machined for Action Length, Action Inlet, Bottom Metal, or Barrel Inlet)
+                </span>
               </div>
 
               {/* Order Attachments */}
@@ -1444,9 +1478,10 @@ export default function OrderEntry() {
                       key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                       value={features.action_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_inlet: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
@@ -1482,9 +1517,10 @@ export default function OrderEntry() {
                     <Select 
                       value={features.barrel_inlet || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, barrel_inlet: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs
@@ -1738,9 +1774,10 @@ export default function OrderEntry() {
                       key={`action-length-${renderKey}-${features.action_length || 'empty'}`}
                       value={features.action_length || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, action_length: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Short" />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Short"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="short">Short</SelectItem>
@@ -1770,9 +1807,10 @@ export default function OrderEntry() {
                       key={`bottom-metal-${renderKey}-${features.bottom_metal || 'empty'}`}
                       value={features.bottom_metal || undefined} 
                       onValueChange={(value) => setFeatures(prev => ({ ...prev, bottom_metal: value }))}
+                      disabled={isFlattop}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
+                      <SelectTrigger className={isFlattop ? "opacity-50 cursor-not-allowed" : ""}>
+                        <SelectValue placeholder={isFlattop ? "Not Available (Flattop)" : "Select..."} />
                       </SelectTrigger>
                       <SelectContent>
                         {featureDefs

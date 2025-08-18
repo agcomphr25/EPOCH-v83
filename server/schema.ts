@@ -29,6 +29,7 @@ export const allOrders = pgTable("all_orders", {
   customerPO: text("customer_po"),
   fbOrderNumber: text("fb_order_number"),
   agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
   isCustomOrder: text("is_custom_order"), // "yes", "no", or null
   modelId: text("model_id"),
   handedness: text("handedness"),
@@ -247,6 +248,7 @@ export const orderDrafts = pgTable("order_drafts", {
   customerPO: text("customer_po"),
   fbOrderNumber: text("fb_order_number"),
   agrOrderDetails: text("agr_order_details"),
+  isFlattop: boolean("is_flattop").default(false),
   isCustomOrder: text("is_custom_order"), // "yes", "no", or null
   modelId: text("model_id"),
   handedness: text("handedness"),

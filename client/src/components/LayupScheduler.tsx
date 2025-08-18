@@ -2129,13 +2129,18 @@ export default function LayupScheduler() {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
             }
 
-            // Sort dates and filter to only include Monday-Friday (days 1-5)
+            // Filter dates to only include current week (Monday-Friday)
+            const currentWeekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
+            const currentWeekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 }); // Sunday
+            
             const sortedDates = Array.from(assignmentMap.keys())
               .sort()
               .filter(dateStr => {
                 const date = new Date(dateStr);
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
-                return dayOfWeek >= 1 && dayOfWeek <= 5; // Only Monday through Friday
+                // Only Monday through Friday AND within current week
+                return dayOfWeek >= 1 && dayOfWeek <= 5 && 
+                       date >= currentWeekStart && date <= currentWeekEnd;
               });
             
             return sortedDates.map(dateStr => {

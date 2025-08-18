@@ -2068,20 +2068,22 @@ export default function LayupScheduler() {
                 min-height: 25px !important; 
               }
               .order-card { 
-                margin: 0 0 0.5px 0 !important; 
-                padding: 1px 2px !important; 
-                font-size: 6px !important;
+                margin: 0 0 1px 0 !important; 
+                padding: 2px 3px !important; 
+                font-size: 8px !important;
               }
               .order-id {
-                font-size: 6px !important;
+                font-size: 8px !important;
               }
               .order-details {
-                font-size: 9px !important;
+                font-size: 12px !important;
                 font-weight: bold !important;
+                line-height: 1.2 !important;
               }
               .mold-info {
-                font-size: 9px !important;
+                font-size: 12px !important;
                 font-weight: bold !important;
+                line-height: 1.2 !important;
               }
               .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
                 font-size: 4px !important;
@@ -2111,11 +2113,22 @@ export default function LayupScheduler() {
           ${(() => {
             // Build map of all mold-date-orders combinations that have assignments
             const assignmentMap = new Map();
+            console.log('🖨️ PRINT DEBUG: Processing orderAssignments for print:', Object.keys(orderAssignments).length, 'total assignments');
+            
             Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
               const order = orders.find(o => o.orderId === orderId);
               if (!order) return;
               
               const assignmentDateOnly = assignment.date.split('T')[0];
+              const assignmentDate = new Date(assignmentDateOnly);
+              const dayOfWeek = assignmentDate.getDay();
+              const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+              
+              // Log Thursday assignments specifically
+              if (dayOfWeek === 4) {
+                console.log(`🖨️ THURSDAY ASSIGNMENT FOUND: ${orderId} → ${assignment.moldId} on ${assignmentDateOnly} (${dayName})`);
+              }
+              
               const key = `${assignmentDateOnly}`;
               
               if (!assignmentMap.has(key)) {
@@ -2131,6 +2144,14 @@ export default function LayupScheduler() {
               }
               dayData.moldAssignments.get(assignment.moldId).push(order);
             });
+
+            // Debug: Show what dates we have in assignmentMap
+            console.log('🖨️ PRINT DEBUG: assignmentMap dates:', Array.from(assignmentMap.keys()).map(dateStr => {
+              const date = new Date(dateStr);
+              const dayOfWeek = date.getDay();
+              const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+              return `${dateStr} (${dayName})`;
+            }));
 
             if (assignmentMap.size === 0) {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';

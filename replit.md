@@ -74,7 +74,12 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **FIXED**: Single schedule entry endpoint (/api/layup-schedule) date conversion
 ✅ **FIXED**: Bulk schedule save endpoint (/api/layup-schedule/save) date conversion
 ✅ **ENHANCED**: Proper Date object handling for database insertion
-✅ **CONFIRMED**: Save Schedule button locks weekly schedule and progresses orders to Layup/Plugging department
+✅ **UPDATED**: Save Schedule now only saves the weekly schedule without moving orders to departments
+
+**Print Layout Optimization (2025-08-18):**
+✅ **IMPLEMENTED**: Smart print filtering that only shows molds and dates with assigned orders
+✅ **REMOVED**: Empty cells from print view for cleaner, more readable schedules
+✅ **ENHANCED**: Compact table structure showing only relevant information
 
 ## Interface Components Reference
 **IMPORTANT: Multiple Order List Interfaces Exist**

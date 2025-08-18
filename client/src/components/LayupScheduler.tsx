@@ -3784,28 +3784,40 @@ export default function LayupScheduler() {
                           <Button 
                             onClick={async () => {
                               try {
-                                // Get all scheduled order IDs
-                                const scheduledOrderIds = Object.keys(orderAssignments);
-                                console.log('🏭 Saving schedule and pushing orders to Layup/Plugging:', scheduledOrderIds);
+                                // Prepare schedule entries for saving (without moving orders)
+                                const scheduleEntries = Object.entries(orderAssignments).map(([orderId, assignment]) => ({
+                                  orderId,
+                                  scheduledDate: assignment.date,
+                                  moldId: assignment.moldId,
+                                  employeeId: assignment.employeeId || null,
+                                  isOverride: assignment.isOverride || false
+                                }));
+
+                                console.log('💾 Saving weekly schedule only:', scheduleEntries.length, 'entries');
                                 
-                                // Push orders to layup/plugging department
-                                const response = await fetch('/api/push-to-layup-plugging', {
+                                // Save schedule entries only (no department changes)
+                                const response = await fetch('/api/layup-schedule/save', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ orderIds: scheduledOrderIds })
+                                  body: JSON.stringify({
+                                    scheduleEntries,
+                                    weekStart: dates[0].toISOString(),
+                                    workDays: selectedWorkDays
+                                  })
                                 });
                                 
                                 const result = await response.json();
                                 
                                 if (result.success) {
-                                  // Clear the schedule after successful save
-                                  setOrderAssignments({});
-                                  console.log('✅ Schedule saved and orders pushed to Layup/Plugging department');
+                                  console.log('✅ Weekly schedule saved successfully');
                                   
                                   // Show success feedback
-                                  alert(`Successfully saved schedule and moved ${result.updatedOrders.length} orders to Layup/Plugging Department Manager!`);
+                                  alert(`Successfully saved weekly schedule with ${scheduleEntries.length} order assignments!`);
+                                  
+                                  // Keep the schedule visible (don't clear orderAssignments)
+                                  // This allows viewing the saved schedule and making adjustments
                                 } else {
-                                  console.error('❌ Failed to push orders:', result.error);
+                                  console.error('❌ Failed to save schedule:', result.error);
                                   alert('Failed to save schedule: ' + result.error);
                                 }
                               } catch (error) {

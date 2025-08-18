@@ -63,48 +63,18 @@ router.post('/save', async (req: Request, res: Response) => {
         ]);
 
         savedCount++;
-
-        // Progress order to Layup/Plugging department
-        const progressResult = await pool.query(`
-          UPDATE all_orders 
-          SET 
-            current_department = 'Layup/Plugging',
-            department_history = CASE
-              WHEN department_history IS NULL THEN 
-                jsonb_build_array(jsonb_build_object(
-                  'department', 'Layup/Plugging', 
-                  'timestamp', $1,
-                  'scheduledDate', $2
-                ))
-              ELSE 
-                department_history || jsonb_build_array(jsonb_build_object(
-                  'department', 'Layup/Plugging', 
-                  'timestamp', $1,
-                  'scheduledDate', $2
-                ))
-            END,
-            updated_at = $1
-          WHERE order_id = $3 OR orderId = $3
-        `, [new Date().toISOString(), processedScheduledDate.toISOString(), orderId]);
-
-        if (progressResult.rowCount && progressResult.rowCount > 0) {
-          progressedCount++;
-          console.log(`✅ Order ${orderId} scheduled for ${scheduledDate} and progressed to Layup/Plugging`);
-        } else {
-          console.log(`⚠️ Order ${orderId} scheduled but not found for progression`);
-        }
+        console.log(`✅ Order ${orderId} scheduled for ${scheduledDate} (schedule only, no department change)`);
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
-      console.log(`✅ Successfully saved ${savedCount} schedule entries and progressed ${progressedCount} orders to Layup/Plugging`);
+      console.log(`✅ Successfully saved ${savedCount} schedule entries (no department changes)`);
       
       res.json({
         success: true,
-        message: `Schedule saved successfully`,
+        message: `Weekly schedule saved successfully`,
         entriesSaved: savedCount,
-        ordersProgressed: progressedCount,
         weekStart: weekStart,
         workDays: workDays
       });

@@ -2152,6 +2152,14 @@ export default function LayupScheduler() {
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
               return `${dateStr} (${dayName})`;
             }));
+            
+            // Debug: Show current week calculation
+            console.log('🖨️ CURRENT WEEK DEBUG:', {
+              currentDate: currentDate.toString(),
+              weekStart: currentWeekStart.toString(),
+              weekEnd: currentWeekEnd.toString(),
+              today: new Date().toString()
+            });
 
             if (assignmentMap.size === 0) {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';

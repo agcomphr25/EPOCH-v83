@@ -841,13 +841,13 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       }
     }
 
-    // Remove order from production queue if it exists there
+    // Remove order from layup queue if it exists there
     try {
-      await storage.deleteProductionQueueItem(orderId);
-      console.log('🔧 Removed order from production queue:', orderId);
-    } catch (productionQueueError) {
-      console.log('🔧 Order was not in production queue or removal failed:', productionQueueError);
-      // Don't fail the cancellation if production queue removal fails
+      await storage.deleteLayupQueueItem(orderId);
+      console.log('🔧 Removed order from layup queue:', orderId);
+    } catch (layupQueueError) {
+      console.log('🔧 Order was not in layup queue or removal failed:', layupQueueError);
+      // Don't fail the cancellation if layup queue removal fails
     }
 
     console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);

@@ -194,6 +194,11 @@ export default function AllOrdersList() {
 
 
   const filteredOrders = (orders || []).filter((order: any) => {
+    // Don't show cancelled orders
+    if (order.status === 'CANCELLED' || order.isCancelled) {
+      return false;
+    }
+
     // Department filter
     const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
 
@@ -213,8 +218,6 @@ export default function AllOrdersList() {
     ].filter(Boolean);
 
     const searchMatch = searchFields.some(field => field?.includes(searchLower));
-
-
 
     return departmentMatch && searchMatch;
   });

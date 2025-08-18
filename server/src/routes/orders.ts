@@ -472,6 +472,72 @@ router.post('/:id/scrap', async (req: Request, res: Response) => {
   }
 });
 
+// Move order back to draft for editing
+router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    
+    // Get the current order
+    const currentOrder = await storage.getOrderById(orderId);
+    if (!currentOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Move order back to draft status by copying to order_drafts table
+    const draftData = {
+      orderId: currentOrder.orderId,
+      customerId: currentOrder.customerId,
+      orderDate: currentOrder.orderDate,
+      dueDate: currentOrder.dueDate,
+      modelId: currentOrder.modelId,
+      features: currentOrder.features,
+      handedness: currentOrder.handedness,
+      totalPrice: currentOrder.totalPrice || 0,
+      notes: currentOrder.notes,
+      status: 'draft',
+      source: currentOrder.source || 'main_orders',
+      paymentAmount: currentOrder.paymentAmount,
+      paymentDate: currentOrder.paymentDate,
+      paymentType: currentOrder.paymentType,
+      discountCode: currentOrder.discountCode,
+      customDiscountType: currentOrder.customDiscountType,
+      customDiscountValue: currentOrder.customDiscountValue,
+      showCustomDiscount: currentOrder.showCustomDiscount,
+      priceOverride: currentOrder.priceOverride,
+      isFlattop: currentOrder.isFlattop || false
+    };
+
+    // Create draft order
+    const draftOrder = await storage.createOrderDraft(draftData);
+    
+    // Remove from finalized orders
+    await storage.deleteOrder(orderId);
+
+    res.json({ 
+      success: true, 
+      message: "Order moved to draft for editing",
+      draftOrder 
+    });
+  } catch (error) {
+    console.error('Move to draft error:', error);
+    res.status(500).json({ error: "Failed to move order to draft" });
+  }
+});
+
+// Progress order to next department
+router.post('/:id/progress', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const { nextDepartment } = req.body;
+    
+    const updatedOrder = await storage.progressOrder(orderId, nextDepartment);
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Progress order error:', error);
+    res.status(500).json({ error: "Failed to progress order" });
+  }
+});
+
 // Purchase Orders
 router.get('/purchase-orders', async (req: Request, res: Response) => {
   try {

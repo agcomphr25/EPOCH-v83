@@ -76,6 +76,12 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 ✅ **ENHANCED**: Proper Date object handling for database insertion
 ✅ **UPDATED**: Save Schedule now only saves the weekly schedule without moving orders to departments
 
+**Department Progression Logic Standardization (2025-08-18):**
+✅ **UNIFIED**: Both OrdersList.tsx and AllOrdersList.tsx now use identical department flow arrays
+✅ **STANDARDIZED**: Department progression: P1 Production Queue → Layup/Plugging → Barcode → CNC → Finish → Gunsmith → Paint → Shipping QC → Shipping
+✅ **FIXED**: AG367 department progression button visibility by handling "Layup/Plugging" combined department
+✅ **SIMPLIFIED**: Removed special case handling since "Layup/Plugging" is now in standard flow
+
 **Print Layout Optimization (2025-08-18):**
 ✅ **IMPLEMENTED**: Smart print filtering that only shows molds and dates with assigned orders
 ✅ **REMOVED**: Empty cells from print view for cleaner, more readable schedules

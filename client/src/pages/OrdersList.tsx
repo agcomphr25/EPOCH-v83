@@ -215,13 +215,8 @@ export default function OrdersList() {
   // Department progression functions
   const getNextDepartment = (currentDepartment: string) => {
     const departmentFlow = [
-      'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
-    
-    // Handle combined "Layup/Plugging" department
-    if (currentDepartment === 'Layup/Plugging') {
-      return 'CNC'; // After Layup/Plugging, next is CNC
-    }
     
     const currentIndex = departmentFlow.indexOf(currentDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {

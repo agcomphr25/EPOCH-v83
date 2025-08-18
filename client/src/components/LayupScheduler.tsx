@@ -1971,9 +1971,10 @@ export default function LayupScheduler() {
               font-size: 8px;
             }
             .order-details {
-              font-size: 7px;
+              font-size: 10px;
               margin-top: 1px;
               opacity: 0.9;
+              font-weight: bold;
             }
             .material-badge {
               display: inline-block;
@@ -2015,10 +2016,10 @@ export default function LayupScheduler() {
               margin-top: 1px;
             }
             .mold-info {
-              font-size: 7px;
+              font-size: 10px;
               margin-top: 1px;
               font-weight: bold;
-              opacity: 0.8;
+              opacity: 0.9;
             }
             @media print { 
               body { 
@@ -2075,10 +2076,12 @@ export default function LayupScheduler() {
                 font-size: 6px !important;
               }
               .order-details {
-                font-size: 5px !important;
+                font-size: 9px !important;
+                font-weight: bold !important;
               }
               .mold-info {
-                font-size: 5px !important;
+                font-size: 9px !important;
+                font-weight: bold !important;
               }
               .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
                 font-size: 4px !important;

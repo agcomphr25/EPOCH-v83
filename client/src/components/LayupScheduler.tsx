@@ -1088,11 +1088,11 @@ export default function LayupScheduler() {
       // Auto-trigger scheduling if no assignments exist yet
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
-        console.log('🎯 Auto-triggering initial schedule generation');
-        console.log('🎯 About to auto-schedule:', orders.length, 'orders');
-        setTimeout(() => {
-          handleAutoSchedule();
-        }, 1000); // Increased delay to ensure component is fully loaded
+        console.log('🎯 Auto-scheduling temporarily disabled to prevent React render errors');
+        console.log('🎯 Would auto-schedule:', orders.length, 'orders');
+        // setTimeout(() => {
+        //   handleAutoSchedule();
+        // }, 1000); // Increased delay to ensure component is fully loaded
       }
     } else {
       console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
@@ -1568,6 +1568,11 @@ export default function LayupScheduler() {
       }
     } catch (error) {
       console.error('❌ PRODUCTION FLOW: Error generating schedule:', error);
+      toast({
+        title: "Schedule Generation Failed",
+        description: "Failed to generate algorithmic schedule. Please try again.",
+        variant: "destructive"
+      });
     }
   }, [orders, molds, employees]);
 
@@ -1644,10 +1649,11 @@ export default function LayupScheduler() {
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
         
         // Auto-trigger the algorithmic scheduler to process the production queue
-        setTimeout(() => {
-          console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
-          generateAlgorithmicSchedule();
-        }, 1000);
+        console.log('🤖 PRODUCTION FLOW: Auto-scheduling temporarily disabled to prevent React render errors');
+        // setTimeout(() => {
+        //   console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
+        //   generateAlgorithmicSchedule();
+        // }, 1000);
       } else {
         console.log('🏭 PRODUCTION FLOW: Schedule looks complete -', scheduledOrderCount, 'scheduled,', unscheduledOrderCount, 'remaining');
       }

@@ -29,6 +29,20 @@ export function useUnifiedLayupOrders() {
   // P2 orders are now handled separately in P2LayupScheduler
   const { data: p1Orders = [], isLoading: p1Loading, error } = useQuery({
     queryKey: ['/api/p1-layup-queue'],
+    queryFn: async () => {
+      console.log('🚀 Making direct API call to /api/p1-layup-queue');
+      const response = await fetch('/api/p1-layup-queue');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('🎯 Direct API response:', {
+        status: response.status,
+        length: data?.length,
+        firstItem: data?.[0]?.orderId
+      });
+      return data;
+    },
     select: (data: any) => {
       console.log('🔧 RAW API RESPONSE:', {
         dataType: typeof data,
@@ -36,11 +50,12 @@ export function useUnifiedLayupOrders() {
         length: data?.length || 0,
         hasData: !!data,
         firstItem: data?.[0],
-        keys: data ? Object.keys(data) : 'no data'
+        keys: data ? Object.keys(data) : 'no data',
+        fullResponse: data
       });
       
       if (!data) {
-        console.error('❌ No data received from API');
+        console.error('❌ No data received from API - data is falsy');
         return [];
       }
       
@@ -50,21 +65,29 @@ export function useUnifiedLayupOrders() {
       }
       
       console.log(`✅ Successfully loaded ${data.length} orders from API`);
+      if (data.length > 0) {
+        console.log('✅ Sample order data:', data[0]);
+      }
       return data;
     },
-    retry: 3,
-    refetchInterval: 5 * 60 * 1000, // Reduced to 5 minutes instead of 30 seconds
-    staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-    refetchOnWindowFocus: false, // Don't refetch when user returns to tab
-    refetchOnMount: true, // Only refetch when component mounts
+    retry: 1,
+    refetchInterval: false, // Disable automatic refetching for debugging
+    staleTime: 0, // Always consider data stale for debugging
+    refetchOnWindowFocus: false,
+    refetchOnMount: true
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {
     p1OrdersCount: p1Orders?.length || 0,
     loading: p1Loading,
     error: error,
-    hasData: !!p1Orders
+    hasData: !!p1Orders,
+    p1OrdersFirst3: p1Orders?.slice(0, 3)
   });
+
+  if (error) {
+    console.error('❌ API Error in useUnifiedLayupOrders:', error);
+  }
 
   // Only P1 orders now - P2 orders excluded from unified scheduler
   const combinedOrders = [...p1Orders].sort((a, b) => {

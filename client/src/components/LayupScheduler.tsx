@@ -1598,6 +1598,22 @@ export default function LayupScheduler() {
     }
   }, [generatedSchedule]);
 
+  // Calculate dates based on view type
+  const dates = useMemo(() => {
+    if (viewType === 'week') {
+      const startDate = startOfWeek(currentDate, { weekStartsOn: 1 }); // Start on Monday
+      return Array.from({ length: 5 }, (_, i) => addDays(startDate, i)); // Monday to Friday
+    } else if (viewType === 'day') {
+      return [currentDate];
+    } else {
+      // Month view - return all days in month
+      return eachDayOfInterval({
+        start: startOfMonth(currentDate),
+        end: endOfMonth(currentDate)
+      });
+    }
+  }, [viewType, currentDate]);
+
   // Auto-trigger algorithmic scheduling when production queue has orders
   useEffect(() => {
     console.log('🎯 Production Flow Auto-schedule check:', {

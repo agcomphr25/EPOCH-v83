@@ -88,7 +88,7 @@ import {
 
 } from "./schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
@@ -1453,7 +1453,7 @@ export class DatabaseStorage implements IStorage {
           updatedAt: allOrders.updatedAt
         })
         .from(allOrders)
-        .leftJoin(customers, eq(allOrders.customerId, customers.id))
+        .leftJoin(customers, sql`${allOrders.customerId} = CAST(${customers.id} AS TEXT)`)
         .where(
           and(
             eq(allOrders.currentDepartment, department),

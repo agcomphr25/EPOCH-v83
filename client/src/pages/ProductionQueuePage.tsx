@@ -287,7 +287,14 @@ export default function ProductionQueuePage() {
                           className="rounded"
                         />
                         <div>
-                          <div className="font-medium text-gray-900">{order.orderId}</div>
+                          <div className="font-medium text-gray-900">
+                            {order.orderId}
+                            {order.fbOrderNumber && (
+                              <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                FB: {order.fbOrderNumber}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
                         </div>
                       </div>
@@ -374,7 +381,14 @@ export default function ProductionQueuePage() {
                         className="rounded"
                       />
                       <div>
-                        <div className="font-medium text-gray-900">{order.orderId}</div>
+                        <div className="font-medium text-gray-900">
+                          {order.orderId}
+                          {order.fbOrderNumber && (
+                            <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                              FB: {order.fbOrderNumber}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
                       </div>
                     </div>

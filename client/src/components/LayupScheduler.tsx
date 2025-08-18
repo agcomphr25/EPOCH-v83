@@ -127,14 +127,13 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   const materialType = getMaterialType(modelId || '');
 
   // Debug logging for material type detection (can be removed after verification)
-  if (['AG079', 'AG073', 'AG072', 'AG070', 'AG078', 'AH009', 'AG706'].includes(order.orderId)) {
+  if (['AG079', 'AG073', 'AG072', 'AG070', 'AG078'].includes(order.orderId)) {
     console.log(`🎨 CARD COLOR DEBUG for ${order.orderId}:`, {
       source: order.source,
       modelId: modelId,
       stockModelId: order.stockModelId,
       orderModelId: order.modelId,
       materialType: materialType,
-      fullOrder: order,
       expectedColor:
         order.source === 'production_order' ? 'PURPLE (Purchase Order)' :
         materialType === 'CF' ? 'DEEP ORANGE (CF)' :
@@ -194,18 +193,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
 
           const displayName = getModelDisplayName(modelId);
 
-          // Debug display issues
-          if (['AH009', 'AG706'].includes(order.orderId)) {
-            console.log(`🐛 ${order.orderId} DISPLAY DEBUG:`, {
-              orderId: order.orderId,
-              modelId: modelId,
-              stockModelId: order.stockModelId,
-              orderModelId: order.modelId,
-              displayName: displayName,
-              materialType: materialType,
-              getModelDisplayNameFunction: typeof getModelDisplayName
-            });
-          }
+
 
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
@@ -2417,18 +2405,7 @@ export default function LayupScheduler() {
 
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     
-    // Debug model lookup for problematic orders
-    if (['cf_adj_alp_hunter', 'cf_ferrata', 'mesa_universal'].includes(modelId)) {
-      console.log(`🔍 MODEL LOOKUP DEBUG for modelId: ${modelId}`, {
-        modelFound: !!model,
-        model: model,
-        stockModelsCount: stockModels.length,
-        firstStockModel: stockModels[0],
-        allModelIds: stockModels.map(m => m.id),
-        searchingFor: modelId,
-        exactMatch: stockModels.find(m => m.id === modelId)
-      });
-    }
+
     
     if (model?.displayName) {
       return model.displayName;

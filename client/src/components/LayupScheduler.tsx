@@ -2152,14 +2152,6 @@ export default function LayupScheduler() {
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
               return `${dateStr} (${dayName})`;
             }));
-            
-            // Debug: Show current week calculation
-            console.log('🖨️ CURRENT WEEK DEBUG:', {
-              currentDate: currentDate.toString(),
-              weekStart: currentWeekStart.toString(),
-              weekEnd: currentWeekEnd.toString(),
-              today: new Date().toString()
-            });
 
             if (assignmentMap.size === 0) {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
@@ -2168,6 +2160,14 @@ export default function LayupScheduler() {
             // Filter dates to only include current week (Monday-Friday)
             const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
             const currentWeekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
+            
+            // Debug: Show current week calculation
+            console.log('🖨️ CURRENT WEEK DEBUG:', {
+              currentDate: currentDate.toString(),
+              weekStart: currentWeekStart.toString(),
+              weekEnd: currentWeekEnd.toString(),
+              today: new Date().toString()
+            });
             
             const sortedDates = Array.from(assignmentMap.keys())
               .sort()

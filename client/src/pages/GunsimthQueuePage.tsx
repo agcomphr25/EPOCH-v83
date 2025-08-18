@@ -17,24 +17,21 @@ export default function GunsimthQueuePage() {
   // Get orders in Gunsmith department
   const gunsmithOrders = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Gunsmith' || 
-      (order.department === 'Gunsmith' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Gunsmith'
     );
   }, [allOrders]);
 
   // Count orders in previous department (Finish)
   const finishCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Finish'
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Paint)
   const paintCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Paint' || 
-      (order.department === 'Paint' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Paint'
     ).length;
   }, [allOrders]);
 

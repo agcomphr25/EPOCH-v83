@@ -17,24 +17,21 @@ export default function FinishQueuePage() {
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish' || 
-      (order.department === 'Finish' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Finish'
     );
   }, [allOrders]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'CNC' || 
-      (order.department === 'CNC' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'CNC'
     ).length;
   }, [allOrders]);
 
   // Count orders in next department (Gunsmith)
   const gunsmithCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Gunsmith' || 
-      (order.department === 'Gunsmith' && order.status === 'IN_PROGRESS')
+      order.currentDepartment === 'Gunsmith'
     ).length;
   }, [allOrders]);
 

@@ -87,14 +87,9 @@ export default function AllOrdersPage() {
         description: "Order progressed successfully",
       });
       
-      // Force immediate refetch of all related queries
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] }),
-        queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] })
-      ]);
+      // Clear all caches and force immediate refetch
+      queryClient.clear();
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: any, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -107,10 +102,11 @@ export default function AllOrdersPage() {
   });
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status', 'v2'],
+    queryKey: ['/api/orders/with-payment-status'],
     queryFn: () => apiRequest('/api/orders/with-payment-status'),
-    refetchInterval: 1000, // Refresh every 1 second for immediate updates
-    staleTime: 500 // Data becomes stale after 0.5 seconds
+    refetchInterval: 500, // Refresh every 0.5 seconds
+    staleTime: 0, // Data is always stale, force fresh fetch
+    gcTime: 0 // Don't cache at all (renamed from cacheTime in React Query v5)
   });
 
   // Cancel order mutation

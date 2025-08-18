@@ -2149,17 +2149,20 @@ export default function LayupScheduler() {
               const order = orders.find(o => o.orderId === orderId);
               if (!order) return;
               
+              // Ensure consistent date format (YYYY-MM-DD)
               const assignmentDateOnly = assignment.date.split('T')[0];
-              const assignmentDate = new Date(assignmentDateOnly);
+              const assignmentDate = new Date(assignmentDateOnly + 'T12:00:00'); // Add noon to avoid timezone issues
               const dayOfWeek = assignmentDate.getDay();
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
               
               // Log Thursday assignments specifically
               if (dayOfWeek === 4) {
                 console.log(`🖨️ THURSDAY ASSIGNMENT FOUND: ${orderId} → ${assignment.moldId} on ${assignmentDateOnly} (${dayName})`);
+                console.log(`   Full assignment object:`, assignment);
+                console.log(`   Order found:`, order ? 'YES' : 'NO');
               }
               
-              const key = `${assignmentDateOnly}`;
+              const key = assignmentDateOnly; // Use consistent YYYY-MM-DD format
               
               if (!assignmentMap.has(key)) {
                 assignmentMap.set(key, {
@@ -2182,6 +2185,14 @@ export default function LayupScheduler() {
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
               return `${dateStr} (${dayName})`;
             }));
+            
+            console.log('🖨️ RAW ORDER ASSIGNMENTS FOR PRINT:');
+            Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+              const assignmentDate = new Date(assignment.date);
+              const dayOfWeek = assignmentDate.getDay();
+              const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+              console.log(`   ${orderId} → ${assignment.moldId} on ${assignment.date} (${dayName}, day ${dayOfWeek})`);
+            });
 
             if (assignmentMap.size === 0) {
               return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
@@ -2202,13 +2213,21 @@ export default function LayupScheduler() {
             const sortedDates = Array.from(assignmentMap.keys())
               .sort()
               .filter(dateStr => {
-                const date = new Date(dateStr);
+                const date = new Date(dateStr + 'T12:00:00'); // Add noon time to avoid timezone issues
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
                 const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-                const inCurrentWeek = date >= currentWeekStart && date <= currentWeekEnd;
+                
+                // Compare dates using the same noon approach to avoid timezone issues
+                const weekStart = new Date(currentWeekStart);
+                weekStart.setHours(12, 0, 0, 0);
+                const weekEnd = new Date(currentWeekEnd);
+                weekEnd.setHours(12, 0, 0, 0);
+                
+                const inCurrentWeek = date >= weekStart && date <= weekEnd;
                 
                 console.log(`🖨️ DATE FILTER: ${dateStr} (${dayName}, day ${dayOfWeek}) - WorkDay: ${isWorkDay}, InWeek: ${inCurrentWeek}, Include: ${isWorkDay && inCurrentWeek}`);
+                console.log(`   Date comparison: ${date.toISOString()} vs Week: ${weekStart.toISOString()} to ${weekEnd.toISOString()}`);
                 
                 // Only Monday through Friday AND within current week
                 return isWorkDay && inCurrentWeek;

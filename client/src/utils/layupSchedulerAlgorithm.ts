@@ -143,10 +143,39 @@ export function calculateDailyCapacity(
  * Gets compatible molds for a stock model
  */
 export function getCompatibleMolds(stockModelId: string, molds: MoldCapacity[]): MoldCapacity[] {
-  return molds.filter(mold => 
-    mold.enabled && 
-    (mold.stockModels.includes(stockModelId) || mold.stockModels.includes('universal'))
-  );
+  if (!stockModelId) {
+    return [];
+  }
+
+  return molds.filter(mold => {
+    if (!mold.enabled) {
+      return false;
+    }
+    
+    // If mold has no stock model restrictions, it's universal
+    if (!mold.stockModels || mold.stockModels.length === 0) {
+      return true;
+    }
+    
+    // Check exact match first
+    if (mold.stockModels.includes(stockModelId)) {
+      return true;
+    }
+    
+    // Check for universal compatibility
+    if (mold.stockModels.includes('universal')) {
+      return true;
+    }
+    
+    // Special handling for common stock model variations
+    const normalizedStockModel = stockModelId.toLowerCase().replace(/[_-]/g, '');
+    const moldSupports = mold.stockModels.some(supported => {
+      const normalizedSupported = supported.toLowerCase().replace(/[_-]/g, '');
+      return normalizedSupported === normalizedStockModel;
+    });
+    
+    return moldSupports;
+  });
 }
 
 /**
@@ -247,6 +276,20 @@ export function generateScheduleAllocations(
             const usageB = moldDailyUsage.get(b.moldId)?.get(dateKey) || 0;
             return usageA - usageB;
           })[0];
+        
+        // Validate mold assignment
+        if (bestMold) {
+          console.log(`🔧 Assigning order ${order.orderId} (${group.stockModelId}) to mold ${bestMold.moldId} (${bestMold.modelName})`);
+          
+          // Double-check compatibility
+          const isCompatible = !bestMold.stockModels || bestMold.stockModels.length === 0 || 
+                              bestMold.stockModels.includes(group.stockModelId) ||
+                              bestMold.stockModels.includes('universal');
+          
+          if (!isCompatible) {
+            console.warn(`⚠️ MOLD COMPATIBILITY WARNING: Order ${order.orderId} (${group.stockModelId}) assigned to incompatible mold ${bestMold.moldId} (supports: ${bestMold.stockModels?.join(', ') || 'universal'})`);
+          }
+        }
         
         if (bestMold) {
           // Allocate this order

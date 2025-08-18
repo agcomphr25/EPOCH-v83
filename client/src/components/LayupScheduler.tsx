@@ -52,7 +52,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
     setNodeRef,
     transform,
     isDragging,
-  } = useDraggable({ 
+  } = useDraggable({
     id: order.orderId,
     data: {
       type: 'order',
@@ -132,7 +132,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
       source: order.source,
       modelId: modelId,
       materialType: materialType,
-      expectedColor: 
+      expectedColor:
         order.source === 'production_order' ? 'PURPLE (Purchase Order)' :
         materialType === 'CF' ? 'DEEP ORANGE (CF)' :
         materialType === 'FG' ? 'LIGHT ORANGE (FG)' : 'GRAY (Unknown)'
@@ -281,7 +281,7 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
                 'remington_700_long': 'LA',
                 'rem_700': 'SA',
                 'rem_700_short': 'SA',
-                'rem_700_long': 'LA', 
+                'rem_700_long': 'LA',
                 'tikka_t3': 'SA',
                 'tikka_short': 'SA',
                 'tikka_long': 'LA',
@@ -373,16 +373,16 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
             const lopValue = orderFeatures.length_of_pull;
 
             // Don't show if empty, none, standard, std, or any variation indicating no extra length
-            if (!lopValue || 
-                lopValue === 'none' || 
-                lopValue === 'standard' || 
+            if (!lopValue ||
+                lopValue === 'none' ||
+                lopValue === 'standard' ||
                 lopValue === 'std' ||
                 lopValue === 'std_length' ||
                 lopValue === 'standard_length' ||
                 lopValue === 'no_extra_length' ||
                 lopValue === 'std_no_extra_length' ||
                 lopValue === 'no_lop_change' ||
-                lopValue === '' || 
+                lopValue === '' ||
                 lopValue === '0' ||
                 lopValue === 'normal' ||
                 lopValue.toLowerCase().includes('std') ||
@@ -458,13 +458,13 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
             }
 
             // Fallback: check direct field for backward compatibility
-            const heavyFillValue = orderFeatures.heavy_fill || 
-                                   orderFeatures.heavyFill || 
+            const heavyFillValue = orderFeatures.heavy_fill ||
+                                   orderFeatures.heavyFill ||
                                    orderFeatures.heavy_fill_option ||
                                    orderFeatures['heavy-fill'];
 
-            if (heavyFillValue === 'true' || 
-                heavyFillValue === true || 
+            if (heavyFillValue === 'true' ||
+                heavyFillValue === true ||
                 heavyFillValue === 'yes' ||
                 heavyFillValue === 'heavy_fill') {
               return 'Heavy Fill';
@@ -498,10 +498,10 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
 });
 
 // Droppable Cell Component with responsive height
-function DroppableCell({ 
-  moldId, 
-  date, 
-  orders, 
+function DroppableCell({
+  moldId,
+  date,
+  orders,
   onDrop,
   moldInfo,
   getModelDisplayName,
@@ -509,10 +509,10 @@ function DroppableCell({
   processedOrders,
   selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
   isScheduleLocked = false
-}: { 
-  moldId: string; 
-  date: Date; 
-  orders: any[]; 
+}: {
+  moldId: string;
+  date: Date;
+  orders: any[];
   onDrop: (orderId: string, moldId: string, date: Date) => void;
   moldInfo?: { moldId: string, instanceNumber?: number };
   getModelDisplayName?: (modelId: string) => string;
@@ -551,20 +551,20 @@ function DroppableCell({
   const isFriday = dayOfWeek === 5;
   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
   const hasOrders = orders.length > 0;
-  
+
   // Hide empty cells on work week columns (Mon-Thu), but always show Friday for manual drops
   const shouldHideEmptyCell = !hasOrders && !isFriday && isWorkDay;
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       className={`${cellHeight} border p-1 transition-all duration-200 ${
-        shouldHideEmptyCell 
-          ? 'border-transparent bg-transparent opacity-0 pointer-events-none' 
-          : isOver 
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-            : isNonWorkDay 
-              ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10 opacity-75' 
+        shouldHideEmptyCell
+          ? 'border-transparent bg-transparent opacity-0 pointer-events-none'
+          : isOver
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : isNonWorkDay
+              ? 'border-amber-200 dark:border-amber-700 bg-amber-25 dark:bg-amber-900/10 opacity-75'
               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
       }`}
     >
@@ -638,7 +638,7 @@ export default function LayupScheduler() {
     enabled: true,
     select: (data) => {
       if (!data || !Array.isArray(data)) return data;
-      
+
       // Filter out assignments for days not in selectedWorkDays
       const filteredData = data.filter(assignment => {
         const date = new Date(assignment.scheduledDate);
@@ -650,11 +650,11 @@ export default function LayupScheduler() {
         }
         return isWorkDay;
       });
-      
+
       if (filteredData.length !== data.length) {
         console.log(`📋 Database filter: Removed ${data.length - filteredData.length} Friday assignments from database, kept ${filteredData.length} Monday-Thursday assignments`);
       }
-      
+
       return filteredData;
     }
   });
@@ -663,13 +663,13 @@ export default function LayupScheduler() {
   useEffect(() => {
     if (existingSchedule && Array.isArray(existingSchedule) && existingSchedule.length > 0) {
       console.log('🔍 DEBUG: Loading existing schedule from database:', existingSchedule.length, 'entries');
-      
+
       const assignments: {[orderId: string]: { moldId: string, date: string }} = {};
       (existingSchedule as any[]).forEach((entry: any) => {
         const schedDate = new Date(entry.scheduledDate);
         const dayOfWeek = schedDate.getDay();
         const dateStr = entry.scheduledDate;
-        
+
         // MESA DEBUG: Extra logging for Mesa orders
         const isMesaOrder = entry.moldId && entry.moldId.includes('Mesa');
         if (isMesaOrder) {
@@ -679,30 +679,19 @@ export default function LayupScheduler() {
         } else {
           console.log(`📅 Order ${entry.orderId}: ${dateStr} → Day ${dayOfWeek} (${schedDate.toDateString()})`);
         }
-        
-        // SPECIAL DEBUG: Extra logging for AI141
-        if (entry.orderId === 'AI141') {
-          console.error(`🔍 AI141 SPECIAL DEBUG:`);
-          console.error(`   Raw date from DB: ${entry.scheduledDate}`);
-          console.error(`   Parsed date: ${schedDate.toDateString()}`);
-          console.error(`   Day of week: ${dayOfWeek} (0=Sun, 5=Fri)`);
-          console.error(`   ISO string: ${schedDate.toISOString()}`);
-          console.error(`   Local string: ${schedDate.toLocaleString()}`);
-          console.error(`   Mold ID: ${entry.moldId}`);
-        }
-        
+
         // Skip assignments for days not in selectedWorkDays
         if (!selectedWorkDays.includes(dayOfWeek)) {
           const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
           console.log(`🗑️ Skipping ${dayName} assignment for ${entry.orderId} on ${schedDate.toDateString()} (${dayName} not in work days)`);
-          return; 
+          return;
         }
-        
+
         assignments[entry.orderId] = {
           moldId: entry.moldId,
           date: entry.scheduledDate
         };
-        
+
         // MESA DEBUG: Confirm Mesa order was added to assignments
         if (entry.moldId && entry.moldId.includes('Mesa')) {
           console.log(`✅ MESA ORDER ADDED TO ASSIGNMENTS: ${entry.orderId} → ${entry.moldId} on ${schedDate.toDateString()}`);
@@ -710,14 +699,14 @@ export default function LayupScheduler() {
       });
 
       console.log('📦 Total assignments loaded:', Object.keys(assignments).length);
-      
+
       // COUNT Mesa orders specifically
       const mesaAssignments = Object.entries(assignments).filter(([_, assignment]) => assignment.moldId.includes('Mesa'));
       console.log(`🏔️ MESA ASSIGNMENTS LOADED: ${mesaAssignments.length} Mesa orders in assignments`);
       mesaAssignments.slice(0, 5).forEach(([orderId, assignment]) => {
         console.log(`   🏔️ ${orderId} → ${assignment.moldId} on ${assignment.date}`);
       });
-      
+
       // DEBUG: Show what's actually in orderAssignments
       console.log('🔍 DEBUGGING orderAssignments contents (first 10):');
       Object.entries(assignments).slice(0, 10).forEach(([orderId, assignment]) => {
@@ -726,14 +715,14 @@ export default function LayupScheduler() {
         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
         const isMesa = assignment.moldId.includes('Mesa') ? '🏔️ MESA' : '📅';
         console.log(`   ${isMesa} ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
-        
+
         if (dayOfWeek === 5) {
           const errorMsg = `❌ FRIDAY FROM DATABASE: ${orderId} scheduled on Friday ${assignmentDate.toDateString()}`;
           console.error(errorMsg);
           setDebugInfo(prev => [...prev, errorMsg]);
         }
       });
-      
+
       setOrderAssignments(assignments);
     }
   }, [existingSchedule]);
@@ -749,7 +738,7 @@ export default function LayupScheduler() {
       console.log('💾 Saving schedule for', orderIds.length, 'orders');
 
       // Delete existing entries for these orders
-      const deletePromises = orderIds.map(orderId => 
+      const deletePromises = orderIds.map(orderId =>
         apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
           method: 'DELETE'
         }).catch(err => {
@@ -771,7 +760,7 @@ export default function LayupScheduler() {
       }));
 
       // Save each schedule entry
-      const savePromises = scheduleEntries.map(entry => 
+      const savePromises = scheduleEntries.map(entry =>
         apiRequest('/api/layup-schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -800,25 +789,25 @@ export default function LayupScheduler() {
 
     console.log('🏭 PRODUCTION FLOW: Starting complete save and department push workflow...');
     setIsSaving(true);
-    
+
     try {
       // Step 1: Save the layup schedule to database
       console.log('🏭 PRODUCTION FLOW: Step 1 - Saving layup schedule to database...');
       await saveScheduleMutation.mutateAsync(orderAssignments);
-      
+
       // Step 2: Push current week orders to Layup/Plugging Department Manager
       console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing current week orders to department manager...');
       const currentWeekOrders = getOrdersForCurrentWeek();
-      
+
       if (currentWeekOrders.length > 0) {
         const scheduledOrderIds = currentWeekOrders.map(order => order.orderId);
         console.log(`🏭 PRODUCTION FLOW: Pushing ${scheduledOrderIds.length} orders to Layup/Plugging department`);
-        
+
         await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
-        
+
         console.log('✅ PRODUCTION FLOW: Complete workflow finished successfully!');
         console.log('✅ PRODUCTION FLOW: Orders are now available in Layup/Plugging Department Manager');
-        
+
         toast({
           title: "Production Flow Complete",
           description: `Schedule saved and ${scheduledOrderIds.length} orders pushed to Layup/Plugging department`,
@@ -830,7 +819,7 @@ export default function LayupScheduler() {
           description: "Layup schedule saved successfully",
         });
       }
-      
+
     } catch (error) {
       console.error('❌ PRODUCTION FLOW: Error in complete workflow:', error);
       toast({
@@ -876,7 +865,7 @@ export default function LayupScheduler() {
     // Get all currently scheduled orders from this week
     const currentWeekOrders = getOrdersForCurrentWeek();
     const scheduledOrderIds = currentWeekOrders.map(order => order.orderId);
-    
+
     if (scheduledOrderIds.length === 0) {
       toast({
         title: "No Orders",
@@ -897,7 +886,7 @@ export default function LayupScheduler() {
         molds: molds,
         employees: employees
       };
-      
+
       return apiRequest('/api/python-scheduler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -910,18 +899,18 @@ export default function LayupScheduler() {
         title: "Python Scheduler Complete",
         description: `Scheduled ${result.schedule?.length || 0} orders with Mesa Universal constraints`,
       });
-      
+
       // Apply the Python scheduler results to our local state
       if (result.schedule && Array.isArray(result.schedule)) {
         const newAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-        
+
         result.schedule.forEach((slot: any) => {
           newAssignments[slot.order_id] = {
             moldId: slot.mold_id,
             date: slot.scheduled_date
           };
         });
-        
+
         // Apply Friday validation to algorithmic schedule (never allow Friday)
         const validatedAssignments = validateNoFridayAssignments(newAssignments);
         setOrderAssignments(validatedAssignments);
@@ -987,7 +976,7 @@ export default function LayupScheduler() {
   const getOrdersForCurrentWeek = () => {
     const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
     const endOfCurrentWeek = addDays(startOfCurrentWeek, 4); // Friday end
-    
+
     return processedOrders.filter(order => {
       // Check if order is assigned to this week
       const assignment = orderAssignments[order.orderId];
@@ -1008,7 +997,7 @@ export default function LayupScheduler() {
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
-  // Include all orders from the unified production queue (regular orders, Mesa production orders, P1 purchase orders)
+  // Include all orders from the production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {
     console.log('🔍 LayupScheduler orders debug:', {
       allOrdersCount: allOrders?.length || 0,
@@ -1022,13 +1011,13 @@ export default function LayupScheduler() {
       }, {}) || {},
       sampleOrders: allOrders?.slice(0, 3)?.map(o => ({ id: o.orderId, product: o.product, source: o.source }))
     });
-    
+
     // If we have no orders but backend shows 1008, there's a data loading issue
     if (!allOrders || allOrders.length === 0) {
       console.error('❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders');
       console.error('❌ Backend shows 1008 orders but frontend received empty array');
     }
-    
+
     // Return ALL orders from the production queue - no filtering by source
     return allOrders || [];
   }, [allOrders, ordersLoading]);
@@ -1084,7 +1073,7 @@ export default function LayupScheduler() {
     // Log when auto-schedule should run
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
-      
+
       // Auto-trigger scheduling if no assignments exist yet
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
@@ -1147,13 +1136,13 @@ export default function LayupScheduler() {
       for (let i = 0; i < 7; i++) {
         const workDay = new Date(current);
         const dayOfWeek = workDay.getDay();
-        
+
         // CRITICAL: Only include days that are explicitly selected by the user
         // This enforces Monday-Thursday [1,2,3,4] by default
         if (selectedWorkDays.includes(dayOfWeek)) {
           workDays.push(workDay);
         }
-        
+
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
       }
 
@@ -1177,7 +1166,7 @@ export default function LayupScheduler() {
       fridayDatesInAllWorkDays.forEach(date => {
         console.error(`   - Friday found in work days: ${date.toDateString()}`);
       });
-      
+
       // Remove all Friday dates from allWorkDays
       const cleanedWorkDays = allWorkDays.filter(date => date.getDay() !== 5);
       allWorkDays.splice(0, allWorkDays.length, ...cleanedWorkDays);
@@ -1191,43 +1180,43 @@ export default function LayupScheduler() {
       // If already has stockModelId, use it
       if (order.stockModelId) return order.stockModelId;
       if (order.modelId) return order.modelId;
-      
+
       // Intelligent detection based on features and action configuration
       if (order.features) {
         const actionLength = order.features.action_length;
         const actionInlet = order.features.action_inlet;
-        
+
         // Mesa Universal - Remington 700 actions
         if (actionInlet?.includes('rem_700') || actionInlet?.includes('remington_700')) {
           return 'mesa_universal';
         }
-        
+
         // K2 variants - based on action length
         if (actionLength === 'medium' || actionInlet?.includes('k2')) {
           return 'fg_k2';
         }
-        
+
         // Alpine Hunter variants - precision actions
         if (actionInlet?.includes('terminus') || actionInlet?.includes('defiance')) {
           return 'cf_alpine_hunter';
         }
-        
+
         // Privateer - tactical configurations
         if (order.features.rail_accessory || order.features.qd_accessory) {
           return 'cf_privateer';
         }
-        
+
         // Sportsman - traditional configurations
         return 'fg_sportsman';
       }
-      
+
       // Fallback based on product name
       if (order.product?.includes('Mesa')) return 'mesa_universal';
       if (order.product?.includes('K2')) return 'fg_k2';
       if (order.product?.includes('Alpine')) return 'cf_alpine_hunter';
       if (order.product?.includes('Privateer')) return 'cf_privateer';
       if (order.product?.includes('Sportsman')) return 'fg_sportsman';
-      
+
       return 'unknown';
     };
 
@@ -1236,21 +1225,21 @@ export default function LayupScheduler() {
       // Use intelligent detection for stock model identification
       const aDetectedModel = getOrderStockModelId(a);
       const bDetectedModel = getOrderStockModelId(b);
-      
+
       // Priority 1: Mesa Universal orders get highest priority
       const aMesaUniversal = (aDetectedModel === 'mesa_universal' || a.product === 'Mesa - Universal');
       const bMesaUniversal = (bDetectedModel === 'mesa_universal' || b.product === 'Mesa - Universal');
-      
+
       if (aMesaUniversal && !bMesaUniversal) return -1; // Mesa Universal first
       if (!aMesaUniversal && bMesaUniversal) return 1;  // Mesa Universal first
-      
+
       // Priority 2: Sort by priority score (lower = higher priority)
       const aPriority = a.priorityScore || 99;
       const bPriority = b.priorityScore || 99;
       if (aPriority !== bPriority) {
         return aPriority - bPriority;
       }
-      
+
       // Priority 3: Sort by due date (earliest first)
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
@@ -1306,32 +1295,32 @@ export default function LayupScheduler() {
           console.log(`🔧 Mold ${mold.moldId} has no stock model restrictions - compatible with all`);
           return true; // No restrictions
         }
-        
+
         // Direct exact match first
         const exactMatch = mold.stockModels.includes(modelId);
         if (exactMatch) {
           console.log(`🎯 EXACT MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
           return true;
         }
-        
+
         // Strict partial matching - only allow clear subset/superset relationships
         const strictPartialMatch = mold.stockModels.some((sm: string) => {
           const smLower = sm.toLowerCase();
           const modelIdLower = modelId.toLowerCase();
-          
+
           // Only match if one is clearly contained in the other with proper word boundaries
-          const isStrictMatch = smLower === modelIdLower || 
+          const isStrictMatch = smLower === modelIdLower ||
                                (smLower.includes(modelIdLower) && smLower.includes('_' + modelIdLower)) ||
                                (modelIdLower.includes(smLower) && modelIdLower.includes('_' + smLower));
-          
+
           return isStrictMatch;
         });
-        
+
         if (strictPartialMatch) {
           console.log(`🎯 STRICT PARTIAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
           return true;
         }
-        
+
         // Log incompatible molds for debugging
         console.log(`❌ NO MATCH: Order ${order.orderId} (${modelId}) vs Mold ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
         return false;
@@ -1344,7 +1333,7 @@ export default function LayupScheduler() {
     // Track cell assignments to ensure ONE ORDER PER CELL
     const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
-    
+
     // Track Mesa Universal orders per day (8 maximum)
     const mesaUniversalDailyCount: Record<string, number> = {};
 
@@ -1436,11 +1425,11 @@ export default function LayupScheduler() {
         const targetDate = allWorkDays[bestDateIndex];
         const dateKey = targetDate.toISOString().split('T')[0];
         const cellKey = `${bestMold.moldId}-${dateKey}`;
-        
+
         // Check Mesa Universal daily limit (8 per day maximum)
         const isMesaUniversal = (order.stockModelId === 'mesa_universal' || order.product === 'Mesa - Universal');
         const currentMesaCount = mesaUniversalDailyCount[dateKey] || 0;
-        
+
         if (isMesaUniversal && currentMesaCount >= 8) {
           console.log(`⏸️ Mesa Universal limit reached for ${dateKey}: ${currentMesaCount}/8 - skipping to next day`);
           // Find next day with Mesa Universal capacity
@@ -1467,14 +1456,14 @@ export default function LayupScheduler() {
         cellAssignments.add(cellKey);
         dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
-        
+
         // Track Mesa Universal orders
         if (isMesaUniversal) {
           mesaUniversalDailyCount[dateKey] = (mesaUniversalDailyCount[dateKey] || 0) + 1;
         }
 
         assigned = true;
-        const logPrefix = isMesaUniversal ? '🏔️ MESA UNIVERSAL ASSIGNED:' : 
+        const logPrefix = isMesaUniversal ? '🏔️ MESA UNIVERSAL ASSIGNED:' :
                          order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
         const mesaStatus = isMesaUniversal ? ` (Mesa: ${mesaUniversalDailyCount[dateKey]}/8)` : '';
         console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)${mesaStatus}`);
@@ -1493,10 +1482,10 @@ export default function LayupScheduler() {
       console.log(`  ${moldId}: filled up to day ${dateIndex} (${dateIndex > 0 ? format(allWorkDays[dateIndex - 1], 'MM/dd') : 'none'})`);
     });
 
-    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) => 
+    console.log('👥 Daily capacity usage:', Object.entries(dailyAssignments).map(([date, count]) =>
       `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
     ).slice(0, 8));
-    
+
     // Show Mesa Universal daily distribution
     console.log('🏔️ Mesa Universal daily distribution:');
     Object.entries(mesaUniversalDailyCount).forEach(([date, count]) => {
@@ -1517,7 +1506,7 @@ export default function LayupScheduler() {
     }
 
     console.log('🤖 Generating algorithmic schedule...');
-    
+
     try {
       console.log('🏭 PRODUCTION FLOW: Processing production queue with algorithmic scheduler...');
       const response = await apiRequest('/api/algorithmic-schedule', {
@@ -1538,30 +1527,30 @@ export default function LayupScheduler() {
       if (response.success && response.allocations) {
         console.log(`✅ PRODUCTION FLOW: Generated ${response.allocations.length} order allocations`);
         console.log('✅ PRODUCTION FLOW: Sample allocations:', response.allocations.slice(0, 3));
-        
+
         // Convert to schedule assignments format for the calendar
         const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-        
+
         response.allocations.forEach((allocation: any) => {
           scheduleAssignments[allocation.orderId] = {
             moldId: allocation.moldId,
             date: allocation.scheduledDate
           };
         });
-        
+
         console.log(`📅 PRODUCTION FLOW: Assigning ${Object.keys(scheduleAssignments).length} orders to schedule`);
-        
+
         // Apply Friday validation to algorithmic schedule based on work days setting
         const validatedAssignments = selectedWorkDays.includes(5) ? scheduleAssignments : validateNoFridayAssignments(scheduleAssignments);
         setOrderAssignments(validatedAssignments);
-        
+
         // Log mold assignments for verification
         const moldAssignments = response.allocations.reduce((acc: any, alloc: any) => {
           acc[alloc.moldId] = (acc[alloc.moldId] || 0) + 1;
           return acc;
         }, {});
         console.log('🔧 PRODUCTION FLOW: Mold assignments:', moldAssignments);
-        
+
         console.log('📅 PRODUCTION FLOW: Schedule ready for review and adjustment');
       } else {
         console.error('❌ PRODUCTION FLOW: Failed to generate schedule:', response);
@@ -1581,9 +1570,9 @@ export default function LayupScheduler() {
     if (generatedSchedule && generatedSchedule.length > 0) {
       console.log('📋 Loading generated schedule with', generatedSchedule.length, 'entries');
       console.log('📋 Sample generated schedule entry:', generatedSchedule[0]);
-      
+
       const scheduleAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-      
+
       generatedSchedule.forEach((entry: any) => {
         console.log('📋 Processing schedule entry:', entry.orderId, entry.moldId, entry.scheduledDate);
         scheduleAssignments[entry.orderId] = {
@@ -1591,17 +1580,17 @@ export default function LayupScheduler() {
           date: entry.scheduledDate
         };
       });
-      
+
       console.log('📋 Generated schedule assignments:', Object.keys(scheduleAssignments).length);
       console.log('📋 Sample assignment:', Object.entries(scheduleAssignments)[0]);
       console.log('📋 Current processedOrders count:', processedOrders?.length || 0);
       console.log('📋 Sample processedOrders IDs:', processedOrders?.slice(0, 5)?.map(o => o.orderId) || []);
-      
+
       // Apply Friday validation to auto-generated schedule (never allow Friday)
       const validatedAssignments = validateNoFridayAssignments(scheduleAssignments);
       setOrderAssignments(validatedAssignments);
       console.log('📋 Order assignments state updated');
-      
+
       // Force calendar re-render by triggering a state change
       setTimeout(() => {
         console.log('📋 Calendar should now display orders for assignments:', Object.keys(scheduleAssignments).length);
@@ -1634,20 +1623,20 @@ export default function LayupScheduler() {
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
       const scheduledOrderCount = generatedSchedule ? generatedSchedule.length : 0;
       const unscheduledOrderCount = filteredOrders.length - scheduledOrderCount;
-      
+
       console.log('📊 SCHEDULE ANALYSIS:', {
         totalOrders: orders.length,
         scheduledOrders: scheduledOrderCount,
         unscheduledOrders: unscheduledOrderCount,
         needsScheduling: unscheduledOrderCount > 50
       });
-      
+
       // Auto-trigger if we have many unscheduled orders (threshold: 50+ orders)
       if (unscheduledOrderCount > 50) {
         console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders...');
         console.log('🏭 Production queue:', orders.length, 'total orders,', scheduledOrderCount, 'already scheduled');
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
-        
+
         // Auto-trigger the algorithmic scheduler to process the production queue
         console.log('🤖 PRODUCTION FLOW: Auto-scheduling temporarily disabled to prevent React render errors');
         // setTimeout(() => {
@@ -1681,7 +1670,7 @@ export default function LayupScheduler() {
     if (!printWindow) return;
 
     // Get current date range for title
-    const dateRange = viewType === 'week' 
+    const dateRange = viewType === 'week'
       ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
       : format(currentDate, 'MMMM yyyy');
 
@@ -1769,9 +1758,9 @@ export default function LayupScheduler() {
 
       const lopValue = order.features.length_of_pull;
 
-      if (!lopValue || 
-          lopValue === 'none' || 
-          lopValue === 'standard' || 
+      if (!lopValue ||
+          lopValue === 'none' ||
+          lopValue === 'standard' ||
           lopValue === 'std' ||
           lopValue === 'no_lop_change' ||
           lopValue.toLowerCase().includes('std') ||
@@ -1852,75 +1841,75 @@ export default function LayupScheduler() {
         <head>
           <title>Layup Schedule - ${dateRange}</title>
           <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0; 
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
               padding: 0;
               font-size: 9px;
               line-height: 1.1;
             }
-            .header { 
-              text-align: center; 
+            .header {
+              text-align: center;
               margin: 0;
-              margin-bottom: 2px; 
-              border-bottom: 1px solid #333; 
+              margin-bottom: 2px;
+              border-bottom: 1px solid #333;
               padding: 0;
-              padding-bottom: 1px; 
+              padding-bottom: 1px;
             }
-            .header h1 { 
-              margin: 0; 
+            .header h1 {
+              margin: 0;
               padding: 0;
-              font-size: 12px; 
+              font-size: 12px;
             }
-            .header h2 { 
-              margin: 0; 
+            .header h2 {
+              margin: 0;
               padding: 0;
-              font-size: 10px; 
+              font-size: 10px;
               color: #666;
             }
-            .header p { 
-              margin: 0; 
+            .header p {
+              margin: 0;
               padding: 0;
-              font-size: 8px; 
+              font-size: 8px;
               color: #888;
             }
-            .stats { 
-              display: flex; 
-              justify-content: space-between; 
+            .stats {
+              display: flex;
+              justify-content: space-between;
               margin: 0;
-              margin-bottom: 2px; 
+              margin-bottom: 2px;
               padding: 0;
               gap: 1px;
             }
-            .stat { 
-              background: #f5f5f5; 
-              padding: 2px 3px; 
-              border-radius: 1px; 
+            .stat {
+              background: #f5f5f5;
+              padding: 2px 3px;
+              border-radius: 1px;
               text-align: center;
               font-size: 8px;
               font-weight: bold;
             }
-            .schedule-grid { 
+            .schedule-grid {
               width: 100%;
               border-collapse: collapse;
-              border: 1px solid #333; 
+              border: 1px solid #333;
               background: white;
             }
-            .schedule-table { 
+            .schedule-table {
               width: 100%;
               border-collapse: collapse;
-              border: 1px solid #333; 
+              border: 1px solid #333;
             }
             .schedule-table th,
-            .schedule-table td { 
+            .schedule-table td {
               border: 1px solid #ccc;
               padding: 0.5px;
               vertical-align: top;
               text-align: center;
             }
-            .schedule-table th { 
-              background: #f5f5f5; 
-              font-weight: bold; 
+            .schedule-table th {
+              background: #f5f5f5;
+              font-weight: bold;
               font-size: 8px;
               padding: 2px 1px;
             }
@@ -1928,18 +1917,18 @@ export default function LayupScheduler() {
               background: #fff3cd;
               color: #856404;
             }
-            .schedule-table .mold-header { 
-              background: #e5e5e5; 
-              font-weight: bold; 
+            .schedule-table .mold-header {
+              background: #e5e5e5;
+              font-weight: bold;
               font-size: 8px;
               text-align: center;
               padding: 2px 1px;
               width: 50px;
             }
-            .schedule-table .cell { 
+            .schedule-table .cell {
               background: white;
-              padding: 0.5px; 
-              min-height: 25px; 
+              padding: 0.5px;
+              min-height: 25px;
               width: auto;
             }
             .schedule-table .cell.friday {
@@ -1950,55 +1939,55 @@ export default function LayupScheduler() {
               color: #666;
               margin-bottom: 1px;
             }
-            .order-card { 
-              margin: 0 0 1px 0; 
-              padding: 2px 3px; 
-              border-radius: 2px; 
+            .order-card {
+              margin: 0 0 1px 0;
+              padding: 2px 3px;
+              border-radius: 2px;
               font-size: 8px;
               border: 1px solid;
               text-align: center;
               line-height: 1.1;
             }
-            .order-id { 
-              font-size: 10px; 
-              font-weight: bold; 
+            .order-id {
+              font-size: 10px;
+              font-weight: bold;
             }
-            .model-name { 
-              font-size: 12px; 
-              font-weight: bold; 
+            .model-name {
+              font-size: 12px;
+              font-weight: bold;
               margin: 1px 0;
             }
-            .action-length { 
-              font-size: 12px; 
-              font-weight: bold; 
+            .action-length {
+              font-size: 12px;
+              font-weight: bold;
               background: #f0f0f0;
               border-radius: 2px;
               padding: 1px 2px;
               margin: 1px 0;
             }
-            .mold-info { 
-              font-size: 12px; 
-              font-weight: bold; 
+            .mold-info {
+              font-size: 12px;
+              font-weight: bold;
               color: #444;
               margin: 1px 0;
             }
-            .order-card.p1_po { 
-              background: #fff5e6; 
+            .order-card.p1_po {
+              background: #fff5e6;
               border-color: #ffc069;
               color: #d46b08;
             }
-            .order-card.production { 
-              background: #f3e8ff; 
+            .order-card.production {
+              background: #f3e8ff;
               border-color: #c084fc;
               color: #7c3aed;
             }
-            .order-card.fg { 
-              background: #7c3aed; 
+            .order-card.fg {
+              background: #7c3aed;
               border-color: #6d28d9;
               color: white;
             }
-            .order-card.regular { 
-              background: #e6f3ff; 
+            .order-card.regular {
+              background: #e6f3ff;
               border-color: #69b7ff;
               color: #1e40af;
             }
@@ -2057,55 +2046,55 @@ export default function LayupScheduler() {
               font-weight: bold;
               opacity: 0.9;
             }
-            @media print { 
-              body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
+            @media print {
+              body {
+                margin: 0 !important;
+                padding: 0 !important;
                 font-size: 8px !important;
                 line-height: 1.1 !important;
               }
-              .header { 
+              .header {
                 margin: 0 !important;
-                margin-bottom: 2px !important; 
+                margin-bottom: 2px !important;
                 padding: 0 !important;
-                padding-bottom: 2px !important; 
+                padding-bottom: 2px !important;
               }
-              .header h1 { 
-                font-size: 10px !important; 
+              .header h1 {
+                font-size: 10px !important;
               }
-              .header h2 { 
-                font-size: 8px !important; 
+              .header h2 {
+                font-size: 8px !important;
               }
-              .header p { 
-                font-size: 6px !important; 
-              }
-              .stats { 
-                margin-bottom: 1px !important; 
-              }
-              .stat { 
-                padding: 1px 2px !important; 
+              .header p {
                 font-size: 6px !important;
               }
-              .schedule-table { 
-                break-inside: avoid; 
+              .stats {
+                margin-bottom: 1px !important;
+              }
+              .stat {
+                padding: 1px 2px !important;
+                font-size: 6px !important;
+              }
+              .schedule-table {
+                break-inside: avoid;
                 margin: 0 !important;
               }
-              .schedule-table th { 
-                padding: 1px !important; 
+              .schedule-table th {
+                padding: 1px !important;
                 font-size: 6px !important;
               }
-              .schedule-table .mold-header { 
-                padding: 1px !important; 
+              .schedule-table .mold-header {
+                padding: 1px !important;
                 font-size: 6px !important;
                 width: 40px !important;
               }
-              .schedule-table .cell { 
-                padding: 0.5px !important; 
-                min-height: 25px !important; 
+              .schedule-table .cell {
+                padding: 0.5px !important;
+                min-height: 25px !important;
               }
-              .order-card { 
-                margin: 0 0 1px 0 !important; 
-                padding: 2px 3px !important; 
+              .order-card {
+                margin: 0 0 1px 0 !important;
+                padding: 2px 3px !important;
                 font-size: 8px !important;
               }
               .order-id {
@@ -2150,33 +2139,33 @@ export default function LayupScheduler() {
             // Build map of all mold-date-orders combinations that have assignments
             const assignmentMap = new Map();
             console.log('🖨️ PRINT DEBUG: Processing orderAssignments for print:', Object.keys(orderAssignments).length, 'total assignments');
-            
+
             Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
               const order = orders.find(o => o.orderId === orderId);
               if (!order) return;
-              
+
               // Ensure consistent date format (YYYY-MM-DD)
               const assignmentDateOnly = assignment.date.split('T')[0];
               const assignmentDate = new Date(assignmentDateOnly + 'T12:00:00'); // Add noon to avoid timezone issues
               const dayOfWeek = assignmentDate.getDay();
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-              
+
               // Log Thursday assignments specifically
               if (dayOfWeek === 4) {
                 console.log(`🖨️ THURSDAY ASSIGNMENT FOUND: ${orderId} → ${assignment.moldId} on ${assignmentDateOnly} (${dayName})`);
                 console.log(`   Full assignment object:`, assignment);
                 console.log(`   Order found:`, order ? 'YES' : 'NO');
               }
-              
+
               const key = assignmentDateOnly; // Use consistent YYYY-MM-DD format
-              
+
               if (!assignmentMap.has(key)) {
                 assignmentMap.set(key, {
                   date: assignmentDateOnly,
                   moldAssignments: new Map()
                 });
               }
-              
+
               const dayData = assignmentMap.get(key);
               if (!dayData.moldAssignments.has(assignment.moldId)) {
                 dayData.moldAssignments.set(assignment.moldId, []);
@@ -2191,13 +2180,13 @@ export default function LayupScheduler() {
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
               return `${dateStr} (${dayName})`;
             }));
-            
+
             console.log('🖨️ RAW ORDER ASSIGNMENTS FOR PRINT:');
             Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
               const assignmentDate = new Date(assignment.date);
               const dayOfWeek = assignmentDate.getDay();
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-              console.log(`   ${orderId} → ${assignment.moldId} on ${assignment.date} (${dayName}, day ${dayOfWeek})`);
+              console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
             });
 
             if (assignmentMap.size === 0) {
@@ -2207,7 +2196,7 @@ export default function LayupScheduler() {
             // Filter dates to only include current week (Monday-Thursday only for production schedule)
             const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
             const currentWeekThursday = addDays(currentWeekStart, 3); // Thursday (Monday + 3 days)
-            
+
             // Debug: Show current week calculation
             console.log('🖨️ CURRENT WEEK DEBUG:', {
               currentDate: currentDate.toString(),
@@ -2215,41 +2204,41 @@ export default function LayupScheduler() {
               weekThursday: currentWeekThursday.toString(),
               today: new Date().toString()
             });
-            
+
             const sortedDates = Array.from(assignmentMap.keys())
               .sort()
               .filter(dateStr => {
-                const date = new Date(dateStr + 'T12:00:00'); // Add noon time to avoid timezone issues
+                const date = new Date(dateStr + 'T12:00:00'); // Add noon to avoid timezone issues
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
                 const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 4; // Monday (1) through Thursday (4) only
-                
+
                 // Compare dates using the same noon approach to avoid timezone issues
                 const weekStart = new Date(currentWeekStart);
                 weekStart.setHours(12, 0, 0, 0);
                 const weekThursday = new Date(currentWeekThursday);
                 weekThursday.setHours(12, 0, 0, 0);
-                
+
                 const inCurrentWeek = date >= weekStart && date <= weekThursday;
-                
+
                 console.log(`🖨️ DATE FILTER: ${dateStr} (${dayName}, day ${dayOfWeek}) - WorkDay: ${isWorkDay}, InWeek: ${inCurrentWeek}, Include: ${isWorkDay && inCurrentWeek}`);
                 console.log(`   Date comparison: ${date.toISOString()} vs Week: ${weekStart.toISOString()} to ${weekThursday.toISOString()}`);
-                
+
                 // Only Monday through Friday AND within current week
                 return isWorkDay && inCurrentWeek;
               });
-              
+
             console.log('🖨️ FINAL SORTED DATES FOR PRINT:', sortedDates.map(dateStr => {
               const date = new Date(dateStr + 'T12:00:00'); // Add noon for consistent timezone handling
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
               return `${dateStr} (${dayName})`;
             }));
-            
+
             return sortedDates.map(dateStr => {
               const date = new Date(dateStr + 'T12:00:00'); // Add noon for consistent timezone handling
               const dayData = assignmentMap.get(dateStr);
               const isFriday = date.getDay() === 5;
-              
+
               return `
                 <div class="daily-section" style="margin-bottom: 30px; page-break-inside: avoid;">
                   <div class="day-header" style="background: ${isFriday ? '#fff3cd' : '#f8f9fa'}; padding: 10px; border: 2px solid #333; margin-bottom: 10px;">
@@ -2258,19 +2247,19 @@ export default function LayupScheduler() {
                       ${isFriday ? ' (MANUAL ONLY - Backup Day)' : ''}
                     </h2>
                   </div>
-                  
+
                   <div class="mold-assignments" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
                     ${(Array.from(dayData.moldAssignments.entries()) as Array<[string, any[]]>).map((entry) => {
                       const [moldId, orders] = entry;
                       const mold = molds.find(m => m.moldId === moldId);
-                      
+
                       return `
                         <div class="mold-section" style="border: 1px solid #333; padding: 10px; background: white;">
                           <div class="mold-title" style="background: #e9ecef; padding: 5px; text-align: center; font-weight: bold; margin-bottom: 10px;">
                             ${moldId}${mold?.instanceNumber ? ` #${mold.instanceNumber}` : ''}
                             <div style="font-size: 10px; font-weight: normal;">${orders.length} Order(s)</div>
                           </div>
-                          
+
                           <div class="orders-list">
                             ${orders.sort((a: any, b: any) => {
                               // Sort by priority score (lower = higher priority), then by order ID
@@ -2288,7 +2277,7 @@ export default function LayupScheduler() {
                               const lopDisplay = getLOPDisplay(order);
                               const hasHeavyFill = getHeavyFillDisplay(order);
                               const customer = order.customerName || order.customer || 'Unknown Customer';
-                              
+
                               return `
                                 <div class="order-item" style="border-bottom: 1px solid #ddd; padding: 8px 0; ${index === orders.length - 1 ? 'border-bottom: none;' : ''}">
                                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -2300,7 +2289,7 @@ export default function LayupScheduler() {
                                       ${materialType || 'UNK'}
                                     </div>
                                   </div>
-                                  
+
                                   <div class="order-details" style="font-size: 10px; line-height: 1.3;">
                                     <div><strong>Customer:</strong> ${customer}</div>
                                     <div><strong>Model:</strong> ${modelName}</div>
@@ -2308,7 +2297,7 @@ export default function LayupScheduler() {
                                     ${lopDisplay ? `<div><strong>LOP:</strong> ${lopDisplay}</div>` : ''}
                                     ${hasHeavyFill ? '<div style="color: #dc2626;"><strong>⚠ HEAVY FILL</strong></div>' : ''}
                                   </div>
-                                  
+
                                   <div class="completion-checkbox" style="margin-top: 6px; display: flex; align-items: center;">
                                     <input type="checkbox" style="margin-right: 6px; transform: scale(1.2);">
                                     <label style="font-size: 9px; color: #666;">Layup Complete</label>
@@ -2321,10 +2310,10 @@ export default function LayupScheduler() {
                       `;
                     }).join('')}
                   </div>
-                  
+
                   <div class="day-summary" style="margin-top: 15px; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; font-size: 10px;">
-                    <strong>Daily Summary:</strong> 
-                    ${[...dayData.moldAssignments.values()].reduce((total: number, orders: any) => total + (orders as any[]).length, 0)} total orders across 
+                    <strong>Daily Summary:</strong>
+                    ${[...dayData.moldAssignments.values()].reduce((total: number, orders: any) => total + (orders as any[]).length, 0)} total orders across
                     ${dayData.moldAssignments.size} mold(s)
                     ${isFriday ? ' • <span style="color: #856404;">MANUAL SCHEDULING ONLY</span>' : ''}
                   </div>
@@ -2364,18 +2353,68 @@ export default function LayupScheduler() {
     return model?.name || modelId;
   };
 
-  // Debug logging with emojis for visibility
-  console.log('🎯 LayupScheduler - Orders data:', orders);
-  console.log('📊 LayupScheduler - Orders count:', orders?.length);
-  console.log('🔍 LayupScheduler - Sample order:', orders?.[0]);
-  
+  // Helper to get order's model ID for compatibility checks
+  const getOrderModelId = (order: any) => {
+    // Prioritize stockModelId, then modelId
+    return order.stockModelId || order.modelId || getOrderStockModelId(order); // Fallback to intelligent detection
+  };
+
+  // Key normalization function to convert FB Order Numbers back to Order IDs
+  const normalizeOrderKey = useCallback((key: string): string => {
+    // If key is already a valid Order ID, return it
+    const isValidOrderId = processedOrders.some(order => order.orderId === key);
+    if (isValidOrderId) {
+      return key;
+    }
+
+    // Try to find order by FB Order Number
+    const orderByFbNumber = processedOrders.find(order => {
+      // Safely handle order object - cast to any to avoid type issues
+      const orderAny = order as any;
+      return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === key;
+    });
+    if (orderByFbNumber) {
+      console.warn(`🔧 KEY NORMALIZATION: Converting FB Order Number "${key}" to Order ID "${(orderByFbNumber as any).orderId}"`);
+      return (orderByFbNumber as any).orderId;
+    }
+
+    console.warn(`⚠️ KEY NORMALIZATION: Unknown key "${key}" - keeping as is`);
+    return key;
+  }, [processedOrders]);
+
+  // Friday validation function: Remove Friday assignments from automatic scheduling only
+  const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }, allowManualFriday: boolean = false) => {
+    const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
+      const assignmentDate = new Date(assignment.date);
+      return assignmentDate.getDay() === 5; // Friday check
+    });
+
+    if (fridayAssignments.length > 0) {
+      console.log(`🔧 AUTO-SCHEDULER FRIDAY FILTER: Found ${fridayAssignments.length} Friday assignments from automatic scheduling`);
+      fridayAssignments.forEach(([orderId, assignment]) => {
+        console.log(`   - Removing auto-scheduled Friday: ${orderId} on ${new Date(assignment.date).toDateString()}`);
+      });
+
+      // Remove Friday assignments from automatic scheduling
+      const cleanedAssignments = { ...assignments };
+      fridayAssignments.forEach(([orderId]) => {
+        delete cleanedAssignments[orderId];
+      });
+
+      console.log(`✅ Friday filter: Removed ${fridayAssignments.length} auto-scheduled Friday assignments, kept ${Object.keys(cleanedAssignments).length} Monday-Thursday assignments`);
+      return cleanedAssignments;
+    }
+
+    return assignments;
+  }, []);
+
   // FRIDAY VALIDATION: Verify no Friday assignments exist
   if (Object.keys(orderAssignments).length > 0) {
     const fridayAssignments = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       return assignmentDate.getDay() === 5;
     });
-    
+
     if (fridayAssignments.length > 0) {
       console.error(`🚨 FRIDAY ASSIGNMENTS DETECTED:`, fridayAssignments.map(([id]) => id));
     } else {
@@ -2420,395 +2459,65 @@ export default function LayupScheduler() {
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const dragData = e.dataTransfer.getData('text/plain');
+    const { orderId, source } = JSON.parse(dragData);
 
-  // Key normalization function to convert FB Order Numbers back to Order IDs
-  const normalizeOrderKey = useCallback((key: string): string => {
-    // If key is already a valid Order ID, return it
-    const isValidOrderId = processedOrders.some(order => order.orderId === key);
-    if (isValidOrderId) {
-      return key;
+    const targetElement = e.target as HTMLElement;
+    const dayCell = targetElement.closest('[data-day]');
+
+    if (!dayCell) return;
+
+    const day = parseInt(dayCell.getAttribute('data-day') || '0');
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day];
+
+    // Find the order being dropped
+    const order = allOrders.find(o => o.orderId === orderId);
+    if (!order) {
+      toast({
+        title: "Error",
+        description: "Order not found",
+        variant: "destructive",
+      });
+      return;
     }
-    
-    // Try to find order by FB Order Number
-    const orderByFbNumber = processedOrders.find(order => {
-      // Safely handle order object - cast to any to avoid type issues
-      const orderAny = order as any;
-      return getDisplayOrderId({ orderId: orderAny.orderId, fbOrderNumber: orderAny.fbOrderNumber }) === key;
+
+    // Check mold compatibility
+    const modelId = getOrderModelId(order);
+    const compatibleMolds = molds.filter(mold => {
+      if (!mold.enabled) return false;
+      if (!mold.stockModels || mold.stockModels.length === 0) return true;
+      if (mold.stockModels.includes(modelId)) return true;
+      if (mold.stockModels.includes('universal')) return true;
+
+      const normalizedModelId = modelId?.toLowerCase().replace(/[_-]/g, '') || '';
+      return mold.stockModels.some(supported => {
+        const normalizedSupported = supported.toLowerCase().replace(/[_-]/g, '');
+        return normalizedSupported === normalizedModelId;
+      });
     });
-    if (orderByFbNumber) {
-      console.warn(`🔧 KEY NORMALIZATION: Converting FB Order Number "${key}" to Order ID "${(orderByFbNumber as any).orderId}"`);
-      return (orderByFbNumber as any).orderId;
+
+    if (compatibleMolds.length === 0) {
+      toast({
+        title: "Incompatible Mold Assignment",
+        description: `Order ${orderId} (${modelId}) has no compatible molds available. Please check mold configurations.`,
+        variant: "destructive",
+      });
+      return;
     }
-    
-    console.warn(`⚠️ KEY NORMALIZATION: Unknown key "${key}" - keeping as is`);
-    return key;
-  }, [processedOrders]);
 
-  // Friday cleanup disabled to allow manual drag-and-drop placement on Friday
-  // This was causing drag-and-drop to fail by removing Friday assignments immediately
-
-  // Auto-generation disabled to prevent interference with drag-and-drop
-  // This was causing manual assignments to be overwritten by auto-scheduling
-
-
-
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 3, // Reduced from 8 to make dragging more responsive
-      },
-    })
-  );
-
-  // Generate schedule (exclude P1 purchase orders - they're handled by generateAutoSchedule)
-  const schedule = useMemo((): any[] => {
-    console.log('🔄 Client-side schedule generation disabled - using algorithmic scheduler instead');
-    // DISABLED: Client-side scheduling replaced by backend algorithmic scheduler
-    // The algorithmic scheduler handles all order types correctly
-    return [];
-  }, [orders, molds, employees]);
-
-  // Apply automatic schedule to orderAssignments when schedule changes
-  React.useEffect(() => {
-    // DISABLED: Client-side auto-assignment replaced by algorithmic scheduler
-    if (false && schedule.length > 0 && Object.keys(orderAssignments).length === 0) {
-      console.log('🚀 Applying automatic schedule:', schedule.length, 'assignments');
-
-      // Debug production orders and P1 purchase orders in schedule
-      const productionScheduleItems = schedule.filter((item: any) => {
-        const order = orders.find(o => o.orderId === item.orderId);
-        return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
-      });
-      console.log('🏭 Production/P1 orders in schedule:', productionScheduleItems.length);
-
-      const autoAssignments: {[orderId: string]: { moldId: string, date: string }} = {};
-
-      schedule.forEach((item: any) => {
-        const order = orders.find(o => o.orderId === item.orderId);
-        const isProduction = order?.source === 'production_order' || order?.source === 'p1_purchase_order';
-        
-        // CRITICAL DEBUG: Check for Friday assignments being created
-        const scheduleDate = new Date(item.scheduledDate);
-        const dayOfWeek = scheduleDate.getDay();
-        
-        if (dayOfWeek === 5) {
-          const errorMsg = `❌ FRIDAY ASSIGNMENT DETECTED: ${item.orderId} on ${scheduleDate.toDateString()} (Source: ${order?.source})`;
-          console.error(errorMsg);
-          console.error(`   🔍 Schedule item details:`, item);
-          console.error(`   🔍 Order source:`, order?.source);
-          console.trace(`🚨 FRIDAY CREATION TRACE for ${item.orderId}:`);
-          
-          setDebugInfo(prev => [...prev, errorMsg]);
-          return; // SKIP Friday assignments completely
-        }
-        
-        if (isProduction) {
-          console.log(`🏭 PRODUCTION/P1 ORDER ASSIGNMENT: ${item.orderId} (${order?.source}) → mold ${item.moldId} on ${item.scheduledDate.toDateString()}`);
-        }
-
-        autoAssignments[item.orderId] = {
-          moldId: item.moldId,
-          date: item.scheduledDate.toISOString()
-        };
-      });
-
-      setOrderAssignments(autoAssignments);
-      setHasUnsavedScheduleChanges(true);
-      console.log('✅ Auto-assigned orders:', Object.keys(autoAssignments).length);
-      console.log('✅ Production/P1 orders assigned:', Object.keys(autoAssignments).filter(orderId => {
-        const order = orders.find(o => o.orderId === orderId);
-        return order?.source === 'production_order' || order?.source === 'p1_purchase_order';
-      }).length);
-    } else if (schedule.length > 0 && Object.keys(orderAssignments).length > 0) {
-      // Preserve existing assignments (especially P1 purchase orders) while adding new regular orders
-      console.log('🔄 Merging schedule with existing assignments (preserving P1 purchase orders)');
-      
-      const existingP1Assignments = Object.entries(orderAssignments).filter(([orderId]) => {
-        const order = orders.find(o => o.orderId === orderId);
-        return order?.source === 'p1_purchase_order';
-      });
-      
-      const existingProductionAssignments = Object.entries(orderAssignments).filter(([orderId]) => {
-        const order = orders.find(o => o.orderId === orderId);
-        return order?.source === 'production_order';
-      });
-      
-      console.log('🏭 Preserving P1 purchase order assignments:', existingP1Assignments.length);
-      console.log('🏭 Preserving production order assignments:', existingProductionAssignments.length);
-      
-      const newAssignments: {[orderId: string]: { moldId: string, date: string }} = { ...orderAssignments };
-      
-      // Add new assignments for regular orders that aren't already assigned
-      schedule.forEach((item: any) => {
-        const order = orders.find(o => o.orderId === item.orderId);
-        
-        // CRITICAL DEBUG: Check for Friday assignments during merge
-        const scheduleDate = new Date(item.scheduledDate);
-        const dayOfWeek = scheduleDate.getDay();
-        
-        if (dayOfWeek === 5) {
-          console.error(`❌ FRIDAY ASSIGNMENT IN MERGE: ${item.orderId} on ${scheduleDate.toDateString()}`);
-          console.error(`   🔍 Merge item details:`, item);
-          return; // SKIP Friday assignments completely
-        }
-        
-        if (order?.source === 'main_orders' && !newAssignments[item.orderId]) {
-          newAssignments[item.orderId] = {
-            moldId: item.moldId,
-            date: item.scheduledDate.toISOString()
-          };
-        }
-      });
-      
-      // Apply Friday validation before merging assignments
-      const validatedNewAssignments = validateNoFridayAssignments(newAssignments);
-      setOrderAssignments(validatedNewAssignments);
-      console.log('✅ Merged assignments:', Object.keys(validatedNewAssignments).length);
-    }
-  }, [schedule, orderAssignments]);
-
-  // Build date columns
-  // Generate date ranges based on view type - SHOW ALL DAYS but mark work vs non-work days
-  const dates = useMemo(() => {
-    let calculatedDates;
-    if (viewType === 'day') {
-      calculatedDates = [currentDate];
-    } else if (viewType === 'week') {
-      // Show selected work days + Friday for manual drops (even if Friday not in work days)
-      const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
-      const allWeekDays = eachDayOfInterval({ start, end: addDays(start, 6) }); // 7 days
-      
-      // Include selected work days
-      let datesSet = new Set(allWeekDays.filter(date => selectedWorkDays.includes(date.getDay())));
-      
-      // Always add Friday for manual drops (day 5), even if not in selectedWorkDays
-      const friday = allWeekDays.find(date => date.getDay() === 5);
-      if (friday) {
-        datesSet.add(friday);
-      }
-      
-      // Convert back to array and sort by day of week
-      calculatedDates = Array.from(datesSet).sort((a, b) => a.getDay() - b.getDay());
-      
-      console.log(`📅 WEEK VIEW: Showing work days + Friday for manual drops [${calculatedDates.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]).join(', ')}]`);
+    if (day === 5) { // Friday
+      // Handle manual Friday assignment
+      handleManualFridayAssignment(orderId, source);
     } else {
-      // month - show only selected work days
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
-      const allDays = eachDayOfInterval({ start, end });
-      // Show only selected work days (no hardcoded Friday)
-      calculatedDates = allDays.filter(date => selectedWorkDays.includes(date.getDay()));
-      console.log(`📅 MONTH VIEW: Showing only selected work days [${selectedWorkDays.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
-    }
-    
-    // DEBUG: Show what dates we're displaying and what assignments exist
-    console.log('📅 DATES BEING DISPLAYED:', calculatedDates.map(d => `${d.toDateString()} (day ${d.getDay()})`));
-    console.log('🔍 SELECTED WORK DAYS:', selectedWorkDays);
-    console.log('📊 TOTAL ORDERS AVAILABLE:', processedOrders?.length || 0);
-    console.log('📋 CURRENT ASSIGNMENTS COUNT:', Object.keys(orderAssignments).length);
-    
-    // Show orderAssignments when we're rendering
-    if (Object.keys(orderAssignments).length > 0) {
-      console.log('📋 CURRENT orderAssignments STATE:');
-      
-      // SPECIAL CHECK: Look for AI141 specifically
-      Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignmentDate.getDay()];
-        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${assignmentDate.getDay()})`);
-        
-        if (orderId === 'AI141') {
-          console.error(`🚨 AI141 FOUND IN STATE:`, assignment);
-          console.error(`🚨 AI141 Date: ${assignment.date}`);
-          console.error(`🚨 AI141 Parsed: ${assignmentDate.toDateString()} (day ${assignmentDate.getDay()})`);
-        }
-      });
-      Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
-        const assignmentDate = new Date(assignment.date);
-        const dayOfWeek = assignmentDate.getDay();
-        const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-        console.log(`   ${orderId} → ${assignment.moldId} on ${assignmentDate.toDateString()} (${dayName}, day ${dayOfWeek})`);
-        
-        if (dayOfWeek === 5) {
-          const errorMsg = `❌ FRIDAY IN STATE: ${orderId} on Friday ${assignmentDate.toDateString()}`;
-          console.error(errorMsg);
-          console.trace(`🔍 FRIDAY ASSIGNMENT ORIGIN for ${orderId}:`);
-          console.error(`🔍 FRIDAY ASSIGNMENT DEBUG - Source analysis:`);
-          console.error(`   Assignment object:`, assignment);
-          console.error(`   Raw date string:`, assignment.date);
-          console.error(`   Parsed date:`, assignmentDate);
-          console.error(`   Assignment source: Check if this came from database, drag-drop, or algorithm`);
-          
-          setDebugInfo(prev => [...prev, errorMsg]);
-        }
+      toast({
+        title: "Invalid Drop",
+        description: `Can only manually assign orders to Friday. Today is ${dayName}.`,
+        variant: "destructive",
       });
     }
-    
-    return calculatedDates;
-  }, [viewType, currentDate, orderAssignments, selectedWorkDays]);
-
-  // For week-based organization, group dates into work week sections (Mon-Fri)
-  const weekGroups = useMemo(() => {
-    if (viewType !== 'month') return null;
-
-    const weeks: Date[][] = [];
-    let currentWeek: Date[] = [];
-
-    dates.forEach((date, index) => {
-      // Include all weekdays (Mon-Fri)
-      currentWeek.push(date);
-
-      // Complete the week on Friday (5) or at the end
-      const dayOfWeek = date.getDay();
-      if (dayOfWeek === 5 || index === dates.length - 1) {
-        if (currentWeek.length > 0) {
-          weeks.push(currentWeek);
-          currentWeek = [];
-        }
-      }
-    });
-
-    return weeks;
-  }, [dates, viewType]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    // Prevent any drag operations when schedule is locked
-    if (isScheduleLocked) {
-      console.log('🔒 Schedule is locked - drag operation blocked');
-      return;
-    }
-
-    if (!over) {
-      console.log('❌ No drop target detected');
-      return;
-    }
-
-    const orderId = active.id as string;
-    const dropTargetId = over.id as string;
-
-    console.log('🎯 DRAG END DEBUG:', { 
-      orderId, 
-      dropTargetId, 
-      activeId: active.id,
-      overId: over.id,
-      overData: over.data.current,
-      activeData: active.data.current 
-    });
-
-    // Parse the drop target ID (format: moldId|dateISO)
-    const [targetMoldId, dateIso] = dropTargetId.split('|');
-
-    if (!targetMoldId || !dateIso) {
-      console.warn('❌ Invalid drop target:', dropTargetId);
-      return;
-    }
-
-    // CRITICAL: Check if target date violates work day settings
-    const targetDate = new Date(dateIso);
-    const targetDayOfWeek = targetDate.getDay();
-    
-    // Get current work days from settings (default Monday-Thursday = [1,2,3,4])
-    const allowedWorkDays = selectedWorkDays;
-    
-    console.log(`🔍 DRAG VALIDATION CHECK:`, {
-      orderId,
-      targetDayOfWeek,
-      targetDate: targetDate.toDateString(),
-      selectedWorkDays,
-      isAllowed: allowedWorkDays.includes(targetDayOfWeek)
-    });
-
-    // Allow Friday drops for manual scheduling even if not in work days
-    const isFridayManualDrop = targetDayOfWeek === 5;
-    
-    if (!allowedWorkDays.includes(targetDayOfWeek) && !isFridayManualDrop) {
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const targetDayName = dayNames[targetDayOfWeek];
-      const allowedDayNames = allowedWorkDays.map(day => dayNames[day]).join(', ');
-      
-      console.error(`❌ WORK DAY VIOLATION: Cannot manually schedule ${orderId} on ${targetDayName} ${targetDate.toDateString()}`);
-      console.error(`   Allowed work days: ${allowedDayNames} (${allowedWorkDays.join(', ')})`);
-      
-      alert(`❌ Cannot schedule orders on ${targetDayName}!\n\nAllowed work days: ${allowedDayNames} or Friday for manual drops`);
-      
-      return;
-    }
-    
-    // Show warning for Friday drops but allow them
-    if (isFridayManualDrop && !allowedWorkDays.includes(5)) {
-      console.log(`🔔 Manual Friday drop: ${orderId} scheduled on Friday ${targetDate.toDateString()}`);
-    }
-
-    // PRESERVE ORIGINAL MOLD - only change the date when dragging between cells
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
-    // Apply key normalization to ensure we use Order ID, not FB Order Number
-    const normalizedOrderId = normalizeOrderKey(orderId);
-    
-    // Get the current assignment to preserve the original mold
-    const currentAssignment = orderAssignments[normalizedOrderId];
-    const originalMoldId = currentAssignment?.moldId;
-    
-    if (!originalMoldId) {
-      console.warn(`❌ No original mold assignment found for order ${orderId}`);
-      return;
-    }
-    
-    console.log(`🎯 Moving order ${orderId} from ${originalMoldId} to same mold on ${targetDate.toDateString()} (${dayNames[targetDayOfWeek]})`);
-    console.log(`   PRESERVING original mold: ${originalMoldId} (not changing to ${targetMoldId})`);
-
-    // Update assignment - PRESERVE original mold, only change date
-    const newAssignments = {
-      ...orderAssignments,
-      [normalizedOrderId]: { moldId: originalMoldId, date: dateIso }
-    };
-    
-    // Apply work day validation to ensure consistency
-    setOrderAssignments(newAssignments);
-
-    // Mark as having unsaved changes
-    setHasUnsavedScheduleChanges(true);
-
-    // Show success toast
-    toast({
-      title: "Order Moved",
-      description: `Order ${orderId} moved to ${new Date(dateIso).toLocaleDateString()} (mold preserved: ${originalMoldId})`,
-    });
-  };
-
-  const handleDragStart = (event: any) => {
-    setActiveId(event.active.id);
-  };
-
-  // Friday validation function: Remove Friday assignments from automatic scheduling only
-  const validateNoFridayAssignments = React.useCallback((assignments: { [orderId: string]: { moldId: string, date: string } }, allowManualFriday: boolean = false) => {
-    const fridayAssignments = Object.entries(assignments).filter(([orderId, assignment]) => {
-      const assignmentDate = new Date(assignment.date);
-      return assignmentDate.getDay() === 5; // Friday check
-    });
-    
-    if (fridayAssignments.length > 0) {
-      console.log(`🔧 AUTO-SCHEDULER FRIDAY FILTER: Found ${fridayAssignments.length} Friday assignments from automatic scheduling`);
-      fridayAssignments.forEach(([orderId, assignment]) => {
-        console.log(`   - Removing auto-scheduled Friday: ${orderId} on ${new Date(assignment.date).toDateString()}`);
-      });
-      
-      // Remove Friday assignments from automatic scheduling
-      const cleanedAssignments = { ...assignments };
-      fridayAssignments.forEach(([orderId]) => {
-        delete cleanedAssignments[orderId];
-      });
-      
-      console.log(`✅ Friday filter: Removed ${fridayAssignments.length} auto-scheduled Friday assignments, kept ${Object.keys(cleanedAssignments).length} Monday-Thursday assignments`);
-      return cleanedAssignments;
-    }
-    
-    return assignments;
-  }, []);
+  }, [toast, allOrders, molds]);
 
   // Initial Friday cleanup effect - run once when orderAssignments are first loaded (disabled to prevent cycles)
   React.useEffect(() => {
@@ -2824,7 +2533,7 @@ export default function LayupScheduler() {
     console.log('🤖 Starting automatic scheduling...');
     console.log('📊 Total processed orders available:', processedOrders.length);
     console.log('📊 Current order assignments:', Object.keys(orderAssignments).length);
-    
+
     const unassignedOrders = processedOrders.filter(order => !orderAssignments[order.orderId]);
     console.log(`📋 Scheduling ${unassignedOrders.length} unassigned orders`);
     console.log('📋 First 10 unassigned orders:', unassignedOrders.slice(0, 10).map(o => ({
@@ -2847,11 +2556,11 @@ export default function LayupScheduler() {
       const workDays: Date[] = [];
       console.log(`📅 Generating work days starting from: ${startDate.toDateString()} (Day: ${startDate.getDay()})`);
       console.log(`📅 Selected work days: ${selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`);
-      
+
       for (let week = 0; week < weeksCount; week++) {
         const weekStart = startOfWeek(startDate, { weekStartsOn: 1 }); // Get Monday of current week
         const actualWeekStart = addDays(weekStart, week * 7); // Add weeks
-        
+
         // Generate days based on user selection (Monday = 0 offset, Tuesday = 1 offset, etc.)
         for (let dayOffset = 0; dayOffset < 5; dayOffset++) {
           const dayOfWeek = dayOffset + 1; // Monday = 1, Tuesday = 2, etc.
@@ -2861,7 +2570,7 @@ export default function LayupScheduler() {
           }
         }
       }
-      
+
       return workDays;
     };
 
@@ -2873,12 +2582,12 @@ export default function LayupScheduler() {
       // Priority by source: P1 purchase orders first, then regular orders
       if (a.source === 'p1_purchase_order' && b.source !== 'p1_purchase_order') return -1;
       if (b.source === 'p1_purchase_order' && a.source !== 'p1_purchase_order') return 1;
-      
+
       // Then by priority score
       const aPriority = a.priorityScore || 99;
       const bPriority = b.priorityScore || 99;
       if (aPriority !== bPriority) return aPriority - bPriority;
-      
+
       // Then by due date
       const aDueDate = new Date(a.dueDate || a.orderDate).getTime();
       const bDueDate = new Date(b.dueDate || b.orderDate).getTime();
@@ -2893,25 +2602,25 @@ export default function LayupScheduler() {
         if (!mold.stockModels || mold.stockModels.length === 0) return true;
         return mold.stockModels.includes(modelId);
       });
-      
+
       if (compatibleMolds.length === 0) {
         console.warn(`❌ No compatible molds for order ${order.orderId} with model ${modelId}`);
         console.warn('Available molds:', molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
       }
-      
+
       return compatibleMolds;
     };
 
     // Track mold capacity per day
     const moldCapacity: {[key: string]: number} = {};
-    
+
     let assignedCount = 0;
     let skippedCount = 0;
 
     // Schedule each order
     sortedOrders.forEach((order, index) => {
       const compatibleMolds = getCompatibleMolds(order);
-      
+
       if (compatibleMolds.length === 0) {
         console.warn(`❌ No compatible molds found for order ${order.orderId} (${index + 1}/${sortedOrders.length})`);
         skippedCount++;
@@ -2925,7 +2634,7 @@ export default function LayupScheduler() {
         if (assigned) break;
 
         const dateString = date.toISOString();
-        
+
         // Try each compatible mold
         for (const mold of compatibleMolds) {
           const moldCapacityKey = `${mold.moldId}|${dateString}`;
@@ -2939,12 +2648,12 @@ export default function LayupScheduler() {
               moldId: mold.moldId,
               date: dateString
             };
-            
+
             // Update capacity tracking
             moldCapacity[moldCapacityKey] = currentCapacity + 1;
             assignedCount++;
             assigned = true;
-            
+
             if (assignedCount <= 5 || assignedCount % 10 === 0) {
               console.log(`✅ Assigned ${order.orderId} to ${mold.moldId} on ${format(date, 'MM/dd')} (${assignedCount}/${sortedOrders.length})`);
             }
@@ -3101,8 +2810,8 @@ export default function LayupScheduler() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">P1 Order Production Scheduling</p>
 
             </div>
-            
-            
+
+
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
                 <span className="text-blue-700 dark:text-blue-300 font-medium">{orders.length} Orders in Production Queue</span>
@@ -3143,7 +2852,7 @@ export default function LayupScheduler() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Select which days should be included when generating layup schedules. 
+                    Select which days should be included when generating layup schedules.
                     All days Monday-Friday will remain visible in the calendar.
                   </p>
                   <div className="space-y-3">
@@ -3166,7 +2875,7 @@ export default function LayupScheduler() {
                             }
                           }}
                         />
-                        <label 
+                        <label
                           htmlFor={`day-${day}`}
                           className={`text-sm cursor-pointer font-medium ${
                             day === 5 ? 'text-amber-700 dark:text-amber-300' : ''
@@ -3180,7 +2889,7 @@ export default function LayupScheduler() {
                   </div>
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' : 
+                      <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' :
                         selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
                     </p>
                   </div>
@@ -3238,7 +2947,7 @@ export default function LayupScheduler() {
                                   }
                                 }}
                               />
-                              <label 
+                              <label
                                 htmlFor={`stock-${model.id}`}
                                 className="text-sm cursor-pointer"
                               >
@@ -3257,8 +2966,8 @@ export default function LayupScheduler() {
                             checked={isBulkMode}
                             onCheckedChange={(checked) => setIsBulkMode(!!checked)}
                           />
-                          <label 
-                            htmlFor="bulk-mode" 
+                          <label
+                            htmlFor="bulk-mode"
                             className="text-sm font-medium cursor-pointer"
                           >
                             Create multiple molds at once
@@ -3310,9 +3019,9 @@ export default function LayupScheduler() {
                         </div>
                       </div>
                     </div>
-                    <Button 
-                      onClick={handleAddMold} 
-                      className="mt-3" 
+                    <Button
+                      onClick={handleAddMold}
+                      className="mt-3"
                       size="sm"
                       disabled={!newMold.moldName.trim()}
                     >
@@ -3332,7 +3041,7 @@ export default function LayupScheduler() {
                       <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                         <Checkbox
                           checked={mold.enabled ?? true}
-                          onCheckedChange={(checked) => 
+                          onCheckedChange={(checked) =>
                             saveMold({ ...mold, enabled: !!checked })
                           }
                         />
@@ -3368,10 +3077,10 @@ export default function LayupScheduler() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
-                                      saveMold({ 
-                                        ...mold, 
+                                      saveMold({
+                                        ...mold,
                                         modelName: editingMoldName.trim() || mold.modelName,
-                                        stockModels: editingMoldStockModels 
+                                        stockModels: editingMoldStockModels
                                       });
                                       setEditingMoldId(null);
                                       setEditingMoldStockModels([]);
@@ -3429,7 +3138,7 @@ export default function LayupScheduler() {
                                         }
                                       }}
                                     />
-                                    <label 
+                                    <label
                                       htmlFor={`edit-stock-${mold.moldId}-${model.id}`}
                                       className="text-xs cursor-pointer"
                                     >
@@ -3505,7 +3214,7 @@ export default function LayupScheduler() {
                     </ul>
                     {molds.length > 0 && (
                       <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
-                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler. 
+                        <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler.
                         Adjust daily capacity to reflect each mold's production capability.
                       </p>
                     )}
@@ -3567,9 +3276,9 @@ export default function LayupScheduler() {
                         <span className="text-xs">hrs/day</span>
                       </div>
                     </div>
-                    <Button 
-                      onClick={handleAddEmployee} 
-                      className="mt-3" 
+                    <Button
+                      onClick={handleAddEmployee}
+                      className="mt-3"
                       size="sm"
                       disabled={!newEmployee.employeeId.trim()}
                     >
@@ -3659,7 +3368,7 @@ export default function LayupScheduler() {
                       {/* Save Button */}
                       {hasUnsavedChanges && (
                         <div className="flex justify-center pt-4 border-t">
-                          <Button 
+                          <Button
                             onClick={handleSaveEmployeeChanges}
                             className="bg-green-600 hover:bg-green-700 text-white"
                           >
@@ -3673,7 +3382,7 @@ export default function LayupScheduler() {
                   {employees.length > 0 && (
                     <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <p className="text-sm text-green-700 dark:text-green-300">
-                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling. 
+                        <strong>Tip:</strong> Set realistic production rates and daily hours for accurate scheduling.
                         The system will automatically distribute work based on these settings.
                       </p>
                     </div>
@@ -3727,8 +3436,8 @@ export default function LayupScheduler() {
                   }
                 }}
                 disabled={isSaving}
-                className={`mr-2 ${isScheduleLocked 
-                  ? 'bg-red-600 hover:bg-red-700 text-white' 
+                className={`mr-2 ${isScheduleLocked
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
                   : 'bg-green-600 hover:bg-green-700 text-white'
                 }`}
               >
@@ -3787,7 +3496,7 @@ export default function LayupScheduler() {
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="px-3 text-sm font-medium">
-              {viewType === 'week' 
+              {viewType === 'week'
                 ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d')}`
                 : format(currentDate, 'MMMM yyyy')
               }
@@ -3836,14 +3545,14 @@ export default function LayupScheduler() {
               {dates.map(date => {
                   const dayOfWeek = date.getDay();
                   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
-                  
+
                   return (
                     <div
                       key={date.toISOString()}
                       className={`p-3 border text-center font-semibold text-sm ${
                         isWorkDay
                           ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
-                          : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 opacity-75'
+                          : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10 opacity-75'
                       }`}
                     >
                       {format(date, 'MM/dd')}
@@ -3867,8 +3576,8 @@ export default function LayupScheduler() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-auto">
-        <DndContext 
-          sensors={sensors} 
+        <DndContext
+          sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           collisionDetection={closestCorners}
@@ -3888,7 +3597,7 @@ export default function LayupScheduler() {
                       </p>
                     </div>
                     <div className="space-x-2">
-                      <Button 
+                      <Button
                         onClick={generateAlgorithmicSchedule}
                         disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
                         className="bg-blue-600 hover:bg-blue-700"
@@ -3899,7 +3608,7 @@ export default function LayupScheduler() {
                       </Button>
                       {Object.keys(orderAssignments).length > 0 && (
                         <>
-                          <Button 
+                          <Button
                             onClick={async () => {
                               if (isScheduleLocked) {
                                 // Unlock the schedule
@@ -3921,7 +3630,7 @@ export default function LayupScheduler() {
                                   }));
 
                                   console.log('💾 Saving weekly schedule only:', scheduleEntries.length, 'entries');
-                                  
+
                                   // Save schedule entries only (no department changes)
                                   const response = await fetch('/api/layup-schedule/save', {
                                     method: 'POST',
@@ -3932,19 +3641,19 @@ export default function LayupScheduler() {
                                       workDays: selectedWorkDays
                                     })
                                   });
-                                  
+
                                   const result = await response.json();
-                                  
+
                                   if (result.success) {
                                     console.log('✅ Weekly schedule saved successfully');
                                     setIsScheduleLocked(true);
-                                    
+
                                     // Show success feedback
                                     toast({
                                       title: "Schedule Locked",
                                       description: `Schedule saved with ${scheduleEntries.length} order assignments. Orders are locked in place.`,
                                     });
-                                    
+
                                     // Keep the schedule visible (don't clear orderAssignments)
                                     // This allows viewing the saved schedule and making adjustments
                                   } else {
@@ -3957,8 +3666,8 @@ export default function LayupScheduler() {
                                 }
                               }
                             }}
-                            className={`${isScheduleLocked 
-                              ? 'bg-red-600 hover:bg-red-700' 
+                            className={`${isScheduleLocked
+                              ? 'bg-red-600 hover:bg-red-700'
                               : 'bg-green-600 hover:bg-green-700'
                             }`}
                             size="sm"
@@ -3975,7 +3684,7 @@ export default function LayupScheduler() {
                               </>
                             )}
                           </Button>
-                          <Button 
+                          <Button
                             onClick={() => setOrderAssignments({})}
                             variant="outline"
                             size="sm"
@@ -3995,28 +3704,29 @@ export default function LayupScheduler() {
                 >
                   {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
                   {(() => {
-                    // Get molds that either have orders OR are compatible with existing orders in queue
+                    // Get molds that are compatible with any order in the current queue
                     const getCompatibleMolds = (order: any) => {
-                      const modelId = order.stockModelId || order.modelId;
+                      const modelId = getOrderModelId(order);
                       return molds.filter(mold => {
                         if (!mold.enabled) return false;
                         if (!mold.stockModels || mold.stockModels.length === 0) return true; // No restrictions
-                        return mold.stockModels.includes(modelId);
+                        if (mold.stockModels.includes(modelId)) return true; // Exact match
+                        if (mold.stockModels.includes('universal')) return true; // Universal mold
+
+                        // Normalize and compare stock models for variations
+                        const normalizedModelId = modelId?.toLowerCase().replace(/[_-]/g, '') || '';
+                        return mold.stockModels.some(supported => {
+                          const normalizedSupported = supported.toLowerCase().replace(/[_-]/g, '');
+                          return normalizedSupported === normalizedModelId;
+                        });
                       });
                     };
 
-                    // Find molds that are compatible with any order in the current queue
-                    const compatibleMoldIds = new Set<string>();
-                    orders.forEach(order => {
-                      const compatible = getCompatibleMolds(order);
-                      compatible.forEach(mold => compatibleMoldIds.add(mold.moldId));
-                    });
-
-                    // Get molds that have actual order assignments only (hide empty molds)
+                    // Find molds that have actual order assignments only (hide empty molds)
                     const relevantMolds = molds.filter(m => {
                       if (!m.enabled) return false;
 
-                      // Only include molds that have orders assigned (no empty molds)
+                      // Only include molds that have orders assigned
                       const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
                       return hasAssignments;
                     });
@@ -4029,7 +3739,14 @@ export default function LayupScheduler() {
 
                         const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
                           const assignmentDateOnly = assignment.date.split('T')[0];
-                          return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
+                          // CRITICAL FIX: Use UTC date comparison to prevent timezone bugs
+                          const assignmentDate = new Date(assignment.date);
+                          const cellDate = new Date(dateString);
+
+                          const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
+                          const cellDateStr = cellDate.toISOString().split('T')[0];
+
+                          return assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
                         }).length;
 
                         return count + ordersForThisMoldDate;
@@ -4060,18 +3777,15 @@ export default function LayupScheduler() {
                             // Get orders assigned to this mold/date combination
                             const cellOrders = Object.entries(orderAssignments)
                               .filter(([orderId, assignment]) => {
-                                const assignmentDateOnly = assignment.date.split('T')[0];
-                                const cellDateOnly = dateString.split('T')[0];
-                                // CRITICAL FIX: Use UTC date comparison to prevent timezone bugs
                                 const assignmentDate = new Date(assignment.date);
                                 const cellDate = new Date(dateString);
-                                
+
                                 // Force UTC comparison to avoid timezone issues
                                 const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
                                 const cellDateStr = cellDate.toISOString().split('T')[0];
                                 const isMatch = assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
-                                
-                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders  
+
+                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders
                                 if (orderId === 'AI141' || orderId === 'AH005' || orderId === 'AG822') {
                                   console.error(`🔍 MATCH DEBUG for ${orderId}:`);
                                   console.error(`   Cell Date: ${cellDate.toDateString()} (day ${cellDate.getDay()})`);
@@ -4083,20 +3797,20 @@ export default function LayupScheduler() {
                                   console.error(`   Mold match: ${assignment.moldId} === ${mold.moldId} = ${assignment.moldId === mold.moldId}`);
                                   console.error(`   Date match: ${assignmentDateStr} === ${cellDateStr} = ${assignmentDateStr === cellDateStr}`);
                                   console.error(`   Final match: ${isMatch}`);
-                                  
+
                                   if (isMatch && cellDate.getDay() === 5) {
                                     console.error(`💥 FRIDAY MATCH DETECTED FOR ${orderId}!`);
                                     console.error(`💥 THIS SHOULD NEVER HAPPEN - CLEARING STATE`);
                                     setTimeout(() => setOrderAssignments({}), 5);
                                   }
                                 }
-                                
+
                                 // FRIDAY HANDLING: Show Friday assignments for manual drops
                                 if (cellDate.getDay() === 5) {
                                   console.log(`📅 Friday assignment found: ${orderId} on ${cellDate.toDateString()}`);
                                   // Allow Friday assignments to be shown
                                 }
-                                
+
                                 // DEBUG: Specific check for AI141 and AG822 (AI266)
                                 if (orderId === 'AG822') {
                                   console.error(`🔍 AG822 (AI266) MATCHING DEBUG:`);
@@ -4107,7 +3821,7 @@ export default function LayupScheduler() {
                                   console.error(`   Is match: ${isMatch}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
                                 }
-                                
+
                                 // DEBUG: FB Order Number key detection - AI141 should be normalized to AH005
                                 if (orderId.match(/^[A-Z]{2}\d{3}$/) && !processedOrders.some(o => o.orderId === orderId)) {
                                   console.error(`👻 FB ORDER NUMBER AS KEY DETECTED: ${orderId}`);
@@ -4118,7 +3832,7 @@ export default function LayupScheduler() {
                                   console.error(`   Is match: ${isMatch}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
                                   console.error(`   ❗ This is an FB Order Number being used as a key - should be normalized!`);
-                                  
+
                                   // Try to find the actual order
                                   const actualOrder = processedOrders.find(o => {
                                     const orderAny = o as any;
@@ -4135,7 +3849,7 @@ export default function LayupScheduler() {
                                   console.error(`   Assignment date: ${assignment.date}`);
                                   console.error(`   Mold: ${assignment.moldId}`);
                                   console.error(`   Order lookup result:`, processedOrders.find(o => o.orderId === orderId) ? 'FOUND' : 'NOT FOUND');
-                                  
+
                                   // Check if this is an FB Order Number key issue
                                   const actualOrder = processedOrders.find(o => {
                                     const orderAny = o as any;
@@ -4144,10 +3858,10 @@ export default function LayupScheduler() {
                                   if (actualOrder) {
                                     console.error(`   🔧 KEY ISSUE: ${orderId} is FB Order Number, should be ${(actualOrder as any).orderId}`);
                                   }
-                                  
+
                                   // Add to debug info state to show in UI
                                   const orderForDisplay = processedOrders.find(o => (o as any).orderId === orderId);
-                                  const displayOrderId = orderForDisplay 
+                                  const displayOrderId = orderForDisplay
                                     ? getDisplayOrderId({ orderId: (orderForDisplay as any).orderId, fbOrderNumber: (orderForDisplay as any).fbOrderNumber })
                                     : actualOrder ? `${orderId} (FB#)` : orderId;
                                   const errorMsg = `🚨 FRIDAY ORDER ON CALENDAR: ${orderId} (${displayOrderId}) on ${date.toDateString()} mold ${assignment.moldId}`;
@@ -4158,7 +3872,7 @@ export default function LayupScheduler() {
                                     return prev;
                                   });
                                 }
-                                
+
                                 return isMatch;
                               })
                               .map(([orderId]) => {

@@ -26,6 +26,7 @@ import {
   format,
   isSameDay,
   startOfWeek,
+  endOfWeek,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
@@ -2158,7 +2159,8 @@ export default function LayupScheduler() {
                   </div>
                   
                   <div class="mold-assignments" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                    ${Array.from(dayData.moldAssignments.entries()).map(([moldId, orders]) => {
+                    ${(Array.from(dayData.moldAssignments.entries()) as Array<[string, any[]]>).map((entry) => {
+                      const [moldId, orders] = entry;
                       const mold = molds.find(m => m.moldId === moldId);
                       
                       return `
@@ -2169,7 +2171,7 @@ export default function LayupScheduler() {
                           </div>
                           
                           <div class="orders-list">
-                            ${orders.map((order, index) => {
+                            ${orders.map((order: any, index: number) => {
                               const modelId = order.stockModelId || order.modelId;
                               const materialType = getMaterialType(modelId || '');
                               const isProduction = order.source === 'production_order';
@@ -2215,7 +2217,7 @@ export default function LayupScheduler() {
                   
                   <div class="day-summary" style="margin-top: 15px; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; font-size: 10px;">
                     <strong>Daily Summary:</strong> 
-                    ${Array.from(dayData.moldAssignments.values()).reduce((total, orders) => total + orders.length, 0)} total orders across 
+                    ${[...dayData.moldAssignments.values()].reduce((total: number, orders: any) => total + (orders as any[]).length, 0)} total orders across 
                     ${dayData.moldAssignments.size} mold(s)
                     ${isFriday ? ' • <span style="color: #856404;">MANUAL SCHEDULING ONLY</span>' : ''}
                   </div>

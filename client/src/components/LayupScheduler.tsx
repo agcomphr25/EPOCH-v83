@@ -625,6 +625,48 @@ export default function LayupScheduler() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  // Drag handlers
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const orderId = active.id as string;
+    const [date, moldId] = (over.id as string).split('|');
+
+    if (!date || !moldId) return;
+
+    // Update order assignments
+    setOrderAssignments(prev => ({
+      ...prev,
+      [orderId]: { moldId, date }
+    }));
+
+    setHasUnsavedChanges(true);
+  };
+
+  // Handle manual Friday assignment
+  const handleManualFridayAssignment = (orderId: string, source: string) => {
+    toast({
+      title: "Manual Friday Assignment",
+      description: `Order ${orderId} can be manually assigned to Friday if needed.`,
+    });
+  };
+
 
 
   const { molds, saveMold, deleteMold, toggleMoldStatus, loading: moldsLoading } = useMoldSettings();
@@ -2369,10 +2411,10 @@ export default function LayupScheduler() {
     return model?.name || modelId;
   };
 
-  // Helper to get order's model ID for compatibility checks
+  // Helper to get order's model ID for compatibility checks  
   const getOrderModelId = (order: any) => {
     // Prioritize stockModelId, then modelId
-    return order.stockModelId || order.modelId || getOrderStockModelId(order); // Fallback to intelligent detection
+    return order.stockModelId || order.modelId;
   };
 
   // Key normalization function to convert FB Order Numbers back to Order IDs

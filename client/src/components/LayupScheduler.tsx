@@ -2100,123 +2100,118 @@ export default function LayupScheduler() {
             <div class="stat">Employees: ${employees.length}</div>
           </div>
 
-          <table class="schedule-table">
-            ${(() => {
-              // Build map of all mold-date-orders combinations that have assignments
-              const assignmentMap = new Map();
-              Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
-                const order = orders.find(o => o.orderId === orderId);
-                if (!order) return;
-                
-                const assignmentDateOnly = assignment.date.split('T')[0];
-                const key = `${assignment.moldId}-${assignmentDateOnly}`;
-                
-                if (!assignmentMap.has(key)) {
-                  assignmentMap.set(key, {
-                    moldId: assignment.moldId,
-                    date: assignmentDateOnly,
-                    orders: []
-                  });
-                }
-                assignmentMap.get(key).orders.push(order);
-              });
-
-              if (assignmentMap.size === 0) {
-                return '<tr><th colspan="2">No Orders Scheduled</th></tr>';
-              }
-
-              // Get unique dates and molds that have orders
-              const assignmentValues = Array.from(assignmentMap.values());
-              const activeDates = [...new Set(assignmentValues.map(item => item.date))].sort();
-              const activeMoldIds = [...new Set(assignmentValues.map(item => item.moldId))];
+          <!-- Daily Layup Schedule for Production Floor -->
+          ${(() => {
+            // Build map of all mold-date-orders combinations that have assignments
+            const assignmentMap = new Map();
+            Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+              const order = orders.find(o => o.orderId === orderId);
+              if (!order) return;
               
-              // Get mold objects for active molds
-              const activeMoldObjects = activeMoldIds.map(moldId => 
-                molds.find(m => m.moldId === moldId)
-              ).filter((mold): mold is any => mold !== undefined);
+              const assignmentDateOnly = assignment.date.split('T')[0];
+              const key = `${assignmentDateOnly}`;
+              
+              if (!assignmentMap.has(key)) {
+                assignmentMap.set(key, {
+                  date: assignmentDateOnly,
+                  moldAssignments: new Map()
+                });
+              }
+              
+              const dayData = assignmentMap.get(key);
+              if (!dayData.moldAssignments.has(assignment.moldId)) {
+                dayData.moldAssignments.set(assignment.moldId, []);
+              }
+              dayData.moldAssignments.get(assignment.moldId).push(order);
+            });
 
-              // Create header row
-              const headerRow = `
-                <tr>
-                  <th class="mold-header">Mold</th>
-                  ${activeDates.map(dateStr => {
-                    const date = new Date(dateStr);
-                    const isFriday = date.getDay() === 5;
-                    return `
-                      <th class="${isFriday ? 'friday' : ''}">
-                        ${format(date, 'MM/dd')}<br>
-                        <small>${format(date, 'EEE')}</small>
-                        ${isFriday ? '<br><small style="font-size: 6px;">Backup</small>' : ''}
-                      </th>
-                    `;
-                  }).join('')}
-                </tr>
-              `;
+            if (assignmentMap.size === 0) {
+              return '<div style="text-align: center; padding: 20px; font-size: 16px;">No Orders Scheduled This Week</div>';
+            }
 
-              // Create mold rows - only for molds that have orders
-              const moldRows = activeMoldObjects.map((mold: any) => {
-                return `
-                  <tr>
-                    <td class="mold-header">
-                      ${mold?.moldId || 'Unknown'}<br><small>#${mold?.instanceNumber || 'N/A'}</small>
-                    </td>
-                    ${activeDates.map(dateStr => {
-                      const key = `${mold?.moldId || 'unknown'}-${dateStr}`;
-                      const assignmentData = assignmentMap.get(key);
-                      
-                      if (!assignmentData) return '';
-                      
-                      const date = new Date(dateStr);
-                      const isFriday = date.getDay() === 5;
-                      const cellOrders = assignmentData.orders;
+            // Sort dates and create daily sections
+            const sortedDates = Array.from(assignmentMap.keys()).sort();
+            
+            return sortedDates.map(dateStr => {
+              const date = new Date(dateStr);
+              const dayData = assignmentMap.get(dateStr);
+              const isFriday = date.getDay() === 5;
+              
+              return `
+                <div class="daily-section" style="margin-bottom: 30px; page-break-inside: avoid;">
+                  <div class="day-header" style="background: ${isFriday ? '#fff3cd' : '#f8f9fa'}; padding: 10px; border: 2px solid #333; margin-bottom: 10px;">
+                    <h2 style="margin: 0; font-size: 16px; text-align: center;">
+                      ${format(date, 'EEEE, MMMM d, yyyy')}
+                      ${isFriday ? ' (MANUAL ONLY - Backup Day)' : ''}
+                    </h2>
+                  </div>
+                  
+                  <div class="mold-assignments" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                    ${Array.from(dayData.moldAssignments.entries()).map(([moldId, orders]) => {
+                      const mold = molds.find(m => m.moldId === moldId);
                       
                       return `
-                        <td class="cell ${isFriday ? 'friday' : ''}">
-                          <div class="order-count">${cellOrders.length} order(s)</div>
-                          ${cellOrders.map((order: any) => {
-                            const modelId = order.stockModelId || order.modelId;
-                            const materialType = getMaterialType(modelId || '');
-                            const isProduction = order.source === 'production_order';
-                            const displayId = getDisplayOrderId(order) || 'No ID';
-                            const modelName = getModelDisplayName(modelId || '');
-                            const actionLength = getActionLengthDisplay(order);
-                            const lopDisplay = getLOPDisplay(order);
-                            const hasHeavyFill = getHeavyFillDisplay(order);
-
-                            let cardClass = 'regular';
-                            if (order.source === 'p1_purchase_order') cardClass = 'p1_po';
-                            else if (isProduction) cardClass = 'production';
-                            else if (materialType === 'FG') cardClass = 'fg';
-
-                            return `
-                              <div class="order-card ${cardClass}">
-                                <div class="order-id">
-                                  ${displayId}
-                                  ${isProduction ? '<span class="po-badge">PO</span>' : ''}
+                        <div class="mold-section" style="border: 1px solid #333; padding: 10px; background: white;">
+                          <div class="mold-title" style="background: #e9ecef; padding: 5px; text-align: center; font-weight: bold; margin-bottom: 10px;">
+                            ${moldId}${mold?.instanceNumber ? ` #${mold.instanceNumber}` : ''}
+                            <div style="font-size: 10px; font-weight: normal;">${orders.length} Order(s)</div>
+                          </div>
+                          
+                          <div class="orders-list">
+                            ${orders.map((order, index) => {
+                              const modelId = order.stockModelId || order.modelId;
+                              const materialType = getMaterialType(modelId || '');
+                              const isProduction = order.source === 'production_order';
+                              const displayId = getDisplayOrderId(order) || 'No ID';
+                              const modelName = getModelDisplayName(modelId || '');
+                              const actionLength = getActionLengthDisplay(order);
+                              const lopDisplay = getLOPDisplay(order);
+                              const hasHeavyFill = getHeavyFillDisplay(order);
+                              const customer = order.customerName || order.customer || 'Unknown Customer';
+                              
+                              return `
+                                <div class="order-item" style="border-bottom: 1px solid #ddd; padding: 8px 0; ${index === orders.length - 1 ? 'border-bottom: none;' : ''}">
+                                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <div class="order-number" style="font-weight: bold; font-size: 12px;">
+                                      ${displayId}
+                                      ${isProduction ? '<span style="background: purple; color: white; padding: 1px 4px; border-radius: 2px; font-size: 8px; margin-left: 4px;">PO</span>' : ''}
+                                    </div>
+                                    <div class="material-type" style="background: ${materialType === 'CF' ? '#fed7aa' : materialType === 'FG' ? '#fbbf24' : '#e5e7eb'}; padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: bold;">
+                                      ${materialType || 'UNK'}
+                                    </div>
+                                  </div>
+                                  
+                                  <div class="order-details" style="font-size: 10px; line-height: 1.3;">
+                                    <div><strong>Customer:</strong> ${customer}</div>
+                                    <div><strong>Model:</strong> ${modelName}</div>
+                                    ${actionLength ? `<div><strong>Action:</strong> ${actionLength}</div>` : ''}
+                                    ${lopDisplay ? `<div><strong>LOP:</strong> ${lopDisplay}</div>` : ''}
+                                    ${hasHeavyFill ? '<div style="color: #dc2626;"><strong>⚠ HEAVY FILL</strong></div>' : ''}
+                                  </div>
+                                  
+                                  <div class="completion-checkbox" style="margin-top: 6px; display: flex; align-items: center;">
+                                    <input type="checkbox" style="margin-right: 6px; transform: scale(1.2);">
+                                    <label style="font-size: 9px; color: #666;">Layup Complete</label>
+                                  </div>
                                 </div>
-                                <div class="order-details">
-                                  ${materialType ? `<span class="material-badge">${materialType}</span>` : ''}
-                                  ${modelName}
-                                </div>
-                                ${actionLength ? `<div class="order-details">${actionLength}</div>` : ''}
-                                <div class="mold-info">
-                                  ${actionLength ? `${actionLength} ` : ''}${mold?.moldId || 'Unknown'}${mold?.instanceNumber ? ` #${mold.instanceNumber}` : ''}
-                                </div>
-                                ${lopDisplay ? `<div class="lop-badge">LOP: ${lopDisplay}</div>` : ''}
-                                ${hasHeavyFill ? '<div class="heavy-fill-badge">Heavy Fill</div>' : ''}
-                              </div>
-                            `;
-                          }).join('')}
-                        </td>
+                              `;
+                            }).join('')}
+                          </div>
+                        </div>
                       `;
-                    }).filter(cell => cell !== '').join('')}
-                  </tr>
-                `;
-              }).filter(row => row.includes('<td class="cell')).join('');
-
-              return headerRow + moldRows;
-            })()}
-          </table>
+                    }).join('')}
+                  </div>
+                  
+                  <div class="day-summary" style="margin-top: 15px; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; font-size: 10px;">
+                    <strong>Daily Summary:</strong> 
+                    ${Array.from(dayData.moldAssignments.values()).reduce((total, orders) => total + orders.length, 0)} total orders across 
+                    ${dayData.moldAssignments.size} mold(s)
+                    ${isFriday ? ' • <span style="color: #856404;">MANUAL SCHEDULING ONLY</span>' : ''}
+                  </div>
+                </div>
+              `;
+            }).join('');
+          })()}
         </body>
       </html>
     `;

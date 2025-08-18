@@ -509,7 +509,7 @@ export default function OrderEntry() {
   // Extract order ID from URL if editing existing order
   const getOrderIdFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('draft');
+    return urlParams.get('draft') || urlParams.get('edit');
   };
 
   // Track loading state to ensure proper order

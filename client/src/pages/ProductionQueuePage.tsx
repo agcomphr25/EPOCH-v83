@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { ArrowRight, Search, Package, User, Calendar, FileText, AlertTriangle, Edit, Eye } from 'lucide-react';
+import { ArrowRight, Search, Package, User, Calendar, FileText, AlertTriangle, Edit, Eye, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from '@/hooks/use-toast';
@@ -278,12 +278,23 @@ export default function ProductionQueuePage() {
                           <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {issues.map((issue, index) => (
-                          <Badge key={index} variant="destructive" className="text-xs">
-                            {issue}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
+                          className="text-xs"
+                        >
+                          <Edit className="w-3 h-3 mr-1" />
+                          Edit
+                        </Button>
+                        <div className="flex flex-col items-end gap-1">
+                          {issues.map((issue, index) => (
+                            <Badge key={index} variant="destructive" className="text-xs">
+                              {issue}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-2 text-sm text-gray-600">
@@ -355,6 +366,15 @@ export default function ProductionQueuePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
+                        className="text-xs"
+                      >
+                        <Edit className="w-3 h-3 mr-1" />
+                        Edit
+                      </Button>
                       <Badge variant="outline" className="text-xs">
                         {order.modelId || 'No Model'}
                       </Badge>

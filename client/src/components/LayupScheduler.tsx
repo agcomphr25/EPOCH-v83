@@ -127,10 +127,12 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   const materialType = getMaterialType(modelId || '');
 
   // Debug logging for material type detection (can be removed after verification)
-  if (['AG079', 'AG073', 'AG072', 'AG070', 'AG078'].includes(order.orderId)) {
+  if (['AG079', 'AG073', 'AG072', 'AG070', 'AG078', 'AH009'].includes(order.orderId)) {
     console.log(`🎨 CARD COLOR DEBUG for ${order.orderId}:`, {
       source: order.source,
       modelId: modelId,
+      stockModelId: order.stockModelId,
+      orderModelId: order.modelId,
       materialType: materialType,
       expectedColor:
         order.source === 'production_order' ? 'PURPLE (Purchase Order)' :
@@ -190,6 +192,18 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
           if (!getModelDisplayName || !modelId) return null;
 
           const displayName = getModelDisplayName(modelId);
+
+          // Debug AH009 display issue
+          if (order.orderId === 'AH009') {
+            console.log(`🐛 AH009 DISPLAY DEBUG:`, {
+              orderId: order.orderId,
+              modelId: modelId,
+              stockModelId: order.stockModelId,
+              orderModelId: order.modelId,
+              displayName: displayName,
+              materialType: materialType
+            });
+          }
 
           return (
             <div className="text-xs opacity-80 mt-0.5 font-medium">
@@ -2400,6 +2414,18 @@ export default function LayupScheduler() {
     if (!modelId) return 'Unknown Model';
 
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
+    
+    // Debug AH009 model lookup
+    if (modelId === 'cf_adj_alp_hunter' || modelId === 'mesa_universal') {
+      console.log(`🔍 MODEL LOOKUP DEBUG for modelId: ${modelId}`, {
+        modelFound: !!model,
+        model: model,
+        stockModelsCount: stockModels.length,
+        firstStockModel: stockModels[0],
+        allModelIds: stockModels.map(m => m.id).slice(0, 10)
+      });
+    }
+    
     if (model?.displayName) {
       return model.displayName;
     }

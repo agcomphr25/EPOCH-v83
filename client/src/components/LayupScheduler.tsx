@@ -2130,8 +2130,8 @@ export default function LayupScheduler() {
             }
 
             // Filter dates to only include current week (Monday-Friday)
-            const currentWeekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
-            const currentWeekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 }); // Sunday
+            const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
+            const currentWeekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
             
             const sortedDates = Array.from(assignmentMap.keys())
               .sort()

@@ -5441,14 +5441,32 @@ export class DatabaseStorage implements IStorage {
 
 
   // Department-based order methods
-  async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
+  async getOrdersByDepartment(department: string): Promise<any[]> {
     try {
       console.log(`🏭 getOrdersByDepartment: Fetching orders for department "${department}"`);
 
-      // Query the allOrders table for orders in the specified department
+      // Query the allOrders table with customer info for orders in the specified department
       const orders = await db
-        .select()
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          orderDate: allOrders.orderDate,
+          dueDate: allOrders.dueDate,
+          customerId: allOrders.customerId,
+          customerName: customers.name,
+          customerEmail: customers.email,
+          modelId: allOrders.modelId,
+          handedness: allOrders.handedness,
+          features: allOrders.features,
+          totalPrice: allOrders.totalPrice,
+          notes: allOrders.notes,
+          status: allOrders.status,
+          currentDepartment: allOrders.currentDepartment,
+          createdAt: allOrders.createdAt,
+          updatedAt: allOrders.updatedAt
+        })
         .from(allOrders)
+        .leftJoin(customers, eq(allOrders.customerId, customers.id))
         .where(eq(allOrders.currentDepartment, department))
         .orderBy(allOrders.dueDate);
 

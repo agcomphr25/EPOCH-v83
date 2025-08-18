@@ -50,7 +50,7 @@ export default function ProductionQueuePage() {
     }
     
     // Check for missing customer information
-    if (!order.customer || order.customer === 'Unknown Customer') {
+    if (!order.customerId || !order.customerName || order.customerName === 'Unknown Customer') {
       reasons.push('Missing customer info');
     }
     
@@ -275,7 +275,7 @@ export default function ProductionQueuePage() {
                         />
                         <div>
                           <div className="font-medium text-gray-900">{order.orderId}</div>
-                          <div className="text-sm text-gray-600">{order.customer || 'Unknown Customer'}</div>
+                          <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -351,7 +351,7 @@ export default function ProductionQueuePage() {
                       />
                       <div>
                         <div className="font-medium text-gray-900">{order.orderId}</div>
-                        <div className="text-sm text-gray-600">{order.customer || 'Unknown Customer'}</div>
+                        <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

@@ -670,18 +670,25 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Update the appropriate table
     let updatedOrder;
     if (isFinalized) {
+      console.log(`🔄 Updating finalized order ${orderId} in allOrders table`);
+      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
       updatedOrder = await storage.updateFinalizedOrder(orderId, {
         currentDepartment: nextDepartment,
         ...completionUpdates
       });
+      console.log(`✅ Updated finalized order result:`, updatedOrder?.currentDepartment);
     } else {
+      console.log(`🔄 Updating draft order ${orderId} in orderDrafts table`);
+      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
       updatedOrder = await storage.updateOrderDraft(orderId, {
         currentDepartment: nextDepartment,
         ...completionUpdates
       });
+      console.log(`✅ Updated draft order result:`, updatedOrder?.currentDepartment);
     }
 
     console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+    console.log(`✅ Final order department: ${updatedOrder?.currentDepartment}`);
     res.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error('Progress order error:', error);

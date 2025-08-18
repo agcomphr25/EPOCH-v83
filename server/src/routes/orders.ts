@@ -634,14 +634,46 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     console.log(`🏭 Progressing order ${orderId} to ${nextDepartment}`);
 
-    // Try to find order in finalized orders first
+    // Try to find order in different order tables
     let existingOrder = await storage.getFinalizedOrderById(orderId);
     let isFinalized = true;
+    let isP2Order = false;
 
     if (!existingOrder) {
-      // If not found in finalized orders, try draft orders
-      existingOrder = await storage.getOrderDraft(orderId);
-      isFinalized = false;
+      // Try P2 finalized orders
+      try {
+        existingOrder = await storage.getP2FinalizedOrderById(orderId);
+        isP2Order = true;
+        isFinalized = true;
+        console.log(`📋 Found P2 finalized order: ${orderId}`);
+      } catch (error) {
+        // P2 method might not exist, continue to draft orders
+      }
+    }
+
+    if (!existingOrder) {
+      // Try P1 draft orders
+      const draftOrder = await storage.getOrderDraft(orderId);
+      if (draftOrder) {
+        existingOrder = draftOrder;
+        isFinalized = false;
+        console.log(`📋 Found P1 draft order: ${orderId}`);
+      }
+    }
+
+    if (!existingOrder) {
+      // Try P2 draft orders
+      try {
+        const p2DraftOrder = await storage.getP2OrderDraft(orderId);
+        if (p2DraftOrder) {
+          existingOrder = p2DraftOrder;
+          isFinalized = false;
+          isP2Order = true;
+          console.log(`📋 Found P2 draft order: ${orderId}`);
+        }
+      } catch (error) {
+        // P2 method might not exist
+      }
     }
 
     if (!existingOrder) {
@@ -649,7 +681,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Order ${orderId} not found` });
     }
 
-    console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment} (${isFinalized ? 'finalized' : 'draft'})`);
+    console.log(`📋 Found order ${orderId} in department: ${existingOrder.currentDepartment} (${isFinalized ? 'finalized' : 'draft'}, ${isP2Order ? 'P2' : 'P1'})`);
 
     // Prepare completion timestamp update based on current department
     const completionUpdates: any = {};
@@ -657,6 +689,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     switch (existingOrder.currentDepartment) {
       case 'P1 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
+      case 'P2 Production Queue': completionUpdates.productionQueueCompletedAt = now; break;
       case 'Layup/Plugging': completionUpdates.layupPluggingCompletedAt = now; break;
       case 'Barcode': completionUpdates.barcodeCompletedAt = now; break;
       case 'CNC': completionUpdates.cncCompletedAt = now; break;
@@ -669,22 +702,54 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     // Update the appropriate table
     let updatedOrder;
-    if (isFinalized) {
-      console.log(`🔄 Updating finalized order ${orderId} in allOrders table`);
+    if (isFinalized && isP2Order) {
+      console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
+      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      try {
+        updatedOrder = await storage.updateP2FinalizedOrder(orderId, {
+          currentDepartment: nextDepartment,
+          ...completionUpdates
+        });
+        console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
+      } catch (error) {
+        console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
+        updatedOrder = await storage.updateFinalizedOrder(orderId, {
+          currentDepartment: nextDepartment,
+          ...completionUpdates
+        });
+      }
+    } else if (isFinalized) {
+      console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
       console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
       updatedOrder = await storage.updateFinalizedOrder(orderId, {
         currentDepartment: nextDepartment,
         ...completionUpdates
       });
-      console.log(`✅ Updated finalized order result:`, updatedOrder?.currentDepartment);
+      console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
+    } else if (isP2Order) {
+      console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
+      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      try {
+        updatedOrder = await storage.updateP2OrderDraft(orderId, {
+          currentDepartment: nextDepartment,
+          ...completionUpdates
+        });
+        console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
+      } catch (error) {
+        console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
+        updatedOrder = await storage.updateOrderDraft(orderId, {
+          currentDepartment: nextDepartment,
+          ...completionUpdates
+        });
+      }
     } else {
-      console.log(`🔄 Updating draft order ${orderId} in orderDrafts table`);
+      console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
       console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
       updatedOrder = await storage.updateOrderDraft(orderId, {
         currentDepartment: nextDepartment,
         ...completionUpdates
       });
-      console.log(`✅ Updated draft order result:`, updatedOrder?.currentDepartment);
+      console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
     }
 
     console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);

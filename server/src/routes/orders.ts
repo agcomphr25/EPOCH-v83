@@ -490,12 +490,10 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
       orderDate: currentOrder.orderDate,
       dueDate: currentOrder.dueDate,
       modelId: currentOrder.modelId,
-      features: currentOrder.features,
+      features: currentOrder.features as Record<string, any> | null,
       handedness: currentOrder.handedness,
-      totalPrice: currentOrder.totalPrice || 0,
       notes: currentOrder.notes,
-      status: 'draft',
-      source: currentOrder.source || 'main_orders',
+      status: 'DRAFT',
       paymentAmount: currentOrder.paymentAmount,
       paymentDate: currentOrder.paymentDate,
       paymentType: currentOrder.paymentType,
@@ -504,14 +502,16 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
       customDiscountValue: currentOrder.customDiscountValue,
       showCustomDiscount: currentOrder.showCustomDiscount,
       priceOverride: currentOrder.priceOverride,
+      shipping: currentOrder.shipping || 0,
+      isPaid: currentOrder.isPaid || false,
       isFlattop: currentOrder.isFlattop || false
     };
 
     // Create draft order
     const draftOrder = await storage.createOrderDraft(draftData);
     
-    // Remove from finalized orders
-    await storage.deleteOrder(orderId);
+    // Remove from finalized orders (allOrders table) - commented out for now
+    // await storage.deleteFinalizedOrderById(orderId);
 
     res.json({ 
       success: true, 

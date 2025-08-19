@@ -2,18 +2,19 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { OrderTooltip } from '@/components/OrderTooltip';
-import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight } from 'lucide-react';
+import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { useToast } from '@/hooks/use-toast';
 
 export default function QCShippingQueuePage() {
   // State for selected orders
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -25,16 +26,57 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/features'],
   });
 
-  // Get orders in QC/Shipping department
+  // Get orders in QC/Shipping department and categorize by due date
   const qcShippingOrders = useMemo(() => {
     const orders = allOrders as any[];
-    return orders.filter((order: any) => 
+    const filteredOrders = orders.filter((order: any) => 
+      order.currentDepartment === 'Shipping QC' || 
       order.currentDepartment === 'QC' || 
-      order.currentDepartment === 'Shipping' ||
       (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
-      (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
+      (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     );
+    
+    // Sort orders by due date
+    return filteredOrders.sort((a: any, b: any) => {
+      const dateA = new Date(a.dueDate);
+      const dateB = new Date(b.dueDate);
+      return dateA.getTime() - dateB.getTime();
+    });
   }, [allOrders]);
+
+  // Categorize orders by due date
+  const categorizedOrders = useMemo(() => {
+    const today = new Date();
+    const categories = {
+      overdue: [] as any[],
+      dueToday: [] as any[],
+      dueTomorrow: [] as any[],
+      dueThisWeek: [] as any[],
+      dueNextWeek: [] as any[],
+      dueLater: [] as any[]
+    };
+
+    qcShippingOrders.forEach(order => {
+      const dueDate = new Date(order.dueDate);
+      const daysDiff = differenceInDays(dueDate, today);
+      
+      if (daysDiff < 0) {
+        categories.overdue.push(order);
+      } else if (daysDiff === 0) {
+        categories.dueToday.push(order);
+      } else if (daysDiff === 1) {
+        categories.dueTomorrow.push(order);
+      } else if (daysDiff <= 7) {
+        categories.dueThisWeek.push(order);
+      } else if (daysDiff <= 14) {
+        categories.dueNextWeek.push(order);
+      } else {
+        categories.dueLater.push(order);
+      }
+    });
+
+    return categories;
+  }, [qcShippingOrders]);
 
   // Count orders in previous department (Paint)
   const paintCount = useMemo(() => {
@@ -176,6 +218,31 @@ export default function QCShippingQueuePage() {
     }
   };
 
+  // Handle QC checklist download for individual orders
+  const handleQCChecklistDownload = async (orderId: string) => {
+    try {
+      toast({
+        title: "Generating QC checklist...",
+        description: "Please wait while we generate the PDF"
+      });
+
+      // Open PDF in new tab for easy printing
+      window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
+      
+      toast({
+        title: "QC checklist opened",
+        description: `QC checklist for order ${orderId} opened in new tab for printing`
+      });
+    } catch (error) {
+      console.error('Error generating QC checklist:', error);
+      toast({
+        title: "Error generating QC checklist",
+        description: "Failed to generate QC checklist PDF",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -253,25 +320,294 @@ export default function QCShippingQueuePage() {
               No orders in Shipping QC queue
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {qcShippingOrders.map((order: any) => {
+            <div className="space-y-8">
+              {/* Overdue Orders */}
+              {categorizedOrders.overdue.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-red-600" />
+                    <h3 className="text-lg font-semibold text-red-600">Overdue ({categorizedOrders.overdue.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.overdue.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-red-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-red-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
 
+              {/* Due Today */}
+              {categorizedOrders.dueToday.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-orange-600" />
+                    <h3 className="text-lg font-semibold text-orange-600">Due Today ({categorizedOrders.dueToday.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.dueToday.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-orange-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-orange-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                return (
-                  <OrderTooltip 
-                    key={order.orderId} 
-                    order={order} 
-                    stockModels={stockModels} 
-                    className={`border-l-green-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                  >
-                    <Checkbox
-                      checked={selectedOrders.has(order.orderId)}
-                      onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
-                      className="ml-2"
-                    />
-                  </OrderTooltip>
-                );
-              })}
+              {/* Due Tomorrow */}
+              {categorizedOrders.dueTomorrow.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-yellow-600" />
+                    <h3 className="text-lg font-semibold text-yellow-600">Due Tomorrow ({categorizedOrders.dueTomorrow.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.dueTomorrow.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-yellow-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-yellow-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due This Week */}
+              {categorizedOrders.dueThisWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-blue-600">Due This Week ({categorizedOrders.dueThisWeek.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.dueThisWeek.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-blue-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-blue-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Next Week */}
+              {categorizedOrders.dueNextWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-green-600" />
+                    <h3 className="text-lg font-semibold text-green-600">Due Next Week ({categorizedOrders.dueNextWeek.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.dueNextWeek.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-green-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-green-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Later */}
+              {categorizedOrders.dueLater.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-gray-600" />
+                    <h3 className="text-lg font-semibold text-gray-600">Due Later ({categorizedOrders.dueLater.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categorizedOrders.dueLater.map((order: any) => (
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-gray-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-gray-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

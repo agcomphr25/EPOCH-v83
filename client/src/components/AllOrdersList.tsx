@@ -75,6 +75,7 @@ export default function AllOrdersList() {
         
         // Debug logging for isVerified field
         const verifiedOrders = data.filter((order: any) => order.isVerified);
+        console.log('🟢 Verified orders count:', verifiedOrders.length);
         if (verifiedOrders.length > 0) {
           console.log('🟢 Found verified orders:', verifiedOrders.map((o: any) => ({orderId: o.orderId, fbOrderNumber: o.fbOrderNumber, isVerified: o.isVerified})));
         }
@@ -85,16 +86,13 @@ export default function AllOrdersList() {
           console.log('🔍 AG402 data:', {orderId: ag402.orderId, currentDepartment: ag402.currentDepartment, isVerified: ag402.isVerified});
         }
         
-        const ak072 = data.find((o: any) => o.fbOrderNumber === 'AK072');
-        if (ak072) {
-          console.log('🔍 AK072 data:', {orderId: ak072.orderId, fbOrderNumber: ak072.fbOrderNumber, currentDepartment: ak072.currentDepartment, isVerified: ak072.isVerified});
+        const ag630 = data.find((o: any) => o.orderId === 'AG630');
+        if (ag630) {
+          console.log('🔍 AG630 data:', {orderId: ag630.orderId, currentDepartment: ag630.currentDepartment, isVerified: ag630.isVerified});
         }
       });
       return result;
-    },
-    refetchInterval: 500, // Refresh every 0.5 seconds
-    staleTime: 0, // Data is always stale, force fresh fetch
-    gcTime: 0 // Don't cache at all (renamed from cacheTime in React Query v5)
+    }
   });
 
 

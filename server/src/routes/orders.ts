@@ -638,7 +638,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     const { orderId } = req.params;
     const { nextDepartment } = req.body;
 
-    console.log(`🏭 Progressing order ${orderId} to ${nextDepartment}`);
+    console.log(`🏭 Progressing order ${orderId} to ${nextDepartment || 'next department'}`);
 
     // Try to find order in different order tables
     let existingOrder = await storage.getFinalizedOrderById(orderId);
@@ -706,60 +706,87 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
     }
 
+    // Define the departments sequence for automatic progression
+    const departments = [
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
+      'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+    ];
+    
+    // If no nextDepartment provided, calculate it automatically
+    let targetDepartment = nextDepartment;
+    if (!targetDepartment) {
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+      if (currentIndex >= 0 && currentIndex < departments.length - 1) {
+        targetDepartment = departments[currentIndex + 1];
+      } else {
+        console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
+        return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
+      }
+    }
+
+    console.log(`🎯 Target department: ${targetDepartment}`);
+
     // Update the appropriate table
     let updatedOrder;
     if (isFinalized && isP2Order) {
       console.log(`🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       try {
         updatedOrder = await storage.updateP2FinalizedOrder(orderId, {
-          currentDepartment: nextDepartment,
+          currentDepartment: targetDepartment,
           ...completionUpdates
         });
         console.log(`✅ Updated P2 finalized order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateFinalizedOrder(orderId, {
-          currentDepartment: nextDepartment,
+          currentDepartment: targetDepartment,
           ...completionUpdates
         });
       }
     } else if (isFinalized) {
       console.log(`🔄 Updating P1 finalized order ${orderId} in allOrders table`);
-      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       updatedOrder = await storage.updateFinalizedOrder(orderId, {
-        currentDepartment: nextDepartment,
+        currentDepartment: targetDepartment,
         ...completionUpdates
       });
       console.log(`✅ Updated P1 finalized order result:`, updatedOrder?.currentDepartment);
     } else if (isP2Order) {
       console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       try {
         updatedOrder = await storage.updateP2OrderDraft(orderId, {
-          currentDepartment: nextDepartment,
+          currentDepartment: targetDepartment,
           ...completionUpdates
         });
         console.log(`✅ Updated P2 draft order result:`, updatedOrder?.currentDepartment);
       } catch (error) {
         console.error(`❌ P2 update method not available, falling back to P1 update:`, error);
         updatedOrder = await storage.updateOrderDraft(orderId, {
-          currentDepartment: nextDepartment,
+          currentDepartment: targetDepartment,
           ...completionUpdates
         });
       }
     } else {
       console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
-      console.log(`🔄 Update data:`, { currentDepartment: nextDepartment, ...completionUpdates });
+      console.log(`🔄 Update data:`, { currentDepartment: targetDepartment, ...completionUpdates });
       updatedOrder = await storage.updateOrderDraft(orderId, {
-        currentDepartment: nextDepartment,
+        currentDepartment: targetDepartment,
         ...completionUpdates
       });
       console.log(`✅ Updated P1 draft order result:`, updatedOrder?.currentDepartment);
     }
 
-    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+    console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`);
     console.log(`✅ Final order department: ${updatedOrder?.currentDepartment}`);
+    
+    // Verify the update succeeded
+    if (updatedOrder?.currentDepartment !== targetDepartment) {
+      console.error(`❌ Update failed: Expected ${targetDepartment}, got ${updatedOrder?.currentDepartment}`);
+      return res.status(500).json({ error: `Department update failed` });
+    }
+    
     res.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error('Progress order error:', error);

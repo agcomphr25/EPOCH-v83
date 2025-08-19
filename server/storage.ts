@@ -3572,20 +3572,20 @@ export class DatabaseStorage implements IStorage {
   // Department Progression Methods
   async getPipelineCounts(): Promise<Record<string, number>> {
     try {
-      // Use GROUP BY to count orders by current department from orderDrafts
+      // Use GROUP BY to count orders by current department from allOrders (includes both drafts and finalized)
       const results = await db
         .select({
-          department: orderDrafts.currentDepartment,
+          department: allOrders.currentDepartment,
           count: sql<number>`count(*)::integer`
         })
-        .from(orderDrafts)
+        .from(allOrders)
         .where(
           and(
-            ne(orderDrafts.status, 'SCRAPPED'), // Only count active orders
-            isNull(orderDrafts.scrapDate)       // Exclude scrapped orders
+            ne(allOrders.status, 'SCRAPPED'), // Only count active orders
+            isNull(allOrders.scrapDate)       // Exclude scrapped orders
           )
         )
-        .groupBy(orderDrafts.currentDepartment);
+        .groupBy(allOrders.currentDepartment);
 
       // Convert to object format
       const counts: Record<string, number> = {};

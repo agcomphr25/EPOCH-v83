@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = [
+  { name: 'P1 Production Queue', color: 'bg-[#7BAFD4]' },
   { name: 'Layup/Plugging', color: 'bg-[#7BAFD4]' },
   { name: 'CNC', color: 'bg-[#7BAFD4]' },
   { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
@@ -161,7 +162,7 @@ export default function PipelineVisualization() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4">
           {departments.map((dept) => {
             // Handle combined Layup/Plugging department
             let count = 0;

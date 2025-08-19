@@ -31,8 +31,8 @@ export default function CNCQueuePage() {
     'tripod_tap',        // Tripod tap
     'tripod_mount',      // Tripod tap and mount
     'bipod_accessory',   // Spartan bipod and other bipods
-    'adjustable_stock',  // Adjustable stocks
     'spartan_bipod'      // Spartan bipod specifically
+    // Note: adjustable_stock goes to Finish department, not Gunsmith
   ];
   
   // Helper function to normalize feature values (handles arrays and strings)

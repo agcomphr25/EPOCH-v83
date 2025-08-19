@@ -94,29 +94,36 @@ export default function CNCQueuePage() {
 
   // Get orders in CNC department, split by destination
   const { gunsimthQueue, finishQueue } = useMemo(() => {
-    // Filter CNC orders and remove duplicates by orderId
+    console.log('🔧 Processing CNC orders, total orders:', (allOrders as any[]).length);
+    
+    // Get unique CNC orders by orderId
     const cncOrdersMap = new Map();
     (allOrders as any[]).forEach((order: any) => {
-      if (order.currentDepartment === 'CNC' || 
-          (order.department === 'CNC' && order.status === 'IN_PROGRESS')) {
-        // Use orderId as key to prevent duplicates
+      if (order.currentDepartment === 'CNC') {
         cncOrdersMap.set(order.orderId, order);
       }
     });
     
     const cncOrders = Array.from(cncOrdersMap.values());
+    console.log('🔧 Unique CNC orders:', cncOrders.length, cncOrders.map(o => o.orderId));
 
-    // Split into gunsmith and finish queues
+    // Split into gunsmith and finish queues with explicit logging
     const gunsmith: any[] = [];
     const finish: any[] = [];
     
     cncOrders.forEach(order => {
-      if (requiresGunsmith(order)) {
+      const needsGunsmith = requiresGunsmith(order);
+      console.log(`🔧 Order ${order.orderId}: needs gunsmith = ${needsGunsmith}`);
+      
+      if (needsGunsmith) {
         gunsmith.push(order);
       } else {
         finish.push(order);
       }
     });
+
+    console.log('🔧 Gunsmith queue:', gunsmith.length, gunsmith.map(o => o.orderId));
+    console.log('🔧 Finish queue:', finish.length, finish.map(o => o.orderId));
 
     // Sort both queues by due date
     gunsmith.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());

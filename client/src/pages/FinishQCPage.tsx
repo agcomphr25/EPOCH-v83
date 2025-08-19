@@ -285,82 +285,76 @@ export default function FinishQCPage() {
                   </div>
                 </CardHeader>
                 
-                <CardContent>
-                  <div className="grid gap-2">
+                <CardContent className="p-4">
+                  <div className="grid gap-1.5 md:grid-cols-2 lg:grid-cols-3">
                     {technicianOrders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                       
                       return (
-                        <OrderTooltip key={order.orderId} order={order} stockModels={stockModels as any[]}>
-                          <div 
-                            className={`p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
-                              isOverdue
-                                ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
-                                : isSelected
-                                  ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
-                                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={(checked) => 
-                                    handleOrderSelect(order.orderId, checked as boolean)
-                                  }
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{order.orderId}</span>
-                                    {order.fbOrderNumber && (
-                                      <Badge variant="outline" className="text-xs">
-                                        FB: {order.fbOrderNumber}
-                                      </Badge>
-                                    )}
-                                    {order.isPaid && (
-                                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 text-xs">
-                                        PAID
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    {order.customerName}
-                                  </div>
-                                  
-                                  {/* Texture and Paint Information */}
-                                  <div className="flex flex-wrap gap-1 mt-2">
-                                    <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
-                                      {getTextureInfo(order)}
-                                    </Badge>
-                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
-                                      {getPaintColor(order)}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
+                        <div 
+                          key={order.orderId}
+                          className={`p-2 border rounded cursor-pointer transition-all duration-200 ${
+                            isOverdue
+                              ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+                              : isSelected
+                                ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
+                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => 
+                                  handleOrderSelect(order.orderId, checked as boolean)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                className="mt-0.5 flex-shrink-0"
+                              />
                               
-                              <div className="flex flex-col items-end gap-1">
-                                <div className="flex gap-2">
-                                  {order.dueDate && (
-                                    <Badge 
-                                      variant={isOverdue ? "destructive" : "outline"} 
-                                      className="text-xs"
-                                    >
-                                      Due: {format(new Date(order.dueDate), 'M/d')}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="font-medium text-sm truncate">{order.orderId}</span>
+                                  {order.fbOrderNumber && (
+                                    <Badge variant="outline" className="text-xs px-1 py-0">
+                                      FB
+                                    </Badge>
+                                  )}
+                                  {order.isPaid && (
+                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 text-xs px-1 py-0">
+                                      $
                                     </Badge>
                                   )}
                                 </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {order.orderDate && format(new Date(order.orderDate), 'M/d/yy')}
+                                
+                                <div className="text-xs text-gray-600 dark:text-gray-400 truncate mb-1">
+                                  {order.customerName}
+                                </div>
+                                
+                                <div className="flex gap-1">
+                                  <Badge variant="secondary" className="text-xs px-1 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
+                                    {getTextureInfo(order).split(' ')[0]}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-xs px-1 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
+                                    {getPaintColor(order).includes('No') ? 'None' : getPaintColor(order).split(' ')[0]}
+                                  </Badge>
                                 </div>
                               </div>
                             </div>
+                            
+                            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                              {order.dueDate && (
+                                <Badge 
+                                  variant={isOverdue ? "destructive" : "outline"} 
+                                  className="text-xs px-1 py-0"
+                                >
+                                  {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                        </OrderTooltip>
+                        </div>
                       );
                     })}
                   </div>

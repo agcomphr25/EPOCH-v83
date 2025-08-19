@@ -2179,18 +2179,18 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
           
-          // Calculate label position (3x10 grid) - Avery 5160 format
+          // Calculate label position (3x10 grid) - Avery 5160 format with proper spacing
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          const x = 36 + (col * 187); // Left margin + column width  
-          const y = 720 - (row * 72); // Top margin - row height
+          const x = 38 + (col * 189); // Left margin + column width with spacing 
+          const y = 720 - (row * 74); // Top margin - row height with spacing
           
-          // Draw label border
+          // Draw label border with clear separation
           page.drawRectangle({
             x: x,
             y: y,
-            width: 180,
-            height: 60,
+            width: 185,
+            height: 66,
             borderColor: rgb(0, 0, 0),
             borderWidth: 1,
           });
@@ -2232,7 +2232,7 @@ export function registerRoutes(app: Express): Server {
               }
             }
             
-            const maxWidth = 140; // Leave margins
+            const maxWidth = 150; // Increased width for better spacing
             const scale = estimatedWidth > maxWidth ? maxWidth / estimatedWidth : 1;
             const scaledThin = thinWidth * scale;
             const scaledThick = thickWidth * scale;

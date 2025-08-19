@@ -866,6 +866,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       cancelledAt: new Date(),
       cancelReason: reason || 'No reason provided',
       status: 'CANCELLED',
+      currentDepartment: null, // Remove from all department queues
       updatedAt: new Date()
     };
 

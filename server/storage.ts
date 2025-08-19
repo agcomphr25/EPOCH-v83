@@ -1607,6 +1607,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(allOrders.currentDepartment, department),
             ne(allOrders.status, 'SCRAPPED'),
+            ne(allOrders.status, 'CANCELLED'),
             isNull(allOrders.scrapDate)
           )
         )
@@ -3692,6 +3693,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             ne(allOrders.status, 'SCRAPPED'), // Only count active orders
+            ne(allOrders.status, 'CANCELLED'), // Exclude cancelled orders
             isNull(allOrders.scrapDate)       // Exclude scrapped orders
           )
         )
@@ -3735,6 +3737,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             ne(allOrders.status, 'SCRAPPED'),
+            ne(allOrders.status, 'CANCELLED'),
             isNull(allOrders.scrapDate)
           )
         );

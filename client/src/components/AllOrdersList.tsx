@@ -62,37 +62,7 @@ export default function AllOrdersList() {
   }, []);
 
   const { data: orders, isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
-    queryFn: () => {
-      const result = apiRequest('/api/orders/with-payment-status');
-      result.then(data => {
-        console.log('📊 API Response sample:', data.slice(0, 2).map((o: any) => ({
-          orderId: o.orderId, 
-          fbOrderNumber: o.fbOrderNumber, 
-          currentDepartment: o.currentDepartment,
-          isVerified: o.isVerified
-        })));
-        
-        // Debug logging for isVerified field
-        const verifiedOrders = data.filter((order: any) => order.isVerified);
-        console.log('🟢 Verified orders count:', verifiedOrders.length);
-        if (verifiedOrders.length > 0) {
-          console.log('🟢 Found verified orders:', verifiedOrders.map((o: any) => ({orderId: o.orderId, fbOrderNumber: o.fbOrderNumber, isVerified: o.isVerified})));
-        }
-        
-        // Check specific orders
-        const ag402 = data.find((o: any) => o.orderId === 'AG402');
-        if (ag402) {
-          console.log('🔍 AG402 data:', {orderId: ag402.orderId, currentDepartment: ag402.currentDepartment, isVerified: ag402.isVerified});
-        }
-        
-        const ag630 = data.find((o: any) => o.orderId === 'AG630');
-        if (ag630) {
-          console.log('🔍 AG630 data:', {orderId: ag630.orderId, currentDepartment: ag630.currentDepartment, isVerified: ag630.isVerified});
-        }
-      });
-      return result;
-    }
+    queryKey: ['/api/orders/with-payment-status']
   });
 
 
@@ -323,14 +293,8 @@ export default function AllOrdersList() {
       return;
     }
 
-    console.log(`🔄 IMMEDIATE UPDATE: ${orderId} from ${currentDepartment} to ${nextDepartment}`);
-    
     // Immediately update the UI
-    setLocalOrderUpdates(prev => {
-      const newUpdates = { ...prev, [orderId]: nextDepartment };
-      console.log(`🔄 Local updates after change:`, newUpdates);
-      return newUpdates;
-    });
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
     
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
@@ -500,22 +464,11 @@ export default function AllOrdersList() {
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
 
-                // Debug logging for department display
-                if (localOrderUpdates[order.orderId]) {
-                  console.log(`🎯 DISPLAY UPDATE: ${order.orderId} showing ${displayDepartment} (local override active)`);
-                }
-
-                // Debug logging for verified orders
-                if (order.isVerified) {
-                  console.log(`✅ Verified order found: ${order.orderId}`, order.isVerified);
-                  console.log(`✅ Applying green background to ${order.orderId}`);
-                }
+                // Apply local department updates for immediate visual feedback
 
                 const rowClassName = order.isVerified 
                   ? "bg-green-100 hover:bg-green-150 dark:bg-green-900/30 dark:hover:bg-green-900/40" 
                   : "";
-                
-                console.log(`Row ${order.orderId}: isVerified=${order.isVerified}, className="${rowClassName}"`);
 
                 return (
                   <TableRow 

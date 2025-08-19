@@ -145,24 +145,40 @@ export default function AllOrdersList() {
   };
 
   const progressOrderMutation = useMutation({
-    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment?: string }) => {
-      console.log(`🔄 Progressing order ${orderId} to ${nextDepartment || 'next department'}`);
-      return apiRequest(`/api/orders/${orderId}/progress`, {
+    mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
+      console.log(`🔄 ALL ORDERS PROGRESSION: Attempting to progress order ${orderId} to ${nextDepartment}`);
+      
+      const requestBody = {
+        orderIds: [orderId],
+        department: nextDepartment,
+        status: 'IN_PROGRESS'
+      };
+      console.log(`🔄 ALL ORDERS PROGRESSION: Request body:`, requestBody);
+      
+      // Use the bulk department update endpoint that actually exists
+      const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: JSON.stringify({ nextDepartment })
+        body: requestBody
       });
+      console.log(`✅ ALL ORDERS PROGRESSION: API Response:`, response);
+      return response;
     },
     onSuccess: async (data, variables) => {
-      console.log(`✅ Order ${variables.orderId} progressed successfully`, data);
-      toast.success('Order progressed successfully');
+      console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
+      console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: API Response Data:`, data);
+      toast.success(`Order progressed to ${variables.nextDepartment}`);
       
-      // Invalidate relevant queries for faster UI updates
+      // Force immediate invalidation and refetch
+      console.log('🔄 ALL ORDERS PROGRESSION: Invalidating and refetching data...');
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error, variables) => {
-      console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
+      console.error(`❌ ALL ORDERS PROGRESSION: Failed to progress order ${variables.orderId}:`, error);
       toast.error(`Failed to progress order: ${error.message}`);
     }
   });
@@ -281,13 +297,30 @@ export default function AllOrdersList() {
     }
   });
 
-  const getNextDepartment = (currentDept: string) => {
-    const index = departments.indexOf(currentDept);
-    return index >= 0 && index < departments.length - 1 ? departments[index + 1] : null;
+  const departments = [
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+  ];
+
+  const getNextDepartment = (currentDepartment: string) => {
+    // Handle alternative department names
+    const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+    
+    const currentIndex = departments.indexOf(normalizedDepartment);
+    if (currentIndex >= 0 && currentIndex < departments.length - 1) {
+      return departments[currentIndex + 1];
+    }
+    return null;
   };
 
-  const handleProgressOrder = (orderId: string, nextDepartment?: string) => {
-    progressOrderMutation.mutate({ orderId, nextDepartment });
+  const handleProgressOrder = (orderId: string, currentDepartment: string) => {
+    const nextDepartment = getNextDepartment(currentDepartment);
+    if (nextDepartment) {
+      console.log(`🔄 ALL ORDERS: Progressing ${orderId} from ${currentDepartment} to ${nextDepartment}`);
+      progressOrderMutation.mutate({ orderId, nextDepartment });
+    } else {
+      console.log(`⚠️ ALL ORDERS: No next department found for ${currentDepartment}`);
+      toast.error('No next department available');
+    }
   };
 
   const handlePushToLayupPlugging = (orderId: string) => {
@@ -596,7 +629,7 @@ export default function AllOrdersList() {
                             size="sm"
                             onClick={() => {
                               console.log(`🔄 Button clicked for order ${order.orderId}: ${order.currentDepartment} → ${nextDept}`);
-                              handleProgressOrder(order.orderId, nextDept);
+                              handleProgressOrder(order.orderId, order.currentDepartment);
                             }}
                             disabled={progressOrderMutation.isPending}
                             className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}

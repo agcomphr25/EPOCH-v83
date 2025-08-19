@@ -3604,28 +3604,28 @@ export class DatabaseStorage implements IStorage {
 
   async getPipelineDetails(): Promise<Record<string, Array<{ orderId: string; modelId: string; dueDate: Date; daysInDept: number; scheduleStatus: 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical' }>>> {
     try {
-      // Get all active orders with their department entry timestamps
+      // Get all active orders with their department entry timestamps from allOrders (includes both drafts and finalized)
       const orders = await db
         .select({
-          orderId: orderDrafts.orderId,
-          fbOrderNumber: orderDrafts.fbOrderNumber,
-          modelId: orderDrafts.modelId,
-          currentDepartment: orderDrafts.currentDepartment,
-          dueDate: orderDrafts.dueDate,
-          layupCompletedAt: orderDrafts.layupCompletedAt,
-          pluggingCompletedAt: orderDrafts.pluggingCompletedAt,
-          cncCompletedAt: orderDrafts.cncCompletedAt,
-          finishCompletedAt: orderDrafts.finishCompletedAt,
-          gunsmithCompletedAt: orderDrafts.gunsmithCompletedAt,
-          paintCompletedAt: orderDrafts.paintCompletedAt,
-          qcCompletedAt: orderDrafts.qcCompletedAt,
-          createdAt: orderDrafts.createdAt
+          orderId: allOrders.orderId,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          modelId: allOrders.modelId,
+          currentDepartment: allOrders.currentDepartment,
+          dueDate: allOrders.dueDate,
+          layupCompletedAt: allOrders.layupCompletedAt,
+          pluggingCompletedAt: allOrders.pluggingCompletedAt,
+          cncCompletedAt: allOrders.cncCompletedAt,
+          finishCompletedAt: allOrders.finishCompletedAt,
+          gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+          paintCompletedAt: allOrders.paintCompletedAt,
+          qcCompletedAt: allOrders.qcCompletedAt,
+          createdAt: allOrders.createdAt
         })
-        .from(orderDrafts)
+        .from(allOrders)
         .where(
           and(
-            ne(orderDrafts.status, 'SCRAPPED'),
-            isNull(orderDrafts.scrapDate)
+            ne(allOrders.status, 'SCRAPPED'),
+            isNull(allOrders.scrapDate)
           )
         );
 

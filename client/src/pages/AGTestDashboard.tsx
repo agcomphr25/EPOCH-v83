@@ -128,7 +128,7 @@ export default function AGTestDashboard() {
         
         <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-          onClick={() => navigateTo('/finish-department-manager')}
+          onClick={() => navigateTo('/department-queue/finish')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">

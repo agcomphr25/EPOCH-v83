@@ -2051,16 +2051,20 @@ export function registerRoutes(app: Express): Server {
   // Update order department endpoint with progress logic
   app.post('/api/orders/update-department', async (req, res) => {
     try {
+      console.log('🔄 DEPT UPDATE API: Received request body:', JSON.stringify(req.body, null, 2));
       const { orderIds, department, status } = req.body;
 
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        console.log('❌ DEPT UPDATE API: Invalid orderIds:', orderIds);
         return res.status(400).json({ error: 'Order IDs array is required' });
       }
 
       if (!department) {
+        console.log('❌ DEPT UPDATE API: Department missing');
         return res.status(400).json({ error: 'Department is required' });
       }
 
+      console.log(`🔄 DEPT UPDATE API: Processing ${orderIds.length} order(s) to department: ${department}`);
       const { storage } = await import('../../storage');
       const updatedOrders = [];
 

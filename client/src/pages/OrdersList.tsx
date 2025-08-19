@@ -233,18 +233,21 @@ export default function OrdersList() {
   // Progress order mutation
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
-      console.log(`🔄 Progressing order ${orderId} to ${nextDepartment}`);
+      console.log(`🔄 DEPARTMENT PROGRESSION: Attempting to progress order ${orderId} to ${nextDepartment}`);
+      
+      const requestBody = {
+        orderIds: [orderId],
+        department: nextDepartment,
+        status: 'IN_PROGRESS'
+      };
+      console.log(`🔄 DEPARTMENT PROGRESSION: Request body:`, requestBody);
       
       // Use the bulk department update endpoint that other pages use
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: {
-          orderIds: [orderId],
-          department: nextDepartment,
-          status: 'IN_PROGRESS'
-        }
+        body: requestBody
       });
-      console.log(`✅ Progress response:`, response);
+      console.log(`✅ DEPARTMENT PROGRESSION: API Response:`, response);
       return response;
     },
     onSuccess: (data, variables) => {

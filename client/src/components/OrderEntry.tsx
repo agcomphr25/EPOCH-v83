@@ -2060,7 +2060,7 @@ export default function OrderEntry() {
                       </PopoverContent>
                     </Popover>
                     {/* Display selected rails as badges */}
-                    {features.rail_accessory && features.rail_accessory.length > 0 && (
+                    {features.rail_accessory && Array.isArray(features.rail_accessory) && features.rail_accessory.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {features.rail_accessory.map((optionValue: string) => {
                           const railsFeature = featureDefs.find(f => f.id === 'rail_accessory');

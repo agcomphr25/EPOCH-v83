@@ -1379,13 +1379,13 @@ export class DatabaseStorage implements IStorage {
         shipping: allOrders.shipping,
         paymentAmount: allOrders.paymentAmount,
         isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
         fbOrderNumber: allOrders.fbOrderNumber,
         createdAt: allOrders.createdAt,
         updatedAt: allOrders.updatedAt,
         isCancelled: allOrders.isCancelled,
         cancelledAt: allOrders.cancelledAt,
         cancelReason: allOrders.cancelReason,
-        isVerified: allOrders.isVerified,
         // Customer name
         customerName: customers.name,
       })

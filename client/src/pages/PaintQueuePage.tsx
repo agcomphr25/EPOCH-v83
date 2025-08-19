@@ -122,12 +122,10 @@ export default function PaintQueuePage() {
       const paintOption = features.paint_options_combined;
       if (paintOption.includes(':')) {
         const [type, color] = paintOption.split(':');
-        if (type === 'base_colors') {
-          return color.replace(/_/g, ' ');
-        } else if (type === 'custom_graphics') {
-          return `${color.replace(/_/g, ' ')} (graphics)`;
-        }
+        // Only return the subcategory name, not the category
+        return color.replace(/_/g, ' ');
       }
+      // For simple values, just format them
       return paintOption.replace(/_/g, ' ');
     }
     
@@ -136,7 +134,17 @@ export default function PaintQueuePage() {
       if (features.paint_options === 'no_paint') {
         return 'No paint';
       }
-      return features.paint_options.replace(/_/g, ' ');
+      // Format paint option name, removing common category prefixes
+      let paintName = features.paint_options.replace(/_/g, ' ');
+      
+      // Remove category prefixes like "metallic finishes" or "special effects"
+      paintName = paintName
+        .replace(/^metallic finishes\s*/i, '')
+        .replace(/^special effects\s*/i, '')
+        .replace(/^cerakote\s*/i, '')
+        .replace(/^paint options\s*/i, '');
+      
+      return paintName || 'Paint';
     }
     
     return 'No paint';

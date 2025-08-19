@@ -446,12 +446,20 @@ export default function AllOrdersList() {
                 // Debug logging for verified orders
                 if (order.isVerified) {
                   console.log(`✅ Verified order found: ${order.orderId}`, order.isVerified);
+                  console.log(`✅ Applying green background to ${order.orderId}`);
                 }
+
+                const rowClassName = order.isVerified 
+                  ? "bg-green-100 hover:bg-green-150 dark:bg-green-900/30 dark:hover:bg-green-900/40" 
+                  : "";
+                
+                console.log(`Row ${order.orderId}: isVerified=${order.isVerified}, className="${rowClassName}"`);
 
                 return (
                   <TableRow 
                     key={order.orderId}
-                    className={order.isVerified ? "bg-green-50 dark:bg-green-900/20" : ""}
+                    className={rowClassName}
+                    style={order.isVerified ? { backgroundColor: '#dcfce7' } : undefined}
                   >
                     <TableCell className="font-medium">
                       <OrderSummaryModal orderId={order.orderId}>

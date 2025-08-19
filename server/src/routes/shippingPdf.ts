@@ -454,7 +454,40 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         orderFeatures.action_length ? `Action Length: ${orderFeatures.action_length}` : 'Action Length: Standard'
       ].join('\n    ')}`,
       
-      `3) Stock color:\n    Paint Option: ${orderFeatures.paint_option || orderFeatures.color || 'Standard'}`,
+      `3) Stock color:\n    Paint Option: ${(() => {
+        // Use the same logic as sales order PDF for paint display
+        const currentPaint = order.features?.metallic_finishes || order.features?.paint_options || order.features?.paint_options_combined;
+        
+        if (!currentPaint || currentPaint === 'none') {
+          return 'Standard';
+        }
+        
+        // Search through paint-related features to find the display name
+        const paintFeatures = features.filter((f: any) => 
+          f.displayName?.includes('Options') || 
+          f.displayName?.includes('Camo') || 
+          f.displayName?.includes('Cerakote') ||
+          f.displayName?.includes('Terrain') ||
+          f.displayName?.includes('Rogue') ||
+          f.displayName?.includes('Standard') ||
+          f.id === 'metallic_finishes' ||
+          f.id === 'paint_options' ||
+          f.category === 'paint' ||
+          f.subcategory === 'paint'
+        );
+
+        for (const feature of paintFeatures) {
+          if (feature.options) {
+            const option = feature.options.find((opt: any) => opt.value === currentPaint);
+            if (option) {
+              return option.label;
+            }
+          }
+        }
+        
+        // Fallback to formatted value if no option found
+        return currentPaint.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      })()}`,
       
       `4) Custom options are present and completed:\n    ${Object.entries(orderFeatures)
         .filter(([key]) => ['qd_accessory', 'lop_adjustment', 'rail_accessory', 'texture', 'tripod_tap', 'tripod_mount', 'bipod_accessory'].includes(key))

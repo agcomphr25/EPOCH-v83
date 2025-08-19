@@ -387,7 +387,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -443,7 +443,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="destructive" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -499,7 +499,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="secondary" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -555,7 +555,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -611,7 +611,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -667,7 +667,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               {order.dueDate && (
                                 <Badge variant="outline" className="text-xs">
                                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -723,7 +723,7 @@ export default function GunsimthQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold">{getDisplayOrderId(order.orderId)}</div>
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
                               <Badge variant="secondary" className="text-xs">
                                 No Due Date
                               </Badge>

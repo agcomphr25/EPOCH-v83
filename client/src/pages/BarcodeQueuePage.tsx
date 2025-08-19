@@ -135,20 +135,30 @@ export default function BarcodeQueuePage() {
         throw new Error('Failed to create labels');
       }
       
+      // Open PDF in new tab/popup for viewing and printing
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `barcode-labels-${Date.now()}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      const newWindow = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      
+      if (!newWindow) {
+        // Fallback if popup blocked - create download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `barcode-labels-${Date.now()}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      
+      // Clean up URL after a delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 10000);
       
       return { success: true };
     },
     onSuccess: () => {
-      toast.success(`Created Avery labels for ${selectedOrders.size} orders`);
+      toast.success(`Barcode labels opened in new tab for ${selectedOrders.size} orders`);
       setShowLabelDialog(false);
     },
     onError: (error) => {

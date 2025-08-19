@@ -2276,9 +2276,10 @@ export function registerRoutes(app: Express): Server {
       
       const pdfBytes = await pdfDoc.save();
       
-      // Return PDF as base64 or save to file
+      // Return PDF for inline viewing (opens in new tab/popup)
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="barcode-labels.pdf"');
+      res.setHeader('Content-Disposition', 'inline; filename="barcode-labels.pdf"');
+      res.setHeader('Cache-Control', 'no-cache');
       res.send(Buffer.from(pdfBytes));
       
       console.log(`✅ Generated barcode labels PDF for ${orderDetails.length} orders`);

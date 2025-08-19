@@ -24,6 +24,17 @@ export default function CNCQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
+  // Get stock models for display names
+  const { data: stockModels = [] } = useQuery({
+    queryKey: ['/api/stock-models'],
+  });
+
+  const getModelDisplayName = (modelId: string) => {
+    if (!modelId) return 'Unknown Model';
+    const model = (stockModels as any[]).find((m: any) => m.id === modelId);
+    return model?.displayName || model?.name || modelId;
+  };
+
   // Features that go to Gunsmith department (using actual feature names from database)
   const gunsimthFeatures = [
     'rail_accessory',    // Rails
@@ -145,11 +156,6 @@ export default function CNCQueuePage() {
       (order.department === 'Finish' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
-
-  // Get stock models for display names
-  const { data: stockModels = [] } = useQuery({
-    queryKey: ['/api/stock-models'],
-  });
 
   // Selection handlers for Gunsmith queue
   const toggleGunsimthOrderSelection = (orderId: string) => {
@@ -394,6 +400,9 @@ export default function CNCQueuePage() {
                         
                         <div className="text-xs text-gray-600 space-y-1">
                           <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
+                          <div className="text-gray-700 dark:text-gray-300 font-medium">
+                            {getModelDisplayName(order.modelId || order.stockModelId)}
+                          </div>
                           <div className="text-purple-600 font-medium">
                             {(() => {
                               const activeFeatures = [];
@@ -515,6 +524,9 @@ export default function CNCQueuePage() {
                         
                         <div className="text-xs text-gray-600 space-y-1">
                           <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
+                          <div className="text-gray-700 dark:text-gray-300 font-medium">
+                            {getModelDisplayName(order.modelId || order.stockModelId)}
+                          </div>
                           <div className="text-green-600 font-medium">READY FOR FINISH</div>
                         </div>
                       </div>

@@ -93,46 +93,26 @@ export default function CNCQueuePage() {
   };
 
   // Get orders in CNC department, split by destination
-  const { gunsimthQueue, finishQueue } = useMemo(() => {
-    console.log('🔧 Processing CNC orders, total orders:', (allOrders as any[]).length);
+  const gunsimthQueue = useMemo(() => {
+    const cncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
+    const uniqueOrders = cncOrders.filter((order, index, self) => 
+      index === self.findIndex(o => o.orderId === order.orderId)
+    );
     
-    // Get unique CNC orders by orderId
-    const cncOrdersMap = new Map();
-    (allOrders as any[]).forEach((order: any) => {
-      if (order.currentDepartment === 'CNC') {
-        cncOrdersMap.set(order.orderId, order);
-      }
-    });
+    return uniqueOrders
+      .filter(order => requiresGunsmith(order))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [allOrders]);
+
+  const finishQueue = useMemo(() => {
+    const cncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
+    const uniqueOrders = cncOrders.filter((order, index, self) => 
+      index === self.findIndex(o => o.orderId === order.orderId)
+    );
     
-    const cncOrders = Array.from(cncOrdersMap.values());
-    console.log('🔧 Unique CNC orders:', cncOrders.length, cncOrders.map(o => o.orderId));
-
-    // Split into gunsmith and finish queues with explicit logging
-    const gunsmith: any[] = [];
-    const finish: any[] = [];
-    
-    cncOrders.forEach(order => {
-      const needsGunsmith = requiresGunsmith(order);
-      console.log(`🔧 Order ${order.orderId}: needs gunsmith = ${needsGunsmith}`);
-      
-      if (needsGunsmith) {
-        gunsmith.push(order);
-      } else {
-        finish.push(order);
-      }
-    });
-
-    console.log('🔧 Gunsmith queue:', gunsmith.length, gunsmith.map(o => o.orderId));
-    console.log('🔧 Finish queue:', finish.length, finish.map(o => o.orderId));
-
-    // Sort both queues by due date
-    gunsmith.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    finish.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-    return {
-      gunsimthQueue: gunsmith,
-      finishQueue: finish
-    };
+    return uniqueOrders
+      .filter(order => !requiresGunsmith(order))
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [allOrders]);
 
   // Count orders in previous department (Barcode)
@@ -370,13 +350,13 @@ export default function CNCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {gunsimthQueue.map((order: any, index: number) => {
+              {gunsimthQueue.map((order: any) => {
                 const isSelected = selectedGunsimthOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
                   <Card 
-                    key={`gunsmith-${order.orderId}-${index}`}
+                    key={order.orderId}
                     className={`transition-all duration-200 border-l-4 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
@@ -523,13 +503,13 @@ export default function CNCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {finishQueue.map((order: any, index: number) => {
+              {finishQueue.map((order: any) => {
                 const isSelected = selectedFinishOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
                   <Card 
-                    key={`finish-${order.orderId}-${index}`}
+                    key={order.orderId}
                     className={`transition-all duration-200 border-l-4 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'

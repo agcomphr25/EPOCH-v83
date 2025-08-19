@@ -2136,15 +2136,22 @@ export function registerRoutes(app: Express): Server {
       // Get order details for label generation
       const orderDetails = [];
       for (const orderId of orderIds) {
-        const order = await storage.getOrderById(orderId);
-        if (order) {
-          // Ensure order has a barcode - generate if missing
-          if (!order.barcode) {
-            const barcode = `AG-${orderId}-${Date.now().toString().slice(-6)}`;
-            await storage.updateOrder(orderId, { barcode });
-            order.barcode = barcode;
+        // Try to get order from finalized orders first, then drafts
+        let order = null;
+        try {
+          order = await storage.getFinalizedOrderById(orderId);
+          if (!order) {
+            order = await storage.getOrderDraft(orderId);
           }
+        } catch (error) {
+          console.warn(`Could not find order ${orderId}:`, error);
+        }
+        
+        if (order) {
           orderDetails.push(order);
+          console.log(`✅ Found order for barcode: ${orderId}`);
+        } else {
+          console.warn(`❌ Order ${orderId} not found for barcode generation`);
         }
       }
 
@@ -2182,7 +2189,8 @@ export function registerRoutes(app: Express): Server {
           });
           
           // Generate barcode using PDF rectangles (Code 39 pattern)
-          const barcodeText = order.barcode || order.orderId;
+          // Always use the order ID for barcode labels (not the database barcode field)
+          const barcodeText = order.orderId;
           
           // Simple Code 39 barcode generation using rectangles
           const drawSimpleBarcode = (text: string, startX: number, startY: number) => {
@@ -2250,12 +2258,12 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add barcode text below barcode for verification
+          // Add barcode text below barcode for verification (same as order ID)
           page.drawText(`${barcodeText}`, {
             x: x + 8,
             y: y + 20,
-            size: 6,
-            color: rgb(0.3, 0.3, 0.3),
+            size: 7,
+            color: rgb(0, 0, 0),
           });
           
           // Add model and action length

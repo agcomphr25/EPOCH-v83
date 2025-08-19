@@ -165,17 +165,9 @@ export default function PipelineVisualization() {
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4">
           {departments.map((dept) => {
-            // Handle combined Layup/Plugging department
-            let count = 0;
-            let orders: any[] = [];
-            
-            if (dept.name === 'Layup/Plugging') {
-              count = (pipelineCounts?.['Layup'] || 0) + (pipelineCounts?.['Plugging'] || 0);
-              orders = [...(pipelineDetails?.['Layup'] || []), ...(pipelineDetails?.['Plugging'] || [])];
-            } else {
-              count = pipelineCounts?.[dept.name] || 0;
-              orders = pipelineDetails?.[dept.name] || [];
-            }
+            // Get count and orders for this department
+            const count = pipelineCounts?.[dept.name] || 0;
+            const orders = pipelineDetails?.[dept.name] || [];
             
             const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
             

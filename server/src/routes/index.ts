@@ -2188,18 +2188,17 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
           
-          // Generate proper scannable barcode using JSBarcode library
+          // Generate proper scannable barcode using dynamic imports
           const barcodeText = order.orderId;
           
-          // Use JSBarcode to generate proper Code 39 barcode
-          const JsBarcode = require('jsbarcode');
-          const { createCanvas } = require('canvas');
-          
-          // Create canvas for barcode generation
-          const canvas = createCanvas(200, 50);
-          const ctx = canvas.getContext('2d');
-          
           try {
+            // Dynamic imports for JSBarcode and Canvas
+            const JsBarcode = (await import('jsbarcode')).default;
+            const { createCanvas } = await import('canvas');
+            
+            // Create canvas for barcode generation
+            const canvas = createCanvas(200, 50);
+            
             // Generate Code 39 barcode
             JsBarcode(canvas, barcodeText, {
               format: "CODE39",
@@ -2223,12 +2222,20 @@ export function registerRoutes(app: Express): Server {
               height: 20
             });
             
+            console.log(`✅ Generated barcode for ${barcodeText}`);
+            
           } catch (error) {
             console.error('Barcode generation error:', error);
-            // Fallback: Draw text if barcode generation fails
-            page.drawText(`[BARCODE: ${barcodeText}]`, {
+            // Fallback: Draw a simple barcode representation using text
+            page.drawText(`|||  |  ||  |  |||  ||  |  |||`, {
               x: x + 10,
               y: y + 35,
+              size: 12,
+              color: rgb(0, 0, 0),
+            });
+            page.drawText(`${barcodeText}`, {
+              x: x + 10,
+              y: y + 25,
               size: 8,
               color: rgb(0, 0, 0),
             });

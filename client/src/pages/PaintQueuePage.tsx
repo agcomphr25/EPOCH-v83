@@ -112,6 +112,36 @@ export default function PaintQueuePage() {
     progressToShippingQCMutation.mutate(Array.from(selectedOrders));
   };
 
+  // Helper function to get paint color information
+  const getPaintColor = (order: any) => {
+    if (!order.features) return 'No paint';
+    const features = order.features;
+    
+    // Check paint_options_combined first (newer format)
+    if (features.paint_options_combined) {
+      const paintOption = features.paint_options_combined;
+      if (paintOption.includes(':')) {
+        const [type, color] = paintOption.split(':');
+        if (type === 'base_colors') {
+          return color.replace(/_/g, ' ');
+        } else if (type === 'custom_graphics') {
+          return `${color.replace(/_/g, ' ')} (graphics)`;
+        }
+      }
+      return paintOption.replace(/_/g, ' ');
+    }
+    
+    // Check paint_options (older format)
+    if (features.paint_options) {
+      if (features.paint_options === 'no_paint') {
+        return 'No paint';
+      }
+      return features.paint_options.replace(/_/g, ' ');
+    }
+    
+    return 'No paint';
+  };
+
 
 
   return (
@@ -206,76 +236,83 @@ export default function PaintQueuePage() {
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           {paintOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No orders in paint queue
             </div>
           ) : (
-            <div className="grid gap-2">
+            <div className="grid gap-1.5 md:grid-cols-2 lg:grid-cols-3">
               {paintOrders.map((order: any) => {
                 const isSelected = selectedOrders.has(order.orderId);
                 const isOverdue = order.dueDate && new Date() > new Date(order.dueDate);
+                const paintColor = getPaintColor(order);
                 
                 return (
-                  <OrderTooltip key={order.orderId} order={order} stockModels={stockModels as any[]}>
-                    <div 
-                      className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
-                        isOverdue
-                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                          : isSelected
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-pink-500 hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }`}
-                      onClick={() => handleSelectOrder(order.orderId)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={() => handleSelectOrder(order.orderId)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{order.orderId}</span>
-                              {order.fbOrderNumber && (
-                                <Badge variant="outline" className="text-xs">
-                                  FB: {order.fbOrderNumber}
-                                </Badge>
-                              )}
-                              {order.isPaid && (
-                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                              {order.customerName}
-                            </div>
-                          </div>
-                        </div>
+                  <div 
+                    key={order.orderId}
+                    className={`p-2 border rounded cursor-pointer transition-all duration-200 ${
+                      isOverdue
+                        ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+                        : isSelected
+                          ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
+                          : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                    }`}
+                    onClick={() => handleSelectOrder(order.orderId)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleSelectOrder(order.orderId)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-0.5 flex-shrink-0"
+                        />
                         
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {order.currentDepartment}
-                            </Badge>
-                            {order.dueDate && (
-                              <Badge variant={isOverdue ? "destructive" : "outline"} className="text-xs">
-                                Due: {format(new Date(order.dueDate), 'M/d')}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="font-medium text-sm truncate">{getDisplayOrderId(order.orderId)}</span>
+                            {order.fbOrderNumber && (
+                              <Badge variant="outline" className="text-xs px-1 py-0">
+                                FB
+                              </Badge>
+                            )}
+                            {order.isPaid && (
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 text-xs px-1 py-0">
+                                $
                               </Badge>
                             )}
                           </div>
-                          <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-                            {order.orderDate && format(new Date(order.orderDate), 'M/d/yy')}
+                          
+                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate mb-1">
+                            {order.customerName}
+                          </div>
+                          
+                          {/* Paint Color Badge */}
+                          <div className="flex items-center gap-1">
+                            <Badge 
+                              variant="secondary" 
+                              className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 truncate max-w-full"
+                              title={paintColor}
+                            >
+                              🎨 {paintColor.includes('No') ? 'None' : paintColor.split(' ').slice(0, 2).join(' ')}
+                            </Badge>
                           </div>
                         </div>
                       </div>
+                      
+                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                        {order.dueDate && (
+                          <Badge 
+                            variant={isOverdue ? "destructive" : "outline"} 
+                            className="text-xs px-1 py-0"
+                          >
+                            {format(new Date(order.dueDate), 'M/d')}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </OrderTooltip>
+                  </div>
                 );
               })}
             </div>

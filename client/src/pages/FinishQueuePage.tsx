@@ -46,10 +46,10 @@ export default function FinishQueuePage() {
     ).length;
   }, [allOrders]);
 
-  // Count orders in next department (Gunsmith)
-  const gunsmithCount = useMemo(() => {
+  // Count orders in next department (Finish QC)
+  const finishQCCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Gunsmith'
+      order.currentDepartment === 'Finish QC'
     ).length;
   }, [allOrders]);
 
@@ -92,62 +92,46 @@ export default function FinishQueuePage() {
     setSelectAll(false);
   };
 
-  // Progress orders to Gunsmith mutation
-  const progressToGunsimthMutation = useMutation({
-    mutationFn: async (orderIds: string[]) => {
+  // Move orders to Finish QC with technician assignment
+  const moveToFinishQCMutation = useMutation({
+    mutationFn: async ({ orderIds, technician }: { orderIds: string[], technician: string }) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
           orderIds: orderIds,
-          department: 'Gunsmith',
-          status: 'IN_PROGRESS'
+          department: 'Finish QC',
+          status: 'IN_PROGRESS',
+          assignedTechnician: technician
         })
       });
       return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      toast.success(`${selectedOrders.size} orders moved to Gunsmith department`);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
+      toast.success(`${selectedOrders.size} orders moved to Finish QC (${selectedTechnician})`);
       setSelectedOrders(new Set());
       setSelectAll(false);
+      setSelectedTechnician('');
     },
     onError: () => {
-      toast.error("Failed to move orders to Gunsmith");
+      toast.error("Failed to move orders to Finish QC");
     }
   });
 
-  // Progress orders to Paint mutation (for orders that don't need gunsmith work)
-  const progressToPaintMutation = useMutation({
-    mutationFn: async (orderIds: string[]) => {
-      const response = await apiRequest('/api/orders/update-department', {
-        method: 'POST',
-        body: JSON.stringify({
-          orderIds: orderIds,
-          department: 'Paint',
-          status: 'IN_PROGRESS'
-        })
-      });
-      return response;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      toast.success(`${selectedOrders.size} orders moved to Paint department`);
-      setSelectedOrders(new Set());
-      setSelectAll(false);
-    },
-    onError: () => {
-      toast.error("Failed to move orders to Paint");
+  const handleMoveToFinishQC = () => {
+    if (selectedOrders.size === 0) {
+      toast.error('Please select orders to move');
+      return;
     }
-  });
-
-  const handleProgressToGunsmith = () => {
-    if (selectedOrders.size === 0) return;
-    progressToGunsimthMutation.mutate(Array.from(selectedOrders));
-  };
-
-  const handleProgressToPaint = () => {
-    if (selectedOrders.size === 0) return;
-    progressToPaintMutation.mutate(Array.from(selectedOrders));
+    if (!selectedTechnician) {
+      toast.error('Please select a technician');
+      return;
+    }
+    moveToFinishQCMutation.mutate({ 
+      orderIds: Array.from(selectedOrders), 
+      technician: selectedTechnician 
+    });
   };
 
   return (
@@ -184,13 +168,13 @@ export default function FinishQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Gunsmith
+              Finish QC
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {gunsmithCount}
+              {finishQCCount}
             </div>
             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               Orders in next department
@@ -238,22 +222,13 @@ export default function FinishQueuePage() {
                   Select All
                 </label>
                 <Button
-                  onClick={handleProgressToGunsmith}
-                  disabled={selectedOrders.size === 0 || progressToGunsimthMutation.isPending}
-                  className="bg-purple-600 hover:bg-purple-700"
+                  onClick={handleMoveToFinishQC}
+                  disabled={selectedOrders.size === 0 || !selectedTechnician || moveToFinishQCMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
                   size="sm"
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Gunsmith ({selectedOrders.size})
-                </Button>
-                <Button
-                  onClick={handleProgressToPaint}
-                  disabled={selectedOrders.size === 0 || progressToPaintMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700"
-                  size="sm"
-                >
-                  <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Paint ({selectedOrders.size})
+                  Move to Finish QC ({selectedOrders.size})
                 </Button>
                 {selectedOrders.size > 0 && (
                   <Button

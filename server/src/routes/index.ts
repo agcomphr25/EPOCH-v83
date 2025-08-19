@@ -2052,7 +2052,7 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/orders/update-department', async (req, res) => {
     try {
       console.log('🔄 DEPT UPDATE API: Received request body:', JSON.stringify(req.body, null, 2));
-      const { orderIds, department, status } = req.body;
+      const { orderIds, department, status, assignedTechnician } = req.body;
 
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
         console.log('❌ DEPT UPDATE API: Invalid orderIds:', orderIds);
@@ -2101,19 +2101,25 @@ export function registerRoutes(app: Express): Server {
             case 'Shipping': completionUpdates.shippingCompletedAt = now; break;
           }
 
+          // Prepare update data
+          const updateData: any = {
+            currentDepartment: department,
+            status: status || 'IN_PROGRESS',
+            ...completionUpdates
+          };
+          
+          // Add technician assignment if provided
+          if (assignedTechnician) {
+            updateData.assignedTechnician = assignedTechnician;
+          }
+
           // Update the appropriate table
           let updatedOrder;
           if (isFinalized) {
-            updatedOrder = await storage.updateFinalizedOrder(orderId, {
-              currentDepartment: department,
-              status: status || 'IN_PROGRESS',
-              ...completionUpdates
-            });
+            updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
           } else {
             updatedOrder = await storage.updateOrderDraft(orderId, {
-              currentDepartment: department,
-              status: status || 'IN_PROGRESS',
-              ...completionUpdates,
+              ...updateData,
               updatedAt: now
             });
           }

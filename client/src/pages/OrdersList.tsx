@@ -230,73 +230,62 @@ export default function OrdersList() {
     return null;
   };
 
-  // Progress order mutation with optimistic updates
+  // Local state for immediate UI updates
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
+
+  // Progress order mutation with simplified approach
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
-      console.log(`🔄 DEPARTMENT PROGRESSION: Attempting to progress order ${orderId} to ${nextDepartment}`);
-      
       const requestBody = {
         orderIds: [orderId],
         department: nextDepartment,
         status: 'IN_PROGRESS'
       };
-      console.log(`🔄 DEPARTMENT PROGRESSION: Request body:`, requestBody);
       
-      // Use the bulk department update endpoint that other pages use
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: requestBody
       });
-      console.log(`✅ DEPARTMENT PROGRESSION: API Response:`, response);
       return response;
     },
-    onMutate: async ({ orderId, nextDepartment }) => {
-      // Cancel outgoing refetches (so they don't overwrite our optimistic update)
-      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      
-      // Snapshot the previous value
-      const previousOrders = queryClient.getQueryData(['/api/orders/with-payment-status']);
-      
-      // Optimistically update to the new value
-      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-        if (!old) return old;
-        
-        return old.map((order: any) => {
-          if (order.orderId === orderId) {
-            console.log(`🔄 OPTIMISTIC UPDATE: ${orderId} from ${order.currentDepartment} to ${nextDepartment}`);
-            return { ...order, currentDepartment: nextDepartment };
-          }
-          return order;
-        });
-      });
-      
-      // Return a context object with the snapshotted value
-      return { previousOrders };
-    },
-    onError: (err: any, variables, context) => {
-      console.error(`❌ DEPARTMENT PROGRESSION: Failed to progress order ${variables.orderId}:`, err);
-      
-      // Rollback optimistic update on error
-      if (context?.previousOrders) {
-        queryClient.setQueryData(['/api/orders/with-payment-status'], context.previousOrders);
-      }
-      
-      toast.error(err?.message || 'Failed to progress order');
-    },
     onSuccess: (data, variables) => {
-      console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
-      toast.success(`Order progressed to ${variables.nextDepartment}`);
+      toast.success('Department updated');
+      
+      // Keep the local update for 3 seconds, then clear it to let server data take over
+      setTimeout(() => {
+        setLocalOrderUpdates(prev => {
+          const newUpdates = { ...prev };
+          delete newUpdates[variables.orderId];
+          return newUpdates;
+        });
+        // Invalidate to get fresh server data
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      }, 3000);
     },
-    onSettled: () => {
-      // Always refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+    onError: (err: any, variables) => {
+      // Remove failed update from local state
+      setLocalOrderUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[variables.orderId];
+        return newUpdates;
+      });
+      toast.error('Failed to update department');
     }
   });
 
-  const handleProgressOrder = (orderId: string, nextDepartment: string) => {
+  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
+    const nextDepartment = getNextDepartment(currentDepartment);
+    if (!nextDepartment) {
+      toast.error('No next department available');
+      return;
+    }
+
+    // Immediately update the UI
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    
+    // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  };
+  }, [progressOrderMutation]);
 
   const handleOpenCommunication = (order: Order) => {
     const customer = customers?.find(c => c.id.toString() === order.customerId);
@@ -875,7 +864,7 @@ export default function OrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {order.currentDepartment || 'Not Set'}
+                        {localOrderUpdates[order.orderId] || order.currentDepartment || 'Not Set'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -949,15 +938,17 @@ export default function OrdersList() {
                           <TrendingDown className="h-4 w-4" />
                         </Button>
                         {(() => {
-                          const nextDept = getNextDepartment(order.currentDepartment || '');
-                          const isComplete = order.currentDepartment === 'Shipping';
+                          // Use local state if available, otherwise use server data
+                          const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                          const nextDept = getNextDepartment(displayDepartment || '');
+                          const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';
                           
                           if (!isScrapped && !isComplete && nextDept) {
                             return (
                               <Button
                                 size="sm"
-                                onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                                onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
                                 disabled={progressOrderMutation.isPending}
                               >
                                 <ArrowRight className="w-4 h-4 mr-1" />

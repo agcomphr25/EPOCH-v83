@@ -1,14 +1,23 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Target, ArrowLeft, ArrowRight } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Target, ArrowLeft, ArrowRight, CheckSquare, Square, ArrowRightCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 export default function GunsimthQueuePage() {
+  // Multi-select state
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
@@ -44,6 +53,66 @@ export default function GunsimthQueuePage() {
     if (!modelId) return 'Unknown Model';
     const model = stockModels.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  // Multi-select functions
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedOrders.size === gunsmithOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(gunsmithOrders.map((order: any) => order.orderId)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedOrders(new Set());
+  };
+
+  // Progress orders mutation
+  const progressOrdersMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const response = await apiRequest('/api/orders/update-department', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderIds: orderIds,
+          department: 'Paint',
+          status: 'IN_PROGRESS'
+        })
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      toast({
+        title: "Success",
+        description: `${selectedOrders.size} orders moved to Paint department`,
+      });
+      setSelectedOrders(new Set());
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to move orders",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleProgressSelected = () => {
+    if (selectedOrders.size === 0) return;
+    progressOrdersMutation.mutate(Array.from(selectedOrders));
   };
 
   return (
@@ -98,10 +167,51 @@ export default function GunsimthQueuePage() {
       {/* Current Gunsmith Orders */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Gunsmith Orders ({gunsmithOrders.length})
-          </CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Gunsmith Orders ({gunsmithOrders.length})
+            </CardTitle>
+            
+            {gunsmithOrders.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="flex items-center gap-2"
+                >
+                  {selectedOrders.size === gunsmithOrders.length ? (
+                    <CheckSquare className="h-4 w-4" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+                  {selectedOrders.size === gunsmithOrders.length ? 'Deselect All' : 'Select All'}
+                </Button>
+                
+                {selectedOrders.size > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearSelection}
+                    >
+                      Clear ({selectedOrders.size})
+                    </Button>
+                    
+                    <Button
+                      onClick={handleProgressSelected}
+                      disabled={progressOrdersMutation.isPending}
+                      className="flex items-center gap-2"
+                    >
+                      <ArrowRightCircle className="h-4 w-4" />
+                      Move to Paint ({selectedOrders.size})
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {gunsmithOrders.length === 0 ? (
@@ -111,12 +221,23 @@ export default function GunsimthQueuePage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {gunsmithOrders.map((order: any) => (
-                <OrderTooltip 
-                  key={order.id} 
-                  order={order} 
-                  stockModels={stockModels}
-                  className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800"
-                />
+                <div key={order.id} className="relative">
+                  <div className="absolute top-2 left-2 z-10">
+                    <Checkbox
+                      checked={selectedOrders.has(order.orderId)}
+                      onCheckedChange={() => handleSelectOrder(order.orderId)}
+                      className="bg-white dark:bg-gray-800 border-2"
+                    />
+                  </div>
+                  <OrderTooltip 
+                    order={order} 
+                    stockModels={stockModels}
+                    className={`${selectedOrders.has(order.orderId) 
+                      ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
+                      : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+                    } pl-8`}
+                  />
+                </div>
               ))}
             </div>
           )}

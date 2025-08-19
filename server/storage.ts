@@ -1276,6 +1276,7 @@ export class DatabaseStorage implements IStorage {
       isCancelled: allOrders.isCancelled,
       cancelledAt: allOrders.cancelledAt,
       cancelReason: allOrders.cancelReason,
+      isVerified: allOrders.isVerified,
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     }).from(allOrders).orderBy(desc(allOrders.updatedAt));

@@ -98,7 +98,7 @@ export default function OrderEntry() {
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
   const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [showCustomDiscount, setShowCustomDiscount] = useState(false);
-  const [shipping, setShipping] = useState(36.95);
+  const [shipping, setShipping] = useState(0);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
   const [isVerified, setIsVerified] = useState(false);
@@ -754,7 +754,7 @@ export default function OrderEntry() {
         setAgrOrderDetails(order.agrOrderDetails || '');
         setHasAGROrder(!!order.agrOrderDetails);
         setIsFlattop(order.isFlattop || false);
-        setShipping(order.shipping || 36.95);
+        setShipping(order.shipping || 0);
         setIsCustomOrder(order.isCustomOrder === 'yes');
         // Load notes from either the dedicated notes column or features.specialInstructions for backward compatibility
         const notesFromField = order.notes || '';

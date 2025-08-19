@@ -16,6 +16,8 @@ import {
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
+  // Cancelled orders table
+  cancelledOrders,
   // Order attachments table
   orderAttachments,
   // Types
@@ -29,6 +31,7 @@ import {
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
   type AllOrder, type InsertAllOrder, // Type for finalized orders
+  type CancelledOrder, type InsertCancelledOrder, // Type for cancelled orders
   type Form, type InsertForm,
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
@@ -1279,7 +1282,14 @@ export class DatabaseStorage implements IStorage {
       isVerified: allOrders.isVerified,
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
-    }).from(allOrders).orderBy(desc(allOrders.updatedAt));
+    }).from(allOrders)
+    .where(
+      and(
+        ne(allOrders.status, 'CANCELLED'),
+        eq(allOrders.isCancelled, false)
+      )
+    )
+    .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select({

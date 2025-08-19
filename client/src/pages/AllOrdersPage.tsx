@@ -181,8 +181,13 @@ export default function AllOrdersPage() {
     return colors[department] || 'bg-gray-400';
   };
 
-  // Filter orders based on search and department
+  // Filter orders based on search and department, excluding cancelled orders
   const filteredOrders = orders.filter(order => {
+    // Exclude cancelled orders from main list
+    if (order.isCancelled || order.status === 'CANCELLED') {
+      return false;
+    }
+
     // Department filter
     const departmentMatch = selectedDepartment === 'all' || order.currentDepartment === selectedDepartment;
 

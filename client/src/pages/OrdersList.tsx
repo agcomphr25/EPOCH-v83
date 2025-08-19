@@ -439,6 +439,9 @@ export default function OrdersList() {
     
     let filtered = [...orders];
     
+    // Exclude cancelled orders from main list
+    filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
+    
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();

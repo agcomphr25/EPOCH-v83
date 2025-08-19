@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
@@ -244,6 +245,9 @@ export default function FinishQCPage() {
           )}
         </div>
       </div>
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner />
 
       {technicians.length === 0 ? (
         <Card>

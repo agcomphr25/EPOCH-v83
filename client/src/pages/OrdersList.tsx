@@ -254,14 +254,19 @@ export default function OrdersList() {
       console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
       console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: API Response Data:`, data);
       
-      // Force immediate invalidation and refetch
+      // Force immediate invalidation and refetch with aggressive cache clearing
       console.log('🔄 DEPARTMENT PROGRESSION: Invalidating and refetching data...');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       
-      // Force immediate refetch
-      queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      // Remove from cache entirely and refetch
+      queryClient.removeQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.removeQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.removeQueries({ queryKey: ['/api/orders/all'] });
+      
+      // Force immediate refetch with a small delay
+      setTimeout(async () => {
+        await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        console.log('🔄 DEPARTMENT PROGRESSION: Cache cleared and data refetched');
+      }, 100);
       
       toast.success(`Order progressed to ${variables.nextDepartment}`);
     },

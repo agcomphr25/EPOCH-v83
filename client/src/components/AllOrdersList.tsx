@@ -168,14 +168,19 @@ export default function AllOrdersList() {
       console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: API Response Data:`, data);
       toast.success(`Order progressed to ${variables.nextDepartment}`);
       
-      // Force immediate invalidation and refetch
+      // Force immediate invalidation and refetch with aggressive cache clearing
       console.log('🔄 ALL ORDERS PROGRESSION: Invalidating and refetching data...');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       
-      // Force immediate refetch
-      queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      // Remove from cache entirely and refetch
+      queryClient.removeQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.removeQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.removeQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      
+      // Force immediate refetch with a small delay to ensure server state is updated
+      setTimeout(async () => {
+        await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        console.log('🔄 ALL ORDERS PROGRESSION: Cache cleared and data refetched');
+      }, 100);
     },
     onError: (error, variables) => {
       console.error(`❌ ALL ORDERS PROGRESSION: Failed to progress order ${variables.orderId}:`, error);

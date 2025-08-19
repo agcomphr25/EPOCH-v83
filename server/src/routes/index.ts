@@ -2133,6 +2133,13 @@ export function registerRoutes(app: Express): Server {
 
       console.log(`🏷️ Creating barcode labels for ${orderIds.length} orders:`, orderIds);
 
+      // Get stock models for display name mapping
+      const stockModels = await storage.getAllStockModels();
+      const stockModelMap = new Map();
+      stockModels.forEach(model => {
+        stockModelMap.set(model.id, model.displayName || model.name);
+      });
+
       // Get order details for label generation
       const orderDetails = [];
       for (const orderId of orderIds) {
@@ -2278,10 +2285,10 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add model and action length
+          // Add model and action length (using display names)
           const actionLength = order.features?.action_length || 'unknown';
-          const modelName = order.modelId || 'Unknown';
-          page.drawText(`${modelName} - ${actionLength.toUpperCase()}`, {
+          const modelDisplayName = stockModelMap.get(order.modelId) || order.modelId || 'Unknown';
+          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
             x: x + 8,
             y: y + 12,
             size: 6,

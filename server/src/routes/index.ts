@@ -2226,19 +2226,30 @@ export function registerRoutes(app: Express): Server {
             
           } catch (error) {
             console.error('Barcode generation error:', error);
-            // Fallback: Draw a simple barcode representation using text
-            page.drawText(`|||  |  ||  |  |||  ||  |  |||`, {
+            // Fallback: Create a visual barcode pattern for the specific order ID
+            const generateTextBarcode = (text: string) => {
+              // Simple visual pattern based on order ID characters
+              let pattern = '|';
+              for (let char of text) {
+                const code = char.charCodeAt(0);
+                // Create bars based on character codes
+                if (code % 4 === 0) pattern += '|||  ';
+                else if (code % 4 === 1) pattern += '|  ||  ';
+                else if (code % 4 === 2) pattern += '||  |  ';
+                else pattern += '|  |||  ';
+              }
+              pattern += '|';
+              return pattern;
+            };
+            
+            // Draw fallback barcode pattern
+            page.drawText(generateTextBarcode(barcodeText), {
               x: x + 10,
               y: y + 35,
-              size: 12,
+              size: 10,
               color: rgb(0, 0, 0),
             });
-            page.drawText(`${barcodeText}`, {
-              x: x + 10,
-              y: y + 25,
-              size: 8,
-              color: rgb(0, 0, 0),
-            });
+            console.log(`⚠️  Fallback barcode generated for ${barcodeText}`);
           }
           
           // Add order information at top

@@ -2192,63 +2192,78 @@ export function registerRoutes(app: Express): Server {
           // Always use the order ID for barcode labels (not the database barcode field)
           const barcodeText = order.orderId;
           
-          // Simple Code 39 barcode generation using rectangles
-          const drawSimpleBarcode = (text: string, startX: number, startY: number) => {
-            const charMap: { [key: string]: string } = {
-              'A': '1000010011', 'G': '0100010011', '0': '0001001011',
-              'B': '1100000011', 'H': '1001000011', '1': '1001000001',
-              'C': '0100000111', 'I': '0010000111', '2': '0101000001',
-              'D': '1000001011', 'J': '1010000001', '3': '1101000000',
-              'E': '1100001001', 'K': '0001010011', '4': '0001100001',
-              'F': '0100001101', 'L': '1001010001', '5': '1001100000'
+          // Complete Code 39 barcode generation using rectangles
+          const drawCode39Barcode = (text: string, startX: number, startY: number) => {
+            // Complete Code 39 character set with proper encoding
+            const code39Map: { [key: string]: string } = {
+              '0': '101001101101', '1': '110100101011', '2': '101100101011', '3': '110110010101',
+              '4': '101001101011', '5': '110100110101', '6': '101100110101', '7': '101001011011',
+              '8': '110100101101', '9': '101100101101', 'A': '110101001011', 'B': '101101001011',
+              'C': '110110100101', 'D': '101011001011', 'E': '110101100101', 'F': '101101100101',
+              'G': '101010011011', 'H': '110101001101', 'I': '101101001101', 'J': '101011001101',
+              'K': '110101010011', 'L': '101101010011', 'M': '110110101001', 'N': '101011010011',
+              'O': '110101101001', 'P': '101101101001', 'Q': '101010110011', 'R': '110101011001',
+              'S': '101101011001', 'T': '101011011001', 'U': '110010101011', 'V': '100110101011',
+              'W': '110011010101', 'X': '100101101011', 'Y': '110010110101', 'Z': '100110110101',
+              '-': '100101011011', '.': '110010101101', ' ': '100110101101', '$': '100100100101',
+              '/': '100100101001', '+': '100101001001', '%': '101001001001', '*': '100101101101'
             };
             
-            let barWidth = 1.5;
-            let barHeight = 12;
+            const thinWidth = 1.2;
+            const thickWidth = 3;
+            const barHeight = 20;
             let currentX = startX;
             
-            // Ensure barcode fits within label width (170px available)
-            const maxBarcodeWidth = 140;
-            const estimatedWidth = text.length * 12 * barWidth;
-            if (estimatedWidth > maxBarcodeWidth) {
-              barWidth = maxBarcodeWidth / (text.length * 12);
-            }
-            
-            // Draw start character (*)
-            for (let i = 0; i < 10; i++) {
-              if (i % 2 === 0) {
-                page.drawRectangle({
-                  x: currentX,
-                  y: startY,
-                  width: barWidth,
-                  height: barHeight,
-                  color: rgb(0, 0, 0),
-                });
-              }
-              currentX += barWidth;
-            }
-            
-            // Draw text characters with proper mapping
-            for (let char of text.toUpperCase()) {
-              const pattern = charMap[char] || '1000010011';
-              for (let bit of pattern) {
-                if (bit === '1') {
-                  page.drawRectangle({
-                    x: currentX,
-                    y: startY,
-                    width: barWidth,
-                    height: barHeight,
-                    color: rgb(0, 0, 0),
-                  });
+            // Calculate total width needed
+            const fullText = `*${text}*`; // Code 39 requires start/stop characters
+            let totalWidth = 0;
+            for (let char of fullText.toUpperCase()) {
+              const pattern = code39Map[char];
+              if (pattern) {
+                for (let bit of pattern) {
+                  totalWidth += bit === '1' ? thickWidth : thinWidth;
                 }
-                currentX += barWidth;
+                totalWidth += thinWidth; // Gap between characters
               }
-              currentX += barWidth * 0.5; // Smaller gap between characters
+            }
+            
+            // Adjust bar width if needed to fit in label
+            const maxBarcodeWidth = 160;
+            let widthMultiplier = 1;
+            if (totalWidth > maxBarcodeWidth) {
+              widthMultiplier = maxBarcodeWidth / totalWidth;
+            }
+            
+            const adjustedThinWidth = thinWidth * widthMultiplier;
+            const adjustedThickWidth = thickWidth * widthMultiplier;
+            
+            // Draw the barcode
+            for (let char of fullText.toUpperCase()) {
+              const pattern = code39Map[char];
+              if (pattern) {
+                for (let i = 0; i < pattern.length; i++) {
+                  const isBar = i % 2 === 0; // Even positions are bars, odd are spaces
+                  const isThick = pattern[i] === '1';
+                  const width = isThick ? adjustedThickWidth : adjustedThinWidth;
+                  
+                  if (isBar) {
+                    page.drawRectangle({
+                      x: currentX,
+                      y: startY,
+                      width: width,
+                      height: barHeight,
+                      color: rgb(0, 0, 0),
+                    });
+                  }
+                  currentX += width;
+                }
+                currentX += adjustedThinWidth; // Gap between characters
+              }
             }
           };
           
           // Position barcode in center of label
-          drawSimpleBarcode(barcodeText, x + 10, y + 30);
+          drawCode39Barcode(barcodeText, x + 10, y + 28);
           
           // Add order information at top
           page.drawText(`${order.orderId}`, {
@@ -2259,10 +2274,10 @@ export function registerRoutes(app: Express): Server {
           });
           
           // Add barcode text below barcode for verification (same as order ID)
-          page.drawText(`${barcodeText}`, {
+          page.drawText(`*${barcodeText}*`, {
             x: x + 8,
-            y: y + 20,
-            size: 7,
+            y: y + 18,
+            size: 6,
             color: rgb(0, 0, 0),
           });
           

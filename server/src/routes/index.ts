@@ -2207,20 +2207,43 @@ export function registerRoutes(app: Express): Server {
           };
           
           const drawCode39Barcode = (text: string, startX: number, startY: number) => {
-            const thinWidth = 1.2;
-            const thickWidth = 3.0;
-            const barHeight = 18;
+            // Smaller dimensions to fit Avery 5160 labels (2.625" x 1")
+            const thinWidth = 0.8;
+            const thickWidth = 2.0;
+            const barHeight = 12;
             let currentX = startX;
             
             // Add start/stop characters (* for Code 39)
             const fullText = `*${text.toUpperCase()}*`;
+            
+            // Calculate total width to ensure it fits in label
+            let totalWidth = 0;
+            for (let char of fullText) {
+              const pattern = code39Table[char];
+              if (pattern) {
+                for (let bit of pattern) {
+                  totalWidth += bit === '1' ? thickWidth : thinWidth;
+                }
+                totalWidth += thinWidth; // Inter-character gap
+              }
+            }
+            
+            // Scale down if barcode is too wide (max 150 points for Avery label)
+            const maxWidth = 150;
+            let scale = 1;
+            if (totalWidth > maxWidth) {
+              scale = maxWidth / totalWidth;
+            }
+            
+            const scaledThinWidth = thinWidth * scale;
+            const scaledThickWidth = thickWidth * scale;
             
             for (let char of fullText) {
               const pattern = code39Table[char];
               if (pattern) {
                 for (let i = 0; i < pattern.length; i++) {
                   const bit = pattern[i];
-                  const width = bit === '1' ? thickWidth : thinWidth;
+                  const width = bit === '1' ? scaledThickWidth : scaledThinWidth;
                   const isBar = i % 2 === 0; // Even positions are bars
                   
                   if (isBar) {
@@ -2235,13 +2258,13 @@ export function registerRoutes(app: Express): Server {
                   currentX += width;
                 }
                 // Inter-character gap
-                currentX += thinWidth;
+                currentX += scaledThinWidth;
               }
             }
           };
           
-          // Draw the barcode
-          drawCode39Barcode(barcodeText, x + 10, y + 30);
+          // Draw the barcode (positioned to fit within Avery label)
+          drawCode39Barcode(barcodeText, x + 8, y + 32);
           console.log(`✅ Generated Code 39 barcode for ${barcodeText}`);
           
           // Add order information at top

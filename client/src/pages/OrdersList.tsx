@@ -252,20 +252,10 @@ export default function OrdersList() {
       return response;
     },
     onSuccess: (data, variables) => {
+      console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
       toast.success('Department updated');
       
-      // Update the React Query cache directly to prevent reversion
-      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-        if (!old) return old;
-        return old.map((order: any) => {
-          if (order.orderId === variables.orderId) {
-            return { ...order, currentDepartment: variables.nextDepartment };
-          }
-          return order;
-        });
-      });
-      
-      // Clear local update and updating flag since cache is now updated
+      // Cache is already updated from button click - just clean up local state
       setTimeout(() => {
         setLocalOrderUpdates(prev => {
           const newState = { ...prev };
@@ -277,7 +267,7 @@ export default function OrdersList() {
           newSet.delete(variables.orderId);
           return newSet;
         });
-      }, 500);
+      }, 1000); // Longer delay to ensure UI stability
     },
     onError: (err, variables) => {
       // Remove failed local update and updating flag immediately
@@ -303,15 +293,27 @@ export default function OrdersList() {
       return;
     }
     
-    // Mark this order as updating to prevent query interference
-    setUpdatingOrders(prev => new Set(prev).add(orderId));
+    console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
     
-    // Immediately update local state for instant UI feedback
+    // IMMEDIATELY update React Query cache - this prevents any reversion
+    queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
+      if (!old) return old;
+      const updated = old.map((order: any) => {
+        if (order.orderId === orderId) {
+          console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
+          return { ...order, currentDepartment: nextDepartment };
+        }
+        return order;
+      });
+      return updated;
+    });
+    
+    // Also update local state for redundancy
     setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
     
-    // Make the API call
+    // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
-  }, [progressOrderMutation]);
+  }, [progressOrderMutation, queryClient]);
 
   const handleOpenCommunication = (order: Order) => {
     const customer = customers?.find(c => c.id.toString() === order.customerId);
@@ -375,8 +377,9 @@ export default function OrdersList() {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders/with-payment-status', 'v2'],
       queryFn: () => apiRequest('/api/orders/with-payment-status'),
-      refetchInterval: 30000, // Auto-refresh every 30 seconds - reduced to prevent interference
-      refetchOnWindowFocus: false, // Disable to prevent reversion during updates
+      refetchInterval: false, // Completely disable automatic refetching
+      refetchOnWindowFocus: false, // Disable refetch on window focus
+      refetchOnReconnect: false, // Disable refetch on network reconnect
     });
 
     // Debug logging to check if isVerified field is present

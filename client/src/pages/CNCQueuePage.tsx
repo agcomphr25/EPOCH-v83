@@ -200,8 +200,8 @@ export default function CNCQueuePage() {
       setSelectAllGunsmith(false);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
-    onError: (error) => {
-      toast.error(`Failed to progress orders: ${error}`);
+    onError: (error: any) => {
+      toast.error(`Failed to progress orders: ${error.message || error}`);
     }
   });
 
@@ -219,8 +219,8 @@ export default function CNCQueuePage() {
       setSelectAllFinish(false);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
-    onError: (error) => {
-      toast.error(`Failed to progress orders: ${error}`);
+    onError: (error: any) => {
+      toast.error(`Failed to progress orders: ${error.message || error}`);
     }
   });
 
@@ -349,112 +349,80 @@ export default function CNCQueuePage() {
               No orders requiring gunsmith work
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
               {gunsimthQueue.map((order: any) => {
                 const isSelected = selectedGunsimthOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
-                  <Card 
+                  <div 
                     key={order.orderId}
-                    className={`transition-all duration-200 border-l-4 ${
+                    className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                         : isSelected
                         ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
                         : 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
                     }`}
+                    onClick={() => toggleGunsimthOrderSelection(order.orderId)}
                   >
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onChange={() => toggleGunsimthOrderSelection(order.orderId)}
-                          className="mt-1"
-                        />
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleGunsimthOrderSelection(order.orderId)}
+                        className="flex-shrink-0"
+                      />
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm truncate">
+                            {getDisplayOrderId(order)}
+                          </span>
+                          {isOverdue && (
+                            <Badge variant="destructive" className="text-xs ml-1">
+                              OVERDUE
+                            </Badge>
+                          )}
+                        </div>
                         
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-lg">
-                              {getDisplayOrderId(order)}
-                            </span>
-                            {isOverdue && (
-                              <Badge variant="destructive" className="text-xs">
-                                OVERDUE
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Target className="h-3 w-3 text-gray-500" />
-                              <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
-                                Due: {format(new Date(order.dueDate), 'M/d/yy')}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <ArrowUp className="h-3 w-3 text-purple-500" />
-                              <span className="font-bold text-sm text-purple-600">
-                                GUNSMITH FEATURES
-                              </span>
-                            </div>
-                            
-                            {/* Show which features require gunsmith work */}
-                            <div className="text-xs text-gray-600">
-                              {(() => {
-                                const activeFeatures = [];
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
+                          <div className="text-purple-600 font-medium">
+                            {(() => {
+                              const activeFeatures = [];
+                              
+                              const railVal = normalizeFeatureValue(order.features?.rail_accessory);
+                              if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
+                                activeFeatures.push('RAILS');
+                              }
+                              
+                              const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
+                              if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
+                                activeFeatures.push('QDS');
+                              }
+                              
+                              gunsimthFeatures.forEach(feature => {
+                                if (feature === 'rail_accessory' || feature === 'qd_accessory') return;
                                 
-                                // Check rail accessory (with array handling)
-                                const railVal = normalizeFeatureValue(order.features?.rail_accessory);
-                                if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
-                                  activeFeatures.push('RAILS');
-                                }
-                                
-                                // Check QD accessory (with array handling)
-                                const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
-                                if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
-                                  activeFeatures.push('QD CUPS');
-                                }
-                                
-                                // Check other gunsmith features
-                                gunsimthFeatures.forEach(feature => {
-                                  if (feature === 'rail_accessory' || feature === 'qd_accessory') {
-                                    return; // Already handled above
-                                  }
+                                const value = normalizeFeatureValue(order.features?.[feature]);
+                                if (value === 'true' || value === 'yes' ||
+                                    (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
                                   
-                                  const value = normalizeFeatureValue(order.features?.[feature]);
-                                  if (value === 'true' || value === 'yes' ||
-                                      (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
-                                    
-                                    if (feature === 'tripod_tap') activeFeatures.push('TRIPOD TAP');
-                                    else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD MOUNT');
-                                    else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
-                                    else if (feature === 'spartan_bipod') activeFeatures.push('SPARTAN BIPOD');
-                                    else if (feature === 'adjustable_stock') activeFeatures.push('ADJUSTABLE STOCK');
-                                  }
-                                });
-                                
-                                return [...new Set(activeFeatures)].join(', ') || 'GUNSMITH REQUIRED';
-                              })()}
-                            </div>
-                            
-                            {order.customerPO && (
-                              <div className="text-xs text-gray-600">
-                                PO: {order.customerPO}
-                              </div>
-                            )}
-                            
-                            {order.fbOrderNumber && (
-                              <div className="text-xs text-gray-600">
-                                FB: {order.fbOrderNumber}
-                              </div>
-                            )}
+                                  if (feature === 'tripod_tap') activeFeatures.push('TRIPOD');
+                                  else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD');
+                                  else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
+                                  else if (feature === 'spartan_bipod') activeFeatures.push('BIPOD');
+                                  else if (feature === 'adjustable_stock') activeFeatures.push('ADJ STOCK');
+                                }
+                              });
+                              
+                              return Array.from(new Set(activeFeatures)).join(', ') || 'GUNSMITH';
+                            })()}
                           </div>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -502,73 +470,49 @@ export default function CNCQueuePage() {
               No orders ready for finish
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
               {finishQueue.map((order: any) => {
                 const isSelected = selectedFinishOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
-                  <Card 
+                  <div 
                     key={order.orderId}
-                    className={`transition-all duration-200 border-l-4 ${
+                    className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                         : isSelected
                         ? 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
                         : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
                     }`}
+                    onClick={() => toggleFinishOrderSelection(order.orderId)}
                   >
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onChange={() => toggleFinishOrderSelection(order.orderId)}
-                          className="mt-1"
-                        />
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleFinishOrderSelection(order.orderId)}
+                        className="flex-shrink-0"
+                      />
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm truncate">
+                            {getDisplayOrderId(order)}
+                          </span>
+                          {isOverdue && (
+                            <Badge variant="destructive" className="text-xs ml-1">
+                              OVERDUE
+                            </Badge>
+                          )}
+                        </div>
                         
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-lg">
-                              {getDisplayOrderId(order)}
-                            </span>
-                            {isOverdue && (
-                              <Badge variant="destructive" className="text-xs">
-                                OVERDUE
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Target className="h-3 w-3 text-gray-500" />
-                              <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
-                                Due: {format(new Date(order.dueDate), 'M/d/yy')}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <ArrowUp className="h-3 w-3 text-green-500" />
-                              <span className="font-bold text-sm text-green-600">
-                                READY FOR FINISH
-                              </span>
-                            </div>
-                            
-                            {order.customerPO && (
-                              <div className="text-xs text-gray-600">
-                                PO: {order.customerPO}
-                              </div>
-                            )}
-                            
-                            {order.fbOrderNumber && (
-                              <div className="text-xs text-gray-600">
-                                FB: {order.fbOrderNumber}
-                              </div>
-                            )}
-                          </div>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
+                          <div className="text-green-600 font-medium">READY FOR FINISH</div>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>

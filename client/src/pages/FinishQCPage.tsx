@@ -139,6 +139,58 @@ export default function FinishQCPage() {
     moveToPaintMutation.mutate(Array.from(selectedOrders));
   };
 
+  // Helper function to get texture information
+  const getTextureInfo = (order: any) => {
+    if (!order.features) return 'No texture';
+    const features = order.features;
+    
+    if (features.texture_options) {
+      if (features.texture_options === 'no_texture') {
+        return 'No texture';
+      } else if (features.texture_options === 'grip_and_forend') {
+        return 'Grip & forend';
+      } else if (features.texture_options === 'full_texture') {
+        return 'Full texture';
+      } else if (features.texture_options === 'grip_only') {
+        return 'Grip only';
+      } else {
+        return features.texture_options.replace(/_/g, ' ');
+      }
+    }
+    
+    return 'No texture';
+  };
+
+  // Helper function to get paint color information
+  const getPaintColor = (order: any) => {
+    if (!order.features) return 'No paint';
+    const features = order.features;
+    
+    // Check paint_options_combined first (newer format)
+    if (features.paint_options_combined) {
+      const paintOption = features.paint_options_combined;
+      if (paintOption.includes(':')) {
+        const [type, color] = paintOption.split(':');
+        if (type === 'base_colors') {
+          return color.replace(/_/g, ' ');
+        } else if (type === 'custom_graphics') {
+          return `${color.replace(/_/g, ' ')} (graphics)`;
+        }
+      }
+      return paintOption.replace(/_/g, ' ');
+    }
+    
+    // Check paint_options (older format)
+    if (features.paint_options) {
+      if (features.paint_options === 'no_paint') {
+        return 'No paint';
+      }
+      return features.paint_options.replace(/_/g, ' ');
+    }
+    
+    return 'No paint';
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -263,6 +315,16 @@ export default function FinishQCPage() {
                                   
                                   <div className="text-sm text-gray-600 dark:text-gray-400">
                                     {order.customerName}
+                                  </div>
+                                  
+                                  {/* Texture and Paint Information */}
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
+                                      {getTextureInfo(order)}
+                                    </Badge>
+                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
+                                      {getPaintColor(order)}
+                                    </Badge>
                                   </div>
                                 </div>
                               </div>

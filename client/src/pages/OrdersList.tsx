@@ -232,6 +232,9 @@ export default function OrdersList() {
 
   // Local state for immediate UI updates - using reliable dual approach
   const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
+  
+  // Track orders being updated to prevent query invalidation interference
+  const [updatingOrders, setUpdatingOrders] = React.useState<Set<string>>(new Set());
 
   // Progress order mutation with immediate local state update
   const progressOrderMutation = useMutation({
@@ -251,26 +254,42 @@ export default function OrdersList() {
     onSuccess: (data, variables) => {
       toast.success('Department updated');
       
-      // Clear local update after server confirms success
+      // Update the React Query cache directly to prevent reversion
+      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
+        if (!old) return old;
+        return old.map((order: any) => {
+          if (order.orderId === variables.orderId) {
+            return { ...order, currentDepartment: variables.nextDepartment };
+          }
+          return order;
+        });
+      });
+      
+      // Clear local update and updating flag since cache is now updated
       setTimeout(() => {
         setLocalOrderUpdates(prev => {
           const newState = { ...prev };
           delete newState[variables.orderId];
           return newState;
         });
-        
-        // Then invalidate queries to sync with server
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-        }, 1000);
-      }, 2000);
+        setUpdatingOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(variables.orderId);
+          return newSet;
+        });
+      }, 500);
     },
     onError: (err, variables) => {
-      // Remove failed local update immediately
+      // Remove failed local update and updating flag immediately
       setLocalOrderUpdates(prev => {
         const newState = { ...prev };
         delete newState[variables.orderId];
         return newState;
+      });
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(variables.orderId);
+        return newSet;
       });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
@@ -283,6 +302,9 @@ export default function OrdersList() {
       toast.error('No next department available');
       return;
     }
+    
+    // Mark this order as updating to prevent query interference
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
     
     // Immediately update local state for instant UI feedback
     setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
@@ -353,8 +375,8 @@ export default function OrdersList() {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders/with-payment-status', 'v2'],
       queryFn: () => apiRequest('/api/orders/with-payment-status'),
-      refetchInterval: 30000, // Auto-refresh every 30 seconds
-      refetchOnWindowFocus: true, // Refresh when window regains focus
+      refetchInterval: 30000, // Auto-refresh every 30 seconds - reduced to prevent interference
+      refetchOnWindowFocus: false, // Disable to prevent reversion during updates
     });
 
     // Debug logging to check if isVerified field is present

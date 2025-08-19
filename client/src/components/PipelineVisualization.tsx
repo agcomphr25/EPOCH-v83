@@ -6,7 +6,6 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 const departments = [
-  { name: 'P1 Production Queue', color: 'bg-[#7BAFD4]' },
   { name: 'Layup/Plugging', color: 'bg-[#7BAFD4]' },
   { name: 'Barcode', color: 'bg-[#7BAFD4]' },
   { name: 'CNC', color: 'bg-[#7BAFD4]' },
@@ -17,6 +16,8 @@ const departments = [
   { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
+
+const productionQueue = { name: 'P1 Production Queue', color: 'bg-[#7BAFD4]' };
 
 type ScheduleStatus = 'on-schedule' | 'dept-overdue' | 'cannot-meet-due' | 'critical';
 
@@ -88,12 +89,16 @@ const OrderChip = ({ order, onClick, getModelDisplayName }: { order: OrderDetail
 const DepartmentVisualization = ({ department, orders, getModelDisplayName }: { department: string; orders: OrderDetail[]; getModelDisplayName: (modelId: string) => string }) => {
   const count = orders.length;
   const usePixels = count > 20; // Hybrid selection threshold
+  
+  // Use wider grid for Production Queue
+  const isProductionQueue = department === 'P1 Production Queue';
+  const gridCols = isProductionQueue ? 'grid-cols-16' : 'grid-cols-10';
 
   if (usePixels) {
     // Pixel grid for high volume departments
     return (
       <div className="space-y-2">
-        <div className="grid grid-cols-10 gap-1">
+        <div className={`grid ${gridCols} gap-1`}>
           {orders.map((order, index) => (
             <OrderPixel key={order.orderId} order={order} />
           ))}
@@ -163,7 +168,8 @@ export default function PipelineVisualization() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4">
+        {/* Main departments in a 3x3 grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 mb-6">
           {departments.map((dept) => {
             // Get count and orders for this department
             const count = pipelineCounts?.[dept.name] || 0;
@@ -199,6 +205,40 @@ export default function PipelineVisualization() {
             );
           })}
         </div>
+
+        {/* Production Queue at the bottom - wider format */}
+        {(() => {
+          const count = pipelineCounts?.[productionQueue.name] || 0;
+          const orders = pipelineDetails?.[productionQueue.name] || [];
+          const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
+          const isOverloaded = count > 45;
+          
+          return (
+            <div className="border-t pt-4">
+              <div className="text-center space-y-2">
+                <div 
+                  className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl ${
+                    isOverloaded ? 'text-black' : `${productionQueue.color} text-white`
+                  }`}
+                  style={isOverloaded ? { backgroundColor: '#FFFF00' } : {}}
+                >
+                  {count}
+                </div>
+                <div className="text-sm font-medium">{productionQueue.name}</div>
+                
+                {/* Schedule status visualization - wider for more orders */}
+                <div className="min-h-[100px] p-4 bg-gray-50 rounded border overflow-hidden">
+                  <DepartmentVisualization department={productionQueue.name} orders={orders} getModelDisplayName={getModelDisplayName} />
+                </div>
+                
+                <Progress value={percentage} className="h-2" />
+                <div className="text-xs text-gray-500">
+                  {percentage.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         
         {/* Legend */}
         <div className="mt-4 space-y-2">
@@ -234,7 +274,9 @@ export default function PipelineVisualization() {
         <div className="mt-6 pt-4 border-t">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>Pipeline Flow Direction:</span>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap">
+              <span className="text-xs">{productionQueue.name}</span>
+              <span>→</span>
               {departments.map((dept, index) => (
                 <React.Fragment key={dept.name}>
                   <span className="text-xs">{dept.name}</span>

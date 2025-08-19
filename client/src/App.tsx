@@ -202,7 +202,7 @@ function App() {
                   <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
                   <Route path="/stacitest-dashboard" component={STACITestDashboard} />
-                  
+
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
@@ -214,7 +214,7 @@ function App() {
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/cogs-report" component={COGSReportPage} />
                   <Route path="/finance/dashboard" component={FinanceDashboardPage} />
-                  
+
                   {/* Payment Processing Routes */}
                   <Route path="/payment-management" component={PaymentManagement} />
 
@@ -246,7 +246,7 @@ function App() {
                   <Route path="/simplified-layup-scheduler" component={SimplifiedLayupScheduler} />
                   <Route path="/p2-layup-scheduler" component={P2LayupSchedulerPage} />
                   <Route path="/production-queue" component={ProductionQueueManager} />
-                  
+
                   {/* Nonconformance Tracking Routes */}
                   <Route path="/nonconformance" component={NonconformanceDashboard} />
                   <Route path="/nonconformance-report" component={NonconformanceReport} />

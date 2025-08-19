@@ -30,6 +30,68 @@ export default function GunsimthQueuePage() {
     );
   }, [allOrders]);
 
+  // Categorize orders by due date
+  const categorizedOrders = useMemo(() => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    
+    const overdue = [];
+    const dueToday = [];
+    const dueTomorrow = [];
+    const dueThisWeek = [];
+    const dueNextWeek = [];
+    const futureDue = [];
+    const noDueDate = [];
+
+    for (const order of gunsmithOrders) {
+      if (!order.dueDate) {
+        noDueDate.push(order);
+        continue;
+      }
+
+      const dueDate = new Date(order.dueDate);
+      dueDate.setHours(0, 0, 0, 0); // Normalize to start of day
+      const todayNorm = new Date(today);
+      todayNorm.setHours(0, 0, 0, 0);
+
+      if (dueDate < todayNorm) {
+        overdue.push(order);
+      } else if (dueDate.getTime() === todayNorm.getTime()) {
+        dueToday.push(order);
+      } else if (dueDate.getTime() === tomorrow.getTime()) {
+        dueTomorrow.push(order);
+      } else if (dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)) {
+        dueThisWeek.push(order);
+      } else if (dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)) {
+        dueNextWeek.push(order);
+      } else {
+        futureDue.push(order);
+      }
+    }
+
+    // Sort each category by due date and order ID
+    const sortFn = (a: any, b: any) => {
+      if (a.dueDate && b.dueDate) {
+        const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        if (dateCompare !== 0) return dateCompare;
+      }
+      return a.orderId.localeCompare(b.orderId);
+    };
+
+    return {
+      overdue: overdue.sort(sortFn),
+      dueToday: dueToday.sort(sortFn),
+      dueTomorrow: dueTomorrow.sort(sortFn),
+      dueThisWeek: dueThisWeek.sort(sortFn),
+      dueNextWeek: dueNextWeek.sort(sortFn),
+      futureDue: futureDue.sort(sortFn),
+      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId))
+    };
+  }, [gunsmithOrders]);
+
   // Count orders in previous department (Finish)
   const finishCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
@@ -343,27 +405,237 @@ export default function GunsimthQueuePage() {
               No orders currently in Gunsmith department
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {gunsmithOrders.map((order: any) => (
-                <div key={order.id} className="relative">
-                  <div className="absolute top-2 left-2 z-10">
-                    <Checkbox
-                      checked={selectedOrders.has(order.orderId)}
-                      onCheckedChange={() => handleSelectOrder(order.orderId)}
-                      className="bg-white dark:bg-gray-800 border-2"
-                    />
+            <div className="space-y-6">
+              {/* Overdue Orders - Critical Priority */}
+              {categorizedOrders.overdue.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                      🚨 Overdue ({categorizedOrders.overdue.length})
+                    </h3>
                   </div>
-                  <OrderTooltip 
-                    order={order} 
-                    stockModels={stockModels}
-                    gunsimthTasks={getGunsimthTasks(order)}
-                    className={`${selectedOrders.has(order.orderId) 
-                      ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
-                      : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
-                    } pl-8`}
-                  />
+                  <div className="grid gap-2">
+                    {categorizedOrders.overdue.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700' 
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Due Today - High Priority */}
+              {categorizedOrders.dueToday.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                      🔥 Due Today ({categorizedOrders.dueToday.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.dueToday.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700' 
+                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Tomorrow - Medium Priority */}
+              {categorizedOrders.dueTomorrow.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">
+                      ⚡ Due Tomorrow ({categorizedOrders.dueTomorrow.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.dueTomorrow.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700' 
+                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due This Week */}
+              {categorizedOrders.dueThisWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                      📅 Due This Week ({categorizedOrders.dueThisWeek.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.dueThisWeek.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700' 
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Next Week */}
+              {categorizedOrders.dueNextWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">
+                      📆 Due Next Week ({categorizedOrders.dueNextWeek.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.dueNextWeek.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700' 
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Future Due */}
+              {categorizedOrders.futureDue.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                      🗓️ Future Due ({categorizedOrders.futureDue.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.futureDue.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
+                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No Due Date */}
+              {categorizedOrders.noDueDate.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
+                      ❓ No Due Date ({categorizedOrders.noDueDate.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-2">
+                    {categorizedOrders.noDueDate.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <OrderTooltip 
+                          order={order} 
+                          stockModels={stockModels}
+                          gunsimthTasks={getGunsimthTasks(order)}
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700 border-l-4'
+                          } pl-8`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

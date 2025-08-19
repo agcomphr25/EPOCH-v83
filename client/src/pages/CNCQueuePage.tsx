@@ -107,8 +107,8 @@ export default function CNCQueuePage() {
     const cncOrders = Array.from(cncOrdersMap.values());
 
     // Split into gunsmith and finish queues
-    const gunsmith = [];
-    const finish = [];
+    const gunsmith: any[] = [];
+    const finish: any[] = [];
     
     cncOrders.forEach(order => {
       if (requiresGunsmith(order)) {
@@ -119,8 +119,8 @@ export default function CNCQueuePage() {
     });
 
     // Sort both queues by due date
-    gunsmith.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    finish.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    gunsmith.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    finish.sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
     return {
       gunsimthQueue: gunsmith,

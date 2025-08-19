@@ -1868,12 +1868,26 @@ export function registerRoutes(app: Express): Server {
         notes: order.notes || '',
         source: orderSource,
         
-        // Additional fields for barcode display
+        // Additional fields for barcode display (using display names)
         customerName: customer?.name || order.customerId || order.customerName || 'Unknown Customer',
         stockModel: baseModel?.displayName || baseModel?.name || order.modelId || order.itemId || order.itemName,
         color: color || 'Not specified',
         actionLength: order.features?.action_length || order.specifications?.action_length || '',
-        paintOption: order.features?.paintOption || order.specifications?.paintOption || color
+        paintOption: order.features?.paintOption || order.specifications?.paintOption || color,
+        
+        // Enhanced feature display with user-friendly names
+        displayFeatures: {
+          model: baseModel?.displayName || baseModel?.name || order.modelId || order.itemId || 'Unknown Model',
+          actionLength: order.features?.action_length ? 
+            order.features.action_length.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
+            'Not specified',
+          color: color ? 
+            color.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
+            'Not specified',
+          finish: (order.features?.finish || order.features?.paintOption) ? 
+            (order.features.finish || order.features.paintOption).toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
+            'Not specified'
+        }
       };
 
       // Add production-specific details if applicable

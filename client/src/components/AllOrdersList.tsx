@@ -66,10 +66,28 @@ export default function AllOrdersList() {
     queryFn: () => {
       const result = apiRequest('/api/orders/with-payment-status');
       result.then(data => {
+        console.log('📊 API Response sample:', data.slice(0, 2).map((o: any) => ({
+          orderId: o.orderId, 
+          fbOrderNumber: o.fbOrderNumber, 
+          currentDepartment: o.currentDepartment,
+          isVerified: o.isVerified
+        })));
+        
         // Debug logging for isVerified field
         const verifiedOrders = data.filter((order: any) => order.isVerified);
         if (verifiedOrders.length > 0) {
           console.log('🟢 Found verified orders:', verifiedOrders.map((o: any) => ({orderId: o.orderId, fbOrderNumber: o.fbOrderNumber, isVerified: o.isVerified})));
+        }
+        
+        // Check specific orders
+        const ag402 = data.find((o: any) => o.orderId === 'AG402');
+        if (ag402) {
+          console.log('🔍 AG402 data:', {orderId: ag402.orderId, currentDepartment: ag402.currentDepartment, isVerified: ag402.isVerified});
+        }
+        
+        const ak072 = data.find((o: any) => o.fbOrderNumber === 'AK072');
+        if (ak072) {
+          console.log('🔍 AK072 data:', {orderId: ak072.orderId, fbOrderNumber: ak072.fbOrderNumber, currentDepartment: ak072.currentDepartment, isVerified: ak072.isVerified});
         }
       });
       return result;

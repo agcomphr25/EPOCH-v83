@@ -63,7 +63,17 @@ export default function AllOrdersList() {
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status'),
+    queryFn: () => {
+      const result = apiRequest('/api/orders/with-payment-status');
+      result.then(data => {
+        // Debug logging for isVerified field
+        const verifiedOrders = data.filter((order: any) => order.isVerified);
+        if (verifiedOrders.length > 0) {
+          console.log('🟢 Found verified orders:', verifiedOrders.map((o: any) => ({orderId: o.orderId, fbOrderNumber: o.fbOrderNumber, isVerified: o.isVerified})));
+        }
+      });
+      return result;
+    },
     refetchInterval: 500, // Refresh every 0.5 seconds
     staleTime: 0, // Data is always stale, force fresh fetch
     gcTime: 0 // Don't cache at all (renamed from cacheTime in React Query v5)

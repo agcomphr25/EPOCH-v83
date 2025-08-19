@@ -84,6 +84,8 @@ interface Order {
   isCancelled?: boolean;
   cancelledAt?: string;
   cancelReason?: string;
+  // Verification Information
+  isVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -327,6 +329,16 @@ export default function OrdersList() {
       refetchInterval: 30000, // Auto-refresh every 30 seconds
       refetchOnWindowFocus: true, // Refresh when window regains focus
     });
+
+    // Debug logging to check if isVerified field is present
+    if (orders && orders.length > 0) {
+      const testOrder = orders.find(o => o.orderId === 'AG640');
+      if (testOrder) {
+        console.log('🔍 DEBUG: AG640 order data:', testOrder);
+        console.log('🔍 DEBUG: AG640 isVerified:', testOrder.isVerified);
+        console.log('🔍 DEBUG: AG640 keys:', Object.keys(testOrder));
+      }
+    }
 
     const { data: customers } = useQuery<Customer[]>({
       queryKey: ['/api/customers'],
@@ -785,7 +797,10 @@ export default function OrdersList() {
                 {filteredOrders.map((order) => (
                   <TableRow 
                     key={order.id}
-                    className={order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : ''}
+                    className={cn(
+                      order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : '',
+                      order.isVerified ? 'bg-green-50 hover:bg-green-100' : ''
+                    )}
                   >
                     <TableCell className="font-medium" title={order.fbOrderNumber ? `FB Order: ${order.fbOrderNumber} (Order ID: ${order.orderId})` : `Order ID: ${order.orderId}`}>
                       <div className="flex items-center gap-2">

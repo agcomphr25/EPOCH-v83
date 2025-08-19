@@ -247,7 +247,7 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
       return res.json(updatedOrder);
     } catch (draftError) {
       console.log('Draft order not found, attempting finalized order update...');
-      console.log('Draft error:', draftError.message);
+      console.log('Draft error:', (draftError as Error).message);
       
       // If draft update fails, try to update as a finalized order
       try {
@@ -256,7 +256,7 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
         console.log('Updated finalized order successfully:', updatedOrder);
         return res.json(updatedOrder);
       } catch (finalizedError) {
-        console.error('Finalized order update failed:', finalizedError.message);
+        console.error('Finalized order update failed:', (finalizedError as Error).message);
         return res.status(404).json({ error: `Order ${orderId} not found in drafts or finalized orders` });
       }
     }

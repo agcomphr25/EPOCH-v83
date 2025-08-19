@@ -393,45 +393,66 @@ export function BarcodeScanner() {
             </Card>
           )}
 
-          {/* Features & Specifications - Using Display Names */}
-          {orderSummary?.displayFeatures && (
+          {/* Features & Specifications - Complete Display with Proper Names */}
+          {((orderSummary.features && Object.keys(orderSummary.features).length > 0) || 
+            (orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0)) && (
             <Card>
               <CardHeader>
                 <CardTitle>Configuration Details</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="font-medium mb-2">Product Configuration:</h4>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                        <span className="font-medium">Model:</span>
-                        <Badge variant="outline" className="ml-2">
-                          {orderSummary.displayFeatures.model}
-                        </Badge>
+                <div className="space-y-4">
+                  {orderSummary.features && Object.keys(orderSummary.features).length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Selected Features:</h4>
+                      <div className="grid grid-cols-1 gap-2">
+                        {Object.entries(orderSummary.features).map(([key, value], index) => {
+                          // Format the display name for the key
+                          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                          // Format the display value
+                          let displayValue = value;
+                          if (typeof value === 'string') {
+                            displayValue = value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                          }
+                          
+                          return (
+                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
+                              <span className="font-medium">{displayKey}:</span>
+                              <Badge variant="outline" className="ml-2">
+                                {typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue)}
+                              </Badge>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                        <span className="font-medium">Action Length:</span>
-                        <Badge variant="outline" className="ml-2">
-                          {orderSummary.displayFeatures.actionLength}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                        <span className="font-medium">Color/Finish:</span>
-                        <Badge variant="outline" className="ml-2">
-                          {orderSummary.displayFeatures.color}
-                        </Badge>
-                      </div>
-                      {orderSummary.displayFeatures.finish !== 'Not specified' && (
-                        <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                          <span className="font-medium">Paint Option:</span>
-                          <Badge variant="outline" className="ml-2">
-                            {orderSummary.displayFeatures.finish}
-                          </Badge>
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  )}
+
+                  {orderSummary.specifications && Object.keys(orderSummary.specifications).length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Specifications:</h4>
+                      <div className="grid grid-cols-1 gap-2">
+                        {Object.entries(orderSummary.specifications).map(([key, value], index) => {
+                          // Format the display name for the key
+                          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                          // Format the display value
+                          let displayValue = value;
+                          if (typeof value === 'string') {
+                            displayValue = value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                          }
+                          
+                          return (
+                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-blue-50 rounded">
+                              <span className="font-medium">{displayKey}:</span>
+                              <Badge variant="outline" className="ml-2">
+                                {typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue)}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

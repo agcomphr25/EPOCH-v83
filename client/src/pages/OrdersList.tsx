@@ -230,9 +230,10 @@ export default function OrdersList() {
     return null;
   };
 
-  // Using optimistic updates only through React Query cache
+  // Local state for immediate UI updates - using reliable dual approach
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
 
-  // Progress order mutation with immediate query data update
+  // Progress order mutation with immediate local state update
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       const requestBody = {
@@ -247,31 +248,30 @@ export default function OrdersList() {
       });
       return response;
     },
-    onMutate: async ({ orderId, nextDepartment }) => {
-      // Cancel any outgoing refetches to prevent them from overriding our update
-      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      
-      // Immediately update the query data
-      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-        if (!old) return old;
-        return old.map((order: any) => {
-          if (order.orderId === orderId) {
-            return { ...order, currentDepartment: nextDepartment };
-          }
-          return order;
-        });
-      });
-    },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       toast.success('Department updated');
       
-      // Delay server refetch to avoid immediate override
+      // Clear local update after server confirms success
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      }, 5000);
+        setLocalOrderUpdates(prev => {
+          const newState = { ...prev };
+          delete newState[variables.orderId];
+          return newState;
+        });
+        
+        // Then invalidate queries to sync with server
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        }, 1000);
+      }, 2000);
     },
-    onError: () => {
-      // Refetch immediately on error to restore correct state
+    onError: (err, variables) => {
+      // Remove failed local update immediately
+      setLocalOrderUpdates(prev => {
+        const newState = { ...prev };
+        delete newState[variables.orderId];
+        return newState;
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
@@ -284,7 +284,10 @@ export default function OrdersList() {
       return;
     }
     
-    // Make the API call - optimistic update handled in onMutate
+    // Immediately update local state for instant UI feedback
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    
+    // Make the API call
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation]);
 
@@ -865,7 +868,7 @@ export default function OrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {order.currentDepartment || 'Not Set'}
+                        {localOrderUpdates[order.orderId] || order.currentDepartment || 'Not Set'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -939,8 +942,8 @@ export default function OrdersList() {
                           <TrendingDown className="h-4 w-4" />
                         </Button>
                         {(() => {
-                          // Use server data directly - optimistic updates handled in React Query cache
-                          const displayDepartment = order.currentDepartment;
+                          // Use local update if available, otherwise server data
+                          const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
                           const nextDept = getNextDepartment(displayDepartment || '');
                           const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';

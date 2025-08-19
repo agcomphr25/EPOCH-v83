@@ -114,6 +114,9 @@ export default function AllOrdersList() {
     setLocation('/kickback-tracking');
   };
 
+  // Local state for immediate UI updates - back to dual approach but with better synchronization
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
+
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       const requestBody = {
@@ -128,31 +131,30 @@ export default function AllOrdersList() {
       });
       return response;
     },
-    onMutate: async ({ orderId, nextDepartment }) => {
-      // Cancel any outgoing refetches to prevent them from overriding our update
-      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      
-      // Immediately update the query data
-      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-        if (!old) return old;
-        return old.map((order: any) => {
-          if (order.orderId === orderId) {
-            return { ...order, currentDepartment: nextDepartment };
-          }
-          return order;
-        });
-      });
-    },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       toast.success('Department updated');
       
-      // Delay server refetch to avoid immediate override
+      // Clear local update after server confirms success
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      }, 5000);
+        setLocalOrderUpdates(prev => {
+          const newState = { ...prev };
+          delete newState[variables.orderId];
+          return newState;
+        });
+        
+        // Then invalidate queries to sync with server
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+        }, 1000);
+      }, 2000);
     },
-    onError: () => {
-      // Refetch immediately on error to restore correct state
+    onError: (err, variables) => {
+      // Remove failed local update immediately
+      setLocalOrderUpdates(prev => {
+        const newState = { ...prev };
+        delete newState[variables.orderId];
+        return newState;
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
@@ -294,13 +296,20 @@ export default function AllOrdersList() {
       return;
     }
     
-    // Make the API call - optimistic update handled in onMutate
+    // Immediately update local state for instant UI feedback
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    
+    // Make the API call
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
     const nextDepartment = 'Layup/Plugging';
-    // Make the API call - optimistic update handled in onMutate
+    
+    // Immediately update local state for instant UI feedback
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    
+    // Make the API call
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
@@ -449,7 +458,8 @@ export default function AllOrdersList() {
             </TableHeader>
             <TableBody>
               {sortedOrders.map(order => {
-                const displayDepartment = order.currentDepartment;
+                // Use local update if available, otherwise server data
+                const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';

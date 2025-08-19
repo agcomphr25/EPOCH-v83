@@ -272,7 +272,7 @@ export default function FinishQueuePage() {
                       <div className="flex items-center gap-2 mb-2">
                         <Checkbox
                           checked={isSelected}
-                          onChange={() => handleSelectOrder(order.orderId)}
+                          onCheckedChange={() => handleSelectOrder(order.orderId)}
                           onClick={(e) => e.stopPropagation()}
                         />
                         <div className="font-semibold text-sm">

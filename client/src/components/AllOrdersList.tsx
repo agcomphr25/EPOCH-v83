@@ -146,64 +146,27 @@ export default function AllOrdersList() {
 
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
-      console.log(`🔄 ALL ORDERS PROGRESSION: Attempting to progress order ${orderId} to ${nextDepartment}`);
-      
       const requestBody = {
         orderIds: [orderId],
         department: nextDepartment,
         status: 'IN_PROGRESS'
       };
-      console.log(`🔄 ALL ORDERS PROGRESSION: Request body:`, requestBody);
       
-      // Use the bulk department update endpoint that actually exists
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: requestBody
       });
-      console.log(`✅ ALL ORDERS PROGRESSION: API Response:`, response);
       return response;
     },
-    onMutate: async ({ orderId, nextDepartment }) => {
-      // Cancel outgoing refetches (so they don't overwrite our optimistic update)
-      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    onSuccess: () => {
+      // Simple success toast
+      toast.success('Department updated');
       
-      // Snapshot the previous value
-      const previousOrders = queryClient.getQueryData(['/api/orders/with-payment-status']);
-      
-      // Optimistically update to the new value
-      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
-        if (!old) return old;
-        
-        return old.map((order: any) => {
-          if (order.orderId === orderId) {
-            console.log(`🔄 OPTIMISTIC UPDATE: ${orderId} from ${order.currentDepartment} to ${nextDepartment}`);
-            return { ...order, currentDepartment: nextDepartment };
-          }
-          return order;
-        });
-      });
-      
-      // Return a context object with the snapshotted value
-      return { previousOrders };
-    },
-    onError: (err, variables, context) => {
-      console.error(`❌ ALL ORDERS PROGRESSION: Failed to progress order ${variables.orderId}:`, err);
-      
-      // Rollback optimistic update on error
-      if (context?.previousOrders) {
-        queryClient.setQueryData(['/api/orders/with-payment-status'], context.previousOrders);
-      }
-      
-      toast.error(`Failed to progress order: ${err.message}`);
-    },
-    onSuccess: async (data, variables) => {
-      console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
-      toast.success(`Order progressed to ${variables.nextDepartment}`);
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure consistency
+      // Simple invalidation - let React Query handle the rest
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+    },
+    onError: (err: any) => {
+      toast.error('Failed to update department');
     }
   });
 
@@ -336,35 +299,29 @@ export default function AllOrdersList() {
     return null;
   };
 
-  const [processingOrders, setProcessingOrders] = React.useState<Set<string>>(new Set());
+  // Local state for immediate UI updates
+  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
 
   const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
-    // Prevent multiple clicks on the same order
-    if (processingOrders.has(orderId)) {
-      console.log(`⚠️ Order ${orderId} is already being processed, ignoring click`);
+    const nextDepartment = getNextDepartment(currentDepartment);
+    if (!nextDepartment) {
+      toast.error('No next department available');
       return;
     }
 
-    const nextDepartment = getNextDepartment(currentDepartment);
-    if (nextDepartment) {
-      console.log(`🔄 ALL ORDERS: Progressing ${orderId} from ${currentDepartment} to ${nextDepartment}`);
-      setProcessingOrders(prev => new Set(prev).add(orderId));
-      progressOrderMutation.mutate({ orderId, nextDepartment });
-    } else {
-      console.log(`⚠️ ALL ORDERS: No next department found for ${currentDepartment}`);
-      toast.error('No next department available');
-    }
-  }, [processingOrders, progressOrderMutation]);
-
-  // Reset processing state when mutation completes
-  React.useEffect(() => {
-    if (!progressOrderMutation.isPending) {
-      setProcessingOrders(new Set());
-    }
-  }, [progressOrderMutation.isPending]);
+    // Immediately update the UI
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    
+    // Make the API call in the background
+    progressOrderMutation.mutate({ orderId, nextDepartment });
+  }, [progressOrderMutation]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
-    progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
+    const nextDepartment = 'Layup/Plugging';
+    // Immediately update the UI
+    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    // Make the API call in the background
+    progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
   const handleScrapOrder = (scrapData: any) => {
@@ -512,8 +469,10 @@ export default function AllOrdersList() {
             </TableHeader>
             <TableBody>
               {sortedOrders.map(order => {
-                const nextDept = getNextDepartment(order.currentDepartment);
-                const isComplete = order.currentDepartment === 'Shipping';
+                // Use local update if available, otherwise use order data
+                const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                const nextDept = getNextDepartment(displayDepartment);
+                const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
 
                 // Debug logging for verified orders
@@ -573,8 +532,8 @@ export default function AllOrdersList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}>
-                        {order.currentDepartment}
+                      <Badge className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}>
+                        {displayDepartment}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -652,30 +611,22 @@ export default function AllOrdersList() {
                         {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => {
-                              console.log(`🔄 Pushing order ${order.orderId} from P1 Production Queue to Layup/Plugging`);
-                              handlePushToLayupPlugging(order.orderId);
-                            }}
-                            disabled={processingOrders.has(order.orderId)}
-                            className={processingOrders.has(order.orderId) ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
+                            onClick={() => handlePushToLayupPlugging(order.orderId)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            {processingOrders.has(order.orderId) ? 'Processing...' : 'Push to Layup/Plugging'}
+                            Push to Layup/Plugging
                           </Button>
                         )}
 
                         {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => {
-                              console.log(`🔄 Button clicked for order ${order.orderId}: ${order.currentDepartment} → ${nextDept}`);
-                              handleProgressOrder(order.orderId, order.currentDepartment);
-                            }}
-                            disabled={processingOrders.has(order.orderId)}
-                            className={processingOrders.has(order.orderId) ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}
+                            onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            {processingOrders.has(order.orderId) ? 'Processing...' : nextDept}
+                            {nextDept}
                           </Button>
                         )}
 

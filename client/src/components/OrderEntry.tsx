@@ -723,18 +723,33 @@ export default function OrderEntry() {
         console.log('🔧 Current modelOptions available:', modelOptions.length);
         console.log('🔧 Available model IDs:', modelOptions.map(m => m.id));
         console.log('🔧 Looking for model ID:', order.modelId);
+        console.log('🔧 ModelId type and value:', typeof order.modelId, order.modelId);
+        
+        // Log all field values from the order to help debug
+        console.log('🔧 Order data debug:', {
+          orderId: order.orderId,
+          modelId: order.modelId,
+          customerId: order.customerId,
+          features: order.features,
+          status: order.status
+        });
+        
         const modelExists = modelOptions.find(m => m.id === order.modelId);
         console.log('🔧 Model exists in options:', !!modelExists, modelExists?.displayName);
         
-        if (!order.modelId) {
-          console.warn('⚠️ Order has no modelId field');
+        if (order.modelId === null || order.modelId === undefined) {
+          console.warn('⚠️ Order has null/undefined modelId field - this is the problem!');
+          console.warn('⚠️ The order was saved without a valid modelId. Check the order creation/update process.');
         } else if (!modelExists) {
           console.warn('⚠️ Model ID not found in available options:', order.modelId);
         } else {
           console.log('✅ Successfully found model:', modelExists.displayName);
         }
         
-        setModelId(order.modelId || '');
+        // Convert null to empty string for the form
+        const modelIdValue = order.modelId || '';
+        console.log('🔧 Setting modelId value:', modelIdValue);
+        setModelId(modelIdValue);
         
         // Force a re-render to ensure the Select component updates
         setRenderKey(prev => prev + 1);

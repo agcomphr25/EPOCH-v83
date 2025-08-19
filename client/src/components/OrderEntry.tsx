@@ -540,19 +540,20 @@ export default function OrderEntry() {
 
   // Load order data only after initial data is loaded
   useEffect(() => {
-    if (!initialDataLoaded) return;
+    if (!initialDataLoaded || modelOptions.length === 0) return;
 
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
       setIsEditMode(true);
       setEditingOrderId(editOrderId);
+      console.log('🔄 Loading existing order with model options available:', modelOptions.length);
       loadExistingOrder(editOrderId);
     } else {
       setIsEditMode(false);
       setEditingOrderId(null);
       generateOrderId();
     }
-  }, [initialDataLoaded]);
+  }, [initialDataLoaded, modelOptions.length]); // Wait for both initial data AND model options
 
   // Clear Medium action length when switching to Ferrata/Armor models and LOP for CAT/Visigoth models
   useEffect(() => {
@@ -718,13 +719,25 @@ export default function OrderEntry() {
           }
         }
 
-        console.log('Setting modelId:', order.modelId || '');
-        console.log('Current modelOptions available:', modelOptions.length);
-        console.log('Available model IDs:', modelOptions.map(m => m.id));
-        console.log('Looking for model ID:', order.modelId);
+        console.log('🔧 Setting modelId:', order.modelId || '');
+        console.log('🔧 Current modelOptions available:', modelOptions.length);
+        console.log('🔧 Available model IDs:', modelOptions.map(m => m.id));
+        console.log('🔧 Looking for model ID:', order.modelId);
         const modelExists = modelOptions.find(m => m.id === order.modelId);
-        console.log('Model exists in options:', !!modelExists, modelExists?.displayName);
+        console.log('🔧 Model exists in options:', !!modelExists, modelExists?.displayName);
+        
+        if (!order.modelId) {
+          console.warn('⚠️ Order has no modelId field');
+        } else if (!modelExists) {
+          console.warn('⚠️ Model ID not found in available options:', order.modelId);
+        } else {
+          console.log('✅ Successfully found model:', modelExists.displayName);
+        }
+        
         setModelId(order.modelId || '');
+        
+        // Force a re-render to ensure the Select component updates
+        setRenderKey(prev => prev + 1);
         // CRITICAL: Only use the features object - don't set separate state variables
         console.log('✅ Setting features object:', order.features || {});
         const featuresObj = order.features || {};

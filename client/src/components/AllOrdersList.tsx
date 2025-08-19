@@ -158,14 +158,28 @@ export default function AllOrdersList() {
       });
       return response;
     },
-    onSuccess: () => {
-      // Simple success toast
+    onSuccess: (data, variables) => {
+      // Success toast
       toast.success('Department updated');
       
-      // Simple invalidation - let React Query handle the rest
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      // Keep the local update for 3 seconds, then clear it to let server data take over
+      setTimeout(() => {
+        setLocalOrderUpdates(prev => {
+          const newUpdates = { ...prev };
+          delete newUpdates[variables.orderId];
+          return newUpdates;
+        });
+        // Invalidate to get fresh server data
+        queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      }, 3000);
     },
-    onError: (err: any) => {
+    onError: (err: any, variables) => {
+      // Remove failed update from local state
+      setLocalOrderUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[variables.orderId];
+        return newUpdates;
+      });
       toast.error('Failed to update department');
     }
   });
@@ -475,15 +489,20 @@ export default function AllOrdersList() {
             </TableHeader>
             <TableBody>
               {sortedOrders.map(order => {
-                // Use local update if available, otherwise use order data
-                const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                // Create a modified order object with local updates applied directly
+                const modifiedOrder = {
+                  ...order,
+                  currentDepartment: localOrderUpdates[order.orderId] || order.currentDepartment
+                };
+                
+                const displayDepartment = modifiedOrder.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
 
                 // Debug logging for department display
                 if (localOrderUpdates[order.orderId]) {
-                  console.log(`🎯 Order ${order.orderId}: Original=${order.currentDepartment}, Local=${localOrderUpdates[order.orderId]}, Display=${displayDepartment}`);
+                  console.log(`🎯 DISPLAY UPDATE: ${order.orderId} showing ${displayDepartment} (local override active)`);
                 }
 
                 // Debug logging for verified orders

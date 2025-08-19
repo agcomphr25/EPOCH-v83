@@ -2165,10 +2165,10 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
           
-          // Calculate label position (3x10 grid)
+          // Calculate label position (3x10 grid) - Avery 5160 format
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          const x = 36 + (col * 187); // Left margin + column width
+          const x = 36 + (col * 187); // Left margin + column width  
           const y = 720 - (row * 72); // Top margin - row height
           
           // Draw label border
@@ -2195,8 +2195,16 @@ export function registerRoutes(app: Express): Server {
               'F': '0100001101', 'L': '1001010001', '5': '1001100000'
             };
             
-            let barWidth = 2;
+            let barWidth = 1.5;
+            let barHeight = 12;
             let currentX = startX;
+            
+            // Ensure barcode fits within label width (170px available)
+            const maxBarcodeWidth = 140;
+            const estimatedWidth = text.length * 12 * barWidth;
+            if (estimatedWidth > maxBarcodeWidth) {
+              barWidth = maxBarcodeWidth / (text.length * 12);
+            }
             
             // Draw start character (*)
             for (let i = 0; i < 10; i++) {
@@ -2205,14 +2213,14 @@ export function registerRoutes(app: Express): Server {
                   x: currentX,
                   y: startY,
                   width: barWidth,
-                  height: 15,
+                  height: barHeight,
                   color: rgb(0, 0, 0),
                 });
               }
               currentX += barWidth;
             }
             
-            // Draw text characters
+            // Draw text characters with proper mapping
             for (let char of text.toUpperCase()) {
               const pattern = charMap[char] || '1000010011';
               for (let bit of pattern) {
@@ -2221,32 +2229,43 @@ export function registerRoutes(app: Express): Server {
                     x: currentX,
                     y: startY,
                     width: barWidth,
-                    height: 15,
+                    height: barHeight,
                     color: rgb(0, 0, 0),
                   });
                 }
                 currentX += barWidth;
               }
-              currentX += barWidth; // Gap between characters
+              currentX += barWidth * 0.5; // Smaller gap between characters
             }
           };
           
-          drawSimpleBarcode(barcodeText, x + 5, y + 25);
+          // Position barcode in center of label
+          drawSimpleBarcode(barcodeText, x + 10, y + 30);
           
-          // Add order information
+          // Add order information at top
           page.drawText(`${order.orderId}`, {
-            x: x + 5,
-            y: y + 45,
-            size: 10,
+            x: x + 8,
+            y: y + 50,
+            size: 11,
+            color: rgb(0, 0, 0),
+          });
+          
+          // Add barcode text below barcode for verification
+          page.drawText(`${barcodeText}`, {
+            x: x + 8,
+            y: y + 20,
+            size: 6,
+            color: rgb(0.3, 0.3, 0.3),
           });
           
           // Add model and action length
           const actionLength = order.features?.action_length || 'unknown';
           const modelName = order.modelId || 'Unknown';
           page.drawText(`${modelName} - ${actionLength.toUpperCase()}`, {
-            x: x + 5,
-            y: y + 15,
-            size: 7,
+            x: x + 8,
+            y: y + 12,
+            size: 6,
+            color: rgb(0, 0, 0),
           });
           
           // Add due date
@@ -2255,9 +2274,10 @@ export function registerRoutes(app: Express): Server {
             day: 'numeric' 
           });
           page.drawText(`Due: ${dueDate}`, {
-            x: x + 5,
-            y: y + 5,
-            size: 7,
+            x: x + 8,
+            y: y + 4,
+            size: 6,
+            color: rgb(0, 0, 0),
           });
         }
       }

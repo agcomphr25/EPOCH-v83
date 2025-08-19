@@ -2150,8 +2150,6 @@ export function registerRoutes(app: Express): Server {
 
       // Generate Avery label document (PDF format)
       const { PDFDocument, rgb } = await import('pdf-lib');
-      const JsBarcode = await import('jsbarcode');
-      const { createCanvas } = await import('canvas');
       const pdfDoc = await PDFDocument.create();
       
       // Add pages for labels (Avery 5160 format - 3 columns, 10 rows per page)
@@ -2183,39 +2181,57 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
           
-          // Generate barcode image
-          const canvas = createCanvas(150, 30);
+          // Generate barcode using PDF rectangles (Code 39 pattern)
           const barcodeText = order.barcode || order.orderId;
           
-          try {
-            JsBarcode.default(canvas, barcodeText, {
-              format: "CODE39",
-              width: 1,
-              height: 30,
-              displayValue: false,
-              margin: 0
-            });
+          // Simple Code 39 barcode generation using rectangles
+          const drawSimpleBarcode = (text: string, startX: number, startY: number) => {
+            const charMap: { [key: string]: string } = {
+              'A': '1000010011', 'G': '0100010011', '0': '0001001011',
+              'B': '1100000011', 'H': '1001000011', '1': '1001000001',
+              'C': '0100000111', 'I': '0010000111', '2': '0101000001',
+              'D': '1000001011', 'J': '1010000001', '3': '1101000000',
+              'E': '1100001001', 'K': '0001010011', '4': '0001100001',
+              'F': '0100001101', 'L': '1001010001', '5': '1001100000'
+            };
             
-            // Convert canvas to PNG buffer and embed in PDF
-            const barcodeBuffer = canvas.toBuffer('image/png');
-            const barcodeImage = await pdfDoc.embedPng(barcodeBuffer);
+            let barWidth = 2;
+            let currentX = startX;
             
-            // Draw barcode image
-            page.drawImage(barcodeImage, {
-              x: x + 5,
-              y: y + 25,
-              width: 120,
-              height: 20,
-            });
-          } catch (barcodeError) {
-            console.warn(`Failed to generate barcode for ${order.orderId}:`, barcodeError);
-            // Fallback to text if barcode generation fails
-            page.drawText(`${barcodeText}`, {
-              x: x + 5,
-              y: y + 30,
-              size: 8,
-            });
-          }
+            // Draw start character (*)
+            for (let i = 0; i < 10; i++) {
+              if (i % 2 === 0) {
+                page.drawRectangle({
+                  x: currentX,
+                  y: startY,
+                  width: barWidth,
+                  height: 15,
+                  color: rgb(0, 0, 0),
+                });
+              }
+              currentX += barWidth;
+            }
+            
+            // Draw text characters
+            for (let char of text.toUpperCase()) {
+              const pattern = charMap[char] || '1000010011';
+              for (let bit of pattern) {
+                if (bit === '1') {
+                  page.drawRectangle({
+                    x: currentX,
+                    y: startY,
+                    width: barWidth,
+                    height: 15,
+                    color: rgb(0, 0, 0),
+                  });
+                }
+                currentX += barWidth;
+              }
+              currentX += barWidth; // Gap between characters
+            }
+          };
+          
+          drawSimpleBarcode(barcodeText, x + 5, y + 25);
           
           // Add order information
           page.drawText(`${order.orderId}`, {

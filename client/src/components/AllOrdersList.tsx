@@ -309,8 +309,14 @@ export default function AllOrdersList() {
       return;
     }
 
+    console.log(`🔄 IMMEDIATE UPDATE: ${orderId} from ${currentDepartment} to ${nextDepartment}`);
+    
     // Immediately update the UI
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
+    setLocalOrderUpdates(prev => {
+      const newUpdates = { ...prev, [orderId]: nextDepartment };
+      console.log(`🔄 Local updates after change:`, newUpdates);
+      return newUpdates;
+    });
     
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
@@ -474,6 +480,11 @@ export default function AllOrdersList() {
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
+
+                // Debug logging for department display
+                if (localOrderUpdates[order.orderId]) {
+                  console.log(`🎯 Order ${order.orderId}: Original=${order.currentDepartment}, Local=${localOrderUpdates[order.orderId]}, Display=${displayDepartment}`);
+                }
 
                 // Debug logging for verified orders
                 if (order.isVerified) {

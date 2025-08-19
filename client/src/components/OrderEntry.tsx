@@ -2020,13 +2020,13 @@ export default function OrderEntry() {
                                 }
                                 
                                 return availableOptions.map((option) => {
-                                  const isChecked = (features.rail_accessory || []).includes(option.value);
+                                  const isChecked = Array.isArray(features.rail_accessory) ? features.rail_accessory.includes(option.value) : false;
                                   
                                   return (
                                     <CommandItem
                                       key={option.value}
                                       onSelect={() => {
-                                        const currentRails = features.rail_accessory || [];
+                                        const currentRails = Array.isArray(features.rail_accessory) ? features.rail_accessory : [];
                                         if (isChecked) {
                                           setFeatures(prev => ({ ...prev, rail_accessory: currentRails.filter((item: string) => item !== option.value) }));
                                         } else {

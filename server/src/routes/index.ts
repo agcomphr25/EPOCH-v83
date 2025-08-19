@@ -2150,6 +2150,8 @@ export function registerRoutes(app: Express): Server {
 
       // Generate Avery label document (PDF format)
       const { PDFDocument, rgb } = await import('pdf-lib');
+      const JsBarcode = await import('jsbarcode');
+      const { createCanvas } = await import('canvas');
       const pdfDoc = await PDFDocument.create();
       
       // Add pages for labels (Avery 5160 format - 3 columns, 10 rows per page)
@@ -2181,17 +2183,45 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
           
+          // Generate barcode image
+          const canvas = createCanvas(150, 30);
+          const barcodeText = order.barcode || order.orderId;
+          
+          try {
+            JsBarcode.default(canvas, barcodeText, {
+              format: "CODE39",
+              width: 1,
+              height: 30,
+              displayValue: false,
+              margin: 0
+            });
+            
+            // Convert canvas to PNG buffer and embed in PDF
+            const barcodeBuffer = canvas.toBuffer('image/png');
+            const barcodeImage = await pdfDoc.embedPng(barcodeBuffer);
+            
+            // Draw barcode image
+            page.drawImage(barcodeImage, {
+              x: x + 5,
+              y: y + 25,
+              width: 120,
+              height: 20,
+            });
+          } catch (barcodeError) {
+            console.warn(`Failed to generate barcode for ${order.orderId}:`, barcodeError);
+            // Fallback to text if barcode generation fails
+            page.drawText(`${barcodeText}`, {
+              x: x + 5,
+              y: y + 30,
+              size: 8,
+            });
+          }
+          
           // Add order information
           page.drawText(`${order.orderId}`, {
             x: x + 5,
             y: y + 45,
             size: 10,
-          });
-          
-          page.drawText(`${order.barcode}`, {
-            x: x + 5,
-            y: y + 30,
-            size: 8,
           });
           
           // Add model and action length
@@ -2200,7 +2230,7 @@ export function registerRoutes(app: Express): Server {
           page.drawText(`${modelName} - ${actionLength.toUpperCase()}`, {
             x: x + 5,
             y: y + 15,
-            size: 8,
+            size: 7,
           });
           
           // Add due date

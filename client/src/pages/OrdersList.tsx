@@ -230,8 +230,7 @@ export default function OrdersList() {
     return null;
   };
 
-  // Local state for immediate UI updates
-  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
+  // Using optimistic updates only through React Query cache
 
   // Progress order mutation with immediate query data update
   const progressOrderMutation = useMutation({
@@ -263,30 +262,16 @@ export default function OrdersList() {
         });
       });
     },
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       toast.success('Department updated');
-      
-      // Clear local state since query data is now updated
-      setTimeout(() => {
-        setLocalOrderUpdates(prev => {
-          const newUpdates = { ...prev };
-          delete newUpdates[variables.orderId];
-          return newUpdates;
-        });
-      }, 1000);
       
       // Delay server refetch to avoid immediate override
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      }, 8000);
+      }, 5000);
     },
-    onError: (err: any, variables) => {
-      // Remove failed update from local state and refetch immediately
-      setLocalOrderUpdates(prev => {
-        const newUpdates = { ...prev };
-        delete newUpdates[variables.orderId];
-        return newUpdates;
-      });
+    onError: () => {
+      // Refetch immediately on error to restore correct state
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
@@ -298,11 +283,8 @@ export default function OrdersList() {
       toast.error('No next department available');
       return;
     }
-
-    // Immediately update the UI
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
     
-    // Make the API call in the background
+    // Make the API call - optimistic update handled in onMutate
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation]);
 
@@ -883,7 +865,7 @@ export default function OrdersList() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {localOrderUpdates[order.orderId] || order.currentDepartment || 'Not Set'}
+                        {order.currentDepartment || 'Not Set'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -957,8 +939,8 @@ export default function OrdersList() {
                           <TrendingDown className="h-4 w-4" />
                         </Button>
                         {(() => {
-                          // Use local state if available, otherwise use server data
-                          const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
+                          // Use server data directly - optimistic updates handled in React Query cache
+                          const displayDepartment = order.currentDepartment;
                           const nextDept = getNextDepartment(displayDepartment || '');
                           const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';

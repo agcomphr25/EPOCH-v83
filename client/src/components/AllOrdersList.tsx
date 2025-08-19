@@ -128,28 +128,32 @@ export default function AllOrdersList() {
       });
       return response;
     },
-    onSuccess: (data, variables) => {
-      // Success toast
+    onMutate: async ({ orderId, nextDepartment }) => {
+      // Cancel any outgoing refetches to prevent them from overriding our update
+      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      
+      // Immediately update the query data
+      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
+        if (!old) return old;
+        return old.map((order: any) => {
+          if (order.orderId === orderId) {
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        });
+      });
+    },
+    onSuccess: () => {
       toast.success('Department updated');
       
-      // Keep the local update for 3 seconds, then clear it to let server data take over
+      // Delay server refetch to avoid immediate override
       setTimeout(() => {
-        setLocalOrderUpdates(prev => {
-          const newUpdates = { ...prev };
-          delete newUpdates[variables.orderId];
-          return newUpdates;
-        });
-        // Invalidate to get fresh server data
         queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      }, 3000);
+      }, 5000);
     },
-    onError: (err: any, variables) => {
-      // Remove failed update from local state
-      setLocalOrderUpdates(prev => {
-        const newUpdates = { ...prev };
-        delete newUpdates[variables.orderId];
-        return newUpdates;
-      });
+    onError: () => {
+      // Refetch immediately on error to restore correct state
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.error('Failed to update department');
     }
   });
@@ -283,28 +287,20 @@ export default function AllOrdersList() {
     return null;
   };
 
-  // Local state for immediate UI updates
-  const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
-
   const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
     const nextDepartment = getNextDepartment(currentDepartment);
     if (!nextDepartment) {
       toast.error('No next department available');
       return;
     }
-
-    // Immediately update the UI
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
     
-    // Make the API call in the background
+    // Make the API call - optimistic update handled in onMutate
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
     const nextDepartment = 'Layup/Plugging';
-    // Immediately update the UI
-    setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
-    // Make the API call in the background
+    // Make the API call - optimistic update handled in onMutate
     progressOrderMutation.mutate({ orderId, nextDepartment });
   };
 
@@ -453,13 +449,7 @@ export default function AllOrdersList() {
             </TableHeader>
             <TableBody>
               {sortedOrders.map(order => {
-                // Create a modified order object with local updates applied directly
-                const modifiedOrder = {
-                  ...order,
-                  currentDepartment: localOrderUpdates[order.orderId] || order.currentDepartment
-                };
-                
-                const displayDepartment = modifiedOrder.currentDepartment;
+                const displayDepartment = order.currentDepartment;
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';

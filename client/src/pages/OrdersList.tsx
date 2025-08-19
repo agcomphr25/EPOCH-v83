@@ -228,16 +228,22 @@ export default function OrdersList() {
   // Progress order mutation
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
-      return apiRequest(`/api/orders/${orderId}/progress`, {
+      console.log(`🔄 Progressing order ${orderId} to ${nextDepartment}`);
+      const response = await apiRequest(`/api/orders/${orderId}/progress`, {
         method: 'POST',
         body: { nextDepartment }
       });
+      console.log(`✅ Progress response:`, response);
+      return response;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      console.log(`✅ Order ${variables.orderId} progressed successfully to ${variables.nextDepartment}`);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      toast.success('Order progressed successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      toast.success(`Order progressed to ${variables.nextDepartment}`);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
+      console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
       toast.error(error?.message || 'Failed to progress order');
     }
   });

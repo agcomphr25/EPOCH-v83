@@ -51,13 +51,14 @@ export default function CNCQueuePage() {
           (typeof featureValue === 'string' && 
            featureValue !== 'none' && 
            featureValue !== 'no' && 
-           featureValue !== '' &&
+           featureValue !== '' && (
            featureValue.toLowerCase().includes('yes') ||
            featureValue.toLowerCase().includes('rail') ||
            featureValue.toLowerCase().includes('qd') ||
            featureValue.toLowerCase().includes('tripod') ||
            featureValue.toLowerCase().includes('bipod') ||
-           featureValue.toLowerCase().includes('spartan'))
+           featureValue.toLowerCase().includes('spartan')
+           ))
       ) {
         return true;
       }

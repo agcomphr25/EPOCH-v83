@@ -55,6 +55,47 @@ export default function GunsimthQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Function to extract gunsmith tasks from order features
+  const getGunsimthTasks = (order: any) => {
+    const tasks = [];
+    const features = order.features || {};
+
+    // Check for QD accessories
+    if (features.qd_accessory && features.qd_accessory !== 'no_qds') {
+      tasks.push('QDs');
+    }
+
+    // Check for rails
+    if (features.rail_accessory && features.rail_accessory !== 'no_rail') {
+      tasks.push('Rails');
+    }
+
+    // Check for tripod mount
+    if (features.other_options && Array.isArray(features.other_options)) {
+      if (features.other_options.includes('tripod_mount') || features.other_options.includes('mount_and_tap')) {
+        tasks.push('Mount & Tap');
+      }
+    }
+
+    // Check for bipod (Spartan or other)
+    if (features.bipod_accessory && features.bipod_accessory !== 'no_bipod') {
+      if (features.bipod_accessory.includes('spartan')) {
+        tasks.push('Spartan Bipod');
+      } else {
+        tasks.push('Bipod');
+      }
+    }
+
+    // Check for other gunsmith tasks in other_options
+    if (features.other_options && Array.isArray(features.other_options)) {
+      if (features.other_options.includes('tripod')) {
+        tasks.push('Tripod');
+      }
+    }
+
+    return tasks;
+  };
+
   // Multi-select functions
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => {
@@ -80,8 +121,8 @@ export default function GunsimthQueuePage() {
     setSelectedOrders(new Set());
   };
 
-  // Progress orders mutation
-  const progressOrdersMutation = useMutation({
+  // Progress orders to Paint mutation
+  const progressToPaintMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
@@ -104,15 +145,50 @@ export default function GunsimthQueuePage() {
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to move orders",
+        description: "Failed to move orders to Paint",
         variant: "destructive",
       });
     }
   });
 
-  const handleProgressSelected = () => {
+  // Progress orders to Finish mutation
+  const progressToFinishMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const response = await apiRequest('/api/orders/update-department', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderIds: orderIds,
+          department: 'Finish',
+          status: 'IN_PROGRESS'
+        })
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      toast({
+        title: "Success",
+        description: `${selectedOrders.size} orders moved to Finish department`,
+      });
+      setSelectedOrders(new Set());
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to move orders to Finish",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleProgressToPaint = () => {
     if (selectedOrders.size === 0) return;
-    progressOrdersMutation.mutate(Array.from(selectedOrders));
+    progressToPaintMutation.mutate(Array.from(selectedOrders));
+  };
+
+  const handleProgressToFinish = () => {
+    if (selectedOrders.size === 0) return;
+    progressToFinishMutation.mutate(Array.from(selectedOrders));
   };
 
   return (
@@ -200,12 +276,22 @@ export default function GunsimthQueuePage() {
                     </Button>
                     
                     <Button
-                      onClick={handleProgressSelected}
-                      disabled={progressOrdersMutation.isPending}
+                      onClick={handleProgressToPaint}
+                      disabled={progressToPaintMutation.isPending}
                       className="flex items-center gap-2"
                     >
                       <ArrowRightCircle className="h-4 w-4" />
                       Move to Paint ({selectedOrders.size})
+                    </Button>
+                    
+                    <Button
+                      onClick={handleProgressToFinish}
+                      disabled={progressToFinishMutation.isPending}
+                      variant="secondary"
+                      className="flex items-center gap-2"
+                    >
+                      <ArrowRightCircle className="h-4 w-4" />
+                      Move to Finish ({selectedOrders.size})
                     </Button>
                   </>
                 )}
@@ -232,6 +318,7 @@ export default function GunsimthQueuePage() {
                   <OrderTooltip 
                     order={order} 
                     stockModels={stockModels}
+                    gunsimthTasks={getGunsimthTasks(order)}
                     className={`${selectedOrders.has(order.orderId) 
                       ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
                       : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'

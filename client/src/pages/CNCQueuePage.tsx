@@ -31,8 +31,8 @@ export default function CNCQueuePage() {
     'tripod_tap',        // Tripod tap
     'tripod_mount',      // Tripod tap and mount
     'bipod_accessory',   // Spartan bipod and other bipods
-    'spartan_bipod'      // Spartan bipod specifically
-    // Note: adjustable_stock goes to Finish department, not Gunsmith
+    'spartan_bipod',     // Spartan bipod specifically
+    'adjustable_stock'   // Adjustable stock models require gunsmith work
   ];
   
   // Helper function to normalize feature values (handles arrays and strings)
@@ -45,6 +45,12 @@ export default function CNCQueuePage() {
 
   // Check if order has features that require gunsmith work
   const requiresGunsmith = (order: any) => {
+    // Check if it's an adjustable stock model based on modelId/stockModelId
+    const modelId = order.modelId || order.stockModelId || '';
+    if (modelId.toLowerCase().includes('adjustable')) {
+      return true;
+    }
+    
     if (!order.features) return false;
     
     // Check specific gunsmith features with proper array handling
@@ -83,7 +89,8 @@ export default function CNCQueuePage() {
             featureValue.toLowerCase().includes('qd') ||
             featureValue.toLowerCase().includes('tripod') ||
             featureValue.toLowerCase().includes('bipod') ||
-            featureValue.toLowerCase().includes('spartan')))
+            featureValue.toLowerCase().includes('spartan') ||
+            featureValue.toLowerCase().includes('adjustable')))
       ) {
         return true;
       }

@@ -55,42 +55,80 @@ export default function GunsimthQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
-  // Function to extract gunsmith tasks from order features
+  // Function to extract detailed gunsmith tasks from order features
   const getGunsimthTasks = (order: any) => {
     const tasks = [];
     const features = order.features || {};
 
-    // Check for QD accessories
+    // Check for QD accessories with location details
     if (features.qd_accessory && features.qd_accessory !== 'no_qds') {
-      tasks.push('QDs');
+      let qdDetail = 'QDs';
+      const qdValue = features.qd_accessory;
+      
+      if (qdValue.includes('qd_2_left')) qdDetail = 'QDs (2 Left)';
+      else if (qdValue.includes('qd_2_right')) qdDetail = 'QDs (2 Right)';
+      else if (qdValue.includes('qd_2_both')) qdDetail = 'QDs (2 Both Sides)';
+      else if (qdValue.includes('qd_1_left')) qdDetail = 'QDs (1 Left)';
+      else if (qdValue.includes('qd_1_right')) qdDetail = 'QDs (1 Right)';
+      else if (qdValue.includes('left')) qdDetail = 'QDs (Left)';
+      else if (qdValue.includes('right')) qdDetail = 'QDs (Right)';
+      else if (qdValue.includes('both')) qdDetail = 'QDs (Both Sides)';
+      
+      tasks.push(qdDetail);
     }
 
-    // Check for rails
+    // Check for rails with type details
     if (features.rail_accessory && features.rail_accessory !== 'no_rail') {
-      tasks.push('Rails');
+      let railDetails = [];
+      const railValue = features.rail_accessory;
+      
+      if (Array.isArray(railValue)) {
+        railDetails = railValue.map(rail => {
+          if (rail.includes('arca_6')) return 'ARCA 6"';
+          if (rail.includes('arca_12')) return 'ARCA 12"';
+          if (rail.includes('arca_18')) return 'ARCA 18"';
+          if (rail.includes('mlok')) return 'M-LOK';
+          if (rail.includes('picatinny')) return 'Picatinny';
+          return rail;
+        });
+      } else if (typeof railValue === 'string') {
+        if (railValue.includes('arca_6')) railDetails.push('ARCA 6"');
+        else if (railValue.includes('arca_12')) railDetails.push('ARCA 12"');
+        else if (railValue.includes('arca_18')) railDetails.push('ARCA 18"');
+        else if (railValue.includes('mlok')) railDetails.push('M-LOK');
+        else if (railValue.includes('picatinny')) railDetails.push('Picatinny');
+        else railDetails.push(railValue);
+      }
+      
+      if (railDetails.length > 0) {
+        tasks.push(`Rails (${railDetails.join(', ')})`);
+      } else {
+        tasks.push('Rails');
+      }
     }
 
-    // Check for tripod mount
+    // Check for tripod mount and tap
     if (features.other_options && Array.isArray(features.other_options)) {
       if (features.other_options.includes('tripod_mount') || features.other_options.includes('mount_and_tap')) {
         tasks.push('Mount & Tap');
       }
-    }
-
-    // Check for bipod (Spartan or other)
-    if (features.bipod_accessory && features.bipod_accessory !== 'no_bipod') {
-      if (features.bipod_accessory.includes('spartan')) {
-        tasks.push('Spartan Bipod');
-      } else {
-        tasks.push('Bipod');
-      }
-    }
-
-    // Check for other gunsmith tasks in other_options
-    if (features.other_options && Array.isArray(features.other_options)) {
       if (features.other_options.includes('tripod')) {
         tasks.push('Tripod');
       }
+    }
+
+    // Check for bipod with type details
+    if (features.bipod_accessory && features.bipod_accessory !== 'no_bipod') {
+      let bipodDetail = 'Bipod';
+      const bipodValue = features.bipod_accessory;
+      
+      if (bipodValue.includes('spartan_javelin')) bipodDetail = 'Spartan Javelin';
+      else if (bipodValue.includes('spartan_tac')) bipodDetail = 'Spartan TAC';
+      else if (bipodValue.includes('spartan')) bipodDetail = 'Spartan Bipod';
+      else if (bipodValue.includes('harris')) bipodDetail = 'Harris Bipod';
+      else if (bipodValue.includes('atlas')) bipodDetail = 'Atlas Bipod';
+      
+      tasks.push(bipodDetail);
     }
 
     return tasks;

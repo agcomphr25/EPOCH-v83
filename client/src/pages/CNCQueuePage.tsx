@@ -24,17 +24,58 @@ export default function CNCQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
-  // Features that go to Gunsmith department
-  const gunsimthFeatures = ['rails', 'tripod', 'bipod', 'qds', 'adjustable_stock'];
+  // Features that go to Gunsmith department (using actual feature names from database)
+  const gunsimthFeatures = [
+    'rail_accessory',    // Rails
+    'qd_accessory',      // QD Quick Detach Cups  
+    'tripod_tap',        // Tripod tap
+    'tripod_mount',      // Tripod tap and mount
+    'bipod_accessory',   // Spartan bipod and other bipods
+    'adjustable_stock',  // Adjustable stocks
+    'spartan_bipod'      // Spartan bipod specifically
+  ];
   
   // Check if order has features that require gunsmith work
   const requiresGunsmith = (order: any) => {
     if (!order.features) return false;
-    return gunsimthFeatures.some(feature => 
-      order.features[feature] === true || 
-      order.features[feature] === 'yes' ||
-      (typeof order.features[feature] === 'string' && order.features[feature] !== 'none' && order.features[feature] !== '')
-    );
+    
+    // Check each gunsmith feature
+    for (const feature of gunsimthFeatures) {
+      const featureValue = order.features[feature];
+      
+      // Consider it a gunsmith feature if:
+      // - It's true/yes
+      // - It's a non-empty string that's not 'none' or 'no'
+      if (featureValue === true || 
+          featureValue === 'yes' ||
+          (typeof featureValue === 'string' && 
+           featureValue !== 'none' && 
+           featureValue !== 'no' && 
+           featureValue !== '' &&
+           featureValue.toLowerCase().includes('yes') ||
+           featureValue.toLowerCase().includes('rail') ||
+           featureValue.toLowerCase().includes('qd') ||
+           featureValue.toLowerCase().includes('tripod') ||
+           featureValue.toLowerCase().includes('bipod') ||
+           featureValue.toLowerCase().includes('spartan'))
+      ) {
+        return true;
+      }
+    }
+    
+    // Also check for specific values that indicate gunsmith work needed
+    const railValue = order.features.rail_accessory;
+    const qdValue = order.features.qd_accessory;
+    
+    if (railValue && railValue !== 'no_rail' && railValue !== 'none') {
+      return true;
+    }
+    
+    if (qdValue && qdValue !== 'no_qds' && qdValue !== 'none') {
+      return true;
+    }
+    
+    return false;
   };
 
   // Get orders in CNC department, split by destination
@@ -345,17 +386,39 @@ export default function CNCQueuePage() {
                             
                             {/* Show which features require gunsmith work */}
                             <div className="text-xs text-gray-600">
-                              {gunsimthFeatures
-                                .filter(feature => 
-                                  order.features?.[feature] === true || 
-                                  order.features?.[feature] === 'yes' ||
-                                  (typeof order.features?.[feature] === 'string' && 
-                                   order.features?.[feature] !== 'none' && 
-                                   order.features?.[feature] !== '')
-                                )
-                                .map(feature => feature.replace('_', ' ').toUpperCase())
-                                .join(', ')
-                              }
+                              {(() => {
+                                const activeFeatures = [];
+                                
+                                // Check rail accessory
+                                if (order.features?.rail_accessory && 
+                                    order.features.rail_accessory !== 'no_rail' && 
+                                    order.features.rail_accessory !== 'none') {
+                                  activeFeatures.push('RAILS');
+                                }
+                                
+                                // Check QD accessory
+                                if (order.features?.qd_accessory && 
+                                    order.features.qd_accessory !== 'no_qds' && 
+                                    order.features.qd_accessory !== 'none') {
+                                  activeFeatures.push('QD CUPS');
+                                }
+                                
+                                // Check other gunsmith features
+                                gunsimthFeatures.forEach(feature => {
+                                  const value = order.features?.[feature];
+                                  if (value === true || value === 'yes' ||
+                                      (typeof value === 'string' && value !== 'none' && value !== 'no' && value !== '')) {
+                                    
+                                    if (feature === 'tripod_tap') activeFeatures.push('TRIPOD TAP');
+                                    else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD MOUNT');
+                                    else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
+                                    else if (feature === 'spartan_bipod') activeFeatures.push('SPARTAN BIPOD');
+                                    else if (feature === 'adjustable_stock') activeFeatures.push('ADJUSTABLE STOCK');
+                                  }
+                                });
+                                
+                                return [...new Set(activeFeatures)].join(', ') || 'GUNSMITH REQUIRED';
+                              })()}
                             </div>
                             
                             {order.customerPO && (

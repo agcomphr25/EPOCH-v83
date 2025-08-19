@@ -414,7 +414,7 @@ export default function GunsimthQueuePage() {
                       🚨 Overdue ({categorizedOrders.overdue.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.overdue.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -430,7 +430,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700' 
-                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 border-l-4'
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                           } pl-8`}
                         />
                       </div>
@@ -447,7 +447,7 @@ export default function GunsimthQueuePage() {
                       🔥 Due Today ({categorizedOrders.dueToday.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.dueToday.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -463,7 +463,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700' 
-                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 border-l-4'
+                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
                           } pl-8`}
                         />
                       </div>
@@ -480,7 +480,7 @@ export default function GunsimthQueuePage() {
                       ⚡ Due Tomorrow ({categorizedOrders.dueTomorrow.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.dueTomorrow.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -496,7 +496,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700' 
-                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700 border-l-4'
+                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
                           } pl-8`}
                         />
                       </div>
@@ -513,7 +513,7 @@ export default function GunsimthQueuePage() {
                       📅 Due This Week ({categorizedOrders.dueThisWeek.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.dueThisWeek.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -529,7 +529,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700' 
-                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 border-l-4'
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
                           } pl-8`}
                         />
                       </div>
@@ -546,7 +546,7 @@ export default function GunsimthQueuePage() {
                       📆 Due Next Week ({categorizedOrders.dueNextWeek.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.dueNextWeek.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -562,7 +562,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700' 
-                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 border-l-4'
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
                           } pl-8`}
                         />
                       </div>
@@ -579,7 +579,7 @@ export default function GunsimthQueuePage() {
                       🗓️ Future Due ({categorizedOrders.futureDue.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.futureDue.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -595,7 +595,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-purple-100 dark:bg-purple-800/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-300 dark:ring-purple-700' 
-                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700 border-l-4'
+                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
                           } pl-8`}
                         />
                       </div>
@@ -612,7 +612,7 @@ export default function GunsimthQueuePage() {
                       ❓ No Due Date ({categorizedOrders.noDueDate.length})
                     </h3>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {categorizedOrders.noDueDate.map((order: any) => (
                       <div key={order.id} className="relative">
                         <div className="absolute top-2 left-2 z-10">
@@ -628,7 +628,7 @@ export default function GunsimthQueuePage() {
                           gunsimthTasks={getGunsimthTasks(order)}
                           className={`${selectedOrders.has(order.orderId) 
                             ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
-                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700 border-l-4'
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
                           } pl-8`}
                         />
                       </div>

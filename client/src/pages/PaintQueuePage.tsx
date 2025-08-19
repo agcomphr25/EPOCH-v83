@@ -271,10 +271,10 @@ export default function PaintQueuePage() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className="font-medium text-sm truncate">{getDisplayOrderId(order.orderId)}</span>
+                            <span className="font-medium text-sm truncate">{getDisplayOrderId(order)}</span>
                             {order.fbOrderNumber && (
                               <Badge variant="outline" className="text-xs px-1 py-0">
-                                FB
+                                {order.fbOrderNumber}
                               </Badge>
                             )}
                             {order.isPaid && (

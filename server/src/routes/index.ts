@@ -2191,60 +2191,55 @@ export function registerRoutes(app: Express): Server {
           // Generate proper Code 39 barcode using direct implementation
           const barcodeText = order.orderId;
           
-          // Complete Code 39 character encoding table
+          // Correct Code 39 character encoding table (9 bits each: 5 bars + 4 spaces)
           const code39Table: { [key: string]: string } = {
-            '0': '101001101101', '1': '110100101011', '2': '101100101011', '3': '110110010101',
-            '4': '101001101011', '5': '110100110101', '6': '101100110101', '7': '101001011011',
-            '8': '110100101101', '9': '101100101101', 'A': '110101001011', 'B': '101101001011',
-            'C': '110110100101', 'D': '101011001011', 'E': '110101100101', 'F': '101101100101',
-            'G': '101010011011', 'H': '110101001101', 'I': '101101001101', 'J': '101011001101',
-            'K': '110101010011', 'L': '101101010011', 'M': '110110101001', 'N': '101011010011',
-            'O': '110101101001', 'P': '101101101001', 'Q': '101010110011', 'R': '110101011001',
-            'S': '101101011001', 'T': '101011011001', 'U': '110010101011', 'V': '100110101011',
-            'W': '110011010101', 'X': '100101101011', 'Y': '110010110101', 'Z': '100110110101',
-            '-': '100101011011', '.': '110010101101', ' ': '100110101101', '$': '100100100101',
-            '/': '100100101001', '+': '100101001001', '%': '101001001001', '*': '100101101101'
+            '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
+            '4': '000110001', '5': '100110000', '6': '001110000', '7': '000100101',
+            '8': '100100100', '9': '001100100', 'A': '100001001', 'B': '001001001',
+            'C': '101001000', 'D': '000011001', 'E': '100011000', 'F': '001011000',
+            'G': '000001101', 'H': '100001100', 'I': '001001100', 'J': '000011100',
+            'K': '100000011', 'L': '001000011', 'M': '101000010', 'N': '000010011',
+            'O': '100010010', 'P': '001010010', 'Q': '000000111', 'R': '100000110',
+            'S': '001000110', 'T': '000010110', 'U': '110000001', 'V': '011000001',
+            'W': '111000000', 'X': '010010001', 'Y': '110010000', 'Z': '011010000',
+            '-': '010000101', '.': '110000100', ' ': '011000100', '$': '010101000',
+            '/': '010100010', '+': '010001010', '%': '000101010', '*': '010010100'
           };
           
           const drawCode39Barcode = (text: string, startX: number, startY: number) => {
-            // Smaller dimensions to fit Avery 5160 labels (2.625" x 1")
-            const thinWidth = 0.8;
-            const thickWidth = 2.0;
-            const barHeight = 12;
+            // Code 39 specifications: thin=1x, thick=3x, height adequate for scanning
+            const thinWidth = 1.0;
+            const thickWidth = 3.0;
+            const barHeight = 15;
+            const interCharGap = 1.0; // Gap between characters
             let currentX = startX;
             
             // Add start/stop characters (* for Code 39)
             const fullText = `*${text.toUpperCase()}*`;
             
-            // Calculate total width to ensure it fits in label
-            let totalWidth = 0;
+            // Calculate and apply scaling to fit in label
+            let estimatedWidth = 0;
             for (let char of fullText) {
-              const pattern = code39Table[char];
-              if (pattern) {
-                for (let bit of pattern) {
-                  totalWidth += bit === '1' ? thickWidth : thinWidth;
-                }
-                totalWidth += thinWidth; // Inter-character gap
+              if (code39Table[char]) {
+                estimatedWidth += (thinWidth * 6 + thickWidth * 3) + interCharGap; // 9 elements per char
               }
             }
             
-            // Scale down if barcode is too wide (max 150 points for Avery label)
-            const maxWidth = 150;
-            let scale = 1;
-            if (totalWidth > maxWidth) {
-              scale = maxWidth / totalWidth;
-            }
-            
-            const scaledThinWidth = thinWidth * scale;
-            const scaledThickWidth = thickWidth * scale;
+            const maxWidth = 140; // Leave margins
+            const scale = estimatedWidth > maxWidth ? maxWidth / estimatedWidth : 1;
+            const scaledThin = thinWidth * scale;
+            const scaledThick = thickWidth * scale;
+            const scaledGap = interCharGap * scale;
             
             for (let char of fullText) {
               const pattern = code39Table[char];
               if (pattern) {
+                // Code 39: 9 elements per character (5 bars, 4 spaces)
+                // Pattern alternates: bar, space, bar, space, bar, space, bar, space, bar
                 for (let i = 0; i < pattern.length; i++) {
-                  const bit = pattern[i];
-                  const width = bit === '1' ? scaledThickWidth : scaledThinWidth;
-                  const isBar = i % 2 === 0; // Even positions are bars
+                  const isWide = pattern[i] === '1';
+                  const width = isWide ? scaledThick : scaledThin;
+                  const isBar = i % 2 === 0; // Positions 0,2,4,6,8 are bars
                   
                   if (isBar) {
                     page.drawRectangle({
@@ -2257,8 +2252,8 @@ export function registerRoutes(app: Express): Server {
                   }
                   currentX += width;
                 }
-                // Inter-character gap
-                currentX += scaledThinWidth;
+                // Add inter-character gap (narrow space)
+                currentX += scaledGap;
               }
             }
           };

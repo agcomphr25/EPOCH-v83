@@ -1001,8 +1001,14 @@ export default function OrderEntry() {
         return;
       }
 
-      if (!modelId) {
+      // CRITICAL VALIDATION: Prevent saving orders with null/empty modelId
+      if (!modelId || modelId.trim() === '') {
         setErrors(prev => ({ ...prev, modelId: 'Stock model is required' }));
+        toast({
+          title: "Stock Model Required",
+          description: "Please select a stock model before saving the order",
+          variant: "destructive"
+        });
         return;
       }
 

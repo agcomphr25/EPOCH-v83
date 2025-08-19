@@ -231,26 +231,32 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     const updates = insertOrderDraftSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
 
-    // For finalized orders that need to appear in All Orders page,
-    // prioritize updating the all_orders table first
+    // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
+    if (updates.isCustomOrder === 'no' && (!updates.modelId || updates.modelId.trim() === '')) {
+      return res.status(400).json({ 
+        error: "Stock model is required for non-custom orders" 
+      });
+    }
+
+    // CRITICAL FIX: Try to update draft order first since this is the /draft endpoint
     let updatedOrder;
     try {
-      console.log('Attempting to update as finalized order...');
-      updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
-      console.log('Updated finalized order successfully:', updatedOrder);
+      console.log('Attempting to update draft order first...');
+      updatedOrder = await storage.updateOrderDraft(orderId, updates);
+      console.log('Updated draft order successfully:', updatedOrder);
       return res.json(updatedOrder);
-    } catch (finalizedError) {
-      console.log('Finalized order not found, attempting draft order update...');
-      console.log('Finalized error:', finalizedError.message);
+    } catch (draftError) {
+      console.log('Draft order not found, attempting finalized order update...');
+      console.log('Draft error:', draftError.message);
       
-      // If finalized update fails, try to update as a draft order
+      // If draft update fails, try to update as a finalized order
       try {
-        console.log('Calling updateOrderDraft...');
-        updatedOrder = await storage.updateOrderDraft(orderId, updates);
-        console.log('Updated draft order successfully:', updatedOrder);
+        console.log('Calling updateFinalizedOrder...');
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+        console.log('Updated finalized order successfully:', updatedOrder);
         return res.json(updatedOrder);
-      } catch (draftError) {
-        console.error('Draft order update failed:', draftError.message);
+      } catch (finalizedError) {
+        console.error('Finalized order update failed:', finalizedError.message);
         return res.status(404).json({ error: `Order ${orderId} not found in drafts or finalized orders` });
       }
     }

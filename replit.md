@@ -8,6 +8,7 @@ Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.
 Order finalization rules: Orders with "None" or empty stock models cannot be finalized and sent to the Production Queue. The system will block finalization with a clear error message.
 Order identification: FB Order Numbers (like AK046) are stored in the fb_order_number field, not as the primary order_id. The actual order_id remains the AG series format (e.g., AG589 has FB Order #AK046).
+Data integrity: Prevent orders from being saved with null/empty modelId fields to maintain consistency between draft and finalized order tables.
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
@@ -27,7 +28,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
 -   **Backend**: Express.js with TypeScript, utilizing TanStack Query for server state management, Zod for runtime validation, and Axios for external API calls.
 -   **Database**: PostgreSQL managed via Neon serverless, with Drizzle ORM for type-safe database operations and Drizzle-kit for schema migrations.
 -   **Core Features**:
-    -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders. Includes streamlined order-to-production process with direct finalization and auto-population to P1 Production Queue.
+    -   **Order Management**: Dynamic product configuration, feature consolidation, and robust order editing with a unified system for both draft and finalized orders. Includes streamlined order-to-production process with direct finalization and auto-population to P1 Production Queue. Enhanced validation prevents data inconsistency between draft and finalized order tables by requiring valid modelId for all orders.
     -   **Layup Scheduler**: Comprehensive auto-scheduling system with production queue auto-population, priority scoring, Monday-Thursday default scheduling with Friday visibility for manual adjustments. Features drag-and-drop, mold matching, employee capacity management, and automatic department progression. Includes lock/unlock functionality for schedules and automated cleanup of orphaned schedule entries when orders progress to other departments.
     -   **Production Queue Manager**: Auto-populates production queue from finalized orders, calculates priority scores based on due date urgency, manages queue positions with manual adjustments, and provides comprehensive production flow management.
     -   **Department Manager**: Enhanced navigation with department-specific views and comprehensive order details via tooltips. Standardized department progression: P1 Production Queue → Layup/Plugging → Barcode → CNC (splits to Gunsmith or Finish based on features) → Finish → Gunsmith → Paint → Shipping QC → Shipping. CNC Department features dual-queue system with automatic routing based on order features.

@@ -92,6 +92,9 @@ export const allOrders = pgTable("all_orders", {
   cancelReason: text("cancel_reason"),
   // Verification Information
   isVerified: boolean("is_verified").default(false),
+  // Date Tracking Information  
+  isManualDueDate: boolean("is_manual_due_date").default(false),
+  isManualOrderDate: boolean("is_manual_order_date").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -360,6 +363,9 @@ export const orderDrafts = pgTable("order_drafts", {
   deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
   // Verification Information
   isVerified: boolean("is_verified").default(false),
+  // Date Tracking Information  
+  isManualDueDate: boolean("is_manual_due_date").default(false),
+  isManualOrderDate: boolean("is_manual_order_date").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

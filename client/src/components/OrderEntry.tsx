@@ -117,6 +117,8 @@ export default function OrderEntry() {
   
   // Track whether user has manually set the due date
   const [isManualDueDate, setIsManualDueDate] = useState(false);
+  // Track whether user has manually set the order date
+  const [isManualOrderDate, setIsManualOrderDate] = useState(false);
 
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
@@ -730,8 +732,15 @@ export default function OrderEntry() {
           }
         }
         
+        // Similar logic for order date persistence
+        let shouldOrderDateBeManual = false;
+        if (order.isManualOrderDate !== undefined) {
+          shouldOrderDateBeManual = order.isManualOrderDate;
+        }
+        
         setBaseDueDate(calculatedBaseDueDate);
         setIsManualDueDate(shouldBeManual);
+        setIsManualOrderDate(shouldOrderDateBeManual);
 
         if (order.customerId) {
           // Load customer data
@@ -1069,6 +1078,7 @@ export default function OrderEntry() {
         featureQuantities: otherOptionsQuantities,
         isVerified,
         isManualDueDate, // Save the manual due date flag
+        isManualOrderDate, // Save the manual order date flag
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -1214,9 +1224,22 @@ export default function OrderEntry() {
                         const newDate = new Date(dateValue);
                         if (!isNaN(newDate.getTime())) {
                           setOrderDate(newDate);
+                          setIsManualOrderDate(true); // Mark as manually set
+                          // Don't auto-update due date if user has manually set it
+                          if (!isManualDueDate) {
+                            // Update due date based on new order date and current model
+                            const selectedModel = modelOptions.find(m => m.id === modelId);
+                            const modelName = selectedModel?.displayName || selectedModel?.name || '';
+                            const isAdjModel = modelName.toLowerCase().includes('adj');
+                            const daysFromOrder = isAdjModel ? 112 : 98;
+                            const newDueDate = new Date(newDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
+                            setDueDate(newDueDate);
+                            setBaseDueDate(newDueDate);
+                          }
                         }
                       } else {
                         setOrderDate(new Date());
+                        setIsManualOrderDate(false); // Reset manual flag when cleared
                       }
                     }}
                   />

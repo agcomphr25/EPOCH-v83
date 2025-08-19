@@ -251,10 +251,18 @@ export default function OrdersList() {
       return response;
     },
     onSuccess: (data, variables) => {
-      console.log(`✅ Order ${variables.orderId} progressed successfully to ${variables.nextDepartment}`);
+      console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
+      console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: API Response Data:`, data);
+      
+      // Force immediate invalidation and refetch
+      console.log('🔄 DEPARTMENT PROGRESSION: Invalidating and refetching data...');
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      
       toast.success(`Order progressed to ${variables.nextDepartment}`);
     },
     onError: (error: any, variables) => {

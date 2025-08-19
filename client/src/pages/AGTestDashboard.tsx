@@ -110,7 +110,7 @@ export default function AGTestDashboard() {
         
         <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20"
-          onClick={() => navigateTo('/barcode-queue')}
+          onClick={() => navigateTo('/department-queue/barcode')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">

@@ -2149,7 +2149,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Generate Avery label document (PDF format)
-      const { PDFDocument } = await import('pdf-lib');
+      const { PDFDocument, rgb } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.create();
       
       // Add pages for labels (Avery 5160 format - 3 columns, 10 rows per page)
@@ -2177,7 +2177,7 @@ export function registerRoutes(app: Express): Server {
             y: y,
             width: 180,
             height: 60,
-            borderColor: { r: 0, g: 0, b: 0 },
+            borderColor: rgb(0, 0, 0),
             borderWidth: 1,
           });
           

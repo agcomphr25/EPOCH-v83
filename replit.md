@@ -34,7 +34,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Customer Management**: Comprehensive CRM with CSV import/update, integrated address validation, and enhanced contact/address display.
     -   **Inventory Management**: Enhanced with search, BOM integration, and part number display.
     -   **P1 & P2 Systems**: Distinct modules for P1 (regular) and P2 (OEM/supplier) orders, customers, purchase orders, and production order generation based on BOMs.
-    -   **Barcode System**: Integrated P1 order barcode generation (Code 39) with scanner integration and Avery label printing.
+    -   **Barcode System**: Enhanced P1 order barcode generation (Code 39) with scanner integration, categorized queue management, multi-select functionality, and professional Avery 5160 label printing with individual order selection popup interface.
     -   **Employee Management**: Full CRUD API for employee profiles, certifications, performance evaluations, and document management, including a secure employee portal with time clock and checklist functionality.
     -   **Quality Control**: Workflows for digital signature capture, validation, and comprehensive submissions management for checklists.
     -   **Reporting**: Enhanced sales order PDF generation with customer information and readable feature names. Includes smart print filtering for production schedules.

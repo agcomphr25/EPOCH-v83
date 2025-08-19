@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
@@ -14,6 +15,8 @@ import { toast } from 'react-hot-toast';
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [showLabelDialog, setShowLabelDialog] = useState(false);
+  const queryClient = useQueryClient();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -122,13 +125,35 @@ export default function BarcodeQueuePage() {
   // Create barcode labels mutation
   const createBarcodeLabels = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/barcode/create-labels', 'POST', { orderIds });
+      const response = await fetch('/api/barcode/create-labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create labels');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `barcode-labels-${Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
     },
     onSuccess: () => {
       toast.success(`Created Avery labels for ${selectedOrders.size} orders`);
+      setShowLabelDialog(false);
     },
     onError: (error) => {
-      toast.error(`Failed to create barcode labels: ${error}`);
+      console.error('Label creation error:', error);
+      toast.error(`Failed to create barcode labels: ${error.message}`);
     }
   });
 
@@ -144,6 +169,8 @@ export default function BarcodeQueuePage() {
       toast.success(`Progressed ${selectedOrders.size} orders to CNC`);
       setSelectedOrders(new Set());
       setSelectAll(false);
+      // Refetch orders to update the display
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error) => {
       toast.error(`Failed to progress orders: ${error}`);
@@ -155,7 +182,11 @@ export default function BarcodeQueuePage() {
       toast.error('Please select at least one order');
       return;
     }
-    createBarcodeLabels.mutate(Array.from(selectedOrders));
+    setShowLabelDialog(true);
+  };
+
+  const handlePrintLabels = (orderIds: string[]) => {
+    createBarcodeLabels.mutate(orderIds);
   };
 
   const handleProgressToCNC = () => {
@@ -382,6 +413,161 @@ export default function BarcodeQueuePage() {
           })}
         </div>
       )}
+
+      {/* Label Selection Dialog */}
+      <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              Create Barcode Labels - {selectedOrders.size} Orders Selected
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Selected Orders Summary */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+              <h3 className="font-semibold mb-2">Selected Orders Summary:</h3>
+              <div className="grid gap-2">
+                {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
+                  const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
+                  if (categoryOrders.length === 0) return null;
+                  
+                  const [modelName, actionLength] = categoryKey.split('_');
+                  const actionDisplay = actionLength === 'short' ? 'Short Action' : 
+                                       actionLength === 'long' ? 'Long Action' : 'Unknown Action';
+                  
+                  return (
+                    <div key={categoryKey} className="flex items-center justify-between">
+                      <span className="font-medium">{modelName} - {actionDisplay}</span>
+                      <Badge variant="outline">{categoryOrders.length} orders</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Individual Order Cards for Label Selection */}
+            <div className="space-y-4">
+              <h3 className="font-semibold">Individual Orders - Click to Print Labels:</h3>
+              {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
+                const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
+                if (categoryOrders.length === 0) return null;
+                
+                const [modelName, actionLength] = categoryKey.split('_');
+                const actionDisplay = actionLength === 'short' ? 'Short Action' : 
+                                     actionLength === 'long' ? 'Long Action' : 'Unknown Action';
+                
+                return (
+                  <Card key={categoryKey} className="overflow-hidden">
+                    <CardHeader className={`pb-3 ${
+                      actionLength === 'short' 
+                        ? 'bg-red-50 dark:bg-red-900/20' 
+                        : actionLength === 'long'
+                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                        : 'bg-gray-50 dark:bg-gray-900/20'
+                    }`}>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Target className={`h-4 w-4 ${
+                          actionLength === 'short' ? 'text-red-600' : 
+                          actionLength === 'long' ? 'text-blue-600' : 'text-gray-600'
+                        }`} />
+                        {modelName} - {actionDisplay}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        {categoryOrders.map((order: any) => {
+                          const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                          
+                          return (
+                            <Card 
+                              key={order.orderId} 
+                              className={`cursor-pointer transition-all duration-200 border-l-4 hover:shadow-md ${
+                                isOverdue
+                                  ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                                  : actionLength === 'short'
+                                  ? 'border-l-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10'
+                                  : 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                              }`}
+                              onClick={() => handlePrintLabels([order.orderId])}
+                            >
+                              <CardContent className="p-3">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-lg">
+                                      {getDisplayOrderId(order)}
+                                    </span>
+                                    {isOverdue && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        OVERDUE
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-3 w-3 text-gray-500" />
+                                      <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
+                                        Due: {format(new Date(order.dueDate), 'M/d/yy')}
+                                      </span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2">
+                                      <Printer className="h-3 w-3 text-gray-500" />
+                                      <span className="text-xs text-gray-600">
+                                        Click to print individual label
+                                      </span>
+                                    </div>
+                                    
+                                    {order.customerPO && (
+                                      <div className="text-xs text-gray-600">
+                                        PO: {order.customerPO}
+                                      </div>
+                                    )}
+                                    
+                                    {order.fbOrderNumber && (
+                                      <div className="text-xs text-gray-600">
+                                        FB: {order.fbOrderNumber}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowLabelDialog(false)}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handlePrintLabels(Array.from(selectedOrders))}
+                  disabled={createBarcodeLabels.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Print All {selectedOrders.size} Labels
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

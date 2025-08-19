@@ -1385,6 +1385,7 @@ export class DatabaseStorage implements IStorage {
         isCancelled: allOrders.isCancelled,
         cancelledAt: allOrders.cancelledAt,
         cancelReason: allOrders.cancelReason,
+        isVerified: allOrders.isVerified,
         // Customer name
         customerName: customers.name,
       })

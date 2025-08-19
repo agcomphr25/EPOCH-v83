@@ -90,6 +90,8 @@ export const allOrders = pgTable("all_orders", {
   isCancelled: boolean("is_cancelled").default(false),
   cancelledAt: timestamp("cancelled_at"),
   cancelReason: text("cancel_reason"),
+  // Verification Information
+  isVerified: boolean("is_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -305,6 +307,8 @@ export const orderDrafts = pgTable("order_drafts", {
   notificationSentAt: timestamp("notification_sent_at"),
   deliveryConfirmed: boolean("delivery_confirmed").default(false),
   deliveryConfirmedAt: timestamp("delivery_confirmed_at"),
+  // Verification Information
+  isVerified: boolean("is_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -802,6 +806,8 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   paymentAmount: z.number().min(0).optional().nullable(),
   paymentDate: z.coerce.date().optional().nullable(),
   paymentTimestamp: z.coerce.date().optional().nullable(),
+  // Verification field
+  isVerified: z.boolean().default(false),
 });
 
 export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
@@ -832,6 +838,8 @@ export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
   paymentAmount: z.number().min(0).optional().nullable(),
   paymentDate: z.coerce.date().optional().nullable(),
   paymentTimestamp: z.coerce.date().optional().nullable(),
+  // Verification field
+  isVerified: z.boolean().default(false),
 });
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({

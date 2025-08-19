@@ -101,6 +101,7 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
 
   // Payment state - simplified for multiple payments
   const [orderPayments, setOrderPayments] = useState<any[]>([]);
@@ -775,6 +776,7 @@ export default function OrderEntry() {
         setShowCustomDiscount(order.showCustomDiscount || false);
         setPriceOverride(order.priceOverride);
         setShowPriceOverride(!!order.priceOverride);
+        setIsVerified(order.isVerified || false);
 
         // CRITICAL FIX: Load discount details after setting discount code
         if (order.discountCode && order.discountCode !== 'none') {
@@ -1043,6 +1045,7 @@ export default function OrderEntry() {
         priceOverride,
         miscItems: miscItems,
         featureQuantities: otherOptionsQuantities,
+        isVerified,
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -2822,8 +2825,22 @@ export default function OrderEntry() {
                 </div>
               )}
 
+              {/* Verified Checkbox */}
+              <div className="flex items-center space-x-2 pt-4 pb-2">
+                <input
+                  type="checkbox"
+                  id="verified-checkbox"
+                  checked={isVerified}
+                  onChange={(e) => setIsVerified(e.target.checked)}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                />
+                <label htmlFor="verified-checkbox" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Verified against previous ERP
+                </label>
+              </div>
+
               {/* Action Buttons */}
-              <div className="space-y-2 pt-4">
+              <div className="space-y-2">
                 <Button
                   type="button"
                   className="w-full"

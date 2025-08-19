@@ -14,6 +14,7 @@ interface Order {
   fbOrderNumber?: string;
   paymentTotal?: number;
   isFullyPaid?: boolean;
+  isVerified?: boolean;
 }
 
 interface Kickback {
@@ -418,7 +419,10 @@ export default function AllOrdersList() {
 
 
                 return (
-                  <TableRow key={order.orderId}>
+                  <TableRow 
+                    key={order.orderId}
+                    className={order.isVerified ? "bg-green-50 dark:bg-green-900/20" : ""}
+                  >
                     <TableCell className="font-medium">
                       <OrderSummaryModal orderId={order.orderId}>
                         <span className="font-medium">

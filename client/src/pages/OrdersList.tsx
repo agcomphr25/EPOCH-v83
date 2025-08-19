@@ -230,7 +230,7 @@ export default function OrdersList() {
     return null;
   };
 
-  // Progress order mutation
+  // Progress order mutation with optimistic updates
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       console.log(`🔄 DEPARTMENT PROGRESSION: Attempting to progress order ${orderId} to ${nextDepartment}`);
@@ -250,29 +250,47 @@ export default function OrdersList() {
       console.log(`✅ DEPARTMENT PROGRESSION: API Response:`, response);
       return response;
     },
+    onMutate: async ({ orderId, nextDepartment }) => {
+      // Cancel outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      
+      // Snapshot the previous value
+      const previousOrders = queryClient.getQueryData(['/api/orders/with-payment-status']);
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
+        if (!old) return old;
+        
+        return old.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`🔄 OPTIMISTIC UPDATE: ${orderId} from ${order.currentDepartment} to ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        });
+      });
+      
+      // Return a context object with the snapshotted value
+      return { previousOrders };
+    },
+    onError: (err: any, variables, context) => {
+      console.error(`❌ DEPARTMENT PROGRESSION: Failed to progress order ${variables.orderId}:`, err);
+      
+      // Rollback optimistic update on error
+      if (context?.previousOrders) {
+        queryClient.setQueryData(['/api/orders/with-payment-status'], context.previousOrders);
+      }
+      
+      toast.error(err?.message || 'Failed to progress order');
+    },
     onSuccess: (data, variables) => {
       console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
-      console.log(`✅ DEPARTMENT PROGRESSION SUCCESS: API Response Data:`, data);
-      
-      // Force immediate invalidation and refetch with aggressive cache clearing
-      console.log('🔄 DEPARTMENT PROGRESSION: Invalidating and refetching data...');
-      
-      // Remove from cache entirely and refetch
-      queryClient.removeQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.removeQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.removeQueries({ queryKey: ['/api/orders/all'] });
-      
-      // Force immediate refetch with a small delay
-      setTimeout(async () => {
-        await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
-        console.log('🔄 DEPARTMENT PROGRESSION: Cache cleared and data refetched');
-      }, 100);
-      
       toast.success(`Order progressed to ${variables.nextDepartment}`);
     },
-    onError: (error: any, variables) => {
-      console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
-      toast.error(error?.message || 'Failed to progress order');
+    onSettled: () => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
     }
   });
 

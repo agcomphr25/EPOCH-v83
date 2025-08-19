@@ -163,28 +163,47 @@ export default function AllOrdersList() {
       console.log(`✅ ALL ORDERS PROGRESSION: API Response:`, response);
       return response;
     },
+    onMutate: async ({ orderId, nextDepartment }) => {
+      // Cancel outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      
+      // Snapshot the previous value
+      const previousOrders = queryClient.getQueryData(['/api/orders/with-payment-status']);
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/orders/with-payment-status'], (old: any[]) => {
+        if (!old) return old;
+        
+        return old.map((order: any) => {
+          if (order.orderId === orderId) {
+            console.log(`🔄 OPTIMISTIC UPDATE: ${orderId} from ${order.currentDepartment} to ${nextDepartment}`);
+            return { ...order, currentDepartment: nextDepartment };
+          }
+          return order;
+        });
+      });
+      
+      // Return a context object with the snapshotted value
+      return { previousOrders };
+    },
+    onError: (err, variables, context) => {
+      console.error(`❌ ALL ORDERS PROGRESSION: Failed to progress order ${variables.orderId}:`, err);
+      
+      // Rollback optimistic update on error
+      if (context?.previousOrders) {
+        queryClient.setQueryData(['/api/orders/with-payment-status'], context.previousOrders);
+      }
+      
+      toast.error(`Failed to progress order: ${err.message}`);
+    },
     onSuccess: async (data, variables) => {
       console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: Order ${variables.orderId} progressed to ${variables.nextDepartment}`);
-      console.log(`✅ ALL ORDERS PROGRESSION SUCCESS: API Response Data:`, data);
       toast.success(`Order progressed to ${variables.nextDepartment}`);
-      
-      // Force immediate invalidation and refetch with aggressive cache clearing
-      console.log('🔄 ALL ORDERS PROGRESSION: Invalidating and refetching data...');
-      
-      // Remove from cache entirely and refetch
-      queryClient.removeQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      queryClient.removeQueries({ queryKey: ['/api/orders/pipeline-counts'] });
-      queryClient.removeQueries({ queryKey: ['/api/production-queue/prioritized'] });
-      
-      // Force immediate refetch with a small delay to ensure server state is updated
-      setTimeout(async () => {
-        await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
-        console.log('🔄 ALL ORDERS PROGRESSION: Cache cleared and data refetched');
-      }, 100);
     },
-    onError: (error, variables) => {
-      console.error(`❌ ALL ORDERS PROGRESSION: Failed to progress order ${variables.orderId}:`, error);
-      toast.error(`Failed to progress order: ${error.message}`);
+    onSettled: () => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
     }
   });
 
@@ -317,16 +336,32 @@ export default function AllOrdersList() {
     return null;
   };
 
-  const handleProgressOrder = (orderId: string, currentDepartment: string) => {
+  const [processingOrders, setProcessingOrders] = React.useState<Set<string>>(new Set());
+
+  const handleProgressOrder = React.useCallback((orderId: string, currentDepartment: string) => {
+    // Prevent multiple clicks on the same order
+    if (processingOrders.has(orderId)) {
+      console.log(`⚠️ Order ${orderId} is already being processed, ignoring click`);
+      return;
+    }
+
     const nextDepartment = getNextDepartment(currentDepartment);
     if (nextDepartment) {
       console.log(`🔄 ALL ORDERS: Progressing ${orderId} from ${currentDepartment} to ${nextDepartment}`);
+      setProcessingOrders(prev => new Set(prev).add(orderId));
       progressOrderMutation.mutate({ orderId, nextDepartment });
     } else {
       console.log(`⚠️ ALL ORDERS: No next department found for ${currentDepartment}`);
       toast.error('No next department available');
     }
-  };
+  }, [processingOrders, progressOrderMutation]);
+
+  // Reset processing state when mutation completes
+  React.useEffect(() => {
+    if (!progressOrderMutation.isPending) {
+      setProcessingOrders(new Set());
+    }
+  }, [progressOrderMutation.isPending]);
 
   const handlePushToLayupPlugging = (orderId: string) => {
     progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
@@ -621,11 +656,11 @@ export default function AllOrdersList() {
                               console.log(`🔄 Pushing order ${order.orderId} from P1 Production Queue to Layup/Plugging`);
                               handlePushToLayupPlugging(order.orderId);
                             }}
-                            disabled={progressOrderMutation.isPending}
-                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
+                            disabled={processingOrders.has(order.orderId)}
+                            className={processingOrders.has(order.orderId) ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            {progressOrderMutation.isPending ? 'Progressing...' : 'Push to Layup/Plugging'}
+                            {processingOrders.has(order.orderId) ? 'Processing...' : 'Push to Layup/Plugging'}
                           </Button>
                         )}
 
@@ -636,11 +671,11 @@ export default function AllOrdersList() {
                               console.log(`🔄 Button clicked for order ${order.orderId}: ${order.currentDepartment} → ${nextDept}`);
                               handleProgressOrder(order.orderId, order.currentDepartment);
                             }}
-                            disabled={progressOrderMutation.isPending}
-                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}
+                            disabled={processingOrders.has(order.orderId)}
+                            className={processingOrders.has(order.orderId) ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            {progressOrderMutation.isPending ? 'Progressing...' : nextDept}
+                            {processingOrders.has(order.orderId) ? 'Processing...' : nextDept}
                           </Button>
                         )}
 

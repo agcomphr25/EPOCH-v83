@@ -38,9 +38,23 @@ export default function FinishQCPage() {
       return acc;
     }, {});
 
-    // Sort orders within each technician group alphabetically/numerically
+    // Sort orders within each technician group: overdue first, then alphabetically/numerically
     Object.keys(grouped).forEach(technician => {
       grouped[technician].sort((a: any, b: any) => {
+        const now = new Date();
+        const aIsOverdue = a.dueDate && isAfter(now, new Date(a.dueDate));
+        const bIsOverdue = b.dueDate && isAfter(now, new Date(b.dueDate));
+        
+        // Prioritize overdue orders at the top
+        if (aIsOverdue && !bIsOverdue) return -1;
+        if (!aIsOverdue && bIsOverdue) return 1;
+        
+        // If both overdue or both not overdue, sort by due date first (if available)
+        if (a.dueDate && b.dueDate) {
+          const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          if (dateCompare !== 0) return dateCompare;
+        }
+        
         // Extract numeric part from order ID for proper sorting
         const getNumeric = (orderId: string) => {
           const match = orderId.match(/(\d+)/);

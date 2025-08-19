@@ -137,12 +137,13 @@ export default function AllOrdersList() {
       });
     },
     onSuccess: async (data, variables) => {
-      console.log(`✅ Order ${variables.orderId} progressed successfully`);
+      console.log(`✅ Order ${variables.orderId} progressed successfully`, data);
       toast.success('Order progressed successfully');
       
-      // Clear all caches and force immediate refetch
-      queryClient.clear();
-      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      // Invalidate relevant queries for faster UI updates
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
     },
     onError: (error, variables) => {
       console.error(`❌ Failed to progress order ${variables.orderId}:`, error);
@@ -554,21 +555,27 @@ export default function AllOrdersList() {
                         {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => handlePushToLayupPlugging(order.orderId)}
+                            onClick={() => {
+                              console.log(`🔄 Pushing order ${order.orderId} from P1 Production Queue to Layup/Plugging`);
+                              handlePushToLayupPlugging(order.orderId);
+                            }}
                             disabled={progressOrderMutation.isPending}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
-                            Push to Layup/Plugging
+                            {progressOrderMutation.isPending ? 'Progressing...' : 'Push to Layup/Plugging'}
                           </Button>
                         )}
 
                         {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
-                            onClick={() => handleProgressOrder(order.orderId, nextDept)}
+                            onClick={() => {
+                              console.log(`🔄 Button clicked for order ${order.orderId}: ${order.currentDepartment} → ${nextDept}`);
+                              handleProgressOrder(order.orderId, nextDept);
+                            }}
                             disabled={progressOrderMutation.isPending}
-                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
+                            className={progressOrderMutation.isPending ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}
                           >
                             <ArrowRight className="w-4 h-4 mr-1" />
                             {progressOrderMutation.isPending ? 'Progressing...' : nextDept}

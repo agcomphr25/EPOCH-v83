@@ -92,17 +92,17 @@ export default function GunsimthQueuePage() {
     };
   }, [gunsmithOrders]);
 
-  // Count orders in previous department (Finish)
-  const finishCount = useMemo(() => {
+  // Count orders in previous department (CNC)
+  const cncCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Finish'
+      order.currentDepartment === 'CNC'
     ).length;
   }, [allOrders]);
 
-  // Count orders in next department (Paint)
-  const paintCount = useMemo(() => {
+  // Count orders in next department (Finish)
+  const finishCount = useMemo(() => {
     return (allOrders as any[]).filter((order: any) => 
-      order.currentDepartment === 'Paint'
+      order.currentDepartment === 'Finish'
     ).length;
   }, [allOrders]);
 
@@ -221,37 +221,7 @@ export default function GunsimthQueuePage() {
     setSelectedOrders(new Set());
   };
 
-  // Progress orders to Paint mutation
-  const progressToPaintMutation = useMutation({
-    mutationFn: async (orderIds: string[]) => {
-      const response = await apiRequest('/api/orders/update-department', {
-        method: 'POST',
-        body: JSON.stringify({
-          orderIds: orderIds,
-          department: 'Paint',
-          status: 'IN_PROGRESS'
-        })
-      });
-      return response;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      toast({
-        title: "Success",
-        description: `${selectedOrders.size} orders moved to Paint department`,
-      });
-      setSelectedOrders(new Set());
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to move orders to Paint",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Progress orders to Finish mutation
+  // Progress orders to Finish mutation (natural progression from Gunsmith)
   const progressToFinishMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const response = await apiRequest('/api/orders/update-department', {
@@ -281,11 +251,6 @@ export default function GunsimthQueuePage() {
     }
   });
 
-  const handleProgressToPaint = () => {
-    if (selectedOrders.size === 0) return;
-    progressToPaintMutation.mutate(Array.from(selectedOrders));
-  };
-
   const handleProgressToFinish = () => {
     if (selectedOrders.size === 0) return;
     progressToFinishMutation.mutate(Array.from(selectedOrders));
@@ -308,12 +273,12 @@ export default function GunsimthQueuePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-orange-700 dark:text-orange-300 flex items-center gap-2">
               <ArrowLeft className="h-5 w-5" />
-              Finish
+              CNC
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-              {finishCount}
+              {cncCount}
             </div>
             <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
               Orders in previous department
@@ -325,13 +290,13 @@ export default function GunsimthQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Paint
+              Finish
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {paintCount}
+              {finishCount}
             </div>
             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               Orders in next department
@@ -376,19 +341,9 @@ export default function GunsimthQueuePage() {
                     </Button>
                     
                     <Button
-                      onClick={handleProgressToPaint}
-                      disabled={progressToPaintMutation.isPending}
-                      className="flex items-center gap-2"
-                    >
-                      <ArrowRightCircle className="h-4 w-4" />
-                      Move to Paint ({selectedOrders.size})
-                    </Button>
-                    
-                    <Button
                       onClick={handleProgressToFinish}
                       disabled={progressToFinishMutation.isPending}
-                      variant="secondary"
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                     >
                       <ArrowRightCircle className="h-4 w-4" />
                       Move to Finish ({selectedOrders.size})

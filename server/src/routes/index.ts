@@ -2121,6 +2121,172 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Create barcode labels for selected orders
+  app.post('/api/barcode/create-labels', async (req, res) => {
+    try {
+      const { orderIds } = req.body;
+      const { storage } = await import('../../storage');
+      
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ error: 'Order IDs required' });
+      }
+
+      console.log(`🏷️ Creating barcode labels for ${orderIds.length} orders:`, orderIds);
+
+      // Get order details for label generation
+      const orderDetails = [];
+      for (const orderId of orderIds) {
+        const order = await storage.getOrderById(orderId);
+        if (order) {
+          // Ensure order has a barcode - generate if missing
+          if (!order.barcode) {
+            const barcode = `AG-${orderId}-${Date.now().toString().slice(-6)}`;
+            await storage.updateOrder(orderId, { barcode });
+            order.barcode = barcode;
+          }
+          orderDetails.push(order);
+        }
+      }
+
+      // Generate Avery label document (PDF format)
+      const { PDFDocument } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.create();
+      
+      // Add pages for labels (Avery 5160 format - 3 columns, 10 rows per page)
+      const labelsPerPage = 30;
+      const pagesNeeded = Math.ceil(orderDetails.length / labelsPerPage);
+      
+      for (let pageIndex = 0; pageIndex < pagesNeeded; pageIndex++) {
+        const page = pdfDoc.addPage([612, 792]); // 8.5x11 inches
+        const startIndex = pageIndex * labelsPerPage;
+        const endIndex = Math.min(startIndex + labelsPerPage, orderDetails.length);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+          const order = orderDetails[i];
+          const labelIndex = i - startIndex;
+          
+          // Calculate label position (3x10 grid)
+          const col = labelIndex % 3;
+          const row = Math.floor(labelIndex / 3);
+          const x = 36 + (col * 187); // Left margin + column width
+          const y = 720 - (row * 72); // Top margin - row height
+          
+          // Draw label border
+          page.drawRectangle({
+            x: x,
+            y: y,
+            width: 180,
+            height: 60,
+            borderColor: { r: 0, g: 0, b: 0 },
+            borderWidth: 1,
+          });
+          
+          // Add order information
+          page.drawText(`${order.orderId}`, {
+            x: x + 5,
+            y: y + 45,
+            size: 10,
+          });
+          
+          page.drawText(`${order.barcode}`, {
+            x: x + 5,
+            y: y + 30,
+            size: 8,
+          });
+          
+          // Add model and action length
+          const actionLength = order.features?.action_length || 'unknown';
+          const modelName = order.modelId || 'Unknown';
+          page.drawText(`${modelName} - ${actionLength.toUpperCase()}`, {
+            x: x + 5,
+            y: y + 15,
+            size: 8,
+          });
+          
+          // Add due date
+          const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          });
+          page.drawText(`Due: ${dueDate}`, {
+            x: x + 5,
+            y: y + 5,
+            size: 7,
+          });
+        }
+      }
+      
+      const pdfBytes = await pdfDoc.save();
+      
+      // Return PDF as base64 or save to file
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="barcode-labels.pdf"');
+      res.send(Buffer.from(pdfBytes));
+      
+      console.log(`✅ Generated barcode labels PDF for ${orderDetails.length} orders`);
+
+    } catch (error) {
+      console.error('🏷️ Create barcode labels error:', error);
+      res.status(500).json({ error: 'Failed to create barcode labels' });
+    }
+  });
+
+  // Progress orders to next department
+  app.post('/api/orders/progress-department', async (req, res) => {
+    try {
+      const { orderIds, toDepartment } = req.body;
+      const { storage } = await import('../../storage');
+      
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ error: 'Order IDs required' });
+      }
+      
+      if (!toDepartment) {
+        return res.status(400).json({ error: 'Target department required' });
+      }
+
+      console.log(`🔄 Progressing ${orderIds.length} orders to ${toDepartment}:`, orderIds);
+
+      const updatedOrders = [];
+      const currentTimestamp = new Date();
+
+      for (const orderId of orderIds) {
+        const order = await storage.getOrderById(orderId);
+        if (order) {
+          // Update department and completion timestamp
+          const updateData: any = {
+            currentDepartment: toDepartment,
+            updatedAt: currentTimestamp
+          };
+
+          // Set completion timestamp for previous department
+          if (order.currentDepartment === 'Barcode') {
+            updateData.barcodeCompletedAt = currentTimestamp;
+          } else if (order.currentDepartment === 'Layup') {
+            updateData.layupCompletedAt = currentTimestamp;
+          } else if (order.currentDepartment === 'CNC') {
+            updateData.cncCompletedAt = currentTimestamp;
+          }
+
+          const updatedOrder = await storage.updateOrder(orderId, updateData);
+          updatedOrders.push(updatedOrder);
+          
+          console.log(`✅ Progressed ${orderId} from ${order.currentDepartment} to ${toDepartment}`);
+        }
+      }
+
+      res.json({ 
+        success: true,
+        message: `Progressed ${updatedOrders.length} orders to ${toDepartment}`,
+        updatedOrders: updatedOrders.length
+      });
+
+    } catch (error) {
+      console.error('🔄 Progress orders error:', error);
+      res.status(500).json({ error: 'Failed to progress orders' });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }

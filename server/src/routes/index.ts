@@ -2188,69 +2188,61 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
           
-          // Generate proper scannable barcode using dynamic imports
+          // Generate proper Code 39 barcode using direct implementation
           const barcodeText = order.orderId;
           
-          try {
-            // Dynamic imports for JSBarcode and Canvas
-            const JsBarcode = (await import('jsbarcode')).default;
-            const { createCanvas } = await import('canvas');
+          // Complete Code 39 character encoding table
+          const code39Table: { [key: string]: string } = {
+            '0': '101001101101', '1': '110100101011', '2': '101100101011', '3': '110110010101',
+            '4': '101001101011', '5': '110100110101', '6': '101100110101', '7': '101001011011',
+            '8': '110100101101', '9': '101100101101', 'A': '110101001011', 'B': '101101001011',
+            'C': '110110100101', 'D': '101011001011', 'E': '110101100101', 'F': '101101100101',
+            'G': '101010011011', 'H': '110101001101', 'I': '101101001101', 'J': '101011001101',
+            'K': '110101010011', 'L': '101101010011', 'M': '110110101001', 'N': '101011010011',
+            'O': '110101101001', 'P': '101101101001', 'Q': '101010110011', 'R': '110101011001',
+            'S': '101101011001', 'T': '101011011001', 'U': '110010101011', 'V': '100110101011',
+            'W': '110011010101', 'X': '100101101011', 'Y': '110010110101', 'Z': '100110110101',
+            '-': '100101011011', '.': '110010101101', ' ': '100110101101', '$': '100100100101',
+            '/': '100100101001', '+': '100101001001', '%': '101001001001', '*': '100101101101'
+          };
+          
+          const drawCode39Barcode = (text: string, startX: number, startY: number) => {
+            const thinWidth = 1.2;
+            const thickWidth = 3.0;
+            const barHeight = 18;
+            let currentX = startX;
             
-            // Create canvas for barcode generation
-            const canvas = createCanvas(200, 50);
+            // Add start/stop characters (* for Code 39)
+            const fullText = `*${text.toUpperCase()}*`;
             
-            // Generate Code 39 barcode
-            JsBarcode(canvas, barcodeText, {
-              format: "CODE39",
-              width: 1.5,
-              height: 20,
-              displayValue: false,
-              margin: 0,
-              background: "white",
-              lineColor: "black"
-            });
-            
-            // Get the canvas as image data
-            const imageData = canvas.toBuffer('image/png');
-            const barcodeImage = await pdfDoc.embedPng(imageData);
-            
-            // Draw the barcode image on the PDF
-            page.drawImage(barcodeImage, {
-              x: x + 10,
-              y: y + 28,
-              width: 160,
-              height: 20
-            });
-            
-            console.log(`✅ Generated barcode for ${barcodeText}`);
-            
-          } catch (error) {
-            console.error('Barcode generation error:', error);
-            // Fallback: Create a visual barcode pattern for the specific order ID
-            const generateTextBarcode = (text: string) => {
-              // Simple visual pattern based on order ID characters
-              let pattern = '|';
-              for (let char of text) {
-                const code = char.charCodeAt(0);
-                // Create bars based on character codes
-                if (code % 4 === 0) pattern += '|||  ';
-                else if (code % 4 === 1) pattern += '|  ||  ';
-                else if (code % 4 === 2) pattern += '||  |  ';
-                else pattern += '|  |||  ';
+            for (let char of fullText) {
+              const pattern = code39Table[char];
+              if (pattern) {
+                for (let i = 0; i < pattern.length; i++) {
+                  const bit = pattern[i];
+                  const width = bit === '1' ? thickWidth : thinWidth;
+                  const isBar = i % 2 === 0; // Even positions are bars
+                  
+                  if (isBar) {
+                    page.drawRectangle({
+                      x: currentX,
+                      y: startY,
+                      width: width,
+                      height: barHeight,
+                      color: rgb(0, 0, 0),
+                    });
+                  }
+                  currentX += width;
+                }
+                // Inter-character gap
+                currentX += thinWidth;
               }
-              pattern += '|';
-              return pattern;
-            };
-            
-            // Draw fallback barcode pattern
-            page.drawText(generateTextBarcode(barcodeText), {
-              x: x + 10,
-              y: y + 35,
-              size: 10,
-              color: rgb(0, 0, 0),
-            });
-            console.log(`⚠️  Fallback barcode generated for ${barcodeText}`);
-          }
+            }
+          };
+          
+          // Draw the barcode
+          drawCode39Barcode(barcodeText, x + 10, y + 30);
+          console.log(`✅ Generated Code 39 barcode for ${barcodeText}`);
           
           // Add order information at top
           page.drawText(`${order.orderId}`, {

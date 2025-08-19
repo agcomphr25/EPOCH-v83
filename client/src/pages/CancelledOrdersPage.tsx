@@ -37,10 +37,10 @@ export default function CancelledOrdersPage() {
   const [sortBy, setSortBy] = useState<'orderDate' | 'cancelledAt' | 'orderId' | 'customer'>('cancelledAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Fetch all orders
+  // Fetch cancelled orders specifically
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/all'],
-    queryFn: () => apiRequest('/api/orders/all'),
+    queryKey: ['/api/orders/cancelled'],
+    queryFn: () => apiRequest('/api/orders/cancelled'),
   });
 
   // Fetch customers for name resolution
@@ -61,11 +61,11 @@ export default function CancelledOrdersPage() {
     return customer?.phone || '';
   };
 
-  // Filter to show only cancelled orders
+  // Filter and sort cancelled orders (already cancelled from API)
   const cancelledOrders = useMemo(() => {
     if (!orders) return [];
     
-    let filtered = orders.filter(order => order.isCancelled || order.status === 'CANCELLED');
+    let filtered = orders; // Orders are already cancelled from the API
     
     // Apply search filter
     if (searchTerm.trim()) {

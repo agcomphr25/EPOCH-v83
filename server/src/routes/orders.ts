@@ -294,6 +294,18 @@ router.get('/all', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/cancelled', async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 Fetching cancelled orders...');
+    const cancelledOrders = await storage.getCancelledOrders();
+    console.log(`🔍 Found ${cancelledOrders.length} cancelled orders`);
+    res.json(cancelledOrders);
+  } catch (error) {
+    console.error('Error fetching cancelled orders:', error);
+    res.status(500).json({ error: 'Failed to fetch cancelled orders' });
+  }
+});
+
 // Get all finalized orders
 router.get('/finalized', async (req: Request, res: Response) => {
   try {

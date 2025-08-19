@@ -16,8 +16,6 @@ import {
   certifications, employeeCertifications, evaluations, userSessions, employeeDocuments, employeeAuditLog,
   // allOrders table as the finalized orders table
   allOrders,
-  // Cancelled orders table
-  cancelledOrders,
   // Order attachments table
   orderAttachments,
   // Types
@@ -31,7 +29,6 @@ import {
   type StockModel, type InsertStockModel,
   type OrderDraft, type InsertOrderDraft,
   type AllOrder, type InsertAllOrder, // Type for finalized orders
-  type CancelledOrder, type InsertCancelledOrder, // Type for cancelled orders
   type Form, type InsertForm,
   type FormSubmission, type InsertFormSubmission,
   type InventoryItem, type InsertInventoryItem,
@@ -179,7 +176,8 @@ export interface IStorage {
   deleteOrderDraft(orderId: string): Promise<void>;
   getAllOrderDrafts(): Promise<OrderDraft[]>;
   getLastOrderId(): Promise<string>;
-  getAllOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
+  getAllOrders(): Promise<AllOrder[]>;
+  getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
   getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
@@ -1215,6 +1213,108 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get all finalized orders
+  async getCancelledOrders(): Promise<AllOrder[]> {
+    // Select only the columns that actually exist in the all_orders table
+    const orders = await db.select({
+      id: allOrders.id,
+      orderId: allOrders.orderId,
+      orderDate: allOrders.orderDate,
+      dueDate: allOrders.dueDate,
+      customerId: allOrders.customerId,
+      customerPO: allOrders.customerPO,
+      fbOrderNumber: allOrders.fbOrderNumber,
+      agrOrderDetails: allOrders.agrOrderDetails,
+      isCustomOrder: allOrders.isCustomOrder,
+      modelId: allOrders.modelId,
+      handedness: allOrders.handedness,
+      shankLength: allOrders.shankLength,
+      features: allOrders.features,
+      featureQuantities: allOrders.featureQuantities,
+      discountCode: allOrders.discountCode,
+      notes: allOrders.notes,
+      customDiscountType: allOrders.customDiscountType,
+      customDiscountValue: allOrders.customDiscountValue,
+      showCustomDiscount: allOrders.showCustomDiscount,
+      priceOverride: allOrders.priceOverride,
+      shipping: allOrders.shipping,
+      tikkaOption: allOrders.tikkaOption,
+      status: allOrders.status,
+      barcode: allOrders.barcode,
+      currentDepartment: allOrders.currentDepartment,
+      departmentHistory: allOrders.departmentHistory,
+      scrappedQuantity: allOrders.scrappedQuantity,
+      totalProduced: allOrders.totalProduced,
+      layupCompletedAt: allOrders.layupCompletedAt,
+      pluggingCompletedAt: allOrders.pluggingCompletedAt,
+      cncCompletedAt: allOrders.cncCompletedAt,
+      finishCompletedAt: allOrders.finishCompletedAt,
+      gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
+      paintCompletedAt: allOrders.paintCompletedAt,
+      qcCompletedAt: allOrders.qcCompletedAt,
+      shippingCompletedAt: allOrders.shippingCompletedAt,
+      scrapDate: allOrders.scrapDate,
+      scrapReason: allOrders.scrapReason,
+      scrapDisposition: allOrders.scrapDisposition,
+      scrapAuthorization: allOrders.scrapAuthorization,
+      isReplacement: allOrders.isReplacement,
+      replacedOrderId: allOrders.replacedOrderId,
+      isPaid: allOrders.isPaid,
+      paymentType: allOrders.paymentType,
+      paymentAmount: allOrders.paymentAmount,
+      paymentDate: allOrders.paymentDate,
+      paymentTimestamp: allOrders.paymentTimestamp,
+      trackingNumber: allOrders.trackingNumber,
+      shippingCarrier: allOrders.shippingCarrier,
+      shippingMethod: allOrders.shippingMethod,
+      shippedDate: allOrders.shippedDate,
+      estimatedDelivery: allOrders.estimatedDelivery,
+      shippingLabelGenerated: allOrders.shippingLabelGenerated,
+      customerNotified: allOrders.customerNotified,
+      notificationMethod: allOrders.notificationMethod,
+      notificationSentAt: allOrders.notificationSentAt,
+      deliveryConfirmed: allOrders.deliveryConfirmed,
+      deliveryConfirmedAt: allOrders.deliveryConfirmedAt,
+      isCancelled: allOrders.isCancelled,
+      cancelledAt: allOrders.cancelledAt,
+      cancelReason: allOrders.cancelReason,
+      isVerified: allOrders.isVerified,
+      createdAt: allOrders.createdAt,
+      updatedAt: allOrders.updatedAt
+    }).from(allOrders)
+    .where(
+      or(
+        eq(allOrders.status, 'CANCELLED'),
+        eq(allOrders.isCancelled, true)
+      )
+    )
+    .orderBy(desc(allOrders.cancelledAt));
+
+    // Get all customers to create a lookup map
+    const allCustomers = await db.select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
+    }).from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
+
+    // Enrich orders with customer names and add required frontend fields
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
+    })) as AllOrder[];
+  }
+
   async getAllOrders(): Promise<AllOrder[]> {
     // Select only the columns that actually exist in the all_orders table
     const orders = await db.select({

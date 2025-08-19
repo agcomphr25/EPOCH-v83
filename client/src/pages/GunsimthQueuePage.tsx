@@ -122,8 +122,14 @@ export default function GunsimthQueuePage() {
     const tasks = [];
     const features = order.features || {};
 
-    // Check for QD accessories with location details
-    if (features.qd_accessory && features.qd_accessory !== 'no_qds') {
+    // Check for QD accessories with location details - exclude no_qds, none, and empty values
+    if (features.qd_accessory && 
+        features.qd_accessory !== 'no_qds' && 
+        features.qd_accessory !== 'none' && 
+        features.qd_accessory !== '' && 
+        features.qd_accessory !== null && 
+        features.qd_accessory !== undefined &&
+        !features.qd_accessory.toLowerCase().includes('no')) {
       let qdDetail = 'QDs';
       const qdValue = features.qd_accessory;
       
@@ -139,33 +145,38 @@ export default function GunsimthQueuePage() {
       tasks.push(qdDetail);
     }
 
-    // Check for rails with type details
-    if (features.rail_accessory && features.rail_accessory !== 'no_rail') {
+    // Check for rails with type details - exclude no_rail, none, and empty values
+    if (features.rail_accessory && 
+        features.rail_accessory !== 'no_rail' && 
+        features.rail_accessory !== 'none' && 
+        features.rail_accessory !== '' && 
+        features.rail_accessory !== null && 
+        features.rail_accessory !== undefined) {
       let railDetails = [];
       const railValue = features.rail_accessory;
       
       if (Array.isArray(railValue)) {
-        railDetails = railValue.map(rail => {
-          if (rail.includes('arca_6')) return 'ARCA 6"';
-          if (rail.includes('arca_12')) return 'ARCA 12"';
-          if (rail.includes('arca_18')) return 'ARCA 18"';
-          if (rail.includes('mlok')) return 'M-LOK';
-          if (rail.includes('picatinny')) return 'Picatinny';
-          return rail;
-        });
-      } else if (typeof railValue === 'string') {
+        railDetails = railValue
+          .filter(rail => rail && rail !== 'no_rail' && rail !== 'none' && rail !== '')
+          .map(rail => {
+            if (rail.includes('arca_6')) return 'ARCA 6"';
+            if (rail.includes('arca_12')) return 'ARCA 12"';
+            if (rail.includes('arca_18')) return 'ARCA 18"';
+            if (rail.includes('mlok')) return 'M-LOK';
+            if (rail.includes('picatinny')) return 'Picatinny';
+            return rail;
+          });
+      } else if (typeof railValue === 'string' && railValue.toLowerCase() !== 'no rail') {
         if (railValue.includes('arca_6')) railDetails.push('ARCA 6"');
         else if (railValue.includes('arca_12')) railDetails.push('ARCA 12"');
         else if (railValue.includes('arca_18')) railDetails.push('ARCA 18"');
         else if (railValue.includes('mlok')) railDetails.push('M-LOK');
         else if (railValue.includes('picatinny')) railDetails.push('Picatinny');
-        else railDetails.push(railValue);
+        else if (!railValue.toLowerCase().includes('no')) railDetails.push(railValue);
       }
       
       if (railDetails.length > 0) {
         tasks.push(`Rails (${railDetails.join(', ')})`);
-      } else {
-        tasks.push('Rails');
       }
     }
 
@@ -179,8 +190,14 @@ export default function GunsimthQueuePage() {
       }
     }
 
-    // Check for bipod with type details
-    if (features.bipod_accessory && features.bipod_accessory !== 'no_bipod') {
+    // Check for bipod with type details - exclude no_bipod, none, and empty values
+    if (features.bipod_accessory && 
+        features.bipod_accessory !== 'no_bipod' && 
+        features.bipod_accessory !== 'none' && 
+        features.bipod_accessory !== '' && 
+        features.bipod_accessory !== null && 
+        features.bipod_accessory !== undefined &&
+        !features.bipod_accessory.toLowerCase().includes('no')) {
       let bipodDetail = 'Bipod';
       const bipodValue = features.bipod_accessory;
       

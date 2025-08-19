@@ -14,7 +14,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 
 export default function QCShippingQueuePage() {
-  // State for selected orders and shipping functionality
+  // State for selected orders
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showLabelCreator, setShowLabelCreator] = useState(false);
@@ -144,6 +144,40 @@ export default function QCShippingQueuePage() {
     }).join('\n');
   };
 
+  // Helper function to format complete order details for tooltip
+  const formatOrderDetails = (order: any) => {
+    const details = [];
+    
+    // Basic order info
+    details.push(`Order: ${getDisplayOrderId(order)}`);
+    details.push(`Customer: ${order.customer || 'Unknown'}`);
+    details.push(`Model: ${getModelDisplayName(order.stockModelId || order.modelId)}`);
+    
+    if (order.product) {
+      details.push(`Product: ${order.product}`);
+    }
+    
+    if (order.orderDate) {
+      details.push(`Order Date: ${format(new Date(order.orderDate), 'MMM dd, yyyy')}`);
+    }
+    
+    if (order.dueDate) {
+      details.push(`Due Date: ${format(new Date(order.dueDate), 'MMM dd, yyyy')}`);
+    }
+    
+    details.push(`Status: ${order.status || 'Unknown'}`);
+    
+    // Add separator
+    details.push('');
+    details.push('CUSTOMIZATIONS:');
+    
+    // Add features
+    const featuresText = formatOrderFeatures(order);
+    details.push(featuresText);
+    
+    return details.join('\n');
+  };
+
   // Handle checkbox selection
   const handleOrderSelection = (orderId: string, checked: boolean) => {
     const newSelected = new Set(selectedOrders);
@@ -169,6 +203,7 @@ export default function QCShippingQueuePage() {
     if (selectedOrders.size === 0) return;
     
     try {
+      // Update each selected order to move to shipping department
       for (const orderId of Array.from(selectedOrders)) {
         await fetch(`/api/orders/${orderId}`, {
           method: 'PATCH',
@@ -181,32 +216,21 @@ export default function QCShippingQueuePage() {
         });
       }
       
+      // Clear selections and refresh data
       setSelectedOrders(new Set());
+      // Force refresh the orders data
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      toast({
-        title: 'Orders Progressed',
-        description: `${selectedOrders.size} orders moved to Shipping department`,
-      });
     } catch (error) {
       console.error('Error progressing orders to shipping:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to progress orders to shipping',
-        variant: 'destructive',
-      });
     }
   };
 
-  // Handle sales order download - Updated to remove QC checklist functionality
+  // Handle sales order download
   const handleSalesOrderDownload = (orderId: string) => {
     window.open(`/api/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
   };
 
-  // UPS Label functionality moved from ShippingManagement.tsx
+  // Handler functions for UPS label functionality (moved from ShippingManagement.tsx)
   const handleCreateLabel = (orderId: string) => {
     setSelectedOrderId(orderId);
     setShowLabelCreator(true);
@@ -215,11 +239,7 @@ export default function QCShippingQueuePage() {
   const handleLabelSuccess = (data: any) => {
     setLabelData(data);
     setShowLabelViewer(true);
-    queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-    toast({
-      title: "Shipping label created",
-      description: "Label has been generated successfully"
-    });
+    queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] }); // Refresh orders list
   };
 
   const downloadLabel = (labelBase64: string, trackingNumber: string, orderId: string) => {
@@ -229,7 +249,7 @@ export default function QCShippingQueuePage() {
     link.click();
   };
 
-  // Mark order as shipped mutation
+  // Mark order as shipped mutation (moved from ShippingManagement.tsx)
   const markShippedMutation = useMutation({
     mutationFn: ({ orderId, trackingData }: { orderId: string, trackingData: any }) => 
       apiRequest(`/api/shipping/mark-shipped/${orderId}`, {
@@ -274,59 +294,6 @@ export default function QCShippingQueuePage() {
     });
   };
 
-  // Order card component with updated buttons - Sales Order + Shipping Label
-  const OrderCard = ({ order, borderColor, dueDateColor }: { 
-    order: any, 
-    borderColor: string, 
-    dueDateColor: string 
-  }) => (
-    <Card 
-      key={order.orderId}
-      className={`border-l-4 ${borderColor} ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
-    >
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center justify-between">
-          <span>{getDisplayOrderId(order)}</span>
-          <Checkbox
-            checked={selectedOrders.has(order.orderId)}
-            onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
-          />
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
-        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-          {getModelDisplayName(order.stockModelId || order.modelId)}
-        </p>
-        {order.dueDate && (
-          <p className={`text-xs font-medium ${dueDateColor}`}>
-            Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
-          </p>
-        )}
-        <div className="flex gap-1 mt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleSalesOrderDownload(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <FileText className="h-3 w-3 mr-1" />
-            Sales Order
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleCreateLabel(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <Truck className="h-3 w-3 mr-1" />
-            Ship Label
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -352,7 +319,7 @@ export default function QCShippingQueuePage() {
               {paintCount}
             </div>
             <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-              Orders awaiting QC review
+              Orders in previous department
             </p>
           </CardContent>
         </Card>
@@ -414,12 +381,51 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.overdue.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-red-500" 
-                        dueDateColor="text-red-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-red-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-red-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSalesOrderDownload(order.orderId)}
+                              className="flex-1 text-xs"
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Sales Order
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCreateLabel(order.orderId)}
+                              className="flex-1 text-xs"
+                            >
+                              <Truck className="h-3 w-3 mr-1" />
+                              Ship Label
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -434,12 +440,40 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueToday.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-orange-500" 
-                        dueDateColor="text-orange-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-orange-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-orange-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -454,12 +488,40 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueTomorrow.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-yellow-500" 
-                        dueDateColor="text-yellow-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-yellow-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-yellow-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -474,12 +536,40 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueThisWeek.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-blue-500" 
-                        dueDateColor="text-blue-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-blue-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-blue-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -494,12 +584,40 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueNextWeek.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-green-500" 
-                        dueDateColor="text-green-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-green-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-green-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -514,12 +632,40 @@ export default function QCShippingQueuePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {categorizedOrders.dueLater.map((order: any) => (
-                      <OrderCard 
-                        key={order.orderId} 
-                        order={order} 
-                        borderColor="border-l-gray-500" 
-                        dueDateColor="text-gray-600"
-                      />
+                      <Card 
+                        key={order.orderId}
+                        className={`border-l-4 border-l-gray-500 ${selectedOrders.has(order.orderId) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>{getDisplayOrderId(order)}</span>
+                            <Checkbox
+                              checked={selectedOrders.has(order.orderId)}
+                              onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                            />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <p className="text-sm font-medium truncate">{order.customer || 'Unknown Customer'}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {getModelDisplayName(order.stockModelId || order.modelId)}
+                          </p>
+                          {order.dueDate && (
+                            <p className="text-xs text-gray-600 font-medium">
+                              Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQCChecklistDownload(order.orderId)}
+                            className="w-full mt-2 text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            QC Checklist
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </div>
@@ -529,69 +675,18 @@ export default function QCShippingQueuePage() {
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
+      {/* Progress to Shipping Button */}
       {selectedOrders.size > 0 && (
-        <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-            {selectedOrders.size} orders selected
-          </span>
+        <div className="fixed bottom-6 right-6 z-50">
           <Button
             onClick={progressToShipping}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={selectedOrders.size === 0}
+            size="lg"
+            className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
           >
-            <ArrowRight className="h-4 w-4 mr-2" />
-            Progress to Shipping ({selectedOrders.size})
+            <ArrowRight className="mr-2 h-5 w-5" />
+            Progress {selectedOrders.size} Order{selectedOrders.size !== 1 ? 's' : ''} to Shipping
           </Button>
         </div>
-      )}
-
-      {/* UPS Label Creator Dialog */}
-      {showLabelCreator && selectedOrderId && (
-        <UPSLabelCreator
-          orderId={selectedOrderId}
-          isOpen={showLabelCreator}
-          onClose={() => {
-            setShowLabelCreator(false);
-            setSelectedOrderId(null);
-          }}
-          onSuccess={handleLabelSuccess}
-        />
-      )}
-
-      {/* Label Viewer Dialog */}
-      {showLabelViewer && labelData && (
-        <Dialog open={showLabelViewer} onOpenChange={setShowLabelViewer}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Shipping Label Generated</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                <p className="text-sm"><strong>Tracking Number:</strong> {labelData.trackingNumber}</p>
-                <p className="text-sm"><strong>Service:</strong> {labelData.serviceDescription}</p>
-                <p className="text-sm"><strong>Cost:</strong> ${labelData.totalCharges}</p>
-              </div>
-              {labelData.labelImageFormat && (
-                <div className="text-center">
-                  <Button
-                    onClick={() => downloadLabel(labelData.graphicImage, labelData.trackingNumber, selectedOrderId!)}
-                    className="mb-4"
-                  >
-                    Download Label
-                  </Button>
-                  <div className="border rounded-lg p-4 bg-white">
-                    <img 
-                      src={`data:image/gif;base64,${labelData.graphicImage}`}
-                      alt="Shipping Label"
-                      className="mx-auto max-w-full h-auto"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   );

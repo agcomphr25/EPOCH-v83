@@ -35,45 +35,58 @@ export default function CNCQueuePage() {
     'spartan_bipod'      // Spartan bipod specifically
   ];
   
+  // Helper function to normalize feature values (handles arrays and strings)
+  const normalizeFeatureValue = (value: any): string => {
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value[0] : '';
+    }
+    return typeof value === 'string' ? value : '';
+  };
+
   // Check if order has features that require gunsmith work
   const requiresGunsmith = (order: any) => {
     if (!order.features) return false;
     
-    // Check each gunsmith feature
+    // Check specific gunsmith features with proper array handling
+    const railValue = normalizeFeatureValue(order.features.rail_accessory);
+    const qdValue = normalizeFeatureValue(order.features.qd_accessory);
+    
+    // Rail accessory check - anything other than 'no_rail' or 'none' requires gunsmith
+    if (railValue && railValue !== 'no_rail' && railValue !== 'none' && railValue !== '') {
+      return true;
+    }
+    
+    // QD accessory check - anything other than 'no_qds' or 'none' requires gunsmith  
+    if (qdValue && qdValue !== 'no_qds' && qdValue !== 'none' && qdValue !== '') {
+      return true;
+    }
+    
+    // Check other gunsmith features
     for (const feature of gunsimthFeatures) {
-      const featureValue = order.features[feature];
+      if (feature === 'rail_accessory' || feature === 'qd_accessory') {
+        continue; // Already checked above
+      }
+      
+      const featureValue = normalizeFeatureValue(order.features[feature]);
       
       // Consider it a gunsmith feature if:
       // - It's true/yes
       // - It's a non-empty string that's not 'none' or 'no'
-      if (featureValue === true || 
+      if (featureValue === 'true' || 
           featureValue === 'yes' ||
-          (typeof featureValue === 'string' && 
-           featureValue !== 'none' && 
+          (featureValue !== 'none' && 
            featureValue !== 'no' && 
-           featureValue !== '' && (
-           featureValue.toLowerCase().includes('yes') ||
-           featureValue.toLowerCase().includes('rail') ||
-           featureValue.toLowerCase().includes('qd') ||
-           featureValue.toLowerCase().includes('tripod') ||
-           featureValue.toLowerCase().includes('bipod') ||
-           featureValue.toLowerCase().includes('spartan')
-           ))
+           featureValue !== '' && 
+           featureValue !== 'false' &&
+           (featureValue.toLowerCase().includes('yes') ||
+            featureValue.toLowerCase().includes('rail') ||
+            featureValue.toLowerCase().includes('qd') ||
+            featureValue.toLowerCase().includes('tripod') ||
+            featureValue.toLowerCase().includes('bipod') ||
+            featureValue.toLowerCase().includes('spartan')))
       ) {
         return true;
       }
-    }
-    
-    // Also check for specific values that indicate gunsmith work needed
-    const railValue = order.features.rail_accessory;
-    const qdValue = order.features.qd_accessory;
-    
-    if (railValue && railValue !== 'no_rail' && railValue !== 'none') {
-      return true;
-    }
-    
-    if (qdValue && qdValue !== 'no_qds' && qdValue !== 'none') {
-      return true;
     }
     
     return false;
@@ -390,25 +403,27 @@ export default function CNCQueuePage() {
                               {(() => {
                                 const activeFeatures = [];
                                 
-                                // Check rail accessory
-                                if (order.features?.rail_accessory && 
-                                    order.features.rail_accessory !== 'no_rail' && 
-                                    order.features.rail_accessory !== 'none') {
+                                // Check rail accessory (with array handling)
+                                const railVal = normalizeFeatureValue(order.features?.rail_accessory);
+                                if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
                                   activeFeatures.push('RAILS');
                                 }
                                 
-                                // Check QD accessory
-                                if (order.features?.qd_accessory && 
-                                    order.features.qd_accessory !== 'no_qds' && 
-                                    order.features.qd_accessory !== 'none') {
+                                // Check QD accessory (with array handling)
+                                const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
+                                if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
                                   activeFeatures.push('QD CUPS');
                                 }
                                 
                                 // Check other gunsmith features
                                 gunsimthFeatures.forEach(feature => {
-                                  const value = order.features?.[feature];
-                                  if (value === true || value === 'yes' ||
-                                      (typeof value === 'string' && value !== 'none' && value !== 'no' && value !== '')) {
+                                  if (feature === 'rail_accessory' || feature === 'qd_accessory') {
+                                    return; // Already handled above
+                                  }
+                                  
+                                  const value = normalizeFeatureValue(order.features?.[feature]);
+                                  if (value === 'true' || value === 'yes' ||
+                                      (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
                                     
                                     if (feature === 'tripod_tap') activeFeatures.push('TRIPOD TAP');
                                     else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD MOUNT');

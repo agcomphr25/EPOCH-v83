@@ -45,6 +45,7 @@ interface Order {
   isCancelled?: boolean;
   cancelledAt?: string;
   cancelReason?: string;
+  isVerified?: boolean;
 }
 
 export default function AllOrdersPage() {
@@ -333,7 +334,7 @@ export default function AllOrdersPage() {
             </TableHeader>
             <TableBody>
               {sortedOrders.map(order => (
-                <TableRow key={order.orderId}>
+                <TableRow key={order.orderId} className={order.isVerified ? "bg-green-50 dark:bg-green-950" : ""}>
                   <TableCell className="font-medium">
                     {order.fbOrderNumber || order.orderId}
                   </TableCell>

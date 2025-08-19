@@ -111,35 +111,12 @@ export default function GunsimthQueuePage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {gunsmithOrders.map((order: any) => (
-                <OrderTooltip key={order.id} order={order} stockModels={stockModels}>
-                  <Card className="cursor-pointer hover:shadow-md transition-shadow bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-2">
-                          <div className="font-semibold text-lg">
-                            {getDisplayOrderId(order)}
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-300">
-                            {getModelDisplayName(order.modelId)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {order.currentDepartment}
-                            </Badge>
-                            {order.dueDate && (
-                              <Badge variant="outline" className="text-xs">
-                                Due: {format(new Date(order.dueDate), 'M/d')}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-                          {order.orderDate && format(new Date(order.orderDate), 'M/d/yy')}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </OrderTooltip>
+                <OrderTooltip 
+                  key={order.id} 
+                  order={order} 
+                  stockModels={stockModels}
+                  className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800"
+                />
               ))}
             </div>
           )}

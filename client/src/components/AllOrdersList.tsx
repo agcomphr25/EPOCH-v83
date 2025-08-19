@@ -416,7 +416,10 @@ export default function AllOrdersList() {
                 const isComplete = order.currentDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
 
-
+                // Debug logging for verified orders
+                if (order.isVerified) {
+                  console.log(`✅ Verified order found: ${order.orderId}`, order.isVerified);
+                }
 
                 return (
                   <TableRow 

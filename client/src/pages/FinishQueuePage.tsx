@@ -22,14 +22,9 @@ export default function FinishQueuePage() {
 
   // Finish technicians list
   const finishTechnicians = [
-    'Alex Johnson',
-    'Sarah Chen', 
-    'Mike Rodriguez',
-    'Lisa Thompson',
-    'David Park',
-    'Emily Carter',
-    'Jason Wu',
-    'Maria Santos'
+    'Tomas',
+    'AG',
+    'Timmy'
   ];
 
   // Get all orders from production pipeline

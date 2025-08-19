@@ -58,7 +58,18 @@ export default function CNCQueuePage() {
   const requiresGunsmith = (order: any) => {
     // Check if it's an adjustable stock model based on modelId/stockModelId
     const modelId = order.modelId || order.stockModelId || '';
-    if (modelId.toLowerCase().includes('adjustable')) {
+    
+    // Check both the modelId and the actual stock model display name
+    const modelDisplayName = getModelDisplayName(modelId);
+    
+    // Debug logging for adjustable stock detection
+    const isAdjustableModel = modelId.toLowerCase().includes('adjustable') || 
+        modelId.toLowerCase().includes('adj') ||
+        modelDisplayName.toLowerCase().includes('adjustable') ||
+        modelDisplayName.toLowerCase().includes('adj');
+    
+    if (isAdjustableModel) {
+      console.log(`🔧 Adjustable stock detected: ${order.orderId} - ModelID: ${modelId} - Display: ${modelDisplayName}`);
       return true;
     }
     

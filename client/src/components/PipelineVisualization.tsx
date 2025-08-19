@@ -8,12 +8,13 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 const departments = [
   { name: 'P1 Production Queue', color: 'bg-[#7BAFD4]' },
   { name: 'Layup/Plugging', color: 'bg-[#7BAFD4]' },
+  { name: 'Barcode', color: 'bg-[#7BAFD4]' },
   { name: 'CNC', color: 'bg-[#7BAFD4]' },
   { name: 'Gunsmith', color: 'bg-[#7BAFD4]' },
-  { name: 'Finish Assignment', color: 'bg-[#7BAFD4]' },
+  { name: 'Finish', color: 'bg-[#7BAFD4]' },
   { name: 'Finish QC', color: 'bg-[#7BAFD4]' },
   { name: 'Paint', color: 'bg-[#7BAFD4]' },
-  { name: 'QC', color: 'bg-[#7BAFD4]' },
+  { name: 'Shipping QC', color: 'bg-[#7BAFD4]' },
   { name: 'Shipping', color: 'bg-[#7BAFD4]' }
 ];
 

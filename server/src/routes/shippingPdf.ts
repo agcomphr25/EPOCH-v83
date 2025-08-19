@@ -384,16 +384,101 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    // QC Checklist items
+    // Get additional data needed for order-specific checklist
+    const stockModels = await storage.getAllStockModels();
+    const customers = await storage.getAllCustomers();
+    const addresses = await storage.getAllAddresses();
+    const features = await storage.getAllFeatures();
+
+    // Helper functions to extract order-specific details
+    const getStockModelName = (modelId: string) => {
+      const model = stockModels.find(m => m.id === modelId);
+      return model?.displayName || model?.name || modelId || 'Unknown Model';
+    };
+
+    const getCustomerInfo = (customerId: string) => {
+      const customer = customers.find(c => c.id?.toString() === customerId?.toString());
+      return customer;
+    };
+
+    const getShippingAddress = (customerId: string) => {
+      const customerAddresses = addresses.filter(a => a.customerId?.toString() === customerId?.toString());
+      const shippingAddr = customerAddresses.find(a => a.type === 'shipping') || customerAddresses[0];
+      if (shippingAddr) {
+        return `${shippingAddr.street}${shippingAddr.street2 ? ', ' + shippingAddr.street2 : ''}, ${shippingAddr.city}, ${shippingAddr.state} ${shippingAddr.zipCode}`;
+      }
+      return 'Address not found';
+    };
+
+    const getFeatureValue = (featureId: string, value: any) => {
+      const feature = features.find((f: any) => f.id === featureId);
+      if (!feature || !feature.options) return value;
+      
+      if (Array.isArray(value)) {
+        return value.map(v => {
+          const option = feature.options.find((opt: any) => opt.value === v);
+          return option?.label || v;
+        }).join(', ');
+      } else {
+        const option = feature.options.find((opt: any) => opt.value === value);
+        return option?.label || value;
+      }
+    };
+
+    const formatOrderFeatures = (orderFeatures: any) => {
+      if (!orderFeatures) return {};
+      
+      const formatted: any = {};
+      Object.entries(orderFeatures).forEach(([key, value]) => {
+        formatted[key] = getFeatureValue(key, value);
+      });
+      return formatted;
+    };
+
+    // Extract order-specific details
+    const stockModelName = getStockModelName(order.modelId || '');
+    const customer = getCustomerInfo(order.customerId || '');
+    const shippingAddress = getShippingAddress(order.customerId || '');
+    const orderFeatures = formatOrderFeatures(order.features || {});
+
+    // Build order-specific checklist items
     currentY -= 40;
     const checklistItems = [
-      'The proper stock(s) is being shipped:\n(e.g. Alpine Hunter, CAT, etc.)',
-      'Stock(s) is inletted according to the work order:\n(action, barrel, bottom metal, right or left hand)',
-      'Stock(s) is the proper color:',
-      'Custom options are present and completed:\n(QD Cups, rail, LOP, tri-pod option, etc)',
-      'Swivel studs are installed correctly:',
-      'Stock(s) is being shipped to the correct address:',
-      'Buttpad and overall stock finish meet QC standards:'
+      `1) The proper stock is being shipped:\n    Stock Model: ${stockModelName}`,
+      
+      `2) Stock is inletted according to the work order:\n    ${[
+        orderFeatures.handedness ? `Handedness: ${orderFeatures.handedness}` : 'Handedness: Not specified',
+        orderFeatures.bottom_metal ? `Bottom Metal: ${orderFeatures.bottom_metal}` : 'Bottom Metal: Standard',
+        orderFeatures.barrel_inlet ? `Barrel Inlet: ${orderFeatures.barrel_inlet}` : 'Barrel Inlet: Standard',
+        orderFeatures.action ? `Action: ${orderFeatures.action}` : 'Action: Standard',
+        orderFeatures.action_length ? `Action Length: ${orderFeatures.action_length}` : 'Action Length: Standard'
+      ].join('\n    ')}`,
+      
+      `3) Stock color:\n    Paint Option: ${orderFeatures.paint_option || orderFeatures.color || 'Standard'}`,
+      
+      `4) Custom options are present and completed:\n    ${Object.entries(orderFeatures)
+        .filter(([key]) => ['qd_accessory', 'lop_adjustment', 'rail_accessory', 'texture', 'tripod_tap', 'tripod_mount', 'bipod_accessory'].includes(key))
+        .map(([key, value]) => {
+          const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          return `${displayKey}: ${value}`;
+        }).join('\n    ') || 'No custom options specified'}`,
+      
+      `5) Swivel studs are installed correctly:\n    Swivel Studs: ${orderFeatures.swivel_studs || orderFeatures.studs || 'Standard configuration'}`,
+      
+      `6) Stock is being shipped to the correct address:\n    Customer: ${customer?.name || 'Unknown'}\n    Address: ${shippingAddress}`,
+      
+      '7) Buttpad and overall stock meets QC standards',
+      
+      `8) All accessories are included:\n    ${[
+        orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'Standard' ? `Bottom Metal: ${orderFeatures.bottom_metal}` : null,
+        orderFeatures.hat ? 'Hat included' : null,
+        orderFeatures.shirt ? 'Shirt included' : null,
+        orderFeatures.touch_up_paint ? 'Touch-up paint included' : null,
+        Object.entries(orderFeatures)
+          .filter(([key]) => ['accessories', 'extras', 'add_ons'].includes(key))
+          .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+          .join(', ')
+      ].filter(Boolean).join('\n    ') || 'No additional accessories'}`
     ];
 
     checklistItems.forEach((item, index) => {
@@ -412,18 +497,18 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       let lineY = currentY - 8;
 
       itemLines.forEach((line, lineIndex) => {
-        const prefix = lineIndex === 0 ? `${index + 1}) ` : '    ';
-        page.drawText(prefix + line, {
+        // Don't add prefix since numbering is already included in the text
+        page.drawText(line, {
           x: margin + 20,
           y: lineY,
-          size: 10,
-          font: lineIndex === 0 ? font : font,
+          size: 9,
+          font: lineIndex === 0 ? boldFont : font,
           color: rgb(0, 0, 0),
         });
-        lineY -= 14;
+        lineY -= 12;
       });
 
-      currentY -= (itemLines.length * 14) + 15;
+      currentY -= (itemLines.length * 12) + 18;
     });
 
 

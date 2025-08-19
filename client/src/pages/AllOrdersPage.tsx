@@ -46,12 +46,13 @@ interface Order {
   cancelledAt?: string;
   cancelReason?: string;
   isVerified?: boolean;
+  createdAt?: string;
 }
 
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model'>('orderDate');
+  const [sortBy, setSortBy] = useState<'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'>('orderDate');
   const [cancelReason, setCancelReason] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
@@ -216,6 +217,8 @@ export default function AllOrdersPage() {
         return (a.customer || '').localeCompare(b.customer || '');
       case 'model':
         return (a.modelId || '').localeCompare(b.modelId || '');
+      case 'enteredDate':
+        return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime(); // Newest entered first
       default:
         return 0;
     }
@@ -303,7 +306,7 @@ export default function AllOrdersPage() {
 
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Sort by:</span>
-                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model') => setSortBy(value)}>
+                <Select value={sortBy} onValueChange={(value: 'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate') => setSortBy(value)}>
                   <SelectTrigger className="w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -312,6 +315,7 @@ export default function AllOrdersPage() {
                     <SelectItem value="dueDate">Due Date</SelectItem>
                     <SelectItem value="customer">Customer</SelectItem>
                     <SelectItem value="model">Model</SelectItem>
+                    <SelectItem value="enteredDate">Entered Date</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

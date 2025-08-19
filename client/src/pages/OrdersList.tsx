@@ -497,6 +497,10 @@ export default function OrdersList() {
           aValue = new Date(a.dueDate);
           bValue = new Date(b.dueDate);
           break;
+        case 'enteredDate':
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
+          break;
         case 'orderDate':
         default:
           aValue = new Date(a.orderDate);
@@ -747,6 +751,7 @@ export default function OrdersList() {
                 <SelectContent>
                   <SelectItem value="orderDate">Order Date</SelectItem>
                   <SelectItem value="dueDate">Due Date</SelectItem>
+                  <SelectItem value="enteredDate">Entered Date</SelectItem>
                   <SelectItem value="orderId">Order ID</SelectItem>
                   <SelectItem value="customer">Customer</SelectItem>
                   <SelectItem value="model">Model</SelectItem>

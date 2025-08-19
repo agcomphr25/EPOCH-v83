@@ -42,7 +42,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Payment Tracking**: Integrated 'PAID' badge functionality with consistent payment data across the system.
     -   **Shipping Integration**: Full UPS API integration for label creation, rate calculation, and tracking.
     -   **Centralized Configuration**: `shared/company-config.ts` centralizes company information and certification templates.
-    -   **Code Quality**: Integrated ESLint, Prettier, and lint-staged for consistent code formatting and quality checks.
+    -   **Code Quality**: Integrated ESLint, Prettier, and lint-staged for consistent code formatting and quality checks. Custom feature validation system enforces the "Golden Rule" by checking for proper usage of the features object as single source of truth.
 
 ## External Dependencies
 

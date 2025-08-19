@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { useLocation } from 'wouter';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [, setLocation] = useLocation();
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -48,6 +50,11 @@ export default function AGTestDashboard() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Navigation functions
+  const navigateTo = (path: string) => {
+    setLocation(path);
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
       {/* Header */}
@@ -63,40 +70,76 @@ export default function AGTestDashboard() {
         </div>
       </div>
 
-      {/* Quick Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+      {/* Navigation Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          onClick={() => navigateTo('/layup-scheduler')}
+        >
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium">Pipeline Status</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Real-time production tracking across all departments
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <List className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium">Order Management</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Complete order lifecycle and department progression
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-medium">Layup Scheduling</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-medium">Layup Scheduler</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Drag & drop scheduling with automatic optimization
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
+          onClick={() => navigateTo('/all-orders')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <List className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium">All Orders</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Complete order management and tracking system
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20"
+          onClick={() => navigateTo('/barcode-department-manager')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <QrCode className="w-5 h-5 text-orange-600" />
+                <span className="text-sm font-medium">Barcode Manager</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Barcode scanning and label generation system
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+          onClick={() => navigateTo('/finish-department-manager')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                <span className="text-sm font-medium">Finish Manager</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Finish department queue and technician assignment
             </p>
           </CardContent>
         </Card>

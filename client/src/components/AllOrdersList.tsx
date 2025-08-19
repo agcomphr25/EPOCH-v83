@@ -124,7 +124,7 @@ export default function AllOrdersList() {
       
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: requestBody
+        body: JSON.stringify(requestBody)
       });
       return response;
     },

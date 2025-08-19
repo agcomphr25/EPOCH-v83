@@ -460,6 +460,11 @@ export default function OrdersList() {
           return true;
         }
         
+        // Search by FB Order Number
+        if (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(term)) {
+          return true;
+        }
+        
         return false;
       });
     }
@@ -699,7 +704,7 @@ export default function OrdersList() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 type="text"
-                placeholder="Search by Order ID, Customer Name, or Phone..."
+                placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"

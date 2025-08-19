@@ -2188,82 +2188,51 @@ export function registerRoutes(app: Express): Server {
             borderWidth: 1,
           });
           
-          // Generate barcode using PDF rectangles (Code 39 pattern)
-          // Always use the order ID for barcode labels (not the database barcode field)
+          // Generate proper scannable barcode using JSBarcode library
           const barcodeText = order.orderId;
           
-          // Complete Code 39 barcode generation using rectangles
-          const drawCode39Barcode = (text: string, startX: number, startY: number) => {
-            // Complete Code 39 character set with proper encoding
-            const code39Map: { [key: string]: string } = {
-              '0': '101001101101', '1': '110100101011', '2': '101100101011', '3': '110110010101',
-              '4': '101001101011', '5': '110100110101', '6': '101100110101', '7': '101001011011',
-              '8': '110100101101', '9': '101100101101', 'A': '110101001011', 'B': '101101001011',
-              'C': '110110100101', 'D': '101011001011', 'E': '110101100101', 'F': '101101100101',
-              'G': '101010011011', 'H': '110101001101', 'I': '101101001101', 'J': '101011001101',
-              'K': '110101010011', 'L': '101101010011', 'M': '110110101001', 'N': '101011010011',
-              'O': '110101101001', 'P': '101101101001', 'Q': '101010110011', 'R': '110101011001',
-              'S': '101101011001', 'T': '101011011001', 'U': '110010101011', 'V': '100110101011',
-              'W': '110011010101', 'X': '100101101011', 'Y': '110010110101', 'Z': '100110110101',
-              '-': '100101011011', '.': '110010101101', ' ': '100110101101', '$': '100100100101',
-              '/': '100100101001', '+': '100101001001', '%': '101001001001', '*': '100101101101'
-            };
-            
-            const thinWidth = 1.2;
-            const thickWidth = 3;
-            const barHeight = 20;
-            let currentX = startX;
-            
-            // Calculate total width needed
-            const fullText = `*${text}*`; // Code 39 requires start/stop characters
-            let totalWidth = 0;
-            for (let char of fullText.toUpperCase()) {
-              const pattern = code39Map[char];
-              if (pattern) {
-                for (let bit of pattern) {
-                  totalWidth += bit === '1' ? thickWidth : thinWidth;
-                }
-                totalWidth += thinWidth; // Gap between characters
-              }
-            }
-            
-            // Adjust bar width if needed to fit in label
-            const maxBarcodeWidth = 160;
-            let widthMultiplier = 1;
-            if (totalWidth > maxBarcodeWidth) {
-              widthMultiplier = maxBarcodeWidth / totalWidth;
-            }
-            
-            const adjustedThinWidth = thinWidth * widthMultiplier;
-            const adjustedThickWidth = thickWidth * widthMultiplier;
-            
-            // Draw the barcode
-            for (let char of fullText.toUpperCase()) {
-              const pattern = code39Map[char];
-              if (pattern) {
-                for (let i = 0; i < pattern.length; i++) {
-                  const isBar = i % 2 === 0; // Even positions are bars, odd are spaces
-                  const isThick = pattern[i] === '1';
-                  const width = isThick ? adjustedThickWidth : adjustedThinWidth;
-                  
-                  if (isBar) {
-                    page.drawRectangle({
-                      x: currentX,
-                      y: startY,
-                      width: width,
-                      height: barHeight,
-                      color: rgb(0, 0, 0),
-                    });
-                  }
-                  currentX += width;
-                }
-                currentX += adjustedThinWidth; // Gap between characters
-              }
-            }
-          };
+          // Use JSBarcode to generate proper Code 39 barcode
+          const JsBarcode = require('jsbarcode');
+          const { createCanvas } = require('canvas');
           
-          // Position barcode in center of label
-          drawCode39Barcode(barcodeText, x + 10, y + 28);
+          // Create canvas for barcode generation
+          const canvas = createCanvas(200, 50);
+          const ctx = canvas.getContext('2d');
+          
+          try {
+            // Generate Code 39 barcode
+            JsBarcode(canvas, barcodeText, {
+              format: "CODE39",
+              width: 1.5,
+              height: 20,
+              displayValue: false,
+              margin: 0,
+              background: "white",
+              lineColor: "black"
+            });
+            
+            // Get the canvas as image data
+            const imageData = canvas.toBuffer('image/png');
+            const barcodeImage = await pdfDoc.embedPng(imageData);
+            
+            // Draw the barcode image on the PDF
+            page.drawImage(barcodeImage, {
+              x: x + 10,
+              y: y + 28,
+              width: 160,
+              height: 20
+            });
+            
+          } catch (error) {
+            console.error('Barcode generation error:', error);
+            // Fallback: Draw text if barcode generation fails
+            page.drawText(`[BARCODE: ${barcodeText}]`, {
+              x: x + 10,
+              y: y + 35,
+              size: 8,
+              color: rgb(0, 0, 0),
+            });
+          }
           
           // Add order information at top
           page.drawText(`${order.orderId}`, {
@@ -2273,11 +2242,11 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add barcode text below barcode for verification (same as order ID)
-          page.drawText(`*${barcodeText}*`, {
+          // Add barcode text below barcode for verification (clean order ID)
+          page.drawText(`${barcodeText}`, {
             x: x + 8,
             y: y + 18,
-            size: 6,
+            size: 7,
             color: rgb(0, 0, 0),
           });
           

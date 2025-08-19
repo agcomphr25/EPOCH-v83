@@ -178,8 +178,8 @@ export default function PipelineVisualization() {
             
             const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
             
-            // Determine if department should be highlighted (more than 25 stocks)
-            const isOverloaded = count > 25;
+            // Determine if department should be highlighted (more than 45 stocks)
+            const isOverloaded = count > 45;
             
             return (
               <div key={dept.name} className="text-center space-y-2">
@@ -233,7 +233,7 @@ export default function PipelineVisualization() {
           <div className="flex items-center justify-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded" style={{backgroundColor: '#FFFF00'}}></div>
-              <span>Department Card: {'>'}25 Stocks</span>
+              <span>Department Card: {'>'}45 Stocks</span>
             </div>
           </div>
         </div>

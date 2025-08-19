@@ -62,14 +62,13 @@ export default function CNCQueuePage() {
     // Check both the modelId and the actual stock model display name
     const modelDisplayName = getModelDisplayName(modelId);
     
-    // Debug logging for adjustable stock detection
+    // Check for adjustable stock models
     const isAdjustableModel = modelId.toLowerCase().includes('adjustable') || 
         modelId.toLowerCase().includes('adj') ||
         modelDisplayName.toLowerCase().includes('adjustable') ||
         modelDisplayName.toLowerCase().includes('adj');
     
     if (isAdjustableModel) {
-      console.log(`🔧 Adjustable stock detected: ${order.orderId} - ModelID: ${modelId} - Display: ${modelDisplayName}`);
       return true;
     }
     
@@ -213,9 +212,12 @@ export default function CNCQueuePage() {
   // Progress to Gunsmith mutation
   const progressToGunsmith = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', 'POST', { 
-        orderIds, 
-        toDepartment: 'Gunsmith' 
+      return await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          orderIds, 
+          toDepartment: 'Gunsmith' 
+        })
       });
     },
     onSuccess: () => {
@@ -232,9 +234,12 @@ export default function CNCQueuePage() {
   // Progress to Finish mutation
   const progressToFinish = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', 'POST', { 
-        orderIds, 
-        toDepartment: 'Finish' 
+      return await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          orderIds, 
+          toDepartment: 'Finish' 
+        })
       });
     },
     onSuccess: () => {
@@ -348,7 +353,7 @@ export default function CNCQueuePage() {
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={selectAllGunsmith}
-                  onChange={toggleAllGunsimthSelection}
+                  onCheckedChange={toggleAllGunsimthSelection}
                 />
                 Select All
               </label>
@@ -393,7 +398,7 @@ export default function CNCQueuePage() {
                     <div className="flex items-center gap-2">
                       <Checkbox
                         checked={isSelected}
-                        onChange={() => toggleGunsimthOrderSelection(order.orderId)}
+                        onCheckedChange={() => toggleGunsimthOrderSelection(order.orderId)}
                         className="flex-shrink-0"
                       />
                       
@@ -472,7 +477,7 @@ export default function CNCQueuePage() {
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={selectAllFinish}
-                  onChange={toggleAllFinishSelection}
+                  onCheckedChange={toggleAllFinishSelection}
                 />
                 Select All
               </label>
@@ -517,7 +522,7 @@ export default function CNCQueuePage() {
                     <div className="flex items-center gap-2">
                       <Checkbox
                         checked={isSelected}
-                        onChange={() => toggleFinishOrderSelection(order.orderId)}
+                        onCheckedChange={() => toggleFinishOrderSelection(order.orderId)}
                         className="flex-shrink-0"
                       />
                       

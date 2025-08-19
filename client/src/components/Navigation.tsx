@@ -448,38 +448,42 @@ export default function Navigation() {
     closeAllDropdowns();
   }, [location, closeAllDropdowns]);
 
-  // Auto-expand dropdowns when on those pages
+  // Auto-expand dropdowns when on those pages (with delay to prevent interference with manual closing)
   useEffect(() => {
-    if (isVerifiedModulesActive) {
-      setVerifiedModulesExpanded(true);
-    }
-    if (isFormsReportsActive) {
-      setFormsReportsExpanded(true);
-    }
-    if (isInventoryActive) {
-      setInventoryExpanded(true);
-    }
-    if (isQcMaintenanceActive) {
-      setQcMaintenanceExpanded(true);
-    }
-    if (isEmployeesActive) {
-      setEmployeesExpanded(true);
-    }
-    if (isFinanceActive) {
-      setFinanceExpanded(true);
-    }
-    if (isTestDashboardsActive) {
-      setTestDashboardsExpanded(true);
-    }
-    if (isPurchaseOrdersActive) {
-      setPurchaseOrdersExpanded(true);
-    }
-    if (isProductionSchedulingActive) {
-      setProductionSchedulingExpanded(true);
-    }
-    if (isDepartmentQueueActive) {
-      setDepartmentQueueExpanded(true);
-    }
+    const timer = setTimeout(() => {
+      if (isVerifiedModulesActive) {
+        setVerifiedModulesExpanded(true);
+      }
+      if (isFormsReportsActive) {
+        setFormsReportsExpanded(true);
+      }
+      if (isInventoryActive) {
+        setInventoryExpanded(true);
+      }
+      if (isQcMaintenanceActive) {
+        setQcMaintenanceExpanded(true);
+      }
+      if (isEmployeesActive) {
+        setEmployeesExpanded(true);
+      }
+      if (isFinanceActive) {
+        setFinanceExpanded(true);
+      }
+      if (isTestDashboardsActive) {
+        setTestDashboardsExpanded(true);
+      }
+      if (isPurchaseOrdersActive) {
+        setPurchaseOrdersExpanded(true);
+      }
+      if (isProductionSchedulingActive) {
+        setProductionSchedulingExpanded(true);
+      }
+      if (isDepartmentQueueActive) {
+        setDepartmentQueueExpanded(true);
+      }
+    }, 100); // Small delay to prevent conflicts with manual dropdown closing
+
+    return () => clearTimeout(timer);
   }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (

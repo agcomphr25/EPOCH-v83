@@ -218,7 +218,10 @@ export default function OrdersList() {
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
     
-    const currentIndex = departmentFlow.indexOf(currentDepartment);
+    // Handle alternative department names
+    const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
+    
+    const currentIndex = departmentFlow.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
       return departmentFlow[currentIndex + 1];
     }
@@ -229,9 +232,15 @@ export default function OrdersList() {
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string, nextDepartment: string }) => {
       console.log(`🔄 Progressing order ${orderId} to ${nextDepartment}`);
-      const response = await apiRequest(`/api/orders/${orderId}/progress`, {
+      
+      // Use the bulk department update endpoint that other pages use
+      const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
-        body: { nextDepartment }
+        body: {
+          orderIds: [orderId],
+          department: nextDepartment,
+          status: 'IN_PROGRESS'
+        }
       });
       console.log(`✅ Progress response:`, response);
       return response;
@@ -240,6 +249,7 @@ export default function OrdersList() {
       console.log(`✅ Order ${variables.orderId} progressed successfully to ${variables.nextDepartment}`);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       toast.success(`Order progressed to ${variables.nextDepartment}`);
     },
     onError: (error: any, variables) => {

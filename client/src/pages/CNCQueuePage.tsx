@@ -363,13 +363,13 @@ export default function CNCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {gunsimthQueue.map((order: any) => {
+              {gunsimthQueue.map((order: any, index: number) => {
                 const isSelected = selectedGunsimthOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
                   <Card 
-                    key={order.orderId}
+                    key={`gunsmith-${order.orderId}-${index}`}
                     className={`transition-all duration-200 border-l-4 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
@@ -516,13 +516,13 @@ export default function CNCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {finishQueue.map((order: any) => {
+              {finishQueue.map((order: any, index: number) => {
                 const isSelected = selectedFinishOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
                   <Card 
-                    key={order.orderId}
+                    key={`finish-${order.orderId}-${index}`}
                     className={`transition-all duration-200 border-l-4 ${
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'

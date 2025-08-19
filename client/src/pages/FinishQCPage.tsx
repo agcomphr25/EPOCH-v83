@@ -336,12 +336,12 @@ export default function FinishQCPage() {
                                   {order.customerName}
                                 </div>
                                 
-                                <div className="flex gap-1">
+                                <div className="flex gap-1 flex-wrap">
                                   <Badge variant="secondary" className="text-xs px-1 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
-                                    {getTextureInfo(order).split(' ')[0]}
+                                    {getTextureInfo(order)}
                                   </Badge>
                                   <Badge variant="secondary" className="text-xs px-1 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
-                                    {getPaintColor(order).includes('No') ? 'None' : getPaintColor(order).split(' ')[0]}
+                                    {getPaintColor(order)}
                                   </Badge>
                                 </div>
                               </div>

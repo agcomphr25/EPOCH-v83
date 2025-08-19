@@ -5,10 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { OrderTooltip } from '@/components/OrderTooltip';
-import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp } from 'lucide-react';
+import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, isAfter } from 'date-fns';
+import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
@@ -38,6 +37,68 @@ export default function FinishQueuePage() {
       order.currentDepartment === 'Finish'
     );
   }, [allOrders]);
+
+  // Categorize orders by due date
+  const categorizedOrders = useMemo(() => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    
+    const overdue = [];
+    const dueToday = [];
+    const dueTomorrow = [];
+    const dueThisWeek = [];
+    const dueNextWeek = [];
+    const futureDue = [];
+    const noDueDate = [];
+
+    for (const order of finishOrders) {
+      if (!order.dueDate) {
+        noDueDate.push(order);
+        continue;
+      }
+
+      const dueDate = new Date(order.dueDate);
+      dueDate.setHours(0, 0, 0, 0); // Normalize to start of day
+      const todayNorm = new Date(today);
+      todayNorm.setHours(0, 0, 0, 0);
+
+      if (dueDate < todayNorm) {
+        overdue.push(order);
+      } else if (dueDate.getTime() === todayNorm.getTime()) {
+        dueToday.push(order);
+      } else if (dueDate.getTime() === tomorrow.getTime()) {
+        dueTomorrow.push(order);
+      } else if (dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)) {
+        dueThisWeek.push(order);
+      } else if (dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)) {
+        dueNextWeek.push(order);
+      } else {
+        futureDue.push(order);
+      }
+    }
+
+    // Sort each category by due date and order ID
+    const sortFn = (a: any, b: any) => {
+      if (a.dueDate && b.dueDate) {
+        const dateCompare = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        if (dateCompare !== 0) return dateCompare;
+      }
+      return a.orderId.localeCompare(b.orderId);
+    };
+
+    return {
+      overdue: overdue.sort(sortFn),
+      dueToday: dueToday.sort(sortFn),
+      dueTomorrow: dueTomorrow.sort(sortFn),
+      dueThisWeek: dueThisWeek.sort(sortFn),
+      dueNextWeek: dueNextWeek.sort(sortFn),
+      futureDue: futureDue.sort(sortFn),
+      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId))
+    };
+  }, [finishOrders]);
 
   // Count orders in previous department (CNC)
   const cncCount = useMemo(() => {
@@ -213,33 +274,45 @@ export default function FinishQueuePage() {
               </div>
 
               {/* Multi-select Controls */}
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selectAll}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  Select All
-                </label>
-                <Button
-                  onClick={handleMoveToFinishQC}
-                  disabled={selectedOrders.size === 0 || !selectedTechnician || moveToFinishQCMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700"
-                  size="sm"
-                >
-                  <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to Finish QC ({selectedOrders.size})
-                </Button>
-                {selectedOrders.size > 0 && (
+              {finishOrders.length > 0 && (
+                <div className="flex items-center gap-2">
                   <Button
-                    onClick={handleClearSelection}
                     variant="outline"
                     size="sm"
+                    onClick={handleSelectAll}
+                    className="flex items-center gap-2"
                   >
-                    Clear Selection
+                    {selectedOrders.size === finishOrders.length ? (
+                      <CheckSquare className="h-4 w-4" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                    {selectedOrders.size === finishOrders.length ? 'Deselect All' : 'Select All'}
                   </Button>
-                )}
-              </div>
+                  
+                  {selectedOrders.size > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearSelection}
+                    >
+                      Clear ({selectedOrders.size})
+                    </Button>
+                  )}
+
+                  {selectedOrders.size > 0 && selectedTechnician && (
+                    <Button
+                      onClick={handleMoveToFinishQC}
+                      disabled={moveToFinishQCMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                      size="sm"
+                    >
+                      <ArrowRight className="h-4 w-4 mr-1" />
+                      Move to Finish QC ({selectedOrders.size})
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           </CardTitle>
           <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
@@ -252,55 +325,368 @@ export default function FinishQueuePage() {
               No orders currently in Finish department
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-              {finishOrders.map((order: any) => {
-                const isSelected = selectedOrders.has(order.orderId);
-                const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                
-                return (
-                  <OrderTooltip key={order.orderId} order={order} stockModels={stockModels as any[]}>
-                    <div 
-                      className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
-                        isOverdue
-                          ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                          : isSelected
-                          ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-l-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
-                      }`}
-                      onClick={() => handleSelectOrder(order.orderId)}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleSelectOrder(order.orderId)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="font-semibold text-sm">
-                          {getDisplayOrderId(order)}
+            <div className="space-y-6">
+              {/* Overdue Orders - Critical Priority */}
+              {categorizedOrders.overdue.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                      🚨 Overdue ({categorizedOrders.overdue.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.overdue.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
                         </div>
-                        {isOverdue && (
-                          <Badge variant="destructive" className="text-xs">
-                            OVERDUE
-                          </Badge>
-                        )}
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700' 
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
                       </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300 mb-1">
-                        {getModelDisplayName(order.modelId)}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
-                          Due: {format(new Date(order.dueDate), 'MMM d')}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Today - High Priority */}
+              {categorizedOrders.dueToday.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                      🔥 Due Today ({categorizedOrders.dueToday.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.dueToday.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
                         </div>
-                        {order.isPaid && (
-                          <Badge variant="secondary" className="text-xs">
-                            PAID
-                          </Badge>
-                        )}
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700' 
+                            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
                       </div>
-                    </div>
-                  </OrderTooltip>
-                );
-              })}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Tomorrow - Medium Priority */}
+              {categorizedOrders.dueTomorrow.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">
+                      ⚡ Due Tomorrow ({categorizedOrders.dueTomorrow.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.dueTomorrow.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700' 
+                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="outline" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due This Week - Normal Priority */}
+              {categorizedOrders.dueThisWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                      📅 Due This Week ({categorizedOrders.dueThisWeek.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.dueThisWeek.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700' 
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="outline" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due Next Week - Lower Priority */}
+              {categorizedOrders.dueNextWeek.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">
+                      📋 Due Next Week ({categorizedOrders.dueNextWeek.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.dueNextWeek.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700' 
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="outline" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Future Due - Lowest Priority */}
+              {categorizedOrders.futureDue.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
+                      📆 Future Orders ({categorizedOrders.futureDue.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.futureDue.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              {order.dueDate && (
+                                <Badge variant="outline" className="text-xs">
+                                  Due: {format(new Date(order.dueDate), 'M/d')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No Due Date */}
+              {categorizedOrders.noDueDate.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-400">
+                      ❓ No Due Date ({categorizedOrders.noDueDate.length})
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categorizedOrders.noDueDate.map((order: any) => (
+                      <div key={order.id} className="relative">
+                        <div className="absolute top-2 left-2 z-10">
+                          <Checkbox
+                            checked={selectedOrders.has(order.orderId)}
+                            onCheckedChange={() => handleSelectOrder(order.orderId)}
+                            className="bg-white dark:bg-gray-800 border-2"
+                          />
+                        </div>
+                        <Card 
+                          className={`${selectedOrders.has(order.orderId) 
+                            ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700' 
+                            : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
+                          } pl-8`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold">{getDisplayOrderId(order)}</div>
+                              <Badge variant="secondary" className="text-xs">
+                                No Due Date
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                              {order.customerName}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {getModelDisplayName(order.modelId)}
+                            </div>
+                            {order.isPaid && (
+                              <Badge variant="secondary" className="text-xs">
+                                PAID
+                              </Badge>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

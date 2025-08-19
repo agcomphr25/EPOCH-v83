@@ -114,6 +114,9 @@ export default function OrderEntry() {
 
   // Track base due date for rush fee calculations
   const [baseDueDate, setBaseDueDate] = useState(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
+  
+  // Track whether user has manually set the due date
+  const [isManualDueDate, setIsManualDueDate] = useState(false);
 
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
@@ -126,26 +129,26 @@ export default function OrderEntry() {
 
   // Update base due date when stock model changes (only for new orders, not when editing existing ones)
   useEffect(() => {
-    if (modelId && modelOptions.length > 0 && !isEditMode) {
+    if (modelId && modelOptions.length > 0 && !isEditMode && !isManualDueDate) {
       const newBaseDueDate = calculateBaseDueDate();
       setBaseDueDate(newBaseDueDate);
       
-      // Only update actual due date if no rush fees are currently selected
+      // Only update actual due date if no rush fees are currently selected and user hasn't manually set date
       const otherOptions = features.other_options || [];
       const hasAnyRushFee = otherOptions.some((option: string) => 
         option.toLowerCase().includes('rush') && option.toLowerCase().includes('fee')
       );
       
-      if (!hasAnyRushFee) {
+      if (!hasAnyRushFee && !isManualDueDate) {
         setDueDate(newBaseDueDate);
       }
     }
-  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options, isEditMode]);
+  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options, isEditMode, isManualDueDate]);
 
   // Auto-adjust due date based on rush fee selections (only for new orders, not when editing existing ones)
   useEffect(() => {
-    // Skip auto-adjustment for existing orders being edited
-    if (isEditMode) return;
+    // Skip auto-adjustment for existing orders being edited or manually set due dates
+    if (isEditMode || isManualDueDate) return;
     
     const otherOptions = features.other_options || [];
     
@@ -167,8 +170,8 @@ export default function OrderEntry() {
       adjustedDate.setDate(adjustedDate.getDate() - 28);
     }
 
-    // Only update if the calculated date is different from current due date
-    if (adjustedDate.getTime() !== dueDate.getTime()) {
+    // Only update if the calculated date is different from current due date and user hasn't manually set it
+    if (adjustedDate.getTime() !== dueDate.getTime() && !isManualDueDate) {
       setDueDate(adjustedDate);
       
       // Show user feedback about the date change
@@ -199,7 +202,7 @@ export default function OrderEntry() {
         });
       }
     }
-  }, [features.other_options, baseDueDate, toast, modelId, isEditMode]); // Include modelId to recalculate when model changes
+  }, [features.other_options, baseDueDate, toast, modelId, isEditMode, isManualDueDate]); // Include modelId to recalculate when model changes
 
   // Update base due date when user manually changes due date (and no rush fees are selected)
   useEffect(() => {
@@ -699,17 +702,36 @@ export default function OrderEntry() {
         setDueDate(loadedDueDate);
         
         // Calculate what the base due date should be for this model (without rush fees)
+        let calculatedBaseDueDate = loadedDueDate;
+        let shouldBeManual = false;
+        
         if (order.modelId) {
           const selectedModel = modelOptions.find(m => m.id === order.modelId);
           const modelName = selectedModel?.displayName || selectedModel?.name || '';
           const isAdjModel = modelName.toLowerCase().includes('adj');
           const orderDate = new Date(order.orderDate);
           const daysFromOrder = isAdjModel ? 112 : 98;
-          const calculatedBaseDueDate = new Date(orderDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
-          setBaseDueDate(calculatedBaseDueDate);
-        } else {
-          setBaseDueDate(loadedDueDate);
+          calculatedBaseDueDate = new Date(orderDate.getTime() + daysFromOrder * 24 * 60 * 60 * 1000);
+          
+          // Check if loaded due date differs from auto-calculated date (allowing for rush fees)
+          const loadedTime = loadedDueDate.getTime();
+          const baseTime = calculatedBaseDueDate.getTime();
+          const rushFee1Time = new Date(calculatedBaseDueDate.getTime() - 28 * 24 * 60 * 60 * 1000).getTime();
+          const rushFee2Time = new Date(calculatedBaseDueDate.getTime() - 42 * 24 * 60 * 60 * 1000).getTime();
+          
+          // If the loaded date doesn't match any expected calculated date, it's manual
+          if (loadedTime !== baseTime && loadedTime !== rushFee1Time && loadedTime !== rushFee2Time) {
+            shouldBeManual = true;
+          }
+          
+          // Check for explicit isManualDueDate flag in the order (if saved from newer versions)
+          if (order.isManualDueDate !== undefined) {
+            shouldBeManual = order.isManualDueDate;
+          }
         }
+        
+        setBaseDueDate(calculatedBaseDueDate);
+        setIsManualDueDate(shouldBeManual);
 
         if (order.customerId) {
           // Load customer data
@@ -1046,6 +1068,7 @@ export default function OrderEntry() {
         miscItems: miscItems,
         featureQuantities: otherOptionsQuantities,
         isVerified,
+        isManualDueDate, // Save the manual due date flag
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -1143,6 +1166,7 @@ export default function OrderEntry() {
     setOrderPayments([]);
     setMiscItems([]);
     setOtherOptionsQuantities({});
+    setIsManualDueDate(false); // Reset manual due date flag
     generateOrderId();
   };
 
@@ -1198,7 +1222,14 @@ export default function OrderEntry() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="dueDate">Estimated Completion Date</Label>
+                  <Label htmlFor="dueDate" className="flex items-center gap-2">
+                    Estimated Completion Date
+                    {isManualDueDate && (
+                      <Badge variant="secondary" className="text-xs">
+                        Custom
+                      </Badge>
+                    )}
+                  </Label>
                   <Input
                     id="dueDate"
                     name="dueDate"
@@ -1210,13 +1241,20 @@ export default function OrderEntry() {
                         const newDate = new Date(dateValue);
                         if (!isNaN(newDate.getTime())) {
                           setDueDate(newDate);
+                          setIsManualDueDate(true); // Mark as manually set
                         }
                       } else {
                         // If cleared, set to default 98 days from now
                         setDueDate(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000));
+                        setIsManualDueDate(false); // Reset manual flag when cleared
                       }
                     }}
                   />
+                  {isManualDueDate && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Due date manually set - will not auto-adjust for stock model or rush fees
+                    </p>
+                  )}
                 </div>
               </div>
 

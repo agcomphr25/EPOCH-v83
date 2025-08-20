@@ -643,7 +643,7 @@ export default function LayupScheduler() {
     setActiveId(event.active.id);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
 
@@ -654,13 +654,66 @@ export default function LayupScheduler() {
 
     if (!date || !moldId) return;
 
-    // Update order assignments
+    console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to ${moldId} on ${date}`);
+
+    // Update order assignments immediately for UI responsiveness
+    const newAssignment = { moldId, date };
     setOrderAssignments(prev => ({
       ...prev,
-      [orderId]: { moldId, date }
+      [orderId]: newAssignment
     }));
 
     setHasUnsavedChanges(true);
+
+    // Auto-save the assignment to prevent disappearing cards
+    try {
+      console.log('💾 AUTO-SAVE: Saving drag assignment to backend...');
+      
+      // Delete existing schedule entry for this order
+      await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+        method: 'DELETE'
+      }).catch(err => {
+        console.log('Note: No existing schedule found for order', orderId);
+      });
+
+      // Create new schedule entry
+      const scheduleEntry = {
+        orderId,
+        scheduledDate: new Date(date),
+        moldId: moldId,
+        employeeAssignments: [],
+        isOverride: true,
+        overriddenBy: 'user'
+      };
+
+      await apiRequest('/api/layup-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scheduleEntry)
+      });
+
+      console.log(`✅ AUTO-SAVE: Successfully saved ${orderId} assignment`);
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+
+      // Reset unsaved changes since we just saved
+      setHasUnsavedChanges(false);
+
+      toast({
+        title: "Assignment Saved",
+        description: `Order ${orderId} assigned to ${moldId}`,
+      });
+
+    } catch (error) {
+      console.error('❌ AUTO-SAVE ERROR: Failed to save assignment:', error);
+      toast({
+        title: "Save Failed",
+        description: `Failed to save assignment for ${orderId}. Use Save Schedule to retry.`,
+        variant: "destructive"
+      });
+    }
   };
 
   // Handle manual Friday assignment

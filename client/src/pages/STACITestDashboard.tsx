@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Factory } from 'lucide-react';
+import { Calendar, Factory, PlusCircle, FileText, Users, Settings, Wrench } from 'lucide-react';
+import { Link } from 'wouter';
 import LayupScheduler from '@/components/LayupScheduler';
 
 export default function STACITestDashboard() {
@@ -17,6 +18,59 @@ export default function STACITestDashboard() {
         <div className="text-sm text-gray-500 dark:text-gray-400">
           EPOCH v8 Manufacturing ERP
         </div>
+      </div>
+
+      {/* Quick Navigation Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+        <Link href="/order-entry">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
+            <CardContent className="p-4 text-center">
+              <PlusCircle className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Entry</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Create new orders</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/all-orders">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+            <CardContent className="p-4 text-center">
+              <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">All Orders</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">View all orders</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/draft-orders">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-yellow-200">
+            <CardContent className="p-4 text-center">
+              <Settings className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Draft Orders</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage drafts</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/department-queue/layup-plugging">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <Wrench className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Layup/Plugging</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Production queue</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/customer-management">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200">
+            <CardContent className="p-4 text-center">
+              <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customers</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage customers</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Two Column Layout */}

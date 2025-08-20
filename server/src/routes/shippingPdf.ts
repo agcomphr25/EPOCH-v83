@@ -3237,7 +3237,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
         success: true,
         step: 'shipment',
         message: 'UPS API working correctly',
-        trackingNumber: shipmentResult?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber
+        trackingNumber: (shipmentResult as any)?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber
       });
     } catch (shipmentError: any) {
       console.error('🔍 UPS DEBUG - Shipment Failed:', shipmentError.message);

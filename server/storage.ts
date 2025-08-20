@@ -1313,7 +1313,7 @@ export class DatabaseStorage implements IStorage {
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
       isFlattop: false // Add missing field
-    })) as AllOrder[];
+    })) as any;
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
@@ -1415,7 +1415,7 @@ export class DatabaseStorage implements IStorage {
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
       isFlattop: false // Add missing field
-    })) as AllOrder[];
+    })) as any;
   }
 
   // Helper function to calculate order total from features and pricing
@@ -1643,7 +1643,7 @@ export class DatabaseStorage implements IStorage {
         productName: stockModelMap.get(order.modelId || '') || order.modelId || 'Unknown Product',
         stockModelId: order.modelId,
         priority: 50 // Default priority
-      })) as AllOrder[];
+      })) as any;
 
       console.log(`✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`);
       return enrichedOrders;
@@ -5377,7 +5377,7 @@ export class DatabaseStorage implements IStorage {
     return orders.map(order => ({
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer'
-    })) as AllOrder[];
+    })) as any;
   }
 
   // Create a finalized order directly (bypassing draft process)

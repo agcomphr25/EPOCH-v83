@@ -649,7 +649,7 @@ export default function ShippingQueuePage() {
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedCard(order.orderId);
-                setTimeout(() => handleSalesOrderDownload(order.orderId), 100);
+                setTimeout(() => handleSalesOrderDownload(), 100);
               }}
               className="flex-1 text-xs h-8"
             >
@@ -661,7 +661,7 @@ export default function ShippingQueuePage() {
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedCard(order.orderId);
-                setTimeout(() => handleCreateLabel(order.orderId), 100);
+                setTimeout(() => handleShippingLabelCreator(), 100);
               }}
               className="flex-1 text-xs h-8"
             >
@@ -684,14 +684,7 @@ export default function ShippingQueuePage() {
 
         {/* Barcode Scanner */}
         <div className="mb-6">
-          <BarcodeScanner 
-            onScan={(orderId) => {
-              console.log(`Scanned Order ID: ${orderId}`);
-              setSelectedCard(orderId);
-            }}
-            placeholder="Scan or enter order ID for shipping..."
-            className="max-w-md"
-          />
+          <BarcodeScanner />
         </div>
 
         {/* Bulk Actions */}
@@ -699,7 +692,8 @@ export default function ShippingQueuePage() {
           <div className="mb-6">
             <BulkShippingActions 
               selectedOrders={selectedOrders}
-              onComplete={() => setSelectedOrders([])}
+              onClearSelection={() => setSelectedOrders([])}
+              shippingOrders={shippingOrders}
             />
           </div>
         )}
@@ -882,7 +876,7 @@ export default function ShippingQueuePage() {
                   </div>
                   
                   {/* Shipping Actions for Selected Order */}
-                  <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+                  <ShippingActions orderId={selectedCard || ''} orderData={getSelectedOrder()} />
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">

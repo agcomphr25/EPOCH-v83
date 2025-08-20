@@ -155,12 +155,6 @@ export default function QCShippingQueuePage() {
       });
     }
 
-    // Debug logging to see what's happening (remove in production)
-    if (order.orderId && order.features?.other_options) {
-      console.log(`DEBUG: Order ${order.orderId} other_options:`, order.features.other_options);
-      console.log(`DEBUG: Detected paid options:`, paidOptions);
-    }
-
     return paidOptions;
   };
 

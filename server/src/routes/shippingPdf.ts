@@ -1889,6 +1889,91 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// GET route for UPS Shipping Label creation interface
+router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Get order data to display in the interface
+    const { storage } = await import('../../storage');
+    const order = await storage.getOrderById(orderId);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Generate a simple shipping label creation interface
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>UPS Shipping Label Creator - Order ${orderId}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gray-100 p-8">
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Create UPS Shipping Label</h1>
+                <p class="text-gray-600">Order ID: <span class="font-semibold">${orderId}</span></p>
+                <p class="text-gray-600">Customer: <span class="font-semibold">${order.customer || 'N/A'}</span></p>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-blue-800">UPS API Integration Required</h3>
+                        <div class="mt-2 text-sm text-blue-700">
+                            <p>To create shipping labels, UPS API credentials must be configured:</p>
+                            <ul class="list-disc list-inside mt-1">
+                                <li>UPS_CLIENT_ID</li>
+                                <li>UPS_CLIENT_SECRET</li>
+                                <li>UPS account number</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <button onclick="createShippingLabel()" class="w-full bg-brown-600 hover:bg-brown-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    Create UPS Shipping Label
+                </button>
+                
+                <button onclick="window.close()" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    Close Window
+                </button>
+            </div>
+        </div>
+
+        <script>
+            function createShippingLabel() {
+                // For now, show an alert about API configuration
+                alert('UPS API integration is available but requires configuration of UPS credentials in the environment variables.');
+                
+                // In a full implementation, this would:
+                // 1. Collect shipping details from a form
+                // 2. Make a POST request to /api/shipping-pdf/ups-shipping-label/${orderId}
+                // 3. Display the generated label or download it
+            }
+        </script>
+    </body>
+    </html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+
+  } catch (error) {
+    console.error('Error generating shipping label interface:', error);
+    res.status(500).json({ error: 'Failed to generate shipping label interface' });
+  }
+});
+
 // Generate UPS Shipping Label with real UPS API integration
 router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {

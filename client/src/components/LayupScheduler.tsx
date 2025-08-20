@@ -897,28 +897,28 @@ export default function LayupScheduler() {
       console.log('🏭 PRODUCTION FLOW: Step 1 - Saving layup schedule to database...');
       await saveScheduleMutation.mutateAsync(orderAssignments);
 
-      // Step 2: Push current week orders to Layup/Plugging Department Manager
-      console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing current week orders to department manager...');
-      const currentWeekOrders = getOrdersForCurrentWeek();
+      // Step 2: Push ALL scheduled orders to Layup/Plugging Department Manager (not just current week)
+      console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing ALL scheduled orders to department manager...');
+      const allScheduledOrders = getAllScheduledOrders();
 
-      if (currentWeekOrders.length > 0) {
-        const scheduledOrderIds = currentWeekOrders.map(order => order.orderId);
-        console.log(`🏭 PRODUCTION FLOW: Pushing ${scheduledOrderIds.length} orders to Layup/Plugging department`);
+      if (allScheduledOrders.length > 0) {
+        const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
+        console.log(`🏭 PRODUCTION FLOW: Pushing ${scheduledOrderIds.length} total scheduled orders to Layup/Plugging department`);
 
         await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
 
         console.log('✅ PRODUCTION FLOW: Complete workflow finished successfully!');
-        console.log('✅ PRODUCTION FLOW: Orders are now available in Layup/Plugging Department Manager');
+        console.log('✅ PRODUCTION FLOW: All scheduled orders are now available in Layup/Plugging Department Manager');
 
         toast({
           title: "Production Flow Complete",
-          description: `Schedule saved and ${scheduledOrderIds.length} orders pushed to Layup/Plugging department`,
+          description: `Schedule locked and ${scheduledOrderIds.length} total orders pushed to Layup/Plugging department`,
         });
       } else {
-        console.log('🏭 PRODUCTION FLOW: No current week orders to push to department');
+        console.log('🏭 PRODUCTION FLOW: No scheduled orders to push to department');
         toast({
           title: "Schedule Saved",
-          description: "Layup schedule saved successfully",
+          description: "Layup schedule saved successfully (no orders to push)",
         });
       }
 
@@ -1074,7 +1074,7 @@ export default function LayupScheduler() {
     await generateLayupScheduleMutation.mutateAsync();
   };
 
-  // Helper function to get current week's orders
+  // Helper function to get current week's orders  
   const getOrdersForCurrentWeek = () => {
     const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
     const endOfCurrentWeek = addDays(startOfCurrentWeek, 4); // Friday end
@@ -1087,6 +1087,14 @@ export default function LayupScheduler() {
         return assignedDate >= startOfCurrentWeek && assignedDate <= endOfCurrentWeek;
       }
       return false;
+    });
+  };
+
+  // Helper function to get ALL scheduled orders (not just current week)
+  const getAllScheduledOrders = () => {
+    return processedOrders.filter(order => {
+      const assignment = orderAssignments[order.orderId];
+      return assignment !== undefined; // Any order with an assignment
     });
   };
 
@@ -3652,12 +3660,12 @@ export default function LayupScheduler() {
                             {isScheduleLocked ? (
                               <>
                                 <ArrowRight className="w-4 h-4 mr-1" />
-                                Unlock Schedule ({Object.keys(orderAssignments).length} orders)
+                                Unlock Schedule ({Object.keys(orderAssignments).length} total orders)
                               </>
                             ) : (
                               <>
                                 <Save className="w-4 h-4 mr-1" />
-                                Lock Schedule ({Object.keys(orderAssignments).length} orders)
+                                Lock & Push ALL ({Object.keys(orderAssignments).length} total orders)
                               </>
                             )}
                           </Button>

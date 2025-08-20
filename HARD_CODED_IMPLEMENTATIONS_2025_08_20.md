@@ -218,6 +218,18 @@ const shouldHideEmptyCell = isScheduleLocked ? !hasOrders : (!hasOrders && !isFr
   onDragStart={isScheduleLocked ? undefined : handleDragStart}
   onDragEnd={isScheduleLocked ? undefined : handleDragEnd}
 >
+
+// Full schedule scope - push ALL scheduled orders (lines 903-920)
+const getAllScheduledOrders = () => {
+  return processedOrders.filter(order => {
+    const assignment = orderAssignments[order.orderId];
+    return assignment !== undefined; // Any order with an assignment
+  });
+};
+
+// Push ALL scheduled orders, not just current week
+const allScheduledOrders = getAllScheduledOrders();
+const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
 ```
 
 ### Key Features
@@ -226,6 +238,7 @@ const shouldHideEmptyCell = isScheduleLocked ? !hasOrders : (!hasOrders && !isFr
 3. **Cell Visibility**: Empty cells hidden when locked, shown when unlocked
 4. **Drag Disable**: Dragging completely disabled when schedule is locked
 5. **Error Recovery**: Proper error handling and user notifications
+6. **Full Schedule Scope**: Lock and push affects ALL scheduled orders, not just visible week
 
 ### User Experience
 - **Unlocked Mode**: Shows all available mold cells for drag-and-drop scheduling

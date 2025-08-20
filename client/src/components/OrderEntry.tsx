@@ -120,6 +120,23 @@ export default function OrderEntry() {
   // Track whether user has manually set the order date
   const [isManualOrderDate, setIsManualOrderDate] = useState(false);
 
+  // Alt Ship To Address state
+  const [hasAltShipTo, setHasAltShipTo] = useState(false);
+  const [altShipToMode, setAltShipToMode] = useState<'existing' | 'manual'>('existing');
+  const [altShipToCustomer, setAltShipToCustomer] = useState<Customer | null>(null);
+  const [altShipToCustomerId, setAltShipToCustomerId] = useState<string>('');
+  const [altShipToName, setAltShipToName] = useState('');
+  const [altShipToCompany, setAltShipToCompany] = useState('');
+  const [altShipToEmail, setAltShipToEmail] = useState('');
+  const [altShipToPhone, setAltShipToPhone] = useState('');
+  const [altShipToAddress, setAltShipToAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States'
+  });
+
   // Calculate base due date based on stock model
   const calculateBaseDueDate = useCallback(() => {
     const selectedModel = modelOptions.find(m => m.id === modelId);
@@ -809,6 +826,58 @@ export default function OrderEntry() {
         setShowPriceOverride(!!order.priceOverride);
         setIsVerified(order.isVerified || false);
 
+        // Load Alt Ship To data
+        setHasAltShipTo(order.hasAltShipTo || false);
+        if (order.hasAltShipTo) {
+          if (order.altShipToCustomerId) {
+            setAltShipToMode('existing');
+            setAltShipToCustomerId(order.altShipToCustomerId);
+            
+            // Load the customer object for the alt ship to customer
+            const loadAltShipToCustomer = async () => {
+              try {
+                const customers = await apiRequest('/api/customers');
+                const altCustomer = customers.find((c: any) => c.id.toString() === order.altShipToCustomerId.toString());
+                if (altCustomer) {
+                  setAltShipToCustomer(altCustomer);
+                }
+              } catch (error) {
+                console.error('Failed to load alt ship to customer:', error);
+              }
+            };
+            loadAltShipToCustomer();
+            
+            // Clear manual fields
+            setAltShipToName('');
+            setAltShipToCompany('');
+            setAltShipToEmail('');
+            setAltShipToPhone('');
+            setAltShipToAddress({
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: 'United States'
+            });
+          } else if (order.altShipToAddress) {
+            setAltShipToMode('manual');
+            setAltShipToName(order.altShipToName || '');
+            setAltShipToCompany(order.altShipToCompany || '');
+            setAltShipToEmail(order.altShipToEmail || '');
+            setAltShipToPhone(order.altShipToPhone || '');
+            setAltShipToAddress(order.altShipToAddress || {
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: 'United States'
+            });
+            // Clear existing customer
+            setAltShipToCustomer(null);
+            setAltShipToCustomerId('');
+          }
+        }
+
         // CRITICAL FIX: Load discount details after setting discount code
         if (order.discountCode && order.discountCode !== 'none') {
           const loadDiscountDetailsForEdit = async () => {
@@ -1079,6 +1148,13 @@ export default function OrderEntry() {
         isVerified,
         isManualDueDate, // Save the manual due date flag
         isManualOrderDate, // Save the manual order date flag
+        hasAltShipTo,
+        altShipToCustomerId: hasAltShipTo && altShipToMode === 'existing' ? altShipToCustomerId : null,
+        altShipToName: hasAltShipTo && altShipToMode === 'manual' ? altShipToName : null,
+        altShipToCompany: hasAltShipTo && altShipToMode === 'manual' ? altShipToCompany : null,
+        altShipToEmail: hasAltShipTo && altShipToMode === 'manual' ? altShipToEmail : null,
+        altShipToPhone: hasAltShipTo && altShipToMode === 'manual' ? altShipToPhone : null,
+        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -1370,6 +1446,179 @@ export default function OrderEntry() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Alt Ship To Address */}
+              <div className="border rounded-lg p-4 bg-blue-50">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Checkbox 
+                    id="alt-ship-to-checkbox"
+                    checked={hasAltShipTo}
+                    onCheckedChange={(checked) => {
+                      setHasAltShipTo(!!checked);
+                      if (!checked) {
+                        // Clear all alt ship to data when disabled
+                        setAltShipToCustomer(null);
+                        setAltShipToCustomerId('');
+                        setAltShipToName('');
+                        setAltShipToCompany('');
+                        setAltShipToEmail('');
+                        setAltShipToPhone('');
+                        setAltShipToAddress({
+                          street: '',
+                          city: '',
+                          state: '',
+                          zipCode: '',
+                          country: 'United States'
+                        });
+                      }
+                    }}
+                  />
+                  <Label 
+                    htmlFor="alt-ship-to-checkbox" 
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Ship to Different Address
+                  </Label>
+                </div>
+
+                {hasAltShipTo && (
+                  <div className="space-y-4">
+                    {/* Mode Selection */}
+                    <div>
+                      <Label className="text-sm font-medium">Address Type</Label>
+                      <div className="flex gap-4 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="existing-customer"
+                            name="alt-ship-mode"
+                            value="existing"
+                            checked={altShipToMode === 'existing'}
+                            onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                          />
+                          <Label htmlFor="existing-customer" className="text-sm">Existing Customer</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="manual-address"
+                            name="alt-ship-mode"
+                            value="manual"
+                            checked={altShipToMode === 'manual'}
+                            onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                          />
+                          <Label htmlFor="manual-address" className="text-sm">Manual Entry</Label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {altShipToMode === 'existing' ? (
+                      <div>
+                        <CustomerSearchInput
+                          value={altShipToCustomer}
+                          onValueChange={(selectedCustomer) => {
+                            setAltShipToCustomer(selectedCustomer);
+                            if (selectedCustomer) {
+                              setAltShipToCustomerId(selectedCustomer.id.toString());
+                              // Clear manual fields when selecting existing customer
+                              setAltShipToName('');
+                              setAltShipToCompany('');
+                              setAltShipToEmail('');
+                              setAltShipToPhone('');
+                              setAltShipToAddress({
+                                street: '',
+                                city: '',
+                                state: '',
+                                zipCode: '',
+                                country: 'United States'
+                              });
+                            } else {
+                              setAltShipToCustomerId('');
+                            }
+                          }}
+                          placeholder="Search for existing customer..."
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Name *</Label>
+                          <Input
+                            value={altShipToName}
+                            onChange={(e) => setAltShipToName(e.target.value)}
+                            placeholder="Enter recipient name"
+                          />
+                        </div>
+                        <div>
+                          <Label>Company</Label>
+                          <Input
+                            value={altShipToCompany}
+                            onChange={(e) => setAltShipToCompany(e.target.value)}
+                            placeholder="Enter company name"
+                          />
+                        </div>
+                        <div>
+                          <Label>Email</Label>
+                          <Input
+                            type="email"
+                            value={altShipToEmail}
+                            onChange={(e) => setAltShipToEmail(e.target.value)}
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                        <div>
+                          <Label>Phone</Label>
+                          <Input
+                            value={altShipToPhone}
+                            onChange={(e) => setAltShipToPhone(e.target.value)}
+                            placeholder="Enter phone number"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Street Address *</Label>
+                          <Input
+                            value={altShipToAddress.street}
+                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, street: e.target.value }))}
+                            placeholder="Enter street address"
+                          />
+                        </div>
+                        <div>
+                          <Label>City *</Label>
+                          <Input
+                            value={altShipToAddress.city}
+                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, city: e.target.value }))}
+                            placeholder="Enter city"
+                          />
+                        </div>
+                        <div>
+                          <Label>State *</Label>
+                          <Input
+                            value={altShipToAddress.state}
+                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, state: e.target.value }))}
+                            placeholder="Enter state"
+                          />
+                        </div>
+                        <div>
+                          <Label>ZIP Code *</Label>
+                          <Input
+                            value={altShipToAddress.zipCode}
+                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
+                            placeholder="Enter ZIP code"
+                          />
+                        </div>
+                        <div>
+                          <Label>Country</Label>
+                          <Input
+                            value={altShipToAddress.country}
+                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, country: e.target.value }))}
+                            placeholder="United States"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Flattop Option */}

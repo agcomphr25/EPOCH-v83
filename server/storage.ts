@@ -5458,6 +5458,13 @@ export class DatabaseStorage implements IStorage {
       isVerified: orderData.isVerified || false,
       isManualDueDate: orderData.isManualDueDate || false,
       isManualOrderDate: orderData.isManualOrderDate || false,
+      hasAltShipTo: orderData.hasAltShipTo || false,
+      altShipToCustomerId: orderData.altShipToCustomerId,
+      altShipToName: orderData.altShipToName,
+      altShipToCompany: orderData.altShipToCompany,
+      altShipToEmail: orderData.altShipToEmail,
+      altShipToPhone: orderData.altShipToPhone,
+      altShipToAddress: orderData.altShipToAddress,
       finalizedBy: finalizedBy || 'System'
     };
 
@@ -5559,6 +5566,13 @@ export class DatabaseStorage implements IStorage {
       isVerified: draft.isVerified || false,
       isManualDueDate: draft.isManualDueDate || false,
       isManualOrderDate: draft.isManualOrderDate || false,
+      hasAltShipTo: draft.hasAltShipTo || false,
+      altShipToCustomerId: draft.altShipToCustomerId,
+      altShipToName: draft.altShipToName,
+      altShipToCompany: draft.altShipToCompany,
+      altShipToEmail: draft.altShipToEmail,
+      altShipToPhone: draft.altShipToPhone,
+      altShipToAddress: draft.altShipToAddress,
       finalizedBy: finalizedBy || 'System'
     };
 

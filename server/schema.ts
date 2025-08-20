@@ -95,6 +95,14 @@ export const allOrders = pgTable("all_orders", {
   // Date Tracking Information  
   isManualDueDate: boolean("is_manual_due_date").default(false),
   isManualOrderDate: boolean("is_manual_order_date").default(false),
+  // Alt Ship To Address Information
+  hasAltShipTo: boolean("has_alt_ship_to").default(false),
+  altShipToCustomerId: text("alt_ship_to_customer_id"), // Reference to existing customer
+  altShipToName: text("alt_ship_to_name"), // Manual entry name
+  altShipToCompany: text("alt_ship_to_company"), // Manual entry company
+  altShipToEmail: text("alt_ship_to_email"), // Manual entry email
+  altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
+  altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -366,6 +374,14 @@ export const orderDrafts = pgTable("order_drafts", {
   // Date Tracking Information  
   isManualDueDate: boolean("is_manual_due_date").default(false),
   isManualOrderDate: boolean("is_manual_order_date").default(false),
+  // Alt Ship To Address Information
+  hasAltShipTo: boolean("has_alt_ship_to").default(false),
+  altShipToCustomerId: text("alt_ship_to_customer_id"), // Reference to existing customer
+  altShipToName: text("alt_ship_to_name"), // Manual entry name
+  altShipToCompany: text("alt_ship_to_company"), // Manual entry company
+  altShipToEmail: text("alt_ship_to_email"), // Manual entry email
+  altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
+  altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -522,22 +522,9 @@ export default function AllOrdersList() {
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
 
-                // Debug verification status for AG168
-                if (order.orderId === 'AG168') {
-                  console.log('🔍 AG168 verification debug:', {
-                    orderId: order.orderId,
-                    isVerified: order.isVerified,
-                    isVerifiedType: typeof order.isVerified,
-                    rawOrder: order
-                  });
-                }
-
                 // Apply local department updates for immediate visual feedback
-                
-                // Force verification highlighting for AG168 for testing
-                const isOrderVerified = order.orderId === 'AG168' ? true : order.isVerified;
 
-                const rowClassName = isOrderVerified 
+                const rowClassName = order.isVerified 
                   ? "bg-green-100 hover:bg-green-150 dark:bg-green-900/30 dark:hover:bg-green-900/40" 
                   : "";
 
@@ -545,7 +532,7 @@ export default function AllOrdersList() {
                   <TableRow 
                     key={order.orderId}
                     className={rowClassName}
-                    style={isOrderVerified ? { backgroundColor: '#dcfce7' } : undefined}
+                    style={order.isVerified ? { backgroundColor: '#dcfce7' } : undefined}
                   >
                     <TableCell className="font-medium">
                       <OrderSummaryModal orderId={order.orderId}>

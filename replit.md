@@ -10,6 +10,10 @@ Order finalization rules: Orders with "None" or empty stock models cannot be fin
 Order identification: FB Order Numbers (like AK046) are stored in the fb_order_number field, not as the primary order_id. The actual order_id remains the AG series format (e.g., AG589 has FB Order #AK046).
 Data integrity: Prevent orders from being saved with null/empty modelId fields to maintain consistency between draft and finalized order tables.
 UI Performance: Department progression buttons use cache-first approach with disabled automatic refetching to prevent UI reversion issues (resolved August 2025).
+Default shipping charge: Should be 36.95 for new orders.
+Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
+Authentication in development: Employee Management page accessible without authentication in development mode for production floor access.
+Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
 ## System Architecture
 The application adopts a monorepo structure utilizing a full-stack TypeScript approach.
@@ -37,11 +41,12 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Inventory Management**: Enhanced with search, BOM integration, and part number display.
     -   **P1 & P2 Systems**: Distinct modules for P1 (regular) and P2 (OEM/supplier) orders, customers, purchase orders, and production order generation based on BOMs.
     -   **Barcode System**: Complete P1 order barcode generation (Code 39) with scanner integration, categorized queue management, multi-select functionality, and professional Avery 5160 label printing. Features fully scannable Code 39 barcodes with proper spacing, industry-standard encoding, display names for stock models, and labels that open in new tab/popup for viewing and printing. Optimized for production floor scanning with individual barcode recognition. Enhanced barcode scanning displays ALL order features and specifications with user-friendly names (converts "action_length" to "Action Length" and "short_action" to "Short Action").
-    -   **Employee Management**: Full CRUD API for employee profiles, certifications, performance evaluations, and document management, including a secure employee portal with time clock and checklist functionality.
+    -   **Employee Management**: Full CRUD API for employee profiles, certifications, performance evaluations, and document management, including a secure employee portal with time clock and checklist functionality. Development mode bypass authentication for production floor access to employee data. Route /employee properly configured for Employee Dashboard access.
     -   **Quality Control**: Workflows for digital signature capture, validation, and comprehensive submissions management for checklists. Enhanced QC inspection reports dynamically integrate order-specific details including stock model, work order specifications (handedness, bottom metal, barrel inlet, action, action length), paint colors, custom options, swivel studs, shipping addresses, and all accessories from the actual order data.
     -   **Reporting**: Enhanced sales order PDF generation with customer information and readable feature names. Includes smart print filtering for production schedules.
     -   **Payment Tracking**: Integrated 'PAID' badge functionality with consistent payment data across the system.
-    -   **Shipping Integration**: Full UPS API integration for label creation, rate calculation, and tracking.
+    -   **Shipping Integration**: Full UPS API integration for label creation, rate calculation, and tracking. Enhanced with alternate shipping address functionality (Alt Ship To) with full database integration and UI implementation for customer-specific alternate shipping destinations.
+    -   **Dashboard Navigation**: STACITEST Dashboard enhanced with 5 color-coded quick navigation cards providing immediate access to Order Entry (blue), All Orders (green), Draft Orders (yellow), Layup/Plugging queue (purple), and Customer Management (orange). Cards feature hover effects, responsive layout, and consistent theming.
     -   **Centralized Configuration**: `shared/company-config.ts` centralizes company information and certification templates.
     -   **Code Quality**: Integrated ESLint, Prettier, and lint-staged for consistent code formatting and quality checks. Custom feature validation system enforces the "Golden Rule" by checking for proper usage of the features object as single source of truth.
 

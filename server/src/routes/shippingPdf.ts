@@ -412,15 +412,16 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     const getFeatureValue = (featureId: string, value: any) => {
       const feature = features.find((f: any) => f.id === featureId);
-      if (!feature || !feature.options) return value;
+      const featureOptions = (feature as any)?.options || [];
+      if (!feature || !featureOptions) return value;
       
       if (Array.isArray(value)) {
         return value.map(v => {
-          const option = feature.options.find((opt: any) => opt.value === v);
+          const option = featureOptions.find((opt: any) => opt.value === v);
           return option?.label || v;
         }).join(', ');
       } else {
-        const option = feature.options.find((opt: any) => opt.value === value);
+        const option = featureOptions.find((opt: any) => opt.value === value);
         return option?.label || value;
       }
     };
@@ -437,8 +438,8 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     // Extract order-specific details
     const stockModelName = getStockModelName(order.modelId || '');
-    const customer = getCustomerInfo(order.customerId || '');
-    const shippingAddress = getShippingAddress(order.customerId || '');
+    const customer = getCustomerInfo((order as any).customerId || '');
+    const shippingAddress = getShippingAddress((order as any).customerId || '');
     const orderFeatures = formatOrderFeatures(order.features || {});
 
     // Build order-specific checklist items
@@ -447,16 +448,16 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       `1) The proper stock is being shipped:\n    Stock Model: ${stockModelName}`,
       
       `2) Stock is inletted according to the work order:\n    ${[
-        orderFeatures.handedness ? `Handedness: ${orderFeatures.handedness}` : 'Handedness: Not specified',
-        orderFeatures.bottom_metal ? `Bottom Metal: ${orderFeatures.bottom_metal}` : 'Bottom Metal: Standard',
-        orderFeatures.barrel_inlet ? `Barrel Inlet: ${orderFeatures.barrel_inlet}` : 'Barrel Inlet: Standard',
-        orderFeatures.action ? `Action: ${orderFeatures.action}` : 'Action: Standard',
-        orderFeatures.action_length ? `Action Length: ${orderFeatures.action_length}` : 'Action Length: Standard'
+        (orderFeatures as any).handedness ? `Handedness: ${(orderFeatures as any).handedness}` : 'Handedness: Not specified',
+        (orderFeatures as any).bottom_metal ? `Bottom Metal: ${(orderFeatures as any).bottom_metal}` : 'Bottom Metal: Standard',
+        (orderFeatures as any).barrel_inlet ? `Barrel Inlet: ${(orderFeatures as any).barrel_inlet}` : 'Barrel Inlet: Standard',
+        (orderFeatures as any).action ? `Action: ${(orderFeatures as any).action}` : 'Action: Standard',
+        (orderFeatures as any).action_length ? `Action Length: ${(orderFeatures as any).action_length}` : 'Action Length: Standard'
       ].join('\n    ')}`,
       
       `3) Stock color:\n    Paint Option: ${(() => {
         // Use the same logic as sales order PDF for paint display
-        const currentPaint = order.features?.metallic_finishes || order.features?.paint_options || order.features?.paint_options_combined;
+        const currentPaint = (order.features as any)?.metallic_finishes || (order.features as any)?.paint_options || (order.features as any)?.paint_options_combined;
         
         if (!currentPaint || currentPaint === 'none') {
           return 'Standard';
@@ -477,8 +478,9 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         );
 
         for (const feature of paintFeatures) {
-          if (feature.options) {
-            const option = feature.options.find((opt: any) => opt.value === currentPaint);
+          const featureOptions = (feature as any).options || [];
+          if (featureOptions) {
+            const option = featureOptions.find((opt: any) => opt.value === currentPaint);
             if (option) {
               return option.label;
             }
@@ -486,7 +488,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         }
         
         // Fallback to formatted value if no option found
-        return currentPaint.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return currentPaint.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
       })()}`,
       
       `4) Custom options are present and completed:\n    ${Object.entries(orderFeatures)
@@ -710,8 +712,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
-    const customer = customers.find(c => c.id?.toString() === order.customerId?.toString());
-    const customerAddresses = addresses.filter(a => a.customerId === order.customerId);
+    const customer = customers.find(c => c.id?.toString() === (order as any).customerId?.toString());
+    const customerAddresses = addresses.filter(a => a.customerId === (order as any).customerId);
 
     // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
@@ -1156,7 +1158,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const handednessDisplay = order.features?.handedness ? 
-      (order.features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
+      ((order.features as any)?.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
     const wrappedHandedness = wrapText(handednessDisplay, printableWidth - 200, 9, font);
     wrappedHandedness.forEach((line, index) => {
       page.drawText(line, {
@@ -1193,7 +1195,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const actionLengthDisplay = actionLengthOption?.label || 
-      (order.features?.action_length ? order.features.action_length.charAt(0).toUpperCase() + order.features.action_length.slice(1) : 'Not selected');
+      (order.features?.action_length ? (order.features as any)?.action_length.charAt(0).toUpperCase() + (order.features as any)?.action_length.slice(1) : 'Not selected');
     
     // Wrap action length display across multiple lines if needed
     const wrappedActionLength = wrapText(actionLengthDisplay, printableWidth - 200, 9, font);
@@ -1377,8 +1379,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const lopDisplay = lopOption?.label || 
-      (order.features?.length_of_pull && order.features.length_of_pull !== 'no_lop_change' ? 
-        order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+      (order.features?.length_of_pull && (order.features as any)?.length_of_pull !== 'no_lop_change' ? 
+        (order.features as any)?.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     const wrappedLOP = wrapText(lopDisplay, printableWidth - 200, 9, font);
     wrappedLOP.forEach((line, index) => {
@@ -1407,9 +1409,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let railsPrice = 0;
     let railsDisplay = 'Not selected';
     
-    if (order.features?.rail_accessory && Array.isArray(order.features.rail_accessory) && order.features.rail_accessory.length > 0) {
+    if (order.features?.rail_accessory && Array.isArray((order.features as any)?.rail_accessory) && (order.features as any)?.rail_accessory.length > 0) {
       const railFeature = features.find(f => f.id === 'rail_accessory');
-      const selectedRails = order.features.rail_accessory.filter(rail => rail !== 'no_rail');
+      const selectedRails = (order.features as any)?.rail_accessory.filter(rail => rail !== 'no_rail');
       
       if (selectedRails.length > 0) {
         railsDisplay = selectedRails.map(railValue => {
@@ -1463,7 +1465,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const textureDisplay = textureOption?.label || 
-      (order.features?.texture_options ? order.features.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
+      (order.features?.texture_options ? (order.features as any)?.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
     const wrappedTexture = wrapText(textureDisplay, printableWidth - 200, 9, font);
     wrappedTexture.forEach((line, index) => {
@@ -1528,17 +1530,17 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let otherOptionsPrice = 0;
     let otherOptionsDisplay = 'Not selected';
     
-    if (order.features?.other_options && Array.isArray(order.features.other_options) && order.features.other_options.length > 0) {
+    if (order.features?.other_options && Array.isArray((order.features as any)?.other_options) && (order.features as any)?.other_options.length > 0) {
       const otherFeature = features.find(f => f.id === 'other_options');
       
       if (otherFeature?.options) {
-        otherOptionsDisplay = order.features.other_options.map((optionValue: string) => {
+        otherOptionsDisplay = (order.features as any)?.other_options.map((optionValue: string) => {
           const option = otherFeature.options!.find(opt => opt.value === optionValue);
           otherOptionsPrice += option?.price || 0;
           return option?.label || optionValue.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }).join(', ');
       } else {
-        otherOptionsDisplay = order.features.other_options.join(', ');
+        otherOptionsDisplay = (order.features as any)?.other_options.join(', ');
       }
     }
 
@@ -1916,7 +1918,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
             <div class="mb-6">
                 <h1 class="text-2xl font-bold text-gray-900 mb-2">Create UPS Shipping Label</h1>
                 <p class="text-gray-600">Order ID: <span class="font-semibold">${orderId}</span></p>
-                <p class="text-gray-600">Customer: <span class="font-semibold">${order.customer || 'N/A'}</span></p>
+                <p class="text-gray-600">Customer: <span class="font-semibold">${(order as any).customer || 'N/A'}</span></p>
             </div>
             
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -2003,7 +2005,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
     })
     .from(customers)
     .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id))
-    .where(eq(customers.id, parseInt(order.customerId || '0')));
+    .where(eq(customers.id, parseInt((order as any).customerId || '0')));
 
     if (!orderResult || orderResult.length === 0) {
       return res.status(404).json({ error: 'Customer not found for this order' });
@@ -2475,18 +2477,18 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
       try {
         console.log(`=== PROCESSING ORDER ${order.orderId} ===`);
         console.log(`Order object keys:`, Object.keys(order));
-        console.log(`Order customerId field:`, order.customerId);
+        console.log(`Order customerId field:`, (order as any).customerId);
         
         // Get customer and address information
         let customerInfo = null;
         let customerAddress = null;
         
-        console.log(`Looking up customer info for order ${order.orderId}, customerId: ${order.customerId}`);
+        console.log(`Looking up customer info for order ${order.orderId}, customerId: ${(order as any).customerId}`);
         
-        if (order.customerId) {
+        if ((order as any).customerId) {
           try {
-            console.log(`Calling getCustomerById with ID: "${order.customerId}" (type: ${typeof order.customerId})`);
-            customerInfo = await storage.getCustomerById(order.customerId);
+            console.log(`Calling getCustomerById with ID: "${(order as any).customerId}" (type: ${typeof (order as any).customerId})`);
+            customerInfo = await storage.getCustomerById((order as any).customerId);
             console.log(`Customer lookup result:`, customerInfo);
             if (customerInfo) {
               console.log(`Found customer for ${order.orderId}:`, {
@@ -2495,13 +2497,13 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
                 email: customerInfo.email
               });
             } else {
-              console.log(`No customer found for ID: ${order.customerId}`);
+              console.log(`No customer found for ID: ${(order as any).customerId}`);
             }
             
             if (customerInfo) {
               // Get customer's default shipping address
-              const addresses = await storage.getCustomerAddresses(order.customerId);
-              console.log(`Found ${addresses.length} addresses for customer ${order.customerId}`);
+              const addresses = await storage.getCustomerAddresses((order as any).customerId);
+              console.log(`Found ${addresses.length} addresses for customer ${(order as any).customerId}`);
               customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
                               addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
                               addresses[0]; // fallback to first address
@@ -2956,7 +2958,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
     currentY -= 15;
     selectedOrders.forEach((order, index) => {
       if (currentY > 100) { // Only show if there's space
-        page.drawText(`${order.orderId} - ${order.customerId || 'Customer'}`, {
+        page.drawText(`${order.orderId} - ${(order as any).customerId || 'Customer'}`, {
           x: 50,
           y: currentY,
           size: 8,
@@ -3088,7 +3090,7 @@ router.get('/tracking/:orderId', async (req: Request, res: Response) => {
       shippingMethod: order.shippingMethod,
       shippedDate: order.shippedDate,
       estimatedDelivery: order.estimatedDelivery,
-      customerNotified: order.customerNotified,
+      customerNotified: (order as any).customerNotified,
       notificationMethod: order.notificationMethod,
       notificationSentAt: order.notificationSentAt,
       deliveryConfirmed: order.deliveryConfirmed,

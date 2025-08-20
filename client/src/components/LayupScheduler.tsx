@@ -512,7 +512,7 @@ function DroppableCell({
   features,
   processedOrders,
   selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
-  isScheduleLocked = false
+  isWeekLocked
 }: {
   moldId: string;
   date: Date;
@@ -523,7 +523,7 @@ function DroppableCell({
   features?: any[];
   processedOrders?: any[];
   selectedWorkDays?: number[];
-  isScheduleLocked?: boolean;
+  isWeekLocked: (date: Date) => boolean;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -3423,50 +3423,7 @@ export default function LayupScheduler() {
           </div>
 
           <div className="flex items-center space-x-2">
-            {Object.keys(orderAssignments).length > 0 && (
-              <Button
-                variant={isScheduleLocked ? "destructive" : "default"}
-                size="sm"
-                onClick={() => {
-                  if (isScheduleLocked) {
-                    setIsScheduleLocked(false);
-                    toast({
-                      title: "Schedule Unlocked",
-                      description: "You can now reschedule orders by dragging them to different days",
-                    });
-                  } else {
-                    handleSaveSchedule();
-                    setIsScheduleLocked(true);
-                  }
-                }}
-                disabled={isSaving}
-                className={`mr-2 ${isScheduleLocked
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    Locking...
-                  </>
-                ) : (
-                  <>
-                    {isScheduleLocked ? (
-                      <>
-                        <ArrowRight className="w-4 h-4 mr-2" />
-                        Unlock to Reschedule
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-4 h-4 mr-2" />
-                        Lock & Push to Dept
-                      </>
-                    )}
-                  </>
-                )}
-              </Button>
-            )}
+            {/* Old global lock button removed - replaced with week-specific locking */}
 
             <Button
               variant="outline"
@@ -3986,7 +3943,7 @@ export default function LayupScheduler() {
                                 features={features}
                                 processedOrders={processedOrders}
                                 selectedWorkDays={selectedWorkDays}
-                                isScheduleLocked={isScheduleLocked}
+                                isWeekLocked={isWeekLocked}
                               />
                             );
                           });

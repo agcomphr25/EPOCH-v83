@@ -2000,12 +2000,38 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
       const trackingNumber = (upsResponse as any).ShipmentResponse.ShipmentResults.ShipmentIdentificationNumber;
       const labelUrl = `/api/shipping-pdf/ups-shipping-label/${orderId}`;
       
+      // Update order with tracking number and move to Shipping Management
+      const orderUpdateData = {
+        trackingNumber: trackingNumber,
+        currentDepartment: 'Shipping',
+        shippingLabelGenerated: true,
+        shippedDate: new Date(),
+        shippingCarrier: 'UPS',
+        shippingMethod: 'Ground',
+        status: 'Shipped'
+      };
+
+      try {
+        // Try to update finalized order first
+        await storage.updateFinalizedOrder(orderId, orderUpdateData);
+        console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
+      } catch (error) {
+        try {
+          // If not found, try draft orders
+          await storage.updateOrderDraft(orderId, orderUpdateData);
+          console.log(`Updated draft order ${orderId} with tracking ${trackingNumber}`);
+        } catch (draftError) {
+          console.error(`Failed to update order ${orderId} with tracking information:`, error, draftError);
+        }
+      }
+      
       return res.json({
         success: true,
         trackingNumber: trackingNumber,
         labelUrl: labelUrl,
         shippingAddress: shippingAddress,
-        packageDetails: packageDetails
+        packageDetails: packageDetails,
+        orderUpdated: true
       });
     } else {
       return res.status(500).json({ 
@@ -2142,9 +2168,32 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
       console.log(`UPS label created for ${orderId}: ${trackingNumber}`);
       // Skip the old debug logging since we have better detection now
 
-      // Skip order status update for now - UPS API is working correctly
+      // Update order with tracking number and move to Shipping Management
+      const orderUpdateData = {
+        trackingNumber: trackingNumber,
+        currentDepartment: 'Shipping',
+        shippingLabelGenerated: true,
+        shippedDate: new Date(),
+        shippingCarrier: 'UPS',
+        shippingMethod: 'Ground',
+        status: 'Shipped'
+      };
+
+      try {
+        // Try to update finalized order first
+        await storage.updateFinalizedOrder(orderId, orderUpdateData);
+        console.log(`Updated finalized order ${orderId} with tracking ${trackingNumber}`);
+      } catch (error) {
+        try {
+          // If not found, try draft orders
+          await storage.updateOrderDraft(orderId, orderUpdateData);
+          console.log(`Updated draft order ${orderId} with tracking ${trackingNumber}`);
+        } catch (draftError) {
+          console.error(`Failed to update order ${orderId} with tracking information:`, error, draftError);
+        }
+      }
+
       console.log(`UPS label created successfully for ${orderId}, tracking: ${trackingNumber}`);
-      console.log(`Note: Order status update temporarily disabled - label creation is working properly`);
 
       // Convert base64 label image to PDF and return it
       if (labelImage) {

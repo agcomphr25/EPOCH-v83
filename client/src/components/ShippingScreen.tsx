@@ -291,6 +291,20 @@ export function ShippingScreen({ rows }: ShippingScreenProps) {
                       <div className="text-xs text-muted-foreground">
                         {row.shippingCarrier} • {row.estimatedDelivery ? new Date(row.estimatedDelivery).toLocaleDateString() : 'No ETA'}
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1 h-6 px-2 text-xs"
+                        onClick={() => {
+                          const trackingUrl = row.shippingCarrier === 'UPS' 
+                            ? `https://www.ups.com/track?tracknum=${row.trackingNumber}`
+                            : `https://www.fedex.com/apps/fedextrack/?tracknumbers=${row.trackingNumber}`;
+                          window.open(trackingUrl, '_blank');
+                        }}
+                      >
+                        <Truck className="mr-1 h-3 w-3" />
+                        Track Order
+                      </Button>
                     </div>
                   ) : (
                     <span className="text-muted-foreground">No tracking</span>

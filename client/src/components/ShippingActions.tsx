@@ -44,10 +44,10 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   });
   
   const [packageDetails, setPackageDetails] = useState<PackageDetails>({
-    weight: '',
-    length: '',
-    width: '',
-    height: ''
+    weight: '10',
+    length: '12',
+    width: '12',
+    height: '12'
   });
 
   const downloadPdf = (blob: Blob, filename: string) => {
@@ -108,33 +108,51 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   const handleShippingLabel = async () => {
     setIsGeneratingLabel(true);
     try {
-      // Open UPS shipping label in new tab/window for printing (HTML format from UPS)
-      window.open(`/api/shipping-pdf/ups-shipping-label/${orderId}`, '_blank');
-      
-      toast({
-        title: "Shipping Label Generated",
-        description: `UPS shipping label for order ${orderId} opened in new tab for printing.`,
+      // Send package details to server for UPS label generation
+      const response = await axios.post(`/api/shipping-pdf/ups-shipping-label/${orderId}`, {
+        shippingAddress,
+        packageDetails
       });
       
-      // Refresh any tracking displays if needed
-      window.dispatchEvent(new CustomEvent('trackingUpdated', { detail: { orderId } }));
-      
-      setShippingDialogOpen(false);
-      
-      // Reset form
-      setShippingAddress({
-        name: '',
-        street: '',
-        city: '',
-        state: '',
-        zip: ''
-      });
-      setPackageDetails({
-        weight: '',
-        length: '',
-        width: '',
-        height: ''
-      });
+      if (response.data.success && response.data.labelUrl) {
+        // Open the generated label in new tab
+        window.open(response.data.labelUrl, '_blank');
+        
+        toast({
+          title: "Shipping Label Generated",
+          description: `UPS shipping label for order ${orderId} created with tracking: ${response.data.trackingNumber}`,
+        });
+        
+        // Refresh any tracking displays if needed
+        window.dispatchEvent(new CustomEvent('trackingUpdated', { detail: { orderId } }));
+        
+        setShippingDialogOpen(false);
+        
+        // Reset form
+        setShippingAddress({
+          name: '',
+          street: '',
+          city: '',
+          state: '',
+          zip: ''
+        });
+        setPackageDetails({
+          weight: '10',
+          length: '12',
+          width: '12',
+          height: '12'
+        });
+      } else {
+        // If no labelUrl returned, fall back to direct URL approach
+        window.open(`/api/shipping-pdf/ups-shipping-label/${orderId}`, '_blank');
+        
+        toast({
+          title: "Shipping Label Generated",
+          description: `UPS shipping label for order ${orderId} opened in new tab for printing.`,
+        });
+        
+        setShippingDialogOpen(false);
+      }
       
     } catch (error) {
       console.error('Error generating shipping label:', error);
@@ -262,16 +280,15 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
               </Button>
               <Button
                 onClick={handleShippingLabel}
-                disabled={isGeneratingLabel || !shippingAddress.name || !shippingAddress.street}
+                disabled={isGeneratingLabel || !shippingAddress.name || !shippingAddress.street || !packageDetails.weight}
                 className="flex-1"
               >
                 {isGeneratingLabel ? 'Generating...' : 'Generate Label'}
               </Button>
             </div>
             
-            <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
-              <strong>Note:</strong> This currently generates a placeholder label. 
-              UPS API integration is required for live shipping labels.
+            <div className="text-xs text-gray-500 bg-green-50 p-2 rounded">
+              <strong>Note:</strong> Adjust weight and dimensions above, then generate real UPS shipping labels with authentic tracking numbers.
             </div>
           </div>
         </DialogContent>

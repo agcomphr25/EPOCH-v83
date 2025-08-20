@@ -1918,6 +1918,111 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// POST route for UPS Shipping Label with custom package details - REAL UPS API INTEGRATION
+router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { shippingAddress: customShippingAddress, packageDetails: customPackageDetails } = req.body;
+    
+    console.log(`Creating REAL UPS shipping label for order: ${orderId} with custom details`);
+    console.log('Custom shipping address:', customShippingAddress);
+    console.log('Custom package details:', customPackageDetails);
+    
+    // Get order data from storage
+    const { storage } = await import('../../storage');
+    let order = null;
+    
+    // Try to find the order in either finalized or draft orders
+    try {
+      order = await storage.getFinalizedOrderById(orderId);
+      console.log(`Found finalized order: ${orderId}`);
+    } catch (error) {
+      try {
+        order = await storage.getOrderDraft(orderId);
+        console.log(`Found draft order: ${orderId}`);
+      } catch (draftError) {
+        console.log(`Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+
+    // Get customer and shipping information (for fallback if no custom address provided)
+    let customerInfo = null;
+    let customerAddress = null;
+    
+    if ((order as any).customerId) {
+      try {
+        customerInfo = await storage.getCustomerById((order as any).customerId);
+        if (customerInfo) {
+          const addresses = await storage.getCustomerAddresses((order as any).customerId);
+          customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
+                          addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
+                          addresses[0];
+        }
+      } catch (e) {
+        console.log(`Error finding customer info for order ${orderId}:`, e);
+      }
+    }
+
+    // Use custom shipping address if provided, otherwise fall back to customer data
+    const shippingAddress = customShippingAddress && customShippingAddress.name && customShippingAddress.street ? 
+      customShippingAddress : 
+      {
+        name: customerInfo?.name || "Customer Name",
+        street: customerAddress?.street || "123 Main St", 
+        city: customerAddress?.city || "Birmingham",
+        state: customerAddress?.state || "AL",
+        zip: customerAddress?.zipCode || "35203"
+      };
+
+    // Use custom package details if provided, otherwise use defaults
+    const packageDetails = customPackageDetails && customPackageDetails.weight ? 
+      customPackageDetails : 
+      {
+        weight: "10",
+        length: "12",
+        width: "12", 
+        height: "12"
+      };
+
+    console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
+    console.log(`Package details:`, packageDetails);
+
+    // Create UPS shipment using real API with custom details
+    const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
+    const upsResponse = await createUPSShipment(shipmentRequest);
+    
+    if (upsResponse && (upsResponse as any).ShipmentResponse?.ShipmentResults) {
+      const trackingNumber = (upsResponse as any).ShipmentResponse.ShipmentResults.ShipmentIdentificationNumber;
+      const labelUrl = `/api/shipping-pdf/ups-shipping-label/${orderId}`;
+      
+      return res.json({
+        success: true,
+        trackingNumber: trackingNumber,
+        labelUrl: labelUrl,
+        shippingAddress: shippingAddress,
+        packageDetails: packageDetails
+      });
+    } else {
+      return res.status(500).json({ 
+        error: 'Failed to create UPS shipment', 
+        details: 'Invalid UPS API response'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error creating UPS shipping label with custom details:', error);
+    return res.status(500).json({ 
+      error: 'Failed to create UPS shipping label', 
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // GET route for UPS Shipping Label - REAL UPS API INTEGRATION
 router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {

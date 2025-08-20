@@ -556,8 +556,8 @@ function DroppableCell({
   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
   const hasOrders = orders.length > 0;
 
-  // Hide empty cells on work week columns (Mon-Thu), but always show Friday for manual drops
-  const shouldHideEmptyCell = !hasOrders && !isFriday && isWorkDay;
+  // NEW LOGIC: Show empty cells when unlocked (for drag-and-drop), hide when locked (show only assigned orders)
+  const shouldHideEmptyCell = isScheduleLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
 
   return (
     <div
@@ -594,7 +594,7 @@ function DroppableCell({
               />
             );
           })}
-          {orders.length === 0 && (
+          {orders.length === 0 && !isScheduleLocked && (
             <div className="text-xs text-gray-400 text-center py-2 opacity-50">
               {isNonWorkDay ? 'Non-work day' : 'Available'}
             </div>
@@ -650,11 +650,17 @@ export default function LayupScheduler() {
     if (!over) return;
 
     const orderId = active.id as string;
-    const [date, moldId] = (over.id as string).split('|');
+    const dropTargetId = over.id as string;
+    
+    // Parse drop target ID correctly - should be "moldId|date" 
+    const [moldId, date] = dropTargetId.split('|');
 
-    if (!date || !moldId) return;
+    if (!date || !moldId) {
+      console.error('❌ DRAG ERROR: Invalid drop target format:', dropTargetId);
+      return;
+    }
 
-    console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to ${moldId} on ${date}`);
+    console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to mold ${moldId} on ${date}`);
 
     // Update order assignments immediately for UI responsiveness
     const newAssignment = { moldId, date };
@@ -667,7 +673,7 @@ export default function LayupScheduler() {
 
     // Auto-save the assignment to prevent disappearing cards
     try {
-      console.log('💾 AUTO-SAVE: Saving drag assignment to backend...');
+      console.log(`💾 AUTO-SAVE: Saving assignment - Order: ${orderId}, Mold: ${moldId}, Date: ${date}`);
       
       // Delete existing schedule entry for this order
       await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
@@ -676,7 +682,7 @@ export default function LayupScheduler() {
         console.log('Note: No existing schedule found for order', orderId);
       });
 
-      // Create new schedule entry
+      // Create new schedule entry with correct data
       const scheduleEntry = {
         orderId,
         scheduledDate: new Date(date),
@@ -686,13 +692,15 @@ export default function LayupScheduler() {
         overriddenBy: 'user'
       };
 
+      console.log('📝 SCHEDULE ENTRY:', scheduleEntry);
+
       await apiRequest('/api/layup-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(scheduleEntry)
       });
 
-      console.log(`✅ AUTO-SAVE: Successfully saved ${orderId} assignment`);
+      console.log(`✅ AUTO-SAVE: Successfully saved ${orderId} assignment to ${moldId}`);
       
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
@@ -710,7 +718,7 @@ export default function LayupScheduler() {
       console.error('❌ AUTO-SAVE ERROR: Failed to save assignment:', error);
       toast({
         title: "Save Failed",
-        description: `Failed to save assignment for ${orderId}. Use Save Schedule to retry.`,
+        description: `Failed to save assignment for ${orderId}. Please try again.`,
         variant: "destructive"
       });
     }
@@ -3531,9 +3539,9 @@ export default function LayupScheduler() {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-auto">
         <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
+          sensors={isScheduleLocked ? [] : sensors}
+          onDragStart={isScheduleLocked ? undefined : handleDragStart}
+          onDragEnd={isScheduleLocked ? undefined : handleDragEnd}
           collisionDetection={closestCorners}
         >
           <div className="px-6 pb-6">
@@ -3543,11 +3551,26 @@ export default function LayupScheduler() {
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Layup Schedule
-                      </h3>
+                      <div className="flex items-center space-x-3">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          Layup Schedule
+                        </h3>
+                        {isScheduleLocked && (
+                          <Badge variant="destructive" className="animate-pulse">
+                            🔒 LOCKED
+                          </Badge>
+                        )}
+                        {!isScheduleLocked && Object.keys(orderAssignments).length > 0 && (
+                          <Badge variant="secondary">
+                            📝 EDITING
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • {Object.keys(orderAssignments).length} orders currently scheduled
+                        {isScheduleLocked 
+                          ? `Schedule locked with ${Object.keys(orderAssignments).length} orders assigned`
+                          : `${processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • ${Object.keys(orderAssignments).length} orders currently scheduled`
+                        }
                       </p>
                     </div>
                     <div className="space-x-2">

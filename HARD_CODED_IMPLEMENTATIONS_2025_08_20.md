@@ -185,5 +185,52 @@ If functionality is lost, restore from this documentation:
 3. Verify route configurations match Section 3
 4. Test with validation commands from Section 7
 
+## 8. Layup Scheduler Drag-and-Drop Fix (CRITICAL - August 20, 2025 PM)
+
+### Implementation Details
+- **File Modified**: `client/src/components/LayupScheduler.tsx`
+- **Issue Fixed**: Disappearing order cards during drag-and-drop operations
+- **Solution**: Auto-save functionality with proper data validation and locked/unlocked modes
+
+### Hard-Coded Logic
+```typescript
+// Fixed drag-and-drop parsing (lines 649-720)
+const handleDragEnd = async (event: DragEndEvent) => {
+  const dropTargetId = over.id as string;
+  const [moldId, date] = dropTargetId.split('|'); // Fixed: moldId|date instead of date|moldId
+  
+  // Auto-save to prevent disappearing cards
+  await apiRequest('/api/layup-schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderId, scheduledDate: new Date(date), moldId, isOverride: true
+    })
+  });
+};
+
+// Locked/Unlocked Visual Modes (lines 562-563, 3544-3547)
+const shouldHideEmptyCell = isScheduleLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
+
+// Disable drag when locked
+<DndContext
+  sensors={isScheduleLocked ? [] : sensors}
+  onDragStart={isScheduleLocked ? undefined : handleDragStart}
+  onDragEnd={isScheduleLocked ? undefined : handleDragEnd}
+>
+```
+
+### Key Features
+1. **Auto-Save**: Every drag operation immediately saves to backend
+2. **Visual Feedback**: Locked 🔒 vs Editing 📝 badges
+3. **Cell Visibility**: Empty cells hidden when locked, shown when unlocked
+4. **Drag Disable**: Dragging completely disabled when schedule is locked
+5. **Error Recovery**: Proper error handling and user notifications
+
+### User Experience
+- **Unlocked Mode**: Shows all available mold cells for drag-and-drop scheduling
+- **Locked Mode**: Hides empty cells, shows only assigned orders, disables dragging
+- **Clear Visual Indicators**: Users immediately know if schedule is editable or locked
+
 **Date Implemented**: August 20, 2025  
 **Status**: PRODUCTION READY - DO NOT MODIFY WITHOUT CONSULTATION

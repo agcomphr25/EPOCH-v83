@@ -168,19 +168,8 @@ export default function AllOrdersPage() {
   };
 
   const getDepartmentBadgeColor = (department: string) => {
-    const colors: { [key: string]: string } = {
-      'P1 Production Queue': 'bg-slate-600',
-      'Layup/Plugging': 'bg-blue-500',
-      'Barcode': 'bg-cyan-500',
-      'CNC': 'bg-green-500',
-      'Finish': 'bg-yellow-500',
-      'Gunsmith': 'bg-purple-500',
-      'Finish QC': 'bg-yellow-600',
-      'Paint': 'bg-pink-500',
-      'Shipping QC': 'bg-indigo-500',
-      'Shipping': 'bg-gray-500'
-    };
-    return colors[department] || 'bg-gray-400';
+    // Keep badges black/default as requested
+    return 'bg-gray-600';
   };
 
   // Filter orders based on search and department, excluding cancelled orders

@@ -556,8 +556,9 @@ function DroppableCell({
   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
   const hasOrders = orders.length > 0;
 
-  // NEW LOGIC: Show empty cells when unlocked (for drag-and-drop), hide when locked (show only assigned orders)
-  const shouldHideEmptyCell = isScheduleLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
+  // NEW LOGIC: Show empty cells when week is unlocked (for drag-and-drop), hide when week is locked (show only assigned orders)
+  const weekIsLocked = isWeekLocked(date);
+  const shouldHideEmptyCell = weekIsLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
 
   return (
     <div
@@ -590,11 +591,11 @@ function DroppableCell({
                 getModelDisplayName={getModelDisplayName}
                 features={features}
                 processedOrders={processedOrders}
-                isLocked={isScheduleLocked}
+                isLocked={weekIsLocked}
               />
             );
           })}
-          {orders.length === 0 && !isScheduleLocked && (
+          {orders.length === 0 && !weekIsLocked && (
             <div className="text-xs text-gray-400 text-center py-2 opacity-50">
               {isNonWorkDay ? 'Non-work day' : 'Available'}
             </div>
@@ -624,7 +625,10 @@ export default function LayupScheduler() {
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
-  const [isScheduleLocked, setIsScheduleLocked] = useState(false);
+  // Week-specific lock state instead of global lock
+  const [lockedWeeks, setLockedWeeks] = useState<{[weekKey: string]: boolean}>({
+    '2025-08-18': true, // Week of 8/18-8/22 is locked
+  });
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -657,6 +661,18 @@ export default function LayupScheduler() {
 
     if (!date || !moldId) {
       console.error('❌ DRAG ERROR: Invalid drop target format:', dropTargetId);
+      return;
+    }
+
+    // Check if target week is locked
+    const targetDate = new Date(date);
+    if (isWeekLocked(targetDate)) {
+      console.log('❌ Cannot drop to locked week');
+      toast({
+        title: "Week Locked",
+        description: `Cannot schedule to week of ${format(targetDate, 'MM/dd')} - week is locked`,
+        variant: "destructive"
+      });
       return;
     }
 
@@ -1096,6 +1112,24 @@ export default function LayupScheduler() {
       const assignment = orderAssignments[order.orderId];
       return assignment !== undefined; // Any order with an assignment
     });
+  };
+
+  // Helper function to get week key for locking (format: YYYY-MM-DD of Monday)
+  const getWeekKey = (date: Date) => {
+    const monday = startOfWeek(date, { weekStartsOn: 1 });
+    return format(monday, 'yyyy-MM-dd');
+  };
+
+  // Helper function to check if current week is locked
+  const isCurrentWeekLocked = () => {
+    const weekKey = getWeekKey(currentDate);
+    return lockedWeeks[weekKey] || false;
+  };
+
+  // Helper function to check if a specific date's week is locked
+  const isWeekLocked = (date: Date) => {
+    const weekKey = getWeekKey(date);
+    return lockedWeeks[weekKey] || false;
   };
 
 
@@ -3515,25 +3549,35 @@ export default function LayupScheduler() {
               {dates.map(date => {
                   const dayOfWeek = date.getDay();
                   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
+                  const dateWeekLocked = isWeekLocked(date);
 
                   return (
                     <div
                       key={date.toISOString()}
                       className={`p-3 border text-center font-semibold text-sm ${
-                        isWorkDay
-                          ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
-                          : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10 opacity-75'
+                        dateWeekLocked
+                          ? 'border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/20'
+                          : isWorkDay
+                            ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
+                            : 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10 opacity-75'
                       }`}
                     >
                       {format(date, 'MM/dd')}
+                      {dateWeekLocked && (
+                        <div className="text-xs text-red-600 dark:text-red-400">
+                          🔒 LOCKED
+                        </div>
+                      )}
                       <div className={`text-xs mt-1 ${
-                        isWorkDay
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-amber-600 dark:text-amber-400'
+                        dateWeekLocked
+                          ? 'text-red-600 dark:text-red-400'
+                          : isWorkDay
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-amber-600 dark:text-amber-400'
                       }`}>
                         {format(date, 'EEE')}
                         <div className="text-[10px] font-medium">
-                          {isWorkDay ? 'Work Day' : 'Manual Only'}
+                          {dateWeekLocked ? 'Week Locked' : isWorkDay ? 'Work Day' : 'Manual Only'}
                         </div>
                       </div>
                     </div>
@@ -3547,9 +3591,9 @@ export default function LayupScheduler() {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-auto">
         <DndContext
-          sensors={isScheduleLocked ? [] : sensors}
-          onDragStart={isScheduleLocked ? undefined : handleDragStart}
-          onDragEnd={isScheduleLocked ? undefined : handleDragEnd}
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
           collisionDetection={closestCorners}
         >
           <div className="px-6 pb-6">
@@ -3563,20 +3607,20 @@ export default function LayupScheduler() {
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                           Layup Schedule
                         </h3>
-                        {isScheduleLocked && (
+                        {isCurrentWeekLocked() && (
                           <Badge variant="destructive" className="animate-pulse">
-                            🔒 LOCKED
+                            🔒 THIS WEEK LOCKED
                           </Badge>
                         )}
-                        {!isScheduleLocked && Object.keys(orderAssignments).length > 0 && (
+                        {!isCurrentWeekLocked() && Object.keys(orderAssignments).length > 0 && (
                           <Badge variant="secondary">
-                            📝 EDITING
+                            📝 EDITING THIS WEEK
                           </Badge>
                         )}
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {isScheduleLocked 
-                          ? `Schedule locked with ${Object.keys(orderAssignments).length} orders assigned`
+                        {isCurrentWeekLocked() 
+                          ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${Object.keys(orderAssignments).length} total orders scheduled`
                           : `${processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • ${Object.keys(orderAssignments).length} orders currently scheduled`
                         }
                       </p>
@@ -3595,15 +3639,22 @@ export default function LayupScheduler() {
                         <>
                           <Button
                             onClick={async () => {
-                              if (isScheduleLocked) {
-                                // Unlock the schedule
-                                setIsScheduleLocked(false);
+                              const weekKey = getWeekKey(currentDate);
+                              const currentWeekLocked = isCurrentWeekLocked();
+                              
+                              if (currentWeekLocked) {
+                                // Unlock current week
+                                setLockedWeeks(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[weekKey];
+                                  return updated;
+                                });
                                 toast({
-                                  title: "Schedule Unlocked",
-                                  description: "You can now reschedule orders by dragging them to different days",
+                                  title: "Week Unlocked",
+                                  description: `Week of ${format(currentDate, 'MM/dd')} unlocked for editing`,
                                 });
                               } else {
-                                // Save and lock the schedule
+                                // Save and lock current week
                                 try {
                                   // Prepare schedule entries for saving (without moving orders)
                                   const scheduleEntries = Object.entries(orderAssignments).map(([orderId, assignment]) => ({
@@ -3631,12 +3682,12 @@ export default function LayupScheduler() {
 
                                   if (result.success) {
                                     console.log('✅ Weekly schedule saved successfully');
-                                    setIsScheduleLocked(true);
+                                    setLockedWeeks(prev => ({ ...prev, [weekKey]: true }));
 
                                     // Show success feedback
                                     toast({
-                                      title: "Schedule Locked",
-                                      description: `Schedule saved with ${scheduleEntries.length} order assignments. Orders are locked in place.`,
+                                      title: "Week Locked",
+                                      description: `Week of ${format(currentDate, 'MM/dd')} locked with ${scheduleEntries.length} assignments.`,
                                     });
 
                                     // Keep the schedule visible (don't clear orderAssignments)
@@ -3651,21 +3702,21 @@ export default function LayupScheduler() {
                                 }
                               }
                             }}
-                            className={`${isScheduleLocked
+                            className={`${isCurrentWeekLocked()
                               ? 'bg-red-600 hover:bg-red-700'
                               : 'bg-green-600 hover:bg-green-700'
                             }`}
                             size="sm"
                           >
-                            {isScheduleLocked ? (
+                            {isCurrentWeekLocked() ? (
                               <>
                                 <ArrowRight className="w-4 h-4 mr-1" />
-                                Unlock Schedule ({Object.keys(orderAssignments).length} total orders)
+                                Unlock Week ({format(currentDate, 'MM/dd')})
                               </>
                             ) : (
                               <>
                                 <Save className="w-4 h-4 mr-1" />
-                                Lock & Push ALL ({Object.keys(orderAssignments).length} total orders)
+                                Lock Week ({format(currentDate, 'MM/dd')})
                               </>
                             )}
                           </Button>

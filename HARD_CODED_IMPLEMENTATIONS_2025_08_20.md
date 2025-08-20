@@ -245,5 +245,53 @@ const scheduledOrderIds = allScheduledOrders.map(order => order.orderId);
 - **Locked Mode**: Hides empty cells, shows only assigned orders, disables dragging
 - **Clear Visual Indicators**: Users immediately know if schedule is editable or locked
 
+## 9. Week-Specific Locking System (CRITICAL - August 20, 2025 PM)
+
+### Implementation Details
+- **File Modified**: `client/src/components/LayupScheduler.tsx`
+- **Issue Fixed**: Global lock affecting all weeks instead of individual week locking
+- **Solution**: Per-week lock state with individual week controls and visual indicators
+
+### Hard-Coded Logic
+```typescript
+// Week-specific lock state (lines 630-633)
+const [lockedWeeks, setLockedWeeks] = useState<{[weekKey: string]: boolean}>({
+  '2025-08-18': true, // Week of 8/18-8/22 is locked
+});
+
+// Week key generation (lines 1107-1111)
+const getWeekKey = (date: Date) => {
+  const monday = startOfWeek(date, { weekStartsOn: 1 });
+  return format(monday, 'yyyy-MM-dd');
+};
+
+// Lock validation in drag operations (lines 670-680)
+const targetDate = new Date(date);
+if (isWeekLocked(targetDate)) {
+  toast({
+    title: "Week Locked",
+    description: `Cannot schedule to week of ${format(targetDate, 'MM/dd')} - week is locked`,
+    variant: "destructive"
+  });
+  return;
+}
+
+// Visual week indicators (lines 3549-3580)
+const dateWeekLocked = isWeekLocked(date);
+className={`${dateWeekLocked ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'}`}
+```
+
+### Key Features
+1. **Individual Week Control**: Each week can be locked/unlocked independently
+2. **Drag Prevention**: Cannot drag orders TO locked weeks
+3. **Visual Indicators**: Red headers for locked weeks, green for unlocked
+4. **Current Week Controls**: Lock/unlock buttons show current week status
+5. **Status Preservation**: Week 8/18-8/22 locked, 8/25-8/29 unlocked as specified
+
+### User Experience
+- **Locked Weeks**: Red date headers with 🔒 LOCKED indicators, cannot receive dropped orders
+- **Unlocked Weeks**: Green headers, allow drag-and-drop scheduling
+- **Week-Specific Buttons**: Show "Lock Week (MM/dd)" or "Unlock Week (MM/dd)"
+
 **Date Implemented**: August 20, 2025  
 **Status**: PRODUCTION READY - DO NOT MODIFY WITHOUT CONSULTATION

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 import { useToast } from '@/hooks/use-toast';
 import { Package, Users, ChevronDown, Send, CheckCircle, Check, ChevronsUpDown } from 'lucide-react';
@@ -1651,12 +1652,7 @@ export default function OrderEntry() {
                 </span>
               </div>
 
-              {/* Order Attachments */}
-              {orderId && (
-                <div className="mt-6">
-                  <OrderAttachments orderId={orderId} />
-                </div>
-              )}
+
 
               {/* Stock Model Selection and Price Override Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3170,6 +3166,22 @@ export default function OrderEntry() {
                   {isSubmitting ? "Processing..." : (isEditMode ? "Update Order" : "Create Order")}
                 </Button>
               </div>
+
+              {/* Order Attachments - Accordion at bottom */}
+              {orderId && (
+                <div className="mt-6">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="attachments">
+                      <AccordionTrigger className="text-left">
+                        <span className="font-medium">Order Attachments</span>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <OrderAttachments orderId={orderId} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
 
             </CardContent>
           </Card>

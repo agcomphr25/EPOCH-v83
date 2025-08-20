@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { ShippingActions } from '@/components/ShippingActions';
 import { BulkShippingActions } from '@/components/BulkShippingActions';
+import UPSLabelCreator from '@/components/UPSLabelCreator';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -17,6 +19,10 @@ import { useToast } from '@/hooks/use-toast';
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [showLabelCreator, setShowLabelCreator] = useState(false);
+  const [labelData, setLabelData] = useState<any>(null);
+  const [showLabelViewer, setShowLabelViewer] = useState(false);
   const { toast } = useToast();
   
   // Get all orders from production pipeline with payment status
@@ -351,28 +357,29 @@ export default function ShippingQueuePage() {
       return;
     }
 
-    // For now, open the shipping label PDF directly (this can be enhanced with a modal later)
-    try {
-      toast({
-        title: "Opening shipping label creator...",
-        description: "Please wait while we prepare the shipping label"
-      });
+    // Open UPS Label Creator dialog with weight/dimension inputs
+    setSelectedOrderId(orderId);
+    setShowLabelCreator(true);
+  };
 
-      // Open shipping label creation in new tab
-      window.open(`/api/shipping-pdf/ups-shipping-label/${orderId}`, '_blank');
-      
-      toast({
-        title: "Shipping label creator opened",
-        description: `Shipping label creator for order ${orderId} opened in new tab`
-      });
-    } catch (error) {
-      console.error('Error opening shipping label creator:', error);
-      toast({
-        title: "Error opening shipping label creator",
-        description: "Failed to open shipping label creator",
-        variant: "destructive"
-      });
-    }
+  // Handle successful label creation
+  const handleLabelSuccess = (data: any) => {
+    setLabelData(data);
+    setShowLabelViewer(true);
+    setShowLabelCreator(false);
+    
+    toast({
+      title: "Shipping Label Generated",
+      description: `Label created with tracking number: ${data.trackingNumber}`,
+    });
+  };
+
+  // Download label function
+  const downloadLabel = (labelBase64: string, trackingNumber: string, orderId: string) => {
+    const link = document.createElement('a');
+    link.href = `data:image/gif;base64,${labelBase64}`;
+    link.download = `UPS_Label_${orderId}_${trackingNumber}.gif`;
+    link.click();
   };
 
   return (
@@ -888,6 +895,54 @@ export default function ShippingQueuePage() {
           </Card>
         </div>
       </div>
+
+      {/* UPS Label Creator Dialog */}
+      {showLabelCreator && selectedOrderId && (
+        <UPSLabelCreator
+          orderId={selectedOrderId}
+          isOpen={showLabelCreator}
+          onClose={() => {
+            setShowLabelCreator(false);
+            setSelectedOrderId(null);
+          }}
+          onSuccess={handleLabelSuccess}
+        />
+      )}
+
+      {/* Label Viewer Dialog */}
+      {showLabelViewer && labelData && (
+        <Dialog open={showLabelViewer} onOpenChange={setShowLabelViewer}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shipping Label Generated</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <p className="text-sm"><strong>Tracking Number:</strong> {labelData.trackingNumber}</p>
+                <p className="text-sm"><strong>Service:</strong> {labelData.serviceDescription}</p>
+                <p className="text-sm"><strong>Cost:</strong> ${labelData.totalCharges}</p>
+              </div>
+              {labelData.labelImageFormat && (
+                <div className="text-center">
+                  <Button
+                    onClick={() => downloadLabel(labelData.graphicImage, labelData.trackingNumber, selectedOrderId!)}
+                    className="mb-4"
+                  >
+                    Download Label
+                  </Button>
+                  <div className="border rounded-lg p-4 bg-white">
+                    <img 
+                      src={`data:image/gif;base64,${labelData.graphicImage}`}
+                      alt="Shipping Label"
+                      className="mx-auto max-w-full h-auto"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

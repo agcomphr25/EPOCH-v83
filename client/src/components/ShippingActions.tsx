@@ -108,18 +108,12 @@ export function ShippingActions({ orderId, orderData }: ShippingActionsProps) {
   const handleShippingLabel = async () => {
     setIsGeneratingLabel(true);
     try {
-      const response = await axios.post(`/api/shipping-pdf/ups-shipping-label/${orderId}`, {
-        shippingAddress,
-        packageDetails
-      }, {
-        responseType: 'blob'
-      });
-      
-      downloadPdf(response.data, `Shipping-Label-${orderId}.pdf`);
+      // Open UPS shipping label in new tab/window for printing (HTML format from UPS)
+      window.open(`/api/shipping-pdf/ups-shipping-label/${orderId}`, '_blank');
       
       toast({
         title: "Shipping Label Generated",
-        description: `UPS shipping label for order ${orderId} has been downloaded and tracking info saved.`,
+        description: `UPS shipping label for order ${orderId} opened in new tab for printing.`,
       });
       
       // Refresh any tracking displays if needed

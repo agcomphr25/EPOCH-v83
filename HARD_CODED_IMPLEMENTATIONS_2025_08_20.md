@@ -177,6 +177,83 @@ All implementations are:
 - ✅ Documented with inline comments
 - ✅ Preserved in replit.md user preferences
 
+## 10. Shipping QC Checkboxes for Specific Items (August 20, 2025 PM)
+
+### Implementation Details
+- **File Modified**: `client/src/pages/QCShippingQueuePage.tsx`
+- **Feature Added**: Individual checkboxes on Shipping QC cards for specific quality control items
+- **Purpose**: Enable QC verification for specific bottom metals and paid options
+
+### Hard-Coded Logic
+```typescript
+// Helper function to check for specific bottom metals (lines 131-136)
+const hasSpecificBottomMetal = (order: any) => {
+  const bottomMetal = order.features?.bottom_metal;
+  const specificBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+  return bottomMetal && specificBottomMetals.includes(bottomMetal);
+};
+
+// Helper function to detect paid options (lines 138-182)
+const getPaidOtherOptions = (order: any) => {
+  const paidOptions: string[] = [];
+  
+  // Check other_options array for shirt, hat, touch-up paint
+  if (order.features?.other_options && Array.isArray(order.features.other_options)) {
+    order.features.other_options.forEach((option: string) => {
+      if (option.toLowerCase().includes('shirt')) paidOptions.push('Shirt');
+      if (option.toLowerCase().includes('hat')) paidOptions.push('Hat');
+      if (option.toLowerCase().includes('touch') && option.toLowerCase().includes('paint')) {
+        paidOptions.push('Touch-up Paint');
+      }
+    });
+  }
+  return paidOptions;
+};
+
+// Checkbox rendering in OrderCard component (lines 382-408)
+<div className="space-y-1 mt-2 mb-2">
+  {/* Bottom Metal Checkbox */}
+  {hasSpecificBottomMetal(order) && (
+    <div className="flex items-center space-x-2">
+      <Checkbox id={`bottom-metal-${order.orderId}`} />
+      <label className="text-xs font-medium text-blue-700 dark:text-blue-300">
+        Bottom Metal ({order.features.bottom_metal})
+      </label>
+    </div>
+  )}
+  
+  {/* Paid Other Options Checkboxes */}
+  {getPaidOtherOptions(order).map((option, index) => (
+    <div key={index} className="flex items-center space-x-2">
+      <Checkbox id={`paid-option-${order.orderId}-${index}`} />
+      <label className="text-xs font-medium text-green-700 dark:text-green-300">
+        {option}
+      </label>
+    </div>
+  ))}
+</div>
+```
+
+### Key Features
+1. **Specific Bottom Metal Detection**: Automatically detects orders with bottom metals requiring QC verification (AG-M5-SA, AG-M5-LA, AG-M5-LA-CIP, AG-BDL-SA, AG-BDL-LA)
+2. **Paid Options Detection**: Identifies shirt, hat, and touch-up paint options from order features
+3. **Color-Coded Labels**: Blue labels for bottom metals, green labels for paid options
+4. **Individual Checkboxes**: Each item gets its own checkbox for QC verification tracking
+5. **Smart Detection**: Checks both other_options arrays and feature pricing for paid items
+
+### User Experience
+- **Bottom Metal Orders**: Display blue checkbox with specific bottom metal model number
+- **Paid Options**: Display green checkboxes for each paid option (shirt, hat, touch-up paint)
+- **Conditional Display**: Checkboxes only appear for orders containing the specified items
+- **Clear Labeling**: Each checkbox clearly indicates what is being verified
+
+### Status
+- ✅ Feature implemented and working
+- ✅ TypeScript errors resolved
+- ✅ Helper functions created with proper typing
+- ✅ Color-coded visual system implemented
+- ✅ Hard-coded and documented for preservation
+
 ## Emergency Recovery
 
 If functionality is lost, restore from this documentation:

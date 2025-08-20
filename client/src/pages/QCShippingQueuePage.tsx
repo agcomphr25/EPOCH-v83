@@ -125,6 +125,59 @@ export default function QCShippingQueuePage() {
     return option?.label || optionValue;
   };
 
+  // Helper function to check for specific bottom metals
+  const hasSpecificBottomMetal = (order: any) => {
+    const bottomMetal = order.features?.bottom_metal;
+    const specificBottomMetals = ['AG-M5-SA', 'AG-M5-LA', 'AG-M5-LA-CIP', 'AG-BDL-SA', 'AG-BDL-LA'];
+    return bottomMetal && specificBottomMetals.includes(bottomMetal);
+  };
+
+  // Helper function to check for paid other options (shirt, hat, touch-up paint)
+  const getPaidOtherOptions = (order: any) => {
+    const paidOptions: string[] = [];
+    
+    // Check other_options array for shirt, hat, touch-up paint
+    if (order.features?.other_options && Array.isArray(order.features.other_options)) {
+      order.features.other_options.forEach((option: string) => {
+        if (option.toLowerCase().includes('shirt')) {
+          paidOptions.push('Shirt');
+        }
+        if (option.toLowerCase().includes('hat')) {
+          paidOptions.push('Hat');
+        }
+        if (option.toLowerCase().includes('touch') && option.toLowerCase().includes('paint')) {
+          paidOptions.push('Touch-up Paint');
+        }
+      });
+    }
+
+    // Check for any paid options (price > 0)
+    const featureList = features as any[];
+    if (order.features && featureList.length > 0) {
+      Object.entries(order.features).forEach(([featureId, featureValue]) => {
+        if (featureValue && featureValue !== false && featureValue !== '' && featureValue !== 'none') {
+          const feature = featureList.find((f: any) => f.id === featureId);
+          if (feature?.options) {
+            const option = feature.options.find((opt: any) => opt.value === featureValue);
+            if (option && option.price > 0) {
+              // Check if it's a shirt, hat, or paint option
+              const label = option.label?.toLowerCase() || '';
+              if (label.includes('shirt') && !paidOptions.includes('Shirt')) {
+                paidOptions.push('Shirt');
+              } else if (label.includes('hat') && !paidOptions.includes('Hat')) {
+                paidOptions.push('Hat');
+              } else if ((label.includes('touch') && label.includes('paint')) && !paidOptions.includes('Touch-up Paint')) {
+                paidOptions.push('Touch-up Paint');
+              }
+            }
+          }
+        }
+      });
+    }
+
+    return paidOptions;
+  };
+
   // Helper function to format order features for tooltip
   const formatOrderFeatures = (order: any) => {
     if (!order.features) return 'No customizations';
@@ -321,6 +374,36 @@ export default function QCShippingQueuePage() {
             Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
           </p>
         )}
+        
+        {/* QC Checkboxes for specific items */}
+        <div className="space-y-1 mt-2 mb-2">
+          {/* Bottom Metal Checkbox */}
+          {hasSpecificBottomMetal(order) && (
+            <div className="flex items-center space-x-2">
+              <Checkbox id={`bottom-metal-${order.orderId}`} />
+              <label 
+                htmlFor={`bottom-metal-${order.orderId}`} 
+                className="text-xs font-medium text-blue-700 dark:text-blue-300"
+              >
+                Bottom Metal ({order.features.bottom_metal})
+              </label>
+            </div>
+          )}
+          
+          {/* Paid Other Options Checkboxes */}
+          {getPaidOtherOptions(order).map((option, index) => (
+            <div key={index} className="flex items-center space-x-2">
+              <Checkbox id={`paid-option-${order.orderId}-${index}`} />
+              <label 
+                htmlFor={`paid-option-${order.orderId}-${index}`} 
+                className="text-xs font-medium text-green-700 dark:text-green-300"
+              >
+                {option}
+              </label>
+            </div>
+          ))}
+        </div>
+
         <div className="flex gap-1 mt-2">
           <Button
             size="sm"

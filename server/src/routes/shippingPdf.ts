@@ -2057,15 +2057,15 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
             // Send the UPS label HTML (which contains the embedded GIF image)
             return res.send(htmlContent);
           } else {
-            // Handle direct image format
+            // Handle direct image format (GIF from UPS)
             const labelBytes = Buffer.from(labelImage, 'base64');
             
-            // Set response headers for PDF inline display (opens in new tab for printing)
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.pdf"`);
+            // Set response headers for GIF image inline display (opens in new tab for printing)
+            res.setHeader('Content-Type', 'image/gif');
+            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.gif"`);
             res.setHeader('Content-Length', labelBytes.length);
 
-            // Send the UPS label PDF
+            // Send the UPS label GIF image
             return res.send(labelBytes);
           }
         } catch (pdfError) {

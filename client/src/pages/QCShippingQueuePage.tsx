@@ -303,7 +303,17 @@ export default function QCShippingQueuePage() {
             Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
           </p>
         )}
-        {/* Buttons removed - moved to Shipping Department */}
+        <div className="flex gap-1 mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleQCChecklistDownload(order.orderId)}
+            className="flex-1 text-xs"
+          >
+            <CheckCircle className="h-3 w-3 mr-1" />
+            QC Checklist
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

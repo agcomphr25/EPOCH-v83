@@ -426,7 +426,7 @@ export default function ShippingQueuePage() {
                     }`}
                     onClick={() => handleCardSelection(order.orderId)}
                   >
-                    <CardContent className="p-4">
+                    <CardContent className="p-3">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                           <Checkbox
@@ -456,7 +456,7 @@ export default function ShippingQueuePage() {
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* Order Info */}
                         <div className="space-y-1 text-sm">
                           <div className="text-gray-600">
@@ -497,6 +497,34 @@ export default function ShippingQueuePage() {
                             </div>
                           )}
                         </div>
+                      </div>
+                      
+                      {/* Quick Action Buttons */}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCard(order.orderId);
+                            setTimeout(() => handleSalesOrderDownload(), 100);
+                          }}
+                          className="flex-1 text-xs h-8"
+                        >
+                          📋 Sales Order
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCard(order.orderId);
+                            setTimeout(() => handleShippingLabelCreator(), 100);
+                          }}
+                          className="flex-1 text-xs h-8"
+                        >
+                          📦 Ship Label
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

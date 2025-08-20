@@ -303,26 +303,7 @@ export default function QCShippingQueuePage() {
             Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
           </p>
         )}
-        <div className="flex gap-1 mt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleSalesOrderDownload(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <FileText className="h-3 w-3 mr-1" />
-            Sales Order
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleCreateLabel(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <Truck className="h-3 w-3 mr-1" />
-            Ship Label
-          </Button>
-        </div>
+        {/* Buttons removed - moved to Shipping Department */}
       </CardContent>
     </Card>
   );

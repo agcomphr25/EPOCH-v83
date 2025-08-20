@@ -394,15 +394,6 @@ export default function QCShippingQueuePage() {
             <CheckCircle className="h-3 w-3 mr-1" />
             QC Checklist
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleCreateLabel(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <Truck className="h-3 w-3 mr-1" />
-            Ship Label
-          </Button>
         </div>
       </CardContent>
     </Card>

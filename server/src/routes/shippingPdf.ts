@@ -1891,88 +1891,135 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   }
 });
 
-// GET route for UPS Shipping Label creation interface
+// GET route for UPS Shipping Label - REAL UPS API INTEGRATION
 router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
+    console.log(`Creating REAL UPS shipping label for order: ${orderId}`);
     
-    // Get order data to display in the interface
+    // Get order data from storage
     const { storage } = await import('../../storage');
-    const order = await storage.getOrderById(orderId);
+    let order = null;
     
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+    // Try to find the order in either finalized or draft orders
+    try {
+      order = await storage.getFinalizedOrderById(orderId);
+      console.log(`Found finalized order: ${orderId}`);
+    } catch (error) {
+      try {
+        order = await storage.getOrderDraft(orderId);
+        console.log(`Found draft order: ${orderId}`);
+      } catch (draftError) {
+        console.log(`Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
     }
 
-    // Generate a simple shipping label creation interface
-    const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>UPS Shipping Label Creator - Order ${orderId}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="bg-gray-100 p-8">
-        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
-            <div class="mb-6">
-                <h1 class="text-2xl font-bold text-gray-900 mb-2">Create UPS Shipping Label</h1>
-                <p class="text-gray-600">Order ID: <span class="font-semibold">${orderId}</span></p>
-                <p class="text-gray-600">Customer: <span class="font-semibold">${(order as any).customer || 'N/A'}</span></p>
-            </div>
-            
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div class="flex items-start">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-blue-800">UPS API Integration Required</h3>
-                        <div class="mt-2 text-sm text-blue-700">
-                            <p>To create shipping labels, UPS API credentials must be configured:</p>
-                            <ul class="list-disc list-inside mt-1">
-                                <li>UPS_CLIENT_ID</li>
-                                <li>UPS_CLIENT_SECRET</li>
-                                <li>UPS account number</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    if (!order) {
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
 
-            <div class="space-y-4">
-                <button onclick="createShippingLabel()" class="w-full bg-brown-600 hover:bg-brown-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
-                    Create UPS Shipping Label
-                </button>
-                
-                <button onclick="window.close()" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
-                    Close Window
-                </button>
-            </div>
-        </div>
+    // Get customer and shipping information
+    let customerInfo = null;
+    let customerAddress = null;
+    
+    if ((order as any).customerId) {
+      try {
+        customerInfo = await storage.getCustomerById((order as any).customerId);
+        if (customerInfo) {
+          const addresses = await storage.getCustomerAddresses((order as any).customerId);
+          customerAddress = addresses.find(addr => addr.type === 'shipping' && addr.isDefault) || 
+                          addresses.find(addr => addr.type === 'both' && addr.isDefault) ||
+                          addresses[0];
+        }
+      } catch (e) {
+        console.log(`Error finding customer info for order ${orderId}:`, e);
+      }
+    }
 
-        <script>
-            function createShippingLabel() {
-                // For now, show an alert about API configuration
-                alert('UPS API integration is available but requires configuration of UPS credentials in the environment variables.');
-                
-                // In a full implementation, this would:
-                // 1. Collect shipping details from a form
-                // 2. Make a POST request to /api/shipping-pdf/ups-shipping-label/${orderId}
-                // 3. Display the generated label or download it
-            }
-        </script>
-    </body>
-    </html>`;
+    // Build shipping address from customer data
+    const shippingAddress = {
+      name: customerInfo?.name || "Customer Name",
+      street: customerAddress?.street || "123 Main St", 
+      city: customerAddress?.city || "Birmingham",
+      state: customerAddress?.state || "AL",
+      zip: customerAddress?.zipCode || "35203"
+    };
 
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+    // Default package details
+    const packageDetails = {
+      weight: "10",
+      length: "12",
+      width: "12", 
+      height: "12"
+    };
+
+    console.log(`Creating UPS shipment for ${orderId} to:`, shippingAddress);
+
+    // Create UPS shipment using real API
+    const shipmentRequest = buildUPSShipmentRequest(order, shippingAddress, packageDetails);
+    const upsResponse = await createUPSShipment(shipmentRequest);
+    
+    if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
+      const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
+      const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
+      const labelImage = shipmentResults.PackageResults[0]?.ShippingLabel?.GraphicImage;
+
+      console.log(`UPS label created for ${orderId}: ${trackingNumber}`);
+
+      // Update order status and move to Shipping Manager
+      try {
+        console.log(`Moving order ${orderId} to Shipping Manager after label creation`);
+        
+        const updateData = {
+          trackingNumber: trackingNumber,
+          shippingCarrier: 'UPS',
+          shippingMethod: 'UPS Ground',
+          shippedDate: new Date().toISOString(),
+          shippingLabelGenerated: true,
+          currentDepartment: 'Shipping Manager',
+          status: 'COMPLETED'
+        };
+
+        // Update either finalized or draft order based on which table it's in
+        if (order.id) {
+          await storage.updateOrder(order.orderId, updateData);
+          console.log(`Updated finalized order ${order.orderId} status to Shipping Manager`);
+        } else {
+          await storage.updateOrderDraft(order.orderId, updateData);
+          console.log(`Updated draft order ${order.orderId} status to Shipping Manager`);
+        }
+      } catch (updateError) {
+        console.error(`Failed to update order ${order.orderId} status:`, updateError);
+      }
+
+      // Convert base64 label image to PDF and return it
+      if (labelImage) {
+        try {
+          const labelBytes = Buffer.from(labelImage, 'base64');
+          
+          // Set response headers for PDF inline display (opens in new tab for printing)
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.pdf"`);
+          res.setHeader('Content-Length', labelBytes.length);
+
+          // Send the UPS label PDF
+          return res.send(labelBytes);
+        } catch (pdfError) {
+          console.error(`Error processing PDF label for ${orderId}:`, pdfError);
+        }
+      }
+    }
+
+    // If we get here, something went wrong with UPS API
+    throw new Error(`UPS API returned invalid response for ${orderId}`);
 
   } catch (error) {
-    console.error('Error generating shipping label interface:', error);
-    res.status(500).json({ error: 'Failed to generate shipping label interface' });
+    console.error('Error creating real UPS shipping label:', error);
+    res.status(500).json({ 
+      error: 'Failed to create UPS shipping label',
+      details: error.message
+    });
   }
 });
 

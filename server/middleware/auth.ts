@@ -19,10 +19,36 @@ declare global {
 }
 
 /**
- * Authentication middleware to verify session tokens
+ * Check if we're running in deployment environment
+ */
+function isDeploymentEnvironment(req: Request): boolean {
+  const host = req.get('host') || '';
+  
+  // Check for production deployment domains
+  return host.includes('.replit.app') || 
+         host.includes('.repl.co') || 
+         process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Authentication middleware to verify session tokens (deployment-aware)
  */
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   try {
+    // Skip authentication in development environment
+    if (!isDeploymentEnvironment(req)) {
+      // In development, create a mock user for testing
+      req.user = {
+        id: 999,
+        username: 'dev-user',
+        role: 'ADMIN',
+        employeeId: null,
+        canOverridePrices: true,
+        isActive: true
+      };
+      return next();
+    }
+
     const authHeader = req.headers['authorization'];
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;

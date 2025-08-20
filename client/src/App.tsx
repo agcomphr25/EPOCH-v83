@@ -88,6 +88,7 @@ import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
+import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
 function App() {
@@ -144,11 +145,12 @@ function App() {
   try {
     return (
       <QueryClientProvider client={queryClient}>
-        <Router>
-          <div className="min-h-screen bg-gray-50">
-            <Navigation />
-            <OfflineIndicator />
-            <main className="container mx-auto px-4 py-8">
+        <DeploymentAuthWrapper>
+          <Router>
+            <div className="min-h-screen bg-gray-50">
+              <Navigation />
+              <OfflineIndicator />
+              <main className="container mx-auto px-4 py-8">
                   <Switch>
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
@@ -281,6 +283,7 @@ function App() {
           <Toaster />
           <HotToaster />
         </Router>
+        </DeploymentAuthWrapper>
       </QueryClientProvider>
     );
   } catch (error) {

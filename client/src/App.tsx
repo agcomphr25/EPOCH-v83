@@ -192,6 +192,7 @@ function App() {
                   <Route path="/maintenance" component={MaintenancePage} />
 
                   {/* Employee Routes */}
+                  <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/employee-portal" component={EmployeePortalPage} />
                   <Route path="/employee-dashboard" component={EmployeeDashboard} />
                   <Route path="/employee-detail/:id" component={EmployeeDetail} />

@@ -728,8 +728,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Header section with company branding
-    let currentY = height - margin;
+    // Header section with company branding - Fixed positioning
+    let currentY = height - margin - 20; // Move header down from very top edge
     page.drawText('AG COMPOSITES', {
       x: margin,
       y: currentY,
@@ -739,7 +739,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Sales Order title
-    currentY -= 30;
+    currentY -= 35; // Increase spacing for better layout
     page.drawText('SALES ORDER', {
       x: margin,
       y: currentY,
@@ -748,55 +748,57 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    // Order number and date box
+    // Order number and date box - Fixed positioning to align with text
     const orderBoxX = width - margin - 200;
+    const orderBoxTop = currentY + 45; // Position box properly relative to text
     page.drawRectangle({
       x: orderBoxX,
-      y: currentY - 5,
+      y: orderBoxTop - 75, // Adjust box position
       width: 200,
-      height: 60,
+      height: 75,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
+    // Position text INSIDE the box
     page.drawText('Order Number:', {
       x: orderBoxX + 5,
-      y: currentY + 30,
+      y: orderBoxTop - 15,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(orderId, {
       x: orderBoxX + 90,
-      y: currentY + 30,
+      y: orderBoxTop - 15,
       size: 10,
       font: font,
     });
 
     page.drawText('Date:', {
       x: orderBoxX + 5,
-      y: currentY + 15,
+      y: orderBoxTop - 35,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(new Date().toLocaleDateString(), {
       x: orderBoxX + 90,
-      y: currentY + 15,
+      y: orderBoxTop - 35,
       size: 10,
       font: font,
     });
 
     page.drawText('Due Date:', {
       x: orderBoxX + 5,
-      y: currentY,
+      y: orderBoxTop - 55,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
       x: orderBoxX + 90,
-      y: currentY,
+      y: orderBoxTop - 55,
       size: 10,
       font: font,
     });
@@ -845,100 +847,105 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: paymentColor,
     });
 
-    // Customer Information Section - Enhanced Layout
-    currentY -= 80;
+    // Customer Information Section - Fixed positioning
+    currentY -= 120; // Move down to provide space for proper box placement
+    
+    // Define customer box dimensions and position
+    const customerBoxTop = currentY + 100;
+    const customerBoxHeight = 100;
+    const customerBoxBottom = customerBoxTop - customerBoxHeight;
     
     // Create customer info box
     page.drawRectangle({
       x: margin,
-      y: currentY - 100,
+      y: customerBoxBottom,
       width: printableWidth,
-      height: 100,
+      height: customerBoxHeight,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
-    // Customer header
+    // Customer header - positioned INSIDE the box
     page.drawText('CUSTOMER INFORMATION', {
       x: margin + 5,
-      y: currentY - 15,
+      y: customerBoxTop - 15, // Position from top of box
       size: 12,
       font: boldFont,
     });
 
-    // Bill to section
-    currentY -= 35;
+    // Bill to section - positioned INSIDE the box
+    let customerTextY = customerBoxTop - 35; // Start text inside box
     page.drawText('BILL TO:', {
       x: margin + 5,
-      y: currentY,
+      y: customerTextY,
       size: 10,
       font: boldFont,
     });
 
-    currentY -= 15;
+    customerTextY -= 15;
     if (customer) {
-      // Customer name and company
+      // Customer name and company - positioned INSIDE the box
       const customerLine = customer.company ? 
         `${customer.name} - ${customer.company}` : customer.name || 'N/A';
       const wrappedCustomerLine = wrapText(customerLine, printableWidth - 20, 10, font);
       wrappedCustomerLine.forEach((line, index) => {
         page.drawText(line, {
           x: margin + 5,
-          y: currentY - (index * 13),
+          y: customerTextY - (index * 13),
           size: 10,
           font: font,
         });
       });
       if (wrappedCustomerLine.length > 1) {
-        currentY -= (wrappedCustomerLine.length - 1) * 13;
+        customerTextY -= (wrappedCustomerLine.length - 1) * 13;
       }
 
-      currentY -= 13;
-      // Contact person if different from customer name
-      if (customer.contact && customer.contact !== customer.name) {
+      customerTextY -= 13;
+      // Contact person if different from customer name - positioned INSIDE the box
+      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxBottom + 10) {
         const contactText = `Contact: ${customer.contact}`;
         const wrappedContact = wrapText(contactText, printableWidth - 20, 9, font);
         wrappedContact.forEach((line, index) => {
           page.drawText(line, {
             x: margin + 5,
-            y: currentY - (index * 11),
+            y: customerTextY - (index * 11),
             size: 9,
             font: font,
           });
         });
-        currentY -= wrappedContact.length * 11;
+        customerTextY -= wrappedContact.length * 11;
       }
 
-      // Email and phone on same line if both exist
+      // Email and phone on same line if both exist - positioned INSIDE the box
       const contactInfo = [];
       if (customer.email) contactInfo.push(`Email: ${customer.email}`);
       if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
       
-      if (contactInfo.length > 0) {
+      if (contactInfo.length > 0 && customerTextY > customerBoxBottom + 10) {
         const contactInfoText = contactInfo.join(' | ');
         const wrappedContactInfo = wrapText(contactInfoText, printableWidth - 20, 9, font);
         wrappedContactInfo.forEach((line, index) => {
           page.drawText(line, {
             x: margin + 5,
-            y: currentY - (index * 11),
+            y: customerTextY - (index * 11),
             size: 9,
             font: font,
           });
         });
-        currentY -= wrappedContactInfo.length * 11;
+        customerTextY -= wrappedContactInfo.length * 11;
       }
     } else {
       page.drawText('Customer information not available', {
         x: margin + 5,
-        y: currentY,
+        y: customerTextY,
         size: 10,
         font: font,
       });
     }
 
-    // Ship to address section (right side)
+    // Ship to address section (right side) - positioned INSIDE the box
     const shipToX = margin + 280;
-    let shipCurrentY = currentY + 60;
+    let shipCurrentY = customerBoxTop - 35; // Position relative to box top
     
     page.drawText('SHIP TO:', {
       x: shipToX,
@@ -1011,8 +1018,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       });
     }
 
-    // Order Details Section (reduced height)
-    currentY -= 50;
+    // Order Details Section - Position properly after customer box
+    currentY = customerBoxBottom - 30; // Continue below the customer box
     page.drawText('ORDER DETAILS', {
       x: margin,
       y: currentY,

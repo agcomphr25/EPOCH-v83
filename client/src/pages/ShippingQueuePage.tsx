@@ -24,7 +24,7 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/orders/with-payment-status'],
   });
 
-  // Get orders in Shipping department, sorted by due date (latest first)
+  // Get orders in Shipping department, categorized by due date
   const shippingOrders = useMemo(() => {
     const orders = allOrders as any[];
     const filteredOrders = orders.filter((order: any) => 
@@ -32,13 +32,61 @@ export default function ShippingQueuePage() {
       (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
     
-    // Sort by due date - latest due date first (most urgent)
+    // Sort by due date - most urgent first
     return filteredOrders.sort((a: any, b: any) => {
       const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
       const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-      return dateB - dateA; // Latest due date first
+      return dateA - dateB; // Earliest due date first (most urgent)
     });
   }, [allOrders]);
+
+  // Categorize orders by due date
+  const categorizedOrders = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    const overdue: any[] = [];
+    const dueToday: any[] = [];
+    const dueTomorrow: any[] = [];
+    const dueThisWeek: any[] = [];
+    const dueLater: any[] = [];
+
+    shippingOrders.forEach((order: any) => {
+      if (!order.dueDate) {
+        dueLater.push(order);
+        return;
+      }
+
+      const dueDate = new Date(order.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (dueDate < today) {
+        overdue.push(order);
+      } else if (dueDate.getTime() === today.getTime()) {
+        dueToday.push(order);
+      } else if (dueDate.getTime() === tomorrow.getTime()) {
+        dueTomorrow.push(order);
+      } else if (dueDate <= nextWeek) {
+        dueThisWeek.push(order);
+      } else {
+        dueLater.push(order);
+      }
+    });
+
+    return {
+      overdue,
+      dueToday,
+      dueTomorrow,
+      dueThisWeek,
+      dueLater
+    };
+  }, [shippingOrders]);
 
   // Count orders in previous department (Shipping QC)
   const shippingQCCount = useMemo(() => {
@@ -385,225 +433,465 @@ export default function ShippingQueuePage() {
         </Card>
       </div>
 
-      {/* Orders List */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle>Shipping Queue ({shippingOrders.length} orders)</CardTitle>
-            {shippingOrders.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedOrders.length === shippingOrders.length}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm text-gray-600">Select All</span>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {shippingOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <div className="text-lg font-medium mb-2">No orders in shipping queue</div>
-              <div className="text-sm">Orders will appear here when they're ready for shipping</div>
+      {/* Orders List - Categorized by Due Date */}
+      <div className="space-y-6">
+        {/* Header Card */}
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle>Shipping Queue ({shippingOrders.length} orders)</CardTitle>
+              {shippingOrders.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedOrders.length === shippingOrders.length}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <span className="text-sm text-gray-600">Select All</span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="grid gap-4">
-              {shippingOrders.map((order: any) => {
-                const isSelected = selectedCard === order.orderId;
-                const modelId = order.stockModelId || order.modelId;
-                const materialType = order.features?.material_type;
-                const customerInfo = getCustomerInfo(order.customerId);
-                const customerAddress = getCustomerAddress(order.customerId);
-                
-                return (
-                  <Card 
-                    key={order.orderId}
-                    className={`hover:shadow-md transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => handleCardSelection(order.orderId)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={selectedOrders.includes(order.orderId)}
-                            onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
-                            onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
-                          />
-                          <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
-                            {getDisplayOrderId(order)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {order.isFullyPaid ? (
-                            <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
-                              PAID
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs">
-                              NOT PAID
-                            </Badge>
-                          )}
-                          {materialType && (
-                            <Badge variant="secondary" className="text-xs">
-                              {materialType}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* Order Info */}
-                        <div className="space-y-1 text-sm">
-                          <div className="text-gray-600">
-                            <span className="font-medium">Customer:</span> {customerInfo?.name || order.customer}
-                          </div>
-                          <div className="text-gray-600">
-                            <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}
-                          </div>
-                          <div className="text-gray-600">
-                            <span className="font-medium">Order Date:</span> {format(new Date(order.orderDate), 'MMM dd, yyyy')}
-                          </div>
-                          {order.dueDate && (
-                            <div className="text-gray-600">
-                              <span className="font-medium">Due Date:</span> {format(new Date(order.dueDate), 'MMM dd, yyyy')}
-                            </div>
-                          )}
-                        </div>
+          </CardHeader>
+        </Card>
 
-                        {/* Shipping Address */}
-                        <div className="space-y-1 text-sm">
-                          <div className="font-medium text-gray-700 mb-1">Shipping Address:</div>
-                          {customerAddress ? (
-                            <div className="text-gray-600 space-y-1">
-                              <div className="font-medium">{customerInfo?.name || 'Customer'}</div>
-                              {customerInfo?.phone && (
-                                <div className="text-blue-600">{customerInfo.phone}</div>
-                              )}
-                              <div>{customerAddress.street}</div>
-                              {customerAddress.street2 && <div>{customerAddress.street2}</div>}
-                              <div>{customerAddress.city}, {customerAddress.state} {customerAddress.zipCode}</div>
-                              {customerAddress.country !== 'United States' && (
-                                <div>{customerAddress.country}</div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-red-500 text-xs">
-                              ⚠️ No shipping address found
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Quick Action Buttons */}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCard(order.orderId);
-                            setTimeout(() => handleSalesOrderDownload(), 100);
-                          }}
-                          className="flex-1 text-xs h-8"
-                        >
-                          📋 Sales Order
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCard(order.orderId);
-                            setTimeout(() => handleShippingLabelCreator(), 100);
-                          }}
-                          className="flex-1 text-xs h-8"
-                        >
-                          📦 Ship Label
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+        {shippingOrders.length === 0 ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="text-center text-gray-500">
+                <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <div className="text-lg font-medium mb-2">No orders in shipping queue</div>
+                <div className="text-sm">Orders will appear here when they're ready for shipping</div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Overdue Orders */}
+            {categorizedOrders.overdue.length > 0 && (
+              <Card className="border-red-200 bg-red-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-red-700 text-sm font-medium flex items-center gap-2">
+                    🚨 Overdue ({categorizedOrders.overdue.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-3">
+                    {categorizedOrders.overdue.map((order: any) => renderOrderCard(order))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Due Today */}
+            {categorizedOrders.dueToday.length > 0 && (
+              <Card className="border-orange-200 bg-orange-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-orange-700 text-sm font-medium flex items-center gap-2">
+                    ⏰ Due Today ({categorizedOrders.dueToday.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-3">
+                    {categorizedOrders.dueToday.map((order: any) => renderOrderCard(order))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Due Tomorrow */}
+            {categorizedOrders.dueTomorrow.length > 0 && (
+              <Card className="border-yellow-200 bg-yellow-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-yellow-700 text-sm font-medium flex items-center gap-2">
+                    📅 Due Tomorrow ({categorizedOrders.dueTomorrow.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-3">
+                    {categorizedOrders.dueTomorrow.map((order: any) => renderOrderCard(order))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Due This Week */}
+            {categorizedOrders.dueThisWeek.length > 0 && (
+              <Card className="border-blue-200 bg-blue-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-blue-700 text-sm font-medium flex items-center gap-2">
+                    📋 Due This Week ({categorizedOrders.dueThisWeek.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-3">
+                    {categorizedOrders.dueThisWeek.map((order: any) => renderOrderCard(order))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Due Later */}
+            {categorizedOrders.dueLater.length > 0 && (
+              <Card className="border-gray-200 bg-gray-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-gray-700 text-sm font-medium flex items-center gap-2">
+                    📦 Due Later ({categorizedOrders.dueLater.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid gap-3">
+                    {categorizedOrders.dueLater.map((order: any) => renderOrderCard(order))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Function to render individual order cards
+  function renderOrderCard(order: any) {
+    const isSelected = selectedCard === order.orderId;
+    const modelId = order.stockModelId || order.modelId;
+    const materialType = order.features?.material_type;
+    const customerInfo = getCustomerInfo(order.customerId);
+    const customerAddress = getCustomerAddress(order.customerId);
+    
+    return (
+      <Card 
+        key={order.orderId}
+        className={`hover:shadow-md transition-all cursor-pointer ${
+          isSelected 
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+            : 'border-gray-200 hover:border-gray-300'
+        }`}
+        onClick={() => handleCardSelection(order.orderId)}
+      >
+        <CardContent className="p-3">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedOrders.includes(order.orderId)}
+                onCheckedChange={(checked) => handleOrderSelection(order.orderId, checked as boolean)}
+                onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
+              />
+              <div className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}>
+                {getDisplayOrderId(order)}
+              </div>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              {order.isFullyPaid ? (
+                <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs">
+                  PAID
+                </Badge>
+              ) : (
+                <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs">
+                  NOT PAID
+                </Badge>
+              )}
+              {materialType && (
+                <Badge variant="secondary" className="text-xs">
+                  {materialType}
+                </Badge>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Order Info */}
+            <div className="space-y-1 text-sm">
+              <div className="text-gray-600">
+                <span className="font-medium">Customer:</span> {customerInfo?.name || order.customer}
+              </div>
+              <div className="text-gray-600">
+                <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}
+              </div>
+              <div className="text-gray-600">
+                <span className="font-medium">Order Date:</span> {format(new Date(order.orderDate), 'MMM dd, yyyy')}
+              </div>
+              {order.dueDate && (
+                <div className="text-gray-600">
+                  <span className="font-medium">Due Date:</span> {format(new Date(order.dueDate), 'MMM dd, yyyy')}
+                </div>
+              )}
+            </div>
+
+            {/* Shipping Address */}
+            <div className="space-y-1 text-sm">
+              <div className="font-medium text-gray-700 mb-1">Shipping Address:</div>
+              {customerAddress ? (
+                <div className="text-gray-600 space-y-1">
+                  <div className="font-medium">{customerInfo?.name || 'Customer'}</div>
+                  {customerInfo?.phone && (
+                    <div className="text-blue-600">{customerInfo.phone}</div>
+                  )}
+                  <div>{customerAddress.street}</div>
+                  {customerAddress.street2 && <div>{customerAddress.street2}</div>}
+                  <div>{customerAddress.city}, {customerAddress.state} {customerAddress.zipCode}</div>
+                  {customerAddress.country !== 'United States' && (
+                    <div>{customerAddress.country}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-red-500 text-xs">
+                  ⚠️ No shipping address found
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Quick Action Buttons */}
+          <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedCard(order.orderId);
+                setTimeout(() => handleSalesOrderDownload(order.orderId), 100);
+              }}
+              className="flex-1 text-xs h-8"
+            >
+              📋 Sales Order
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedCard(order.orderId);
+                setTimeout(() => handleCreateLabel(order.orderId), 100);
+              }}
+              className="flex-1 text-xs h-8"
+            >
+              📦 Ship Label
+            </Button>
+          </div>
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Bottom Action Panel - Always visible at bottom of page */}
-      <div className="mt-8">
-        <Card className="bg-gray-50 dark:bg-gray-800">
-          <CardContent className="p-6">
-            {selectedCard ? (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="text-lg font-semibold text-blue-600">
-                      Selected Order: {getDisplayOrderId(getSelectedOrder())}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Customer: {getSelectedOrder()?.customer}
-                    </div>
+  // Bottom Action Panel - Always visible at bottom of page
+  return (
+    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
+          <Package className="h-7 w-7 text-green-600" />
+          Shipping Department
+        </h1>
+
+        {/* Barcode Scanner */}
+        <div className="mb-6">
+          <BarcodeScanner 
+            onScan={(orderId) => {
+              console.log(`Scanned Order ID: ${orderId}`);
+              setSelectedCard(orderId);
+            }}
+            placeholder="Scan or enter order ID for shipping..."
+            className="max-w-md"
+          />
+        </div>
+
+        {/* Bulk Actions */}
+        {selectedOrders.length > 0 && (
+          <div className="mb-6">
+            <BulkShippingActions 
+              selectedOrders={selectedOrders}
+              onComplete={() => setSelectedOrders([])}
+            />
+          </div>
+        )}
+
+        {/* Department Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Previous Department Count */}
+          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                <ArrowLeft className="h-5 w-5" />
+                Shipping QC
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {shippingQCCount}
+              </div>
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                Orders in previous department
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Current Department Count */}
+          <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Shipping
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                {shippingOrders.length}
+              </div>
+              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                Orders ready for shipping
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Orders List - Categorized by Due Date */}
+        <div className="space-y-6">
+          {/* Header Card */}
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Shipping Queue ({shippingOrders.length} orders)</CardTitle>
+                {shippingOrders.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedOrders.length === shippingOrders.length}
+                      onCheckedChange={handleSelectAll}
+                    />
+                    <span className="text-sm text-gray-600">Select All</span>
                   </div>
-                  <button
-                    onClick={() => setSelectedCard(null)}
-                    className="text-gray-500 hover:text-gray-700 text-xl px-2 py-1 hover:bg-gray-200 rounded"
-                  >
-                    ×
-                  </button>
-                </div>
-                
-                {/* Shipping Actions for Selected Order */}
-                <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+                )}
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <div className="text-lg font-medium mb-2">Select an order to print shipping documents</div>
-                <div className="text-sm">Click on any order card above to see available printing options</div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardHeader>
+          </Card>
 
-      {/* Bottom Action Buttons */}
-      <div className="mt-8 bg-white border-t border-gray-200 shadow-lg">
-        <div className="flex justify-around items-center py-4 px-4 max-w-lg mx-auto">
-          <button 
-            onClick={handleQCChecklistDownload}
-            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
-          >
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">✓</span>
-            </div>
-            <span className="text-sm font-medium text-gray-700">QC Checklist</span>
-          </button>
-          
-          <button 
-            onClick={handleSalesOrderDownload}
-            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
-          >
-            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">📋</span>
-            </div>
-            <span className="text-sm font-medium text-gray-700">Sales Order</span>
-          </button>
-          
-          <button 
-            onClick={handleShippingLabelCreator}
-            className="flex flex-col items-center space-y-1 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex-1 text-center"
-          >
-            <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">📦</span>
-            </div>
-            <span className="text-sm font-medium text-gray-700">Shipping Label</span>
-          </button>
+          {shippingOrders.length === 0 ? (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center text-gray-500">
+                  <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <div className="text-lg font-medium mb-2">No orders in shipping queue</div>
+                  <div className="text-sm">Orders will appear here when they're ready for shipping</div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Overdue Orders */}
+              {categorizedOrders.overdue.length > 0 && (
+                <Card className="border-red-200 bg-red-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-red-700 text-sm font-medium flex items-center gap-2">
+                      🚨 Overdue ({categorizedOrders.overdue.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3">
+                      {categorizedOrders.overdue.map((order: any) => renderOrderCard(order))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Due Today */}
+              {categorizedOrders.dueToday.length > 0 && (
+                <Card className="border-orange-200 bg-orange-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-orange-700 text-sm font-medium flex items-center gap-2">
+                      ⏰ Due Today ({categorizedOrders.dueToday.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3">
+                      {categorizedOrders.dueToday.map((order: any) => renderOrderCard(order))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Due Tomorrow */}
+              {categorizedOrders.dueTomorrow.length > 0 && (
+                <Card className="border-yellow-200 bg-yellow-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-yellow-700 text-sm font-medium flex items-center gap-2">
+                      📅 Due Tomorrow ({categorizedOrders.dueTomorrow.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3">
+                      {categorizedOrders.dueTomorrow.map((order: any) => renderOrderCard(order))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Due This Week */}
+              {categorizedOrders.dueThisWeek.length > 0 && (
+                <Card className="border-blue-200 bg-blue-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-blue-700 text-sm font-medium flex items-center gap-2">
+                      📋 Due This Week ({categorizedOrders.dueThisWeek.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3">
+                      {categorizedOrders.dueThisWeek.map((order: any) => renderOrderCard(order))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Due Later */}
+              {categorizedOrders.dueLater.length > 0 && (
+                <Card className="border-gray-200 bg-gray-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-gray-700 text-sm font-medium flex items-center gap-2">
+                      📦 Due Later ({categorizedOrders.dueLater.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3">
+                      {categorizedOrders.dueLater.map((order: any) => renderOrderCard(order))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Bottom Action Panel - Always visible at bottom of page */}
+        <div className="mt-8">
+          <Card className="bg-gray-50 dark:bg-gray-800">
+            <CardContent className="p-6">
+              {selectedCard ? (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="text-lg font-semibold text-blue-600">
+                        Selected Order: {getDisplayOrderId(getSelectedOrder())}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Customer: {getSelectedOrder()?.customer}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSelectedCard(null)}
+                      className="text-gray-500 hover:text-gray-700 text-xl px-2 py-1 hover:bg-gray-200 rounded"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  
+                  {/* Shipping Actions for Selected Order */}
+                  <ShippingActions orderId={selectedCard} orderData={getSelectedOrder()} />
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-lg font-medium mb-2">Select an order to print shipping documents</div>
+                  <div className="text-sm">Click on any order card above to see available printing options</div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

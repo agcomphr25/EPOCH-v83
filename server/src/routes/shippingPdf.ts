@@ -642,6 +642,52 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Helper function to wrap text within specified width
+function wrapText(text: string, maxWidth: number, fontSize: number, font: any): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+  
+  // Approximate character width (this is rough, but works for most cases)
+  const charWidth = fontSize * 0.6;
+  const maxCharsPerLine = Math.floor(maxWidth / charWidth);
+  
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    
+    if (testLine.length <= maxCharsPerLine) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Word is too long, break it
+        lines.push(word.substring(0, maxCharsPerLine));
+        currentLine = word.substring(maxCharsPerLine);
+      }
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  return lines;
+}
+
+// Helper function to truncate text to fit within specified width
+function truncateText(text: string, maxWidth: number, fontSize: number): string {
+  const charWidth = fontSize * 0.6;
+  const maxChars = Math.floor(maxWidth / charWidth);
+  
+  if (text.length <= maxChars) {
+    return text;
+  }
+  
+  return text.substring(0, maxChars - 3) + '...';
+}
+
 // Generate Sales Order PDF
 router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
   try {
@@ -832,7 +878,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       // Customer name and company
       const customerLine = customer.company ? 
         `${customer.name} - ${customer.company}` : customer.name || 'N/A';
-      page.drawText(customerLine, {
+      const truncatedCustomerLine = truncateText(customerLine, printableWidth - 20, 10);
+      page.drawText(truncatedCustomerLine, {
         x: margin + 5,
         y: currentY,
         size: 10,
@@ -842,7 +889,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       currentY -= 13;
       // Contact person if different from customer name
       if (customer.contact && customer.contact !== customer.name) {
-        page.drawText(`Contact: ${customer.contact}`, {
+        const contactText = `Contact: ${customer.contact}`;
+        const truncatedContact = truncateText(contactText, printableWidth - 20, 9);
+        page.drawText(truncatedContact, {
           x: margin + 5,
           y: currentY,
           size: 9,
@@ -857,7 +906,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
       
       if (contactInfo.length > 0) {
-        page.drawText(contactInfo.join(' | '), {
+        const contactInfoText = contactInfo.join(' | ');
+        const truncatedContactInfo = truncateText(contactInfoText, printableWidth - 20, 9);
+        page.drawText(truncatedContactInfo, {
           x: margin + 5,
           y: currentY,
           size: 9,
@@ -1086,7 +1137,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const handednessDisplay = order.features?.handedness ? 
       (order.features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-    page.drawText(`${handednessDisplay}`, {
+    const truncatedHandedness = truncateText(handednessDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedHandedness, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1118,7 +1170,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const actionLengthDisplay = actionLengthOption?.label || 
       (order.features?.action_length ? order.features.action_length.charAt(0).toUpperCase() + order.features.action_length.slice(1) : 'Not selected');
     
-    page.drawText(actionLengthDisplay, {
+    // Truncate action length display to prevent overflow
+    const truncatedActionLength = truncateText(actionLengthDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedActionLength, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1148,7 +1202,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const actionInletDisplay = actionInletOption?.label || 'Not selected';
-    page.drawText(actionInletDisplay, {
+    const truncatedActionInlet = truncateText(actionInletDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedActionInlet, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1178,7 +1233,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-    page.drawText(bottomMetalDisplay, {
+    const truncatedBottomMetal = truncateText(bottomMetalDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedBottomMetal, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1208,7 +1264,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
-    page.drawText(barrelInletDisplay, {
+    const truncatedBarrelInlet = truncateText(barrelInletDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedBarrelInlet, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1238,7 +1295,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const qdDisplay = qdOption?.label || 'Not selected';
-    page.drawText(qdDisplay, {
+    const truncatedQD = truncateText(qdDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedQD, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1271,7 +1329,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       (order.features?.length_of_pull && order.features.length_of_pull !== 'no_lop_change' ? 
         order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    page.drawText(lopDisplay, {
+    const truncatedLOP = truncateText(lopDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedLOP, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1312,7 +1371,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    page.drawText(railsDisplay, {
+    const truncatedRails = truncateText(railsDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedRails, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1344,7 +1404,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const textureDisplay = textureOption?.label || 
       (order.features?.texture_options ? order.features.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    page.drawText(textureDisplay, {
+    const truncatedTexture = truncateText(textureDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedTexture, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1374,7 +1435,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const swivelDisplay = swivelOption?.label || 'Not selected';
-    page.drawText(swivelDisplay, {
+    const truncatedSwivel = truncateText(swivelDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedSwivel, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1416,7 +1478,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    page.drawText(otherOptionsDisplay, {
+    // Truncate other options display to prevent overflow
+    const truncatedOtherOptions = truncateText(otherOptionsDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedOtherOptions, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,
@@ -1479,7 +1543,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    page.drawText(paintDisplay, {
+    // Truncate paint display to prevent overflow
+    const truncatedPaintDisplay = truncateText(paintDisplay, printableWidth - 200, 9);
+    page.drawText(truncatedPaintDisplay, {
       x: margin + 120,
       y: summaryLineY,
       size: 9,

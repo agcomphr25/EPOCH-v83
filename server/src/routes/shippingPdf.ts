@@ -748,57 +748,64 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    // Order number and date box - Fixed positioning to align with text
+    // Order number and date box - Fixed positioning
     const orderBoxX = width - margin - 200;
-    const orderBoxTop = currentY + 45; // Position box properly relative to text
+    const orderBoxY = currentY - 10;
+    const orderBoxWidth = 200;
+    const orderBoxHeight = 85;
+    
     page.drawRectangle({
       x: orderBoxX,
-      y: orderBoxTop - 75, // Adjust box position
-      width: 200,
-      height: 75,
+      y: orderBoxY,
+      width: orderBoxWidth,
+      height: orderBoxHeight,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
-    // Position text INSIDE the box
+    // Position text INSIDE the box with proper alignment
+    let boxTextY = orderBoxY + orderBoxHeight - 18; // Start from top of box
+    
     page.drawText('Order Number:', {
-      x: orderBoxX + 5,
-      y: orderBoxTop - 15,
+      x: orderBoxX + 8,
+      y: boxTextY,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(orderId, {
-      x: orderBoxX + 90,
-      y: orderBoxTop - 15,
+      x: orderBoxX + 100,
+      y: boxTextY,
       size: 10,
       font: font,
     });
 
+    boxTextY -= 20;
     page.drawText('Date:', {
-      x: orderBoxX + 5,
-      y: orderBoxTop - 35,
+      x: orderBoxX + 8,
+      y: boxTextY,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(new Date().toLocaleDateString(), {
-      x: orderBoxX + 90,
-      y: orderBoxTop - 35,
+      x: orderBoxX + 100,
+      y: boxTextY,
       size: 10,
       font: font,
     });
 
+    boxTextY -= 20;
     page.drawText('Due Date:', {
-      x: orderBoxX + 5,
-      y: orderBoxTop - 55,
+      x: orderBoxX + 8,
+      y: boxTextY,
       size: 10,
       font: boldFont,
     });
 
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
-      x: orderBoxX + 90,
-      y: orderBoxTop - 55,
+      x: orderBoxX + 100,
+      y: boxTextY,
       size: 10,
       font: font,
     });
@@ -848,35 +855,34 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Customer Information Section - Fixed positioning
-    currentY -= 120; // Move down to provide space for proper box placement
+    currentY -= 140; // Move down to provide space for proper box placement
     
     // Define customer box dimensions and position
-    const customerBoxTop = currentY + 100;
-    const customerBoxHeight = 100;
-    const customerBoxBottom = customerBoxTop - customerBoxHeight;
+    const customerBoxY = currentY;
+    const customerBoxHeight = 120;
     
     // Create customer info box
     page.drawRectangle({
       x: margin,
-      y: customerBoxBottom,
+      y: customerBoxY,
       width: printableWidth,
       height: customerBoxHeight,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
     });
 
-    // Customer header - positioned INSIDE the box
+    // Customer header - positioned INSIDE the box from top
     page.drawText('CUSTOMER INFORMATION', {
-      x: margin + 5,
-      y: customerBoxTop - 15, // Position from top of box
+      x: margin + 8,
+      y: customerBoxY + customerBoxHeight - 20,
       size: 12,
       font: boldFont,
     });
 
     // Bill to section - positioned INSIDE the box
-    let customerTextY = customerBoxTop - 35; // Start text inside box
+    let customerTextY = customerBoxY + customerBoxHeight - 45; // Start text properly inside box
     page.drawText('BILL TO:', {
-      x: margin + 5,
+      x: margin + 8,
       y: customerTextY,
       size: 10,
       font: boldFont,
@@ -887,14 +893,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       // Customer name and company - positioned INSIDE the box
       const customerLine = customer.company ? 
         `${customer.name} - ${customer.company}` : customer.name || 'N/A';
-      const wrappedCustomerLine = wrapText(customerLine, printableWidth - 20, 10, font);
+      const wrappedCustomerLine = wrapText(customerLine, 250, 10, font);
       wrappedCustomerLine.forEach((line, index) => {
-        page.drawText(line, {
-          x: margin + 5,
-          y: customerTextY - (index * 13),
-          size: 10,
-          font: font,
-        });
+        if (customerTextY - (index * 13) > customerBoxY + 8) { // Keep text inside box
+          page.drawText(line, {
+            x: margin + 8,
+            y: customerTextY - (index * 13),
+            size: 10,
+            font: font,
+          });
+        }
       });
       if (wrappedCustomerLine.length > 1) {
         customerTextY -= (wrappedCustomerLine.length - 1) * 13;
@@ -902,16 +910,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       customerTextY -= 13;
       // Contact person if different from customer name - positioned INSIDE the box
-      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxBottom + 10) {
+      if (customer.contact && customer.contact !== customer.name && customerTextY > customerBoxY + 15) {
         const contactText = `Contact: ${customer.contact}`;
-        const wrappedContact = wrapText(contactText, printableWidth - 20, 9, font);
+        const wrappedContact = wrapText(contactText, 250, 9, font);
         wrappedContact.forEach((line, index) => {
-          page.drawText(line, {
-            x: margin + 5,
-            y: customerTextY - (index * 11),
-            size: 9,
-            font: font,
-          });
+          if (customerTextY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: margin + 8,
+              y: customerTextY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
         });
         customerTextY -= wrappedContact.length * 11;
       }
@@ -921,22 +931,24 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (customer.email) contactInfo.push(`Email: ${customer.email}`);
       if (customer.phone) contactInfo.push(`Phone: ${customer.phone}`);
       
-      if (contactInfo.length > 0 && customerTextY > customerBoxBottom + 10) {
+      if (contactInfo.length > 0 && customerTextY > customerBoxY + 15) {
         const contactInfoText = contactInfo.join(' | ');
-        const wrappedContactInfo = wrapText(contactInfoText, printableWidth - 20, 9, font);
+        const wrappedContactInfo = wrapText(contactInfoText, 250, 9, font);
         wrappedContactInfo.forEach((line, index) => {
-          page.drawText(line, {
-            x: margin + 5,
-            y: customerTextY - (index * 11),
-            size: 9,
-            font: font,
-          });
+          if (customerTextY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: margin + 8,
+              y: customerTextY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
         });
         customerTextY -= wrappedContactInfo.length * 11;
       }
     } else {
       page.drawText('Customer information not available', {
-        x: margin + 5,
+        x: margin + 8,
         y: customerTextY,
         size: 10,
         font: font,
@@ -945,7 +957,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Ship to address section (right side) - positioned INSIDE the box
     const shipToX = margin + 280;
-    let shipCurrentY = customerBoxTop - 35; // Position relative to box top
+    let shipCurrentY = customerBoxY + customerBoxHeight - 45; // Position relative to box top
     
     page.drawText('SHIP TO:', {
       x: shipToX,
@@ -958,56 +970,64 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (customerAddresses.length > 0) {
       const primaryAddress = customerAddresses[0];
       
-      // Ship to name (wrapped)
+      // Ship to name (wrapped) - ensure it stays within box
       const shipToName = customer?.name || 'N/A';
-      const wrappedShipToName = wrapText(shipToName, printableWidth - 300, 10, font);
+      const wrappedShipToName = wrapText(shipToName, 250, 10, font);
       wrappedShipToName.forEach((line, index) => {
-        page.drawText(line, {
-          x: shipToX,
-          y: shipCurrentY - (index * 13),
-          size: 10,
-          font: font,
-        });
+        if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+          page.drawText(line, {
+            x: shipToX,
+            y: shipCurrentY - (index * 13),
+            size: 10,
+            font: font,
+          });
+        }
       });
       shipCurrentY -= wrappedShipToName.length * 13;
 
-      // Street address (wrapped)
-      if (primaryAddress.street) {
-        const wrappedStreet = wrapText(primaryAddress.street, printableWidth - 300, 9, font);
+      // Street address (wrapped) - ensure it stays within box
+      if (primaryAddress.street && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet = wrapText(primaryAddress.street, 250, 9, font);
         wrappedStreet.forEach((line, index) => {
-          page.drawText(line, {
-            x: shipToX,
-            y: shipCurrentY - (index * 11),
-            size: 9,
-            font: font,
-          });
+          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: shipToX,
+              y: shipCurrentY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
         });
         shipCurrentY -= wrappedStreet.length * 11;
       }
 
-      // Street2 (suite, apt, etc.) (wrapped)
-      if (primaryAddress.street2) {
-        const wrappedStreet2 = wrapText(primaryAddress.street2, printableWidth - 300, 9, font);
+      // Street2 (suite, apt, etc.) (wrapped) - ensure it stays within box
+      if (primaryAddress.street2 && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet2 = wrapText(primaryAddress.street2, 250, 9, font);
         wrappedStreet2.forEach((line, index) => {
-          page.drawText(line, {
-            x: shipToX,
-            y: shipCurrentY - (index * 11),
-            size: 9,
-            font: font,
-          });
+          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: shipToX,
+              y: shipCurrentY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
         });
         shipCurrentY -= wrappedStreet2.length * 11;
       }
 
-      // City, State, ZIP
-      const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
-      if (cityStateZip !== ', ') {
-        page.drawText(cityStateZip, {
-          x: shipToX,
-          y: shipCurrentY,
-          size: 9,
-          font: font,
-        });
+      // City, State, ZIP - ensure it stays within box
+      if (shipCurrentY > customerBoxY + 15) {
+        const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
+        if (cityStateZip !== ', ') {
+          page.drawText(cityStateZip, {
+            x: shipToX,
+            y: shipCurrentY,
+            size: 9,
+            font: font,
+          });
+        }
       }
     } else {
       page.drawText('Same as billing address', {
@@ -1019,7 +1039,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     }
 
     // Order Details Section - Position properly after customer box
-    currentY = customerBoxBottom - 30; // Continue below the customer box
+    currentY = customerBoxY - 30; // Continue below the customer box
     page.drawText('ORDER DETAILS', {
       x: margin,
       y: currentY,

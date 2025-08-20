@@ -620,7 +620,7 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    page.drawText(`Date: ${new Date().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
+    page.drawText(`Date: ${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString()}`, {
       x: margin + 250,
       y: currentY,
       size: 10,

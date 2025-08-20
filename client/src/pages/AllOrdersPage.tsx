@@ -65,6 +65,7 @@ export default function AllOrdersPage() {
     'CNC',
     'Finish',
     'Gunsmith',
+    'Finish QC',
     'Paint',
     'Shipping QC',
     'Shipping'
@@ -174,6 +175,7 @@ export default function AllOrdersPage() {
       'CNC': 'bg-green-500',
       'Finish': 'bg-yellow-500',
       'Gunsmith': 'bg-purple-500',
+      'Finish QC': 'bg-orange-500',
       'Paint': 'bg-pink-500',
       'Shipping QC': 'bg-indigo-500',
       'Shipping': 'bg-gray-500'

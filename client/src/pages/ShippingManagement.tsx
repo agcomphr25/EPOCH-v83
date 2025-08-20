@@ -7,9 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, FileText, DollarSign } from 'lucide-react';
-import { ShippingTracker } from '@/components/ShippingTracker';
-import UPSLabelCreator from '@/components/UPSLabelCreator';
+import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, FileText, DollarSign, ExternalLink } from 'lucide-react';
+// Removed ShippingTracker import since we're using the simpler Track Order button approach
+// Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -35,10 +35,7 @@ export default function ShippingManagement() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [showLabelCreator, setShowLabelCreator] = useState(false);
-  const [labelData, setLabelData] = useState<any>(null);
-  const [showLabelViewer, setShowLabelViewer] = useState(false);
+  // Removed unused label creator state variables since we're now using Track Order instead of Create Label
 
   // Get shipping-ready orders
   const { data: orders, isLoading, refetch } = useQuery({
@@ -107,24 +104,41 @@ export default function ShippingManagement() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Handler functions for UPS label functionality
-  const handleCreateLabel = (orderId: string) => {
-    setSelectedOrderId(orderId);
-    setShowLabelCreator(true);
+  // Handler function for UPS tracking
+  const handleTrackOrder = async (trackingNumber: string, orderId: string) => {
+    try {
+      // First try to get tracking data from our API
+      const response = await fetch(`/api/shipping-pdf/track-ups/${trackingNumber}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Show tracking information
+        toast({
+          title: "Tracking Information",
+          description: `Order ${orderId} - Tracking: ${trackingNumber}`,
+        });
+        
+        // Open UPS tracking page in new tab
+        window.open(data.upsTrackingUrl, '_blank');
+      } else {
+        // Fallback to UPS website
+        window.open(data.fallbackUrl || `https://www.ups.com/track?tracknum=${trackingNumber}`, '_blank');
+        toast({
+          title: "Tracking",
+          description: `Opened UPS tracking for ${trackingNumber}`,
+        });
+      }
+    } catch (error) {
+      // Fallback to UPS website
+      window.open(`https://www.ups.com/track?tracknum=${trackingNumber}`, '_blank');
+      toast({
+        title: "Tracking",
+        description: `Opened UPS tracking for ${trackingNumber}`,
+      });
+    }
   };
 
-  const handleLabelSuccess = (data: any) => {
-    setLabelData(data);
-    setShowLabelViewer(true);
-    refetch(); // Refresh orders list
-  };
-
-  const downloadLabel = (labelBase64: string, trackingNumber: string, orderId: string) => {
-    const link = document.createElement('a');
-    link.href = `data:image/gif;base64,${labelBase64}`;
-    link.download = `UPS_Label_${orderId}_${trackingNumber}.gif`;
-    link.click();
-  };
+  // Removed label creation functions since we're now using Track Order instead of Create Label
 
   const handleMarkShipped = (order: OrderWithTracking) => {
     if (!order.trackingNumber) {
@@ -271,17 +285,16 @@ export default function ShippingManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        {!order.trackingNumber ? (
-                          <Button
-                            size="sm"
-                            onClick={() => handleCreateLabel(order.orderId)}
-                            className="flex items-center gap-1"
-                          >
-                            <Package className="h-3 w-3" />
-                            Create Label
-                          </Button>
-                        ) : (
+                        {order.trackingNumber ? (
                           <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleTrackOrder(order.trackingNumber!, order.orderId)}
+                              className="flex items-center gap-1"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Track Order
+                            </Button>
                             {order.shippingCost && (
                               <Badge variant="outline" className="flex items-center gap-1">
                                 <DollarSign className="h-3 w-3" />
@@ -300,6 +313,11 @@ export default function ShippingManagement() {
                               </Button>
                             )}
                           </div>
+                        ) : (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Package className="h-3 w-3" />
+                            No Tracking Number
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
@@ -310,112 +328,6 @@ export default function ShippingManagement() {
           )}
         </CardContent>
       </Card>
-
-      {/* UPS Label Creator Dialog */}
-      {showLabelCreator && selectedOrderId && (
-        <UPSLabelCreator
-          orderId={selectedOrderId}
-          isOpen={showLabelCreator}
-          onClose={() => {
-            setShowLabelCreator(false);
-            setSelectedOrderId(null);
-          }}
-          onSuccess={handleLabelSuccess}
-        />
-      )}
-
-      {/* Label Preview Dialog */}
-      {showLabelViewer && labelData && (
-        <Dialog open={showLabelViewer} onOpenChange={setShowLabelViewer}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Shipping Label Created - {labelData.orderId}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-semibold text-green-800">Label Created Successfully</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Tracking Number:</span>
-                    <div className="font-mono bg-white px-2 py-1 rounded border">
-                      {labelData.trackingNumber}
-                    </div>
-                  </div>
-                  {labelData.shipmentCost && (
-                    <div>
-                      <span className="font-medium">Shipping Cost:</span>
-                      <div className="font-mono bg-white px-2 py-1 rounded border">
-                        ${labelData.shipmentCost.toFixed(2)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {labelData.labelBase64 && (
-                <div className="text-center">
-                  <img 
-                    src={`data:image/gif;base64,${labelData.labelBase64}`}
-                    alt="UPS Shipping Label"
-                    className="mx-auto border rounded shadow-lg max-w-full"
-                    style={{ maxHeight: '400px' }}
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-center gap-4">
-                <Button
-                  onClick={() => downloadLabel(labelData.labelBase64, labelData.trackingNumber, labelData.orderId)}
-                  className="flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Label
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowLabelViewer(false)}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Tracking Management Modal */}
-      {selectedOrderId && !showLabelCreator && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Manage Shipping - {selectedOrderId}</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedOrderId(null)}
-                >
-                  ×
-                </Button>
-              </div>
-              <ShippingTracker
-                orderId={selectedOrderId}
-                onUpdate={() => {
-                  refetch();
-                  setSelectedOrderId(null);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -3353,4 +3353,62 @@ async function addSummaryPage(pdfDoc: any, upsLabels: any[]) {
   }
 }
 
+// UPS Tracking API endpoint
+router.get('/track-ups/:trackingNumber', async (req: Request, res: Response) => {
+  try {
+    const { trackingNumber } = req.params;
+    console.log(`🔍 UPS TRACKING: Fetching tracking info for ${trackingNumber}`);
+    
+    // Get UPS access token
+    const accessToken = await getUPSAccessToken();
+    
+    // UPS Tracking API endpoint
+    const trackingUrl = UPS_ENV === 'production' 
+      ? `https://onlinetools.ups.com/api/track/v1/details/${trackingNumber}`
+      : `https://wwwcie.ups.com/api/track/v1/details/${trackingNumber}`;
+    
+    console.log(`🔍 UPS TRACKING: Calling ${trackingUrl}`);
+    
+    const response = await fetch(trackingUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'transId': Math.random().toString(36).substring(7),
+        'transactionSrc': 'AG_Composites_ERP'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('UPS Tracking Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        response: errorText
+      });
+      throw new Error(`UPS Tracking failed: ${response.statusText}`);
+    }
+
+    const trackingData = await response.json();
+    console.log(`🔍 UPS TRACKING SUCCESS for ${trackingNumber}:`, JSON.stringify(trackingData, null, 2));
+    
+    // Return tracking data
+    return res.json({
+      success: true,
+      trackingNumber,
+      trackingData,
+      upsTrackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`
+    });
+
+  } catch (error) {
+    console.error('UPS tracking error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch UPS tracking information',
+      details: error.message,
+      // Provide fallback UPS tracking URL
+      fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`
+    });
+  }
+});
+
 export default router;

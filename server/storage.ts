@@ -584,6 +584,7 @@ export interface IStorage {
   finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
   updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
+  syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
 
 
 
@@ -5454,6 +5455,9 @@ export class DatabaseStorage implements IStorage {
       notificationSentAt: null,
       deliveryConfirmed: false,
       deliveryConfirmedAt: null,
+      isVerified: orderData.isVerified || false,
+      isManualDueDate: orderData.isManualDueDate || false,
+      isManualOrderDate: orderData.isManualOrderDate || false,
       finalizedBy: finalizedBy || 'System'
     };
 
@@ -5552,6 +5556,9 @@ export class DatabaseStorage implements IStorage {
       notificationSentAt: draft.notificationSentAt,
       deliveryConfirmed: draft.deliveryConfirmed,
       deliveryConfirmedAt: draft.deliveryConfirmedAt,
+      isVerified: draft.isVerified || false,
+      isManualDueDate: draft.isManualDueDate || false,
+      isManualOrderDate: draft.isManualOrderDate || false,
       finalizedBy: finalizedBy || 'System'
     };
 
@@ -5582,6 +5589,44 @@ export class DatabaseStorage implements IStorage {
     }
 
     return order;
+  }
+
+  // Sync verification status between draft and finalized orders  
+  async syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }> {
+    console.log('🔄 Starting verification status sync between draft and finalized orders...');
+    
+    try {
+      // Get mismatched records first
+      const mismatches = await db.execute(sql`
+        SELECT d.order_id, d.is_verified as draft_verified, a.is_verified as finalized_verified
+        FROM order_drafts d 
+        JOIN all_orders a ON d.order_id = a.order_id 
+        WHERE d.is_verified != a.is_verified
+      `);
+
+      if (mismatches.rows.length === 0) {
+        return { updatedOrders: 0, message: 'No verification status mismatches found' };
+      }
+
+      // Update finalized orders to match drafts (prioritize draft verification status)
+      const updates = await db.execute(sql`
+        UPDATE all_orders 
+        SET is_verified = order_drafts.is_verified
+        FROM order_drafts 
+        WHERE all_orders.order_id = order_drafts.order_id 
+        AND all_orders.is_verified != order_drafts.is_verified
+      `);
+
+      console.log(`✅ Verification sync complete: ${updates.rowCount || 0} orders updated`);
+      
+      return {
+        updatedOrders: updates.rowCount || 0,
+        message: `Synced verification status for ${updates.rowCount || 0} orders`
+      };
+    } catch (error) {
+      console.error('❌ Error syncing verification status:', error);
+      throw new Error(`Failed to sync verification status: ${(error as Error).message}`);
+    }
   }
 
 

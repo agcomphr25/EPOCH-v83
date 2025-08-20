@@ -556,6 +556,17 @@ router.post('/:id/progress', async (req: Request, res: Response) => {
   }
 });
 
+// Sync verification status between draft and finalized orders
+router.post('/sync-verification', async (req: Request, res: Response) => {
+  try {
+    const result = await storage.syncVerificationStatus();
+    res.json(result);
+  } catch (error) {
+    console.error('Sync verification status error:', error);
+    res.status(500).json({ error: "Failed to sync verification status", details: (error as Error).message });
+  }
+});
+
 // Purchase Orders
 router.get('/purchase-orders', async (req: Request, res: Response) => {
   try {

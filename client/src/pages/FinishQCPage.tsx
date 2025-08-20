@@ -80,20 +80,23 @@ export default function FinishQCPage() {
   // Mutation to move orders to Paint
   const moveToPaintMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      const promises = orderIds.map(orderId =>
-        apiRequest(`/api/orders/${orderId}/department`, {
-          method: 'PUT',
-          body: JSON.stringify({ department: 'Paint', completedBy: 'Finish QC' }),
-          headers: { 'Content-Type': 'application/json' }
+      const response = await apiRequest('/api/orders/update-department', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderIds: orderIds,
+          department: 'Paint',
+          status: 'IN_PROGRESS'
         })
-      );
-      return Promise.all(promises);
+      });
+      return response;
     },
     onSuccess: () => {
       toast.success(`Moved ${selectedOrders.size} orders to Paint`);
       setSelectedOrders(new Set());
       setSelectAllByTechnician({});
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
     },
     onError: (error) => {
       console.error('Error moving orders to Paint:', error);

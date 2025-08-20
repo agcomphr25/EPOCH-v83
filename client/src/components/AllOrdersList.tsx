@@ -40,7 +40,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import CustomerDetailsTooltip from './CustomerDetailsTooltip';
 import CommunicationCompose from './CommunicationCompose';
 
-const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'];
+const departments = ['P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'];
 
 export default function AllOrdersList() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -287,7 +287,7 @@ export default function AllOrdersList() {
   });
 
   const departments = [
-    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
+    'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Finish QC', 'Paint', 'Shipping QC', 'Shipping'
   ];
 
   const getNextDepartment = (currentDepartment: string) => {
@@ -372,6 +372,7 @@ export default function AllOrdersList() {
       'CNC': 'bg-green-500',
       'Finish': 'bg-yellow-500',
       'Gunsmith': 'bg-purple-500',
+      'Finish QC': 'bg-yellow-600',
       'Paint': 'bg-pink-500',
       'Shipping QC': 'bg-indigo-500',
       'Shipping': 'bg-gray-500'

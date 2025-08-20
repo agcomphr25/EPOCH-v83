@@ -878,26 +878,33 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       // Customer name and company
       const customerLine = customer.company ? 
         `${customer.name} - ${customer.company}` : customer.name || 'N/A';
-      const truncatedCustomerLine = truncateText(customerLine, printableWidth - 20, 10);
-      page.drawText(truncatedCustomerLine, {
-        x: margin + 5,
-        y: currentY,
-        size: 10,
-        font: font,
+      const wrappedCustomerLine = wrapText(customerLine, printableWidth - 20, 10, font);
+      wrappedCustomerLine.forEach((line, index) => {
+        page.drawText(line, {
+          x: margin + 5,
+          y: currentY - (index * 13),
+          size: 10,
+          font: font,
+        });
       });
+      if (wrappedCustomerLine.length > 1) {
+        currentY -= (wrappedCustomerLine.length - 1) * 13;
+      }
 
       currentY -= 13;
       // Contact person if different from customer name
       if (customer.contact && customer.contact !== customer.name) {
         const contactText = `Contact: ${customer.contact}`;
-        const truncatedContact = truncateText(contactText, printableWidth - 20, 9);
-        page.drawText(truncatedContact, {
-          x: margin + 5,
-          y: currentY,
-          size: 9,
-          font: font,
+        const wrappedContact = wrapText(contactText, printableWidth - 20, 9, font);
+        wrappedContact.forEach((line, index) => {
+          page.drawText(line, {
+            x: margin + 5,
+            y: currentY - (index * 11),
+            size: 9,
+            font: font,
+          });
         });
-        currentY -= 13;
+        currentY -= wrappedContact.length * 11;
       }
 
       // Email and phone on same line if both exist
@@ -907,13 +914,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       
       if (contactInfo.length > 0) {
         const contactInfoText = contactInfo.join(' | ');
-        const truncatedContactInfo = truncateText(contactInfoText, printableWidth - 20, 9);
-        page.drawText(truncatedContactInfo, {
-          x: margin + 5,
-          y: currentY,
-          size: 9,
-          font: font,
+        const wrappedContactInfo = wrapText(contactInfoText, printableWidth - 20, 9, font);
+        wrappedContactInfo.forEach((line, index) => {
+          page.drawText(line, {
+            x: margin + 5,
+            y: currentY - (index * 11),
+            size: 9,
+            font: font,
+          });
         });
+        currentY -= wrappedContactInfo.length * 11;
       }
     } else {
       page.drawText('Customer information not available', {
@@ -939,35 +949,45 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (customerAddresses.length > 0) {
       const primaryAddress = customerAddresses[0];
       
-      // Ship to name
-      page.drawText(customer?.name || 'N/A', {
-        x: shipToX,
-        y: shipCurrentY,
-        size: 10,
-        font: font,
-      });
-
-      shipCurrentY -= 13;
-      // Street address
-      if (primaryAddress.street) {
-        page.drawText(primaryAddress.street, {
+      // Ship to name (wrapped)
+      const shipToName = customer?.name || 'N/A';
+      const wrappedShipToName = wrapText(shipToName, printableWidth - 300, 10, font);
+      wrappedShipToName.forEach((line, index) => {
+        page.drawText(line, {
           x: shipToX,
-          y: shipCurrentY,
-          size: 9,
+          y: shipCurrentY - (index * 13),
+          size: 10,
           font: font,
         });
-        shipCurrentY -= 13;
+      });
+      shipCurrentY -= wrappedShipToName.length * 13;
+
+      // Street address (wrapped)
+      if (primaryAddress.street) {
+        const wrappedStreet = wrapText(primaryAddress.street, printableWidth - 300, 9, font);
+        wrappedStreet.forEach((line, index) => {
+          page.drawText(line, {
+            x: shipToX,
+            y: shipCurrentY - (index * 11),
+            size: 9,
+            font: font,
+          });
+        });
+        shipCurrentY -= wrappedStreet.length * 11;
       }
 
-      // Street2 (suite, apt, etc.)
+      // Street2 (suite, apt, etc.) (wrapped)
       if (primaryAddress.street2) {
-        page.drawText(primaryAddress.street2, {
-          x: shipToX,
-          y: shipCurrentY,
-          size: 9,
-          font: font,
+        const wrappedStreet2 = wrapText(primaryAddress.street2, printableWidth - 300, 9, font);
+        wrappedStreet2.forEach((line, index) => {
+          page.drawText(line, {
+            x: shipToX,
+            y: shipCurrentY - (index * 11),
+            size: 9,
+            font: font,
+          });
         });
-        shipCurrentY -= 13;
+        shipCurrentY -= wrappedStreet2.length * 11;
       }
 
       // City, State, ZIP
@@ -1137,13 +1157,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     const handednessDisplay = order.features?.handedness ? 
       (order.features.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-    const truncatedHandedness = truncateText(handednessDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedHandedness, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedHandedness = wrapText(handednessDisplay, printableWidth - 200, 9, font);
+    wrappedHandedness.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedHandedness.length > 1) {
+      summaryLineY -= (wrappedHandedness.length - 1) * 12;
+    }
 
     page.drawText('$0.00', {
       x: margin + printableWidth - 80,
@@ -1170,14 +1195,20 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const actionLengthDisplay = actionLengthOption?.label || 
       (order.features?.action_length ? order.features.action_length.charAt(0).toUpperCase() + order.features.action_length.slice(1) : 'Not selected');
     
-    // Truncate action length display to prevent overflow
-    const truncatedActionLength = truncateText(actionLengthDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedActionLength, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    // Wrap action length display across multiple lines if needed
+    const wrappedActionLength = wrapText(actionLengthDisplay, printableWidth - 200, 9, font);
+    wrappedActionLength.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    // Adjust Y position for multiple lines
+    if (wrappedActionLength.length > 1) {
+      summaryLineY -= (wrappedActionLength.length - 1) * 12;
+    }
 
     page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1202,13 +1233,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const actionInletDisplay = actionInletOption?.label || 'Not selected';
-    const truncatedActionInlet = truncateText(actionInletDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedActionInlet, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedActionInlet = wrapText(actionInletDisplay, printableWidth - 200, 9, font);
+    wrappedActionInlet.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedActionInlet.length > 1) {
+      summaryLineY -= (wrappedActionInlet.length - 1) * 12;
+    }
 
     page.drawText(`$${actionInletPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1233,13 +1269,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-    const truncatedBottomMetal = truncateText(bottomMetalDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedBottomMetal, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedBottomMetal = wrapText(bottomMetalDisplay, printableWidth - 200, 9, font);
+    wrappedBottomMetal.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedBottomMetal.length > 1) {
+      summaryLineY -= (wrappedBottomMetal.length - 1) * 12;
+    }
 
     page.drawText(`$${bottomMetalPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1264,13 +1305,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const barrelInletDisplay = barrelInletOption?.label || 'Not selected';
-    const truncatedBarrelInlet = truncateText(barrelInletDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedBarrelInlet, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedBarrelInlet = wrapText(barrelInletDisplay, printableWidth - 200, 9, font);
+    wrappedBarrelInlet.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedBarrelInlet.length > 1) {
+      summaryLineY -= (wrappedBarrelInlet.length - 1) * 12;
+    }
 
     page.drawText(`$${barrelInletPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1295,13 +1341,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const qdDisplay = qdOption?.label || 'Not selected';
-    const truncatedQD = truncateText(qdDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedQD, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedQD = wrapText(qdDisplay, printableWidth - 200, 9, font);
+    wrappedQD.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedQD.length > 1) {
+      summaryLineY -= (wrappedQD.length - 1) * 12;
+    }
 
     page.drawText(`$${qdPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1329,13 +1380,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       (order.features?.length_of_pull && order.features.length_of_pull !== 'no_lop_change' ? 
         order.features.length_of_pull.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const truncatedLOP = truncateText(lopDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedLOP, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedLOP = wrapText(lopDisplay, printableWidth - 200, 9, font);
+    wrappedLOP.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedLOP.length > 1) {
+      summaryLineY -= (wrappedLOP.length - 1) * 12;
+    }
 
     page.drawText(`$${lopPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1371,13 +1427,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    const truncatedRails = truncateText(railsDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedRails, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedRails = wrapText(railsDisplay, printableWidth - 200, 9, font);
+    wrappedRails.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedRails.length > 1) {
+      summaryLineY -= (wrappedRails.length - 1) * 12;
+    }
 
     page.drawText(`$${railsPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1404,13 +1465,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const textureDisplay = textureOption?.label || 
       (order.features?.texture_options ? order.features.texture_options.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not selected');
     
-    const truncatedTexture = truncateText(textureDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedTexture, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedTexture = wrapText(textureDisplay, printableWidth - 200, 9, font);
+    wrappedTexture.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedTexture.length > 1) {
+      summaryLineY -= (wrappedTexture.length - 1) * 12;
+    }
 
     page.drawText(`$${texturePrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1435,13 +1501,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     const swivelDisplay = swivelOption?.label || 'Not selected';
-    const truncatedSwivel = truncateText(swivelDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedSwivel, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    const wrappedSwivel = wrapText(swivelDisplay, printableWidth - 200, 9, font);
+    wrappedSwivel.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    if (wrappedSwivel.length > 1) {
+      summaryLineY -= (wrappedSwivel.length - 1) * 12;
+    }
 
     page.drawText(`$${swivelPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1478,14 +1549,20 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Truncate other options display to prevent overflow
-    const truncatedOtherOptions = truncateText(otherOptionsDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedOtherOptions, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    // Wrap other options display across multiple lines if needed
+    const wrappedOtherOptions = wrapText(otherOptionsDisplay, printableWidth - 200, 9, font);
+    wrappedOtherOptions.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    // Adjust Y position for multiple lines
+    if (wrappedOtherOptions.length > 1) {
+      summaryLineY -= (wrappedOtherOptions.length - 1) * 12;
+    }
 
     page.drawText(`$${otherOptionsPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,
@@ -1543,14 +1620,20 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Truncate paint display to prevent overflow
-    const truncatedPaintDisplay = truncateText(paintDisplay, printableWidth - 200, 9);
-    page.drawText(truncatedPaintDisplay, {
-      x: margin + 120,
-      y: summaryLineY,
-      size: 9,
-      font: font,
+    // Wrap paint display across multiple lines if needed
+    const wrappedPaintDisplay = wrapText(paintDisplay, printableWidth - 200, 9, font);
+    wrappedPaintDisplay.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 120,
+        y: summaryLineY - (index * 12),
+        size: 9,
+        font: font,
+      });
     });
+    // Adjust Y position for multiple lines
+    if (wrappedPaintDisplay.length > 1) {
+      summaryLineY -= (wrappedPaintDisplay.length - 1) * 12;
+    }
 
     page.drawText(`$${paintPrice.toFixed(2)}`, {
       x: margin + printableWidth - 80,

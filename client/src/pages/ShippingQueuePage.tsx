@@ -4,6 +4,7 @@ import { ShippingActions } from '@/components/ShippingActions';
 import { BulkShippingActions } from '@/components/BulkShippingActions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Package, ArrowLeft } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';

@@ -98,6 +98,7 @@ router.get('/download/:attachmentId', async (req, res) => {
   try {
     const attachmentId = parseInt(req.params.attachmentId);
     const attachment = await storage.getOrderAttachment(attachmentId);
+    const forceDownload = req.query.download === 'true';
     
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
@@ -107,7 +108,15 @@ router.get('/download/:attachmentId', async (req, res) => {
       return res.status(404).json({ error: 'File not found on disk' });
     }
 
-    res.download(attachment.filePath, attachment.originalFileName);
+    if (forceDownload) {
+      // Force download with attachment disposition
+      res.download(attachment.filePath, attachment.originalFileName);
+    } else {
+      // Set headers for inline viewing (especially for PDFs)
+      res.setHeader('Content-Type', attachment.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
+      res.sendFile(path.resolve(attachment.filePath));
+    }
   } catch (error) {
     console.error('Error downloading attachment:', error);
     res.status(500).json({ error: 'Failed to download attachment' });

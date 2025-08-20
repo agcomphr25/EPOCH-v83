@@ -197,6 +197,24 @@ export default function QCShippingQueuePage() {
     }
   };
 
+  // Handle QC checklist download
+  const handleQCChecklistDownload = (orderId: string) => {
+    try {
+      window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
+      toast({
+        title: "QC checklist opened",
+        description: `QC checklist for order ${orderId} opened in new tab for inspection`
+      });
+    } catch (error) {
+      console.error('Error generating QC checklist:', error);
+      toast({
+        title: "Error generating QC checklist",
+        description: "Failed to generate QC checklist PDF",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Handle sales order download - Updated to remove QC checklist functionality
   const handleSalesOrderDownload = (orderId: string) => {
     window.open(`/api/sales-order/${orderId}`, '_blank');

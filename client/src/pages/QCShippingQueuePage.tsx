@@ -136,40 +136,50 @@ export default function QCShippingQueuePage() {
   const getPaidOtherOptions = (order: any) => {
     const paidOptions: string[] = [];
     
-    // Check other_options array for shirt, hat, touch-up paint
+    // Only check the other_options array for these specific items
+    // This is more accurate than checking all paid features
     if (order.features?.other_options && Array.isArray(order.features.other_options)) {
       order.features.other_options.forEach((option: string) => {
-        if (option.toLowerCase().includes('shirt')) {
+        const optionLower = option.toLowerCase();
+        if (optionLower.includes('shirt')) {
           paidOptions.push('Shirt');
         }
-        if (option.toLowerCase().includes('hat')) {
+        if (optionLower.includes('hat')) {
           paidOptions.push('Hat');
         }
-        if (option.toLowerCase().includes('touch') && option.toLowerCase().includes('paint')) {
+        if (optionLower.includes('touch') && optionLower.includes('paint')) {
           paidOptions.push('Touch-up Paint');
         }
       });
     }
 
-    // Check for any paid options (price > 0)
+    // Also check specific feature fields that might contain these items
+    // Only look in specific feature categories, not all paid features
     const featureList = features as any[];
     if (order.features && featureList.length > 0) {
-      Object.entries(order.features).forEach(([featureId, featureValue]) => {
-        if (featureValue && featureValue !== false && featureValue !== '' && featureValue !== 'none') {
+      // Check only specific feature categories that might contain shirt/hat/touch-up paint
+      const specificFeatureIds = ['other_options', 'accessories', 'extras', 'additional_items'];
+      
+      specificFeatureIds.forEach(featureId => {
+        if (order.features[featureId]) {
           const feature = featureList.find((f: any) => f.id === featureId);
           if (feature?.options) {
-            const option = feature.options.find((opt: any) => opt.value === featureValue);
-            if (option && option.price > 0) {
-              // Check if it's a shirt, hat, or paint option
-              const label = option.label?.toLowerCase() || '';
-              if (label.includes('shirt') && !paidOptions.includes('Shirt')) {
-                paidOptions.push('Shirt');
-              } else if (label.includes('hat') && !paidOptions.includes('Hat')) {
-                paidOptions.push('Hat');
-              } else if ((label.includes('touch') && label.includes('paint')) && !paidOptions.includes('Touch-up Paint')) {
-                paidOptions.push('Touch-up Paint');
+            const featureValue = order.features[featureId];
+            const values = Array.isArray(featureValue) ? featureValue : [featureValue];
+            
+            values.forEach((value: string) => {
+              const option = feature.options.find((opt: any) => opt.value === value);
+              if (option && option.price > 0) {
+                const label = option.label?.toLowerCase() || '';
+                if (label.includes('shirt') && !paidOptions.includes('Shirt')) {
+                  paidOptions.push('Shirt');
+                } else if (label.includes('hat') && !paidOptions.includes('Hat')) {
+                  paidOptions.push('Hat');
+                } else if (label.includes('touch') && label.includes('paint') && !paidOptions.includes('Touch-up Paint')) {
+                  paidOptions.push('Touch-up Paint');
+                }
               }
-            }
+            });
           }
         }
       });

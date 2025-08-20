@@ -899,7 +899,7 @@ export default function ShippingQueuePage() {
       {/* UPS Label Creator Dialog */}
       {showLabelCreator && selectedOrderId && (
         <UPSLabelCreator
-          orderId={selectedOrderId}
+          orderId={selectedOrderId || ''}
           isOpen={showLabelCreator}
           onClose={() => {
             setShowLabelCreator(false);

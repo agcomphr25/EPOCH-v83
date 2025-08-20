@@ -98,7 +98,7 @@ export default function OrderEntry() {
   const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
   const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [showCustomDiscount, setShowCustomDiscount] = useState(false);
-  const [shipping, setShipping] = useState(0);
+  const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
   const [isVerified, setIsVerified] = useState(false);

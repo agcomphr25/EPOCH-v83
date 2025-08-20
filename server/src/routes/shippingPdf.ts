@@ -1997,9 +1997,45 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
     if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
       const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
       const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
-      const labelImage = shipmentResults.PackageResults[0]?.ShippingLabel?.GraphicImage;
+      
+      // DEBUG: Print the full structure to understand the data
+      console.log(`Full shipmentResults structure for ${orderId}:`, JSON.stringify(shipmentResults, null, 2).substring(0, 1000));
+      
+      // Try to find the label image at various locations in the UPS response
+      let labelImage = null;
+      let firstPackage = null;
+      
+      // Option 1: Standard PackageResults array
+      if (shipmentResults.PackageResults && Array.isArray(shipmentResults.PackageResults)) {
+        firstPackage = shipmentResults.PackageResults[0];
+        labelImage = firstPackage?.ShippingLabel?.GraphicImage || firstPackage?.ShippingLabel?.HTMLImage;
+      }
+      
+      // Option 2: PackageResults as single object
+      if (!labelImage && shipmentResults.PackageResults && !Array.isArray(shipmentResults.PackageResults)) {
+        firstPackage = shipmentResults.PackageResults;
+        labelImage = firstPackage?.ShippingLabel?.GraphicImage || firstPackage?.ShippingLabel?.HTMLImage;
+      }
+      
+      // Option 3: Direct in ShipmentResults (some UPS responses have this structure)
+      if (!labelImage && shipmentResults.ShippingLabel) {
+        labelImage = shipmentResults.ShippingLabel.GraphicImage || shipmentResults.ShippingLabel.HTMLImage;
+        firstPackage = { ShippingLabel: shipmentResults.ShippingLabel };
+      }
+      
+      // Option 4: Alternative paths based on UPS documentation
+      if (!labelImage && shipmentResults.LabelImage) {
+        labelImage = shipmentResults.LabelImage.GraphicImage || shipmentResults.LabelImage.HTMLImage;
+      }
+      
+      console.log(`Label Image Detection for ${orderId}:`, {
+        foundLabelImage: !!labelImage,
+        labelImageLength: labelImage ? labelImage.length : 0,
+        detectionMethod: labelImage ? 'success' : 'failed'
+      });
 
       console.log(`UPS label created for ${orderId}: ${trackingNumber}`);
+      // Skip the old debug logging since we have better detection now
 
       // Skip order status update for now - UPS API is working correctly
       console.log(`UPS label created successfully for ${orderId}, tracking: ${trackingNumber}`);
@@ -2008,19 +2044,34 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
       // Convert base64 label image to PDF and return it
       if (labelImage) {
         try {
-          const labelBytes = Buffer.from(labelImage, 'base64');
+          console.log(`Processing label image for ${orderId}, format type: ${labelImage === firstPackage?.ShippingLabel?.HTMLImage ? 'HTML' : 'Direct'}`);
           
-          // Set response headers for PDF inline display (opens in new tab for printing)
-          res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.pdf"`);
-          res.setHeader('Content-Length', labelBytes.length);
+          // If this is the HTML format, return it as HTML for printing
+          if (labelImage === firstPackage?.ShippingLabel?.HTMLImage) {
+            const htmlContent = Buffer.from(labelImage, 'base64').toString('utf8');
+            
+            // Set response headers for HTML inline display (opens in new tab for printing)
+            res.setHeader('Content-Type', 'text/html');
+            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.html"`);
+            
+            // Send the UPS label HTML (which contains the embedded GIF image)
+            return res.send(htmlContent);
+          } else {
+            // Handle direct image format
+            const labelBytes = Buffer.from(labelImage, 'base64');
+            
+            // Set response headers for PDF inline display (opens in new tab for printing)
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename="UPS-Shipping-Label-${orderId}-${trackingNumber}.pdf"`);
+            res.setHeader('Content-Length', labelBytes.length);
 
-          // Send the UPS label PDF
-          return res.send(labelBytes);
+            // Send the UPS label PDF
+            return res.send(labelBytes);
+          }
         } catch (pdfError) {
-          console.error(`Error processing PDF label for ${orderId}:`, pdfError);
+          console.error(`Error processing label for ${orderId}:`, pdfError);
           return res.status(500).json({ 
-            error: 'Failed to process UPS label PDF', 
+            error: 'Failed to process UPS label', 
             details: pdfError.message,
             trackingNumber: trackingNumber
           });
@@ -2635,7 +2686,10 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
         if (upsResponse && (upsResponse as any).ShipmentResponse && (upsResponse as any).ShipmentResponse.ShipmentResults) {
           const shipmentResults = (upsResponse as any).ShipmentResponse.ShipmentResults;
           const trackingNumber = shipmentResults.ShipmentIdentificationNumber;
-          const labelImage = shipmentResults.PackageResults[0]?.ShippingLabel?.GraphicImage;
+          // Fix PackageResults access for bulk shipping - use correct UPS response structure
+          const packageResults = shipmentResults.PackageResults;
+          const firstPackage = Array.isArray(packageResults) ? packageResults[0] : packageResults;
+          const labelImage = firstPackage?.ShippingLabel?.GraphicImage;
 
           console.log(`UPS label created for ${order.orderId}: ${trackingNumber}`);
           trackingNumbers.push({ orderId: order.orderId, trackingNumber });

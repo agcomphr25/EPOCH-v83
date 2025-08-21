@@ -197,13 +197,12 @@ export default function QCShippingQueuePage() {
     }
   };
 
-  // Progress selected orders to shipping
-  const progressToShipping = async () => {
-    if (selectedOrders.size === 0) return;
-    
-    try {
-      for (const orderId of Array.from(selectedOrders)) {
-        await fetch(`/api/orders/${orderId}`, {
+  // Mutation for progressing orders to shipping
+  const progressOrderMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const results = [];
+      for (const orderId of orderIds) {
+        const result = await apiRequest(`/api/orders/${orderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -212,15 +211,21 @@ export default function QCShippingQueuePage() {
             status: 'IN_PROGRESS' 
           })
         });
+        results.push(result);
       }
-      
-      setSelectedOrders(new Set());
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      return results;
+    },
+    onSuccess: (_, orderIds) => {
       toast({
         title: 'Orders Progressed',
-        description: `${selectedOrders.size} orders moved to Shipping department`,
+        description: `${orderIds.length} orders moved to Shipping department`,
       });
-    } catch (error) {
+      // Clear selection and invalidate cache
+      setSelectedOrders(new Set());
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    },
+    onError: (error: any) => {
       console.error('Error progressing orders to shipping:', error);
       toast({
         title: 'Error',
@@ -228,6 +233,13 @@ export default function QCShippingQueuePage() {
         variant: 'destructive',
       });
     }
+  });
+
+  // Progress selected orders to shipping
+  const progressToShipping = () => {
+    if (selectedOrders.size === 0) return;
+    const orderIds = Array.from(selectedOrders);
+    progressOrderMutation.mutate(orderIds);
   };
 
   // Handle QC checklist download
@@ -610,10 +622,12 @@ export default function QCShippingQueuePage() {
           <Button
             onClick={progressToShipping}
             className="bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={selectedOrders.size === 0}
+            disabled={selectedOrders.size === 0 || progressOrderMutation.isPending}
           >
             <ArrowRight className="h-4 w-4 mr-2" />
-            Progress to Shipping ({selectedOrders.size})
+            {progressOrderMutation.isPending 
+              ? 'Progressing...' 
+              : `Progress to Shipping (${selectedOrders.size})`}
           </Button>
         </div>
       )}

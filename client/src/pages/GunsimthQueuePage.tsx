@@ -273,6 +273,25 @@ export default function GunsimthQueuePage() {
     progressToFinishMutation.mutate(Array.from(selectedOrders));
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    // Check if the order exists in the current queue
+    const orderExists = gunsmithOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast({
+        title: "Success",
+        description: `Order ${orderId} selected automatically`,
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: `Order ${orderId} is not in the Gunsmith department`,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -281,7 +300,7 @@ export default function GunsimthQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

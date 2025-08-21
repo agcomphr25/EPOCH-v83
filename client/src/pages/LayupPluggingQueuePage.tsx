@@ -652,6 +652,18 @@ export default function LayupPluggingQueuePage() {
     moveToDepartmentMutation.mutate(selectedOrders);
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    // Check if the order exists in the current queue
+    const orderExists = currentWeekOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => [...prev, orderId]);
+      toast.success(`Order ${orderId} selected automatically`);
+    } else {
+      toast.error(`Order ${orderId} is not in the Layup/Plugging department`);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -660,7 +672,7 @@ export default function LayupPluggingQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

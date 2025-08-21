@@ -81,7 +81,11 @@ interface OrderSummary {
   };
 }
 
-export function BarcodeScanner() {
+interface BarcodeScannerProps {
+  onOrderScanned?: (orderId: string) => void;
+}
+
+export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   const [location] = useLocation();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -122,6 +126,13 @@ export function BarcodeScanner() {
     enabled: !!scannedBarcode,
     retry: false
   });
+
+  // Auto-select order in department queue when successfully scanned
+  useEffect(() => {
+    if (orderSummary && onOrderScanned) {
+      onOrderScanned(orderSummary.orderId);
+    }
+  }, [orderSummary, onOrderScanned]);
 
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

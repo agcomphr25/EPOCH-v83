@@ -207,6 +207,18 @@ export default function BarcodeQueuePage() {
     progressToCNC.mutate(Array.from(selectedOrders));
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    // Check if the order exists in the current queue
+    const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast.success(`Order ${orderId} selected automatically`);
+    } else {
+      toast.error(`Order ${orderId} is not in the Barcode department`);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header with Actions */}
@@ -254,7 +266,7 @@ export default function BarcodeQueuePage() {
       </div>
 
       {/* Barcode Scanner */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

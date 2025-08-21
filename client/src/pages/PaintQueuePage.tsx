@@ -112,6 +112,18 @@ export default function PaintQueuePage() {
     progressToShippingQCMutation.mutate(Array.from(selectedOrders));
   };
 
+  // Auto-select order when scanned
+  const handleOrderScanned = (orderId: string) => {
+    // Check if the order exists in the current queue
+    const orderExists = paintOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast.success(`Order ${orderId} selected automatically`);
+    } else {
+      toast.error(`Order ${orderId} is not in the Paint department`);
+    }
+  };
+
   // Helper function to get paint color information
   const getPaintColor = (order: any) => {
     if (!order.features) return 'No paint';
@@ -160,7 +172,7 @@ export default function PaintQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner />
+      <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

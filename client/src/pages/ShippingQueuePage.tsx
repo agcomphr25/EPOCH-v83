@@ -1188,10 +1188,39 @@ export default function ShippingQueuePage() {
         </div>
       )}
       
-      {/* Shipping Details Modal */}
-      {showShippingDialog && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      {/* Debug State Display */}
+      <div className="fixed top-4 right-4 z-[60] bg-red-600 text-white p-2 rounded text-sm">
+        Dialog: {showShippingDialog ? 'OPEN' : 'CLOSED'} | Order: {selectedOrderId || 'NONE'}
+      </div>
+
+      {/* Shipping Details Modal - Force Visible */}
+      {true && (
+        <div 
+          className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: showShippingDialog ? 'flex' : 'none',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              maxWidth: '42rem',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
             <div className="p-6">
               {/* Header */}
               <div className="flex justify-between items-center mb-6">

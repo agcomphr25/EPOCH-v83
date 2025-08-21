@@ -73,6 +73,7 @@ import GunsimthQueuePage from "./pages/GunsimthQueuePage";
 import PaintQueuePage from "./pages/PaintQueuePage";
 import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
+import ShippingLabelPage from "./pages/ShippingLabelPage";
 import ShippingManagement from "./pages/ShippingManagement";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
@@ -271,6 +272,9 @@ function App() {
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />
+                  
+                  {/* Shipping Label Route */}
+                  <Route path="/shipping/label/:orderId" component={ShippingLabelPage} />
 
                   {/* Shipping Management Routes */}
                   <Route path="/shipping-management" component={ShippingManagement} />

@@ -381,6 +381,10 @@ export default function ShippingQueuePage() {
   };
 
   const handleShippingLabelCreator = async () => {
+    console.log('🚢 Ship Label button clicked!');
+    console.log('selectedCard:', selectedCard);
+    console.log('selectedOrders:', selectedOrders);
+    
     // Check for selected order - either from card selection or checkbox selection
     let targetOrder = null;
     let orderId = '';
@@ -389,11 +393,14 @@ export default function ShippingQueuePage() {
       // Use card selection if available
       targetOrder = getSelectedOrder();
       orderId = selectedCard;
+      console.log('Using card selection:', orderId);
     } else if (selectedOrders.length === 1) {
       // Use single checkbox selection if only one order is selected
       orderId = selectedOrders[0];
       targetOrder = shippingOrders.find(order => order.orderId === orderId);
+      console.log('Using checkbox selection:', orderId);
     } else {
+      console.log('No valid selection found');
       toast({
         title: "No order selected",
         description: "Please select a single order by clicking on it or checking one checkbox",
@@ -403,6 +410,7 @@ export default function ShippingQueuePage() {
     }
 
     if (!targetOrder) {
+      console.log('Target order not found:', orderId);
       toast({
         title: "Order not found",
         description: "Selected order not found in shipping queue",
@@ -410,6 +418,8 @@ export default function ShippingQueuePage() {
       });
       return;
     }
+    
+    console.log('Target order found:', targetOrder.orderId);
 
     // Pre-populate shipping address from customer data
     const customerInfo = getCustomerInfo(targetOrder.customerId);
@@ -429,8 +439,16 @@ export default function ShippingQueuePage() {
       }));
     }
 
+    console.log('Setting selectedOrderId to:', orderId);
+    console.log('Opening shipping dialog...');
+    
     setSelectedOrderId(orderId);
     setShowShippingDialog(true);
+    
+    toast({
+      title: "Opening Shipping Dialog",
+      description: `Preparing shipping label for order ${orderId}`,
+    });
   };
 
   // Handle successful label creation

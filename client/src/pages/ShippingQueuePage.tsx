@@ -450,7 +450,7 @@ export default function ShippingQueuePage() {
     if (!selectedOrderId) return;
     
     try {
-      const response = await fetch('/api/ups/create-label', {
+      const response = await fetch('/api/shipping/create-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

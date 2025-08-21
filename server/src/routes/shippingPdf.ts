@@ -1158,6 +1158,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // Create bordered container for features table
     const featuresTableHeight = 240; // Increased height to accommodate all features
+    const boxStartY = currentY; // Mark start position for box height calculation
     page.drawRectangle({
       x: margin,
       y: currentY - featuresTableHeight,
@@ -1200,6 +1201,19 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
     
     let summaryLineY = currentY - 35; // Start content below header
+
+    // Initialize all price variables
+    let actionLengthPrice = 0;
+    let actionInletPrice = 0;
+    let bottomMetalPrice = 0;
+    let barrelInletPrice = 0;
+    let qdPrice = 0;
+    let lopPrice = 0;
+    let railsPrice = 0;
+    let texturePrice = 0;
+    let swivelPrice = 0;
+    let otherOptionsPrice = 0;
+    let paintPrice = 0;
 
     // Stock Model - Base Price
     page.drawText('Stock Model:', {
@@ -1270,7 +1284,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const actionLengthFeature = features.find(f => f.id === 'action_length');
       const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
-      const actionLengthPrice = actionLengthOption?.price || 0;
+      actionLengthPrice = actionLengthOption?.price || 0;
 
       page.drawText('Action Length:', {
         x: margin + 8,
@@ -1309,7 +1323,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const actionInletFeature = features.find(f => f.id === 'action_inlet');
       const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === order.features?.action_inlet);
-      const actionInletPrice = actionInletOption?.price || 0;
+      actionInletPrice = actionInletOption?.price || 0;
 
       page.drawText('Action Inlet:', {
         x: margin + 8,
@@ -1346,7 +1360,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
       const bottomMetalOption = bottomMetalFeature?.options?.find(opt => opt.value === order.features?.bottom_metal);
-      const bottomMetalPrice = bottomMetalOption?.price || 0;
+      bottomMetalPrice = bottomMetalOption?.price || 0;
 
       page.drawText('Bottom Metal:', {
         x: margin + 8,
@@ -1382,7 +1396,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Barrel Inlet
     const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');
     const barrelInletOption = barrelInletFeature?.options?.find(opt => opt.value === order.features?.barrel_inlet);
-    const barrelInletPrice = barrelInletOption?.price || 0;
+    barrelInletPrice = barrelInletOption?.price || 0;
 
     page.drawText('Barrel Inlet:', {
       x: margin + 10,
@@ -1418,7 +1432,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // QDs (Quick Detach Cups)
     const qdFeature = features.find(f => f.id === 'qd_accessory');
     const qdOption = qdFeature?.options?.find(opt => opt.value === order.features?.qd_accessory);
-    const qdPrice = qdOption?.price || 0;
+    qdPrice = qdOption?.price || 0;
 
     page.drawText('QDs (Quick Detach Cups):', {
       x: margin + 10,
@@ -1454,7 +1468,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Length of Pull (LOP)
     const lopFeature = features.find(f => f.id === 'length_of_pull');
     const lopOption = lopFeature?.options?.find(opt => opt.value === order.features?.length_of_pull);
-    const lopPrice = lopOption?.price || 0;
+    lopPrice = lopOption?.price || 0;
 
     page.drawText('LOP (Length of Pull):', {
       x: margin + 10,
@@ -1491,7 +1505,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Rails
-    let railsPrice = 0;
+    railsPrice = 0;
     let railsDisplay = 'Not selected';
     
     if (order.features?.rail_accessory && Array.isArray((order.features as any)?.rail_accessory) && (order.features as any)?.rail_accessory.length > 0) {
@@ -1540,7 +1554,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Texture
     const textureFeature = features.find(f => f.id === 'texture_options');
     const textureOption = textureFeature?.options?.find(opt => opt.value === order.features?.texture_options);
-    const texturePrice = textureOption?.price || 0;
+    texturePrice = textureOption?.price || 0;
 
     page.drawText('Texture:', {
       x: margin + 10,
@@ -1578,7 +1592,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Swivel Studs
     const swivelFeature = features.find(f => f.id === 'swivel_studs');
     const swivelOption = swivelFeature?.options?.find(opt => opt.value === order.features?.swivel_studs);
-    const swivelPrice = swivelOption?.price || 0;
+    swivelPrice = swivelOption?.price || 0;
 
     page.drawText('Swivel Studs:', {
       x: margin + 10,
@@ -1612,7 +1626,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Other Options
-    let otherOptionsPrice = 0;
+    otherOptionsPrice = 0;
     let otherOptionsDisplay = 'Not selected';
     
     if (order.features?.other_options && Array.isArray((order.features as any)?.other_options) && (order.features as any)?.other_options.length > 0) {
@@ -1662,7 +1676,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     summaryLineY -= 12;
 
     // Paint Options
-    let paintPrice = 0;
+    paintPrice = 0;
     let paintDisplay = 'Not selected';
     
     // Handle multiple paint option fields

@@ -12,6 +12,7 @@ Data integrity: Prevent orders from being saved with null/empty modelId fields t
 UI Performance: Department progression buttons use cache-first approach with disabled automatic refetching to prevent UI reversion issues (resolved August 2025).
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
+Shipping Label System: Successfully converted from problematic modal to dedicated page approach with enhanced customer data loading and UPS API integration (August 21, 2025).
 Authentication: Completely disabled for all environments - no login required on deployed sites or development.
 Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
@@ -45,7 +46,7 @@ The application adopts a monorepo structure utilizing a full-stack TypeScript ap
     -   **Quality Control**: Workflows for digital signature capture, validation, and comprehensive submissions management for checklists. Enhanced QC inspection reports dynamically integrate order-specific details including stock model, work order specifications (handedness, bottom metal, barrel inlet, action, action length), paint colors, custom options, swivel studs, shipping addresses, and all accessories from the actual order data.
     -   **Reporting**: Enhanced sales order PDF generation with customer information and readable feature names. Includes smart print filtering for production schedules.
     -   **Payment Tracking**: Integrated 'PAID' badge functionality with consistent payment data across the system.
-    -   **Shipping Integration**: Full UPS API integration for label creation, rate calculation, and tracking. Enhanced with alternate shipping address functionality (Alt Ship To) with full database integration and UI implementation for customer-specific alternate shipping destinations.
+    -   **Shipping Integration**: Complete UPS API integration with dedicated shipping label page (`/shipping/label/:orderId`). Features package details form, billing options (sender/receiver), customer address auto-population, and comprehensive error handling. UPS payload structure implemented correctly - requires UPS credential validation for full activation (August 2025).
     -   **Dashboard Navigation**: STACITEST Dashboard enhanced with 5 color-coded quick navigation cards providing immediate access to Order Entry (blue), All Orders (green), Draft Orders (yellow), Layup/Plugging queue (purple), and Customer Management (orange). Cards feature hover effects, responsive layout, and consistent theming.
     -   **Centralized Configuration**: `shared/company-config.ts` centralizes company information and certification templates.
     -   **Code Quality**: Integrated ESLint, Prettier, and lint-staged for consistent code formatting and quality checks. Custom feature validation system enforces the "Golden Rule" by checking for proper usage of the features object as single source of truth.

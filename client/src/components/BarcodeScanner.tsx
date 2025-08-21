@@ -90,6 +90,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const processedOrdersRef = useRef<Set<string>>(new Set());
 
   // Device detection for smart UI
   const { isMobile, hasCamera } = useDeviceDetection();
@@ -131,19 +132,25 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   // Auto-select order in department queue when successfully scanned
   useEffect(() => {
     if (orderSummary && onOrderScanned) {
-      onOrderScanned(orderSummary.orderId);
-      // Auto-select the input text for quick replacement with next scan
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.select();
-          inputRef.current.focus();
-        }
-      }, 100);
+      // Only process if we haven't already processed this order
+      if (!processedOrdersRef.current.has(orderSummary.orderId)) {
+        processedOrdersRef.current.add(orderSummary.orderId);
+        onOrderScanned(orderSummary.orderId);
+        // Auto-select the input text for quick replacement with next scan
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.select();
+            inputRef.current.focus();
+          }
+        }, 100);
+      }
     }
-  }, [orderSummary, onOrderScanned]);
+  }, [orderSummary?.orderId, onOrderScanned]);
 
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      // Clear processed orders when starting a new scan session
+      processedOrdersRef.current.clear();
       handleScan();
       // Auto-select the input text for quick replacement with next scan
       setTimeout(() => {
@@ -156,6 +163,8 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   };
 
   const handleManualScan = () => {
+    // Clear processed orders when starting a new scan session
+    processedOrdersRef.current.clear();
     handleScan();
     // Auto-select the input text for quick replacement with next scan
     setTimeout(() => {
@@ -167,6 +176,8 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   };
 
   const handleCameraScan = (detectedBarcode: string) => {
+    // Clear processed orders when starting a new scan session
+    processedOrdersRef.current.clear();
     handleBarcodeDetected(detectedBarcode);
     setShowCameraScanner(false);
     // Auto-select the input text for quick replacement with next scan

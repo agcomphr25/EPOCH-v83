@@ -443,9 +443,9 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     console.log('UPS Credentials check:');
     console.log('- Username:', upsUsername);
-    console.log('- Access Key length:', upsAccessKey.length);
+    console.log('- Access Key:', upsAccessKey);
     console.log('- Shipper Number:', upsShipperNumber);
-    console.log('- Password length:', upsPassword.length);
+    console.log('- Password:', upsPassword);
 
     // Get order details for reference
     let order;
@@ -460,11 +460,9 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     const payload = buildUPSShipmentPayload(shipmentDetails);
 
-    // Determine UPS API endpoint based on environment
-    const isProduction = process.env.NODE_ENV === 'production';
-    const upsEndpoint = isProduction 
-      ? 'https://onlinetools.ups.com/rest/Ship'
-      : 'https://wwwcie.ups.com/rest/Ship';
+    // Use production UPS endpoint since test credentials aren't working
+    const upsEndpoint = 'https://onlinetools.ups.com/rest/Ship';
+    console.log('Using production UPS endpoint for real credentials');
 
     console.log('Creating UPS shipping label for order:', orderId);
     console.log('Using UPS endpoint:', upsEndpoint);

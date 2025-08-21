@@ -325,9 +325,12 @@ export default function BarcodeQueuePage() {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                       const actionLength = order.features?.action_length || 'unknown';
-                      const materialType = order.modelId?.includes('cf_') ? 'Carbon Fiber' : 
-                                         order.modelId?.includes('fg_') ? 'Fiberglass' : 
-                                         order.modelId?.includes('_tikka') ? 'Tikka' : 'Standard';
+                      // Determine material type from stock model ID
+                      const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
+                                         order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
+                                         order.modelId?.includes('tikka') ? 'Tikka' : 
+                                         order.modelId?.startsWith('m1a_') ? 'M1A' :
+                                         order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
                       
                       return (
                         <Card 
@@ -375,6 +378,8 @@ export default function BarcodeQueuePage() {
                                       materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
                                       materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
                                       materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                      materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' :
+                                      materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' :
                                       'border-blue-600 text-blue-700 bg-blue-50'
                                     }`}>
                                       {materialType}
@@ -470,9 +475,12 @@ export default function BarcodeQueuePage() {
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                           const actionLength = order.features?.action_length || 'unknown';
-                          const materialType = order.modelId?.includes('cf_') ? 'Carbon Fiber' : 
-                                             order.modelId?.includes('fg_') ? 'Fiberglass' : 
-                                             order.modelId?.includes('_tikka') ? 'Tikka' : 'Standard';
+                          // Determine material type from stock model ID
+                          const materialType = order.modelId?.startsWith('cf_') ? 'Carbon Fiber' : 
+                                             order.modelId?.startsWith('fg_') ? 'Fiberglass' : 
+                                             order.modelId?.includes('tikka') ? 'Tikka' : 
+                                             order.modelId?.startsWith('m1a_') ? 'M1A' :
+                                             order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
                           
                           return (
                             <Card 
@@ -511,6 +519,8 @@ export default function BarcodeQueuePage() {
                                         materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
                                         materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
                                         materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                        materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' :
+                                        materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' :
                                         'border-blue-600 text-blue-700 bg-blue-50'
                                       }`}>
                                         {materialType}

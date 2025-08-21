@@ -454,20 +454,21 @@ router.post('/create-label', async (req: Request, res: Response) => {
     console.log('UPS Payload:', JSON.stringify(payload, null, 2));
 
     // UPS API endpoint for shipment creation and label generation
-    const response = await axios.post(upsEndpoint, payload, {
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 30000, // 30 second timeout
-    });
+    try {
+      const response = await axios.post(upsEndpoint, payload, {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000, // 30 second timeout
+      });
 
-    // UPS returns the label as a Base64 string
-    const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-    const trackingNumber = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+      // UPS returns the label as a Base64 string
+      const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+      const trackingNumber = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber;
+      const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
 
-    if (labelBase64 && trackingNumber) {
+      if (labelBase64 && trackingNumber) {
       // Update order with tracking information
       if (order) {
         try {
@@ -492,29 +493,46 @@ router.post('/create-label', async (req: Request, res: Response) => {
         }
       }
 
-      res.json({
-        success: true,
-        labelBase64,
-        trackingNumber,
-        shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
-        orderId,
-        message: 'Shipping label created successfully'
-      });
-    } else {
-      console.error('UPS API response missing required fields:', response.data);
-      res.status(500).json({ 
-        error: 'No label or tracking number returned from UPS.',
-        details: response.data 
-      });
+        res.json({
+          success: true,
+          labelBase64,
+          trackingNumber,
+          shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
+          orderId,
+          message: 'Shipping label created successfully'
+        });
+      } else {
+        console.error('UPS API response missing required fields:', response.data);
+        res.status(500).json({ 
+          error: 'No label or tracking number returned from UPS.',
+          details: response.data 
+        });
+      }
+    } catch (upsError: any) {
+      throw upsError; // Re-throw to be caught by outer catch
     }
   } catch (error: any) {
     console.error('UPS API error:', error.response?.data || error.message);
+    console.error('Full error object:', JSON.stringify(error.response?.data, null, 2));
     
     if (error.response?.data) {
+      // Extract detailed error information
+      const faultDetails = error.response.data.Fault?.detail;
+      let errorMessage = 'UPS API error';
+      
+      if (faultDetails?.Errors) {
+        const errors = Array.isArray(faultDetails.Errors) ? faultDetails.Errors : [faultDetails.Errors];
+        console.error('UPS Error Details:', JSON.stringify(errors, null, 2));
+        
+        if (errors[0]) {
+          errorMessage = errors[0].ErrorDescription || errors[0].Description || errorMessage;
+        }
+      }
+      
       res.status(500).json({ 
-        error: 'UPS API error', 
+        error: errorMessage,
         details: error.response.data,
-        message: error.response.data.Fault?.detail?.Errors?.ErrorDetail?.PrimaryErrorCode?.Description || error.message
+        faultString: error.response.data.Fault?.faultstring
       });
     } else {
       res.status(500).json({ 

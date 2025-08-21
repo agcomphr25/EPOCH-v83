@@ -441,13 +441,21 @@ export default function ShippingQueuePage() {
 
     console.log('Setting selectedOrderId to:', orderId);
     console.log('Opening shipping dialog...');
+    console.log('Current showShippingDialog state:', showShippingDialog);
     
     setSelectedOrderId(orderId);
     setShowShippingDialog(true);
     
+    console.log('After setting state - showShippingDialog should be true');
+    
+    // Force a small delay to ensure state update
+    setTimeout(() => {
+      console.log('Delayed check - showShippingDialog state:', showShippingDialog);
+    }, 100);
+    
     toast({
       title: "Opening Shipping Dialog",
-      description: `Preparing shipping label for order ${orderId}`,
+      description: `Preparing shipping label for order ${orderId}. Dialog state: ${showShippingDialog}`,
     });
   };
 
@@ -1060,12 +1068,19 @@ export default function ShippingQueuePage() {
       )}
 
       {/* Shipping Details Dialog */}
-      <Dialog open={showShippingDialog} onOpenChange={setShowShippingDialog}>
+      <Dialog open={showShippingDialog} onOpenChange={(open) => {
+        console.log('Dialog open state changing to:', open);
+        setShowShippingDialog(open);
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Shipping Details for Order {selectedOrderId}</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
+            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+              Debug: Dialog is open for order {selectedOrderId} (showShippingDialog: {showShippingDialog.toString()})
+            </div>
+            
             {/* Billing Options */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Billing Options</h3>

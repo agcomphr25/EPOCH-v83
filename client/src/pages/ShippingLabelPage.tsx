@@ -53,15 +53,22 @@ export default function ShippingLabelPage() {
     enabled: !!customerId
   });
 
-  const customerInfo = (customers as any[]).find((c: any) => c.id === customerId);
+  // Try different ways to match customer ID (handles string/number mismatches)
+  const customerInfo = (customers as any[]).find((c: any) => 
+    c.id === customerId || 
+    c.id === String(customerId) || 
+    String(c.id) === String(customerId)
+  );
   const customerAddress = (customerAddresses as any[])?.[0];
   
-  // Debug logging
+  // Debug logging with more detail
   console.log('🔍 Shipping Label Page Debug:');
   console.log('OrderID:', orderId);
   console.log('Order Details:', orderDetails);
-  console.log('Customer ID:', customerId);
-  console.log('Customer Info:', customerInfo);
+  console.log('Customer ID from order:', customerId, 'Type:', typeof customerId);
+  console.log('First 5 customers with IDs:', (customers as any[]).slice(0, 5).map(c => ({ id: c.id, name: c.name, idType: typeof c.id })));
+  console.log('Looking for customer with ID:', customerId);
+  console.log('Customer Info found:', customerInfo);
   console.log('Customer Address:', customerAddress);
   console.log('Loading states:', { orderLoading, customersLoading, addressLoading });
 
@@ -187,8 +194,9 @@ export default function ShippingLabelPage() {
               <div>Order Loading: {orderLoading ? 'Yes' : 'No'}</div>
               <div>Customers Loading: {customersLoading ? 'Yes' : 'No'}</div>
               <div>Address Loading: {addressLoading ? 'Yes' : 'No'}</div>
-              <div>Customer ID from Order: {customerId || 'Not found'}</div>
+              <div>Customer ID from Order: {customerId || 'Not found'} (Type: {typeof customerId})</div>
               <div>Total Customers Loaded: {(customers as any[]).length}</div>
+              <div>Sample Customer IDs: {(customers as any[]).slice(0, 3).map(c => `${c.id}(${typeof c.id})`).join(', ')}</div>
               <div>Customer Found: {customerInfo ? 'Yes' : 'No'}</div>
               <div>Customer Name: {customerInfo?.name || 'Not found'}</div>
               <div>Address Found: {customerAddress ? 'Yes' : 'No'}</div>

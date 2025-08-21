@@ -269,14 +269,19 @@ function buildUPSShipmentPayload(details: any) {
     receiverAccount
   } = details;
 
+  const upsUsername = process.env.UPS_USERNAME?.trim();
+  const upsPassword = process.env.UPS_PASSWORD?.trim();
+  const upsAccessKey = process.env.UPS_ACCESS_KEY?.trim();
+  const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
   return {
     UPSSecurity: {
       UsernameToken: {
-        Username: process.env.UPS_USERNAME?.trim(),
-        Password: process.env.UPS_PASSWORD?.trim(),
+        Username: upsUsername,
+        Password: upsPassword,
       },
       ServiceAccessToken: {
-        AccessLicenseNumber: process.env.UPS_ACCESS_KEY?.trim(),
+        AccessLicenseNumber: upsAccessKey,
       },
     },
     ShipmentRequest: {
@@ -296,7 +301,7 @@ function buildUPSShipmentPayload(details: any) {
             Number: shipFromAddress.phone || '5555551234',
             Extension: shipFromAddress.phoneExt || '',
           },
-          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim(),
+          ShipperNumber: upsShipperNumber,
           Address: {
             AddressLine: [shipFromAddress.street, shipFromAddress.street2].filter(Boolean),
             City: shipFromAddress.city,
@@ -425,11 +430,22 @@ router.post('/create-label', async (req: Request, res: Response) => {
     };
 
     // Validate required UPS credentials
-    if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY || !process.env.UPS_SHIPPER_NUMBER) {
+    const upsUsername = process.env.UPS_USERNAME?.trim();
+    const upsPassword = process.env.UPS_PASSWORD?.trim();
+    const upsAccessKey = process.env.UPS_ACCESS_KEY?.trim();
+    const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+    
+    if (!upsUsername || !upsPassword || !upsAccessKey || !upsShipperNumber) {
       return res.status(500).json({ 
         error: 'UPS API credentials not configured. Please set UPS_USERNAME, UPS_PASSWORD, UPS_ACCESS_KEY, and UPS_SHIPPER_NUMBER environment variables.' 
       });
     }
+
+    console.log('UPS Credentials check:');
+    console.log('- Username:', upsUsername);
+    console.log('- Access Key length:', upsAccessKey.length);
+    console.log('- Shipper Number:', upsShipperNumber);
+    console.log('- Password length:', upsPassword.length);
 
     // Get order details for reference
     let order;

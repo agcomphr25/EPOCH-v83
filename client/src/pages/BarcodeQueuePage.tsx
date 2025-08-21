@@ -56,15 +56,14 @@ export default function BarcodeQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
-  // Categorize orders by stock model and action length, sorted by due date
+  // Categorize orders by stock model only, sorted by due date
   const categorizedOrders = useMemo(() => {
     const categories: Record<string, any[]> = {};
     
     barcodeOrders.forEach((order: any) => {
       const modelId = order.modelId;
-      const actionLength = order.features?.action_length || 'unknown';
       const stockModel = (stockModels as any[]).find((m: any) => m.id === modelId);
-      const categoryKey = `${stockModel?.displayName || stockModel?.name || modelId}_${actionLength}`;
+      const categoryKey = stockModel?.displayName || stockModel?.name || modelId;
       
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
@@ -87,18 +86,7 @@ export default function BarcodeQueuePage() {
       });
     });
 
-    // Sort categories by action length priority (short first), then by stock model
-    const sortedCategories = Object.entries(categories).sort(([keyA], [keyB]) => {
-      const actionA = keyA.split('_').pop();
-      const actionB = keyB.split('_').pop();
-      
-      if (actionA === 'short' && actionB !== 'short') return -1;
-      if (actionA !== 'short' && actionB === 'short') return 1;
-      
-      return keyA.localeCompare(keyB);
-    });
-
-    return Object.fromEntries(sortedCategories);
+    return categories;
   }, [barcodeOrders, stockModels]);
 
   // Handle order selection
@@ -315,44 +303,16 @@ export default function BarcodeQueuePage() {
       ) : (
         <div className="space-y-6">
           {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
-            const [modelName, actionLength] = categoryKey.split('_');
-            const actionDisplay = actionLength === 'short' ? 'Short Action' : 
-                                 actionLength === 'medium' ? 'Medium Action' :
-                                 actionLength === 'long' ? 'Long Action' : 
-                                 'Unknown Action';
+            const modelName = categoryKey;
             
             return (
               <Card key={categoryKey} className="overflow-hidden">
-                <CardHeader className={`pb-4 ${
-                  actionLength === 'short' 
-                    ? 'bg-red-50 dark:bg-red-900/20 border-b-red-200' 
-                    : actionLength === 'medium'
-                    ? 'bg-orange-50 dark:bg-orange-900/20 border-b-orange-200'
-                    : actionLength === 'long'
-                    ? 'bg-blue-50 dark:bg-blue-900/20 border-b-blue-200'
-                    : 'bg-gray-50 dark:bg-gray-900/20'
-                }`}>
+                <CardHeader className="pb-4 bg-slate-50 dark:bg-slate-900/20 border-b-slate-200">
                   <CardTitle className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <Target className={`h-5 w-5 ${
-                        actionLength === 'short' ? 'text-red-600' : 
-                        actionLength === 'medium' ? 'text-orange-600' :
-                        actionLength === 'long' ? 'text-blue-600' : 'text-gray-600'
-                      }`} />
+                      <Target className="h-5 w-5 text-slate-600" />
                       <span className="text-lg font-bold">{modelName}</span>
                     </div>
-                    <Badge variant="outline" className={`${
-                      actionLength === 'short' 
-                        ? 'border-red-300 text-red-700 bg-red-100' 
-                        : actionLength === 'medium'
-                        ? 'border-orange-300 text-orange-700 bg-orange-100'
-                        : actionLength === 'long'
-                        ? 'border-blue-300 text-blue-700 bg-blue-100'
-                        : 'border-gray-300 text-gray-700'
-                    }`}>
-                      <ArrowUp className="h-3 w-3 mr-1" />
-                      {actionDisplay}
-                    </Badge>
                     <Badge variant="secondary" className="ml-auto">
                       {orders.length} Orders
                     </Badge>
@@ -364,6 +324,10 @@ export default function BarcodeQueuePage() {
                     {orders.map((order: any) => {
                       const isSelected = selectedOrders.has(order.orderId);
                       const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                      const actionLength = order.features?.action_length || 'unknown';
+                      const materialType = order.modelId?.includes('cf_') ? 'Carbon Fiber' : 
+                                         order.modelId?.includes('fg_') ? 'Fiberglass' : 
+                                         order.modelId?.includes('_tikka') ? 'Tikka' : 'Standard';
                       
                       return (
                         <Card 
@@ -373,13 +337,7 @@ export default function BarcodeQueuePage() {
                               ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-l-blue-500' 
                               : isOverdue
                               ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                              : actionLength === 'short'
-                              ? 'border-l-red-400 hover:bg-red-50 dark:hover:bg-red-900/10'
-                              : actionLength === 'medium'
-                              ? 'border-l-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10'
-                              : actionLength === 'long'
-                              ? 'border-l-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
-                              : 'border-l-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/10'
+                              : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
                           }`}
                           onClick={() => toggleOrderSelection(order.orderId)}
                         >
@@ -403,7 +361,7 @@ export default function BarcodeQueuePage() {
                                   )}
                                 </div>
                                 
-                                <div className="space-y-1 text-sm">
+                                <div className="space-y-2 text-sm">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3 w-3 text-gray-500" />
                                     <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
@@ -411,15 +369,26 @@ export default function BarcodeQueuePage() {
                                     </span>
                                   </div>
                                   
-                                  <div className="flex items-center gap-2">
-                                    <ArrowUp className={`h-3 w-3 ${
-                                      actionLength === 'short' ? 'text-red-500' : 
-                                      actionLength === 'medium' ? 'text-orange-500' :
-                                      actionLength === 'long' ? 'text-blue-500' : 'text-gray-500'
-                                    }`} />
-                                    <span className="font-bold text-lg">
-                                      {actionDisplay.toUpperCase()}
-                                    </span>
+                                  {/* Material Type and Action Badges */}
+                                  <div className="flex gap-2 flex-wrap">
+                                    <Badge variant="outline" className={`text-xs ${
+                                      materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
+                                      materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
+                                      materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                      'border-blue-600 text-blue-700 bg-blue-50'
+                                    }`}>
+                                      {materialType}
+                                    </Badge>
+                                    <Badge variant="outline" className={`text-xs ${
+                                      actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' :
+                                      actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                                      actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+                                      'border-gray-500 text-gray-700 bg-gray-50'
+                                    }`}>
+                                      {actionLength === 'short' ? 'Short' : 
+                                       actionLength === 'medium' ? 'Medium' :
+                                       actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                    </Badge>
                                   </div>
                                   
                                   {order.customerPO && (
@@ -467,14 +436,11 @@ export default function BarcodeQueuePage() {
                   const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                   if (categoryOrders.length === 0) return null;
                   
-                  const [modelName, actionLength] = categoryKey.split('_');
-                  const actionDisplay = actionLength === 'short' ? 'Short Action' : 
-                                       actionLength === 'medium' ? 'Medium Action' :
-                                       actionLength === 'long' ? 'Long Action' : 'Unknown Action';
+                  const modelName = categoryKey;
                   
                   return (
                     <div key={categoryKey} className="flex items-center justify-between">
-                      <span className="font-medium">{modelName} - {actionDisplay}</span>
+                      <span className="font-medium">{modelName}</span>
                       <Badge variant="outline">{categoryOrders.length} orders</Badge>
                     </div>
                   );
@@ -489,35 +455,24 @@ export default function BarcodeQueuePage() {
                 const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                 if (categoryOrders.length === 0) return null;
                 
-                const [modelName, actionLength] = categoryKey.split('_');
-                const actionDisplay = actionLength === 'short' ? 'Short Action' : 
-                                     actionLength === 'medium' ? 'Medium Action' :
-                                     actionLength === 'long' ? 'Long Action' : 'Unknown Action';
+                const modelName = categoryKey;
                 
                 return (
                   <Card key={categoryKey} className="overflow-hidden">
-                    <CardHeader className={`pb-3 ${
-                      actionLength === 'short' 
-                        ? 'bg-red-50 dark:bg-red-900/20' 
-                        : actionLength === 'medium'
-                        ? 'bg-orange-50 dark:bg-orange-900/20'
-                        : actionLength === 'long'
-                        ? 'bg-blue-50 dark:bg-blue-900/20'
-                        : 'bg-gray-50 dark:bg-gray-900/20'
-                    }`}>
+                    <CardHeader className="pb-3 bg-slate-50 dark:bg-slate-900/20">
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <Target className={`h-4 w-4 ${
-                          actionLength === 'short' ? 'text-red-600' : 
-                          actionLength === 'medium' ? 'text-orange-600' :
-                          actionLength === 'long' ? 'text-blue-600' : 'text-gray-600'
-                        }`} />
-                        {modelName} - {actionDisplay}
+                        <Target className="h-4 w-4 text-slate-600" />
+                        {modelName}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4">
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {categoryOrders.map((order: any) => {
                           const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                          const actionLength = order.features?.action_length || 'unknown';
+                          const materialType = order.modelId?.includes('cf_') ? 'Carbon Fiber' : 
+                                             order.modelId?.includes('fg_') ? 'Fiberglass' : 
+                                             order.modelId?.includes('_tikka') ? 'Tikka' : 'Standard';
                           
                           return (
                             <Card 
@@ -525,13 +480,7 @@ export default function BarcodeQueuePage() {
                               className={`cursor-pointer transition-all duration-200 border-l-4 hover:shadow-md ${
                                 isOverdue
                                   ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                                  : actionLength === 'short'
-                                  ? 'border-l-red-400 hover:bg-red-50 dark:hover:bg-red-900/10'
-                                  : actionLength === 'medium'
-                                  ? 'border-l-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10'
-                                  : actionLength === 'long'
-                                  ? 'border-l-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
-                                  : 'border-l-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/10'
+                                  : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
                               }`}
                               onClick={() => handlePrintLabels([order.orderId])}
                             >
@@ -548,12 +497,34 @@ export default function BarcodeQueuePage() {
                                     )}
                                   </div>
                                   
-                                  <div className="space-y-1 text-sm">
+                                  <div className="space-y-2 text-sm">
                                     <div className="flex items-center gap-2">
                                       <Calendar className="h-3 w-3 text-gray-500" />
                                       <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
                                         Due: {format(new Date(order.dueDate), 'M/d/yy')}
                                       </span>
+                                    </div>
+                                    
+                                    {/* Material Type and Action Badges */}
+                                    <div className="flex gap-2 flex-wrap">
+                                      <Badge variant="outline" className={`text-xs ${
+                                        materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
+                                        materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
+                                        materialType === 'Tikka' ? 'border-purple-600 text-purple-700 bg-purple-50' :
+                                        'border-blue-600 text-blue-700 bg-blue-50'
+                                      }`}>
+                                        {materialType}
+                                      </Badge>
+                                      <Badge variant="outline" className={`text-xs ${
+                                        actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' :
+                                        actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                                        actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+                                        'border-gray-500 text-gray-700 bg-gray-50'
+                                      }`}>
+                                        {actionLength === 'short' ? 'Short' : 
+                                         actionLength === 'medium' ? 'Medium' :
+                                         actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                                      </Badge>
                                     </div>
                                     
                                     <div className="flex items-center gap-2">

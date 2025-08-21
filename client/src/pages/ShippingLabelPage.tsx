@@ -179,6 +179,24 @@ export default function ShippingLabelPage() {
           </div>
         </div>
 
+        {/* Debug Information */}
+        <Card className="mb-4 bg-yellow-50 border-yellow-200">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold mb-2">Debug Information</h3>
+            <div className="text-xs space-y-1">
+              <div>Order Loading: {orderLoading ? 'Yes' : 'No'}</div>
+              <div>Customers Loading: {customersLoading ? 'Yes' : 'No'}</div>
+              <div>Address Loading: {addressLoading ? 'Yes' : 'No'}</div>
+              <div>Customer ID from Order: {customerId || 'Not found'}</div>
+              <div>Total Customers Loaded: {(customers as any[]).length}</div>
+              <div>Customer Found: {customerInfo ? 'Yes' : 'No'}</div>
+              <div>Customer Name: {customerInfo?.name || 'Not found'}</div>
+              <div>Address Found: {customerAddress ? 'Yes' : 'No'}</div>
+              <div>Address Street: {customerAddress?.street || 'Not found'}</div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Order Summary */}
         {orderDetails && (
           <Card className="mb-6">
@@ -189,15 +207,19 @@ export default function ShippingLabelPage() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p><span className="font-medium">Customer:</span> {customerInfo?.name || 'Loading...'}</p>
-                  <p><span className="font-medium">Order Date:</span> {(orderDetails as any).orderDate ? format(new Date((orderDetails as any).orderDate), 'MMM dd, yyyy') : 'N/A'}</p>
-                  {(orderDetails as any).dueDate && (
+                  <p><span className="font-medium">Customer:</span> {
+                    customersLoading ? 'Loading...' : 
+                    customerInfo?.name || `Unknown Customer (ID: ${customerId})`
+                  }</p>
+                  <p><span className="font-medium">Order Date:</span> {(orderDetails as any)?.orderDate ? format(new Date((orderDetails as any).orderDate), 'MMM dd, yyyy') : 'N/A'}</p>
+                  {(orderDetails as any)?.dueDate && (
                     <p><span className="font-medium">Due Date:</span> {format(new Date((orderDetails as any).dueDate), 'MMM dd, yyyy')}</p>
                   )}
                 </div>
                 <div>
-                  <p><span className="font-medium">Department:</span> {(orderDetails as any).currentDept || 'N/A'}</p>
-                  <p><span className="font-medium">Total:</span> ${(orderDetails as any).totalAmount || '0.00'}</p>
+                  <p><span className="font-medium">Department:</span> {(orderDetails as any)?.currentDept || 'N/A'}</p>
+                  <p><span className="font-medium">Total:</span> ${(orderDetails as any)?.totalAmount || '0.00'}</p>
+                  <p><span className="font-medium">Customer ID:</span> {customerId || 'Not found'}</p>
                 </div>
               </div>
             </CardContent>

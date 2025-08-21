@@ -460,9 +460,9 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     const payload = buildUPSShipmentPayload(shipmentDetails);
 
-    // Try both test and production endpoints
-    const upsEndpoint = 'https://wwwcie.ups.com/rest/Ship'; // Test endpoint first
-    console.log('Trying UPS test endpoint with provided credentials');
+    // Try production endpoint with new credentials
+    const upsEndpoint = 'https://onlinetools.ups.com/rest/Ship'; // Production endpoint
+    console.log('Trying UPS production endpoint with new credentials');
 
     console.log('Creating UPS shipping label for order:', orderId);
     console.log('Using UPS endpoint:', upsEndpoint);

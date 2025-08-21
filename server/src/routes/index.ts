@@ -957,8 +957,8 @@ export function registerRoutes(app: Express): Server {
           product: po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
-          department: 'Layup',
-          currentDepartment: 'Layup',
+          department: po.currentDepartment || 'P1 Production Queue',
+          currentDepartment: po.currentDepartment || 'P1 Production Queue',
           priorityScore: priorityScore,
           dueDate: po.dueDate,
           source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin

@@ -117,7 +117,66 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
   }
 });
 
-// Get Production Queue with priority scores
+// Get P1 Production Queue (for P1 purchase orders)
+router.get('/p1-queue', async (req: Request, res: Response) => {
+  try {
+    console.log('🏭 P1 QUEUE: Fetching P1 production queue...');
+    
+    const queueResult = await pool.query(`
+      SELECT 
+        order_id,
+        customer_name,
+        item_name,
+        due_date,
+        order_date,
+        current_department,
+        status,
+        po_number
+      FROM production_orders
+      WHERE current_department = 'P1 Production Queue'
+        AND status = 'IN_PROGRESS'
+      ORDER BY due_date ASC, created_at ASC
+    `);
+    
+    const orders = queueResult.rows || [];
+
+    // Calculate current priority metrics
+    const now = new Date();
+    const enhancedQueue = orders.map((order: any) => {
+      const dueDate = new Date(order.due_date || order.order_date);
+      const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      return {
+        orderId: order.order_id,
+        customerName: order.customer_name,
+        itemName: order.item_name,
+        dueDate: order.due_date,
+        orderDate: order.order_date,
+        currentDepartment: order.current_department,
+        status: order.status,
+        poNumber: order.po_number,
+        daysToDue,
+        isOverdue: daysToDue < 0,
+        urgencyLevel: daysToDue < 0 ? 'critical' : 
+                     daysToDue <= 7 ? 'high' : 
+                     daysToDue <= 14 ? 'medium' : 'normal'
+      };
+    });
+
+    console.log(`📋 Fetched ${enhancedQueue.length} P1 production orders`);
+    res.json(enhancedQueue);
+    
+  } catch (error) {
+    console.error('❌ P1 QUEUE: Error fetching P1 queue:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch P1 production queue",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get Production Queue with priority scores (for regular orders)
 router.get('/prioritized', async (req: Request, res: Response) => {
   try {
     console.log('🏭 PRIORITIZED QUEUE: Fetching prioritized production queue...');
@@ -150,7 +209,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     `;
 
     const queueResult = await pool.query(queueQuery);
-    const prioritizedQueue = queueResult || [];
+    const prioritizedQueue = queueResult.rows || [];
 
     // Calculate current priority metrics
     const now = new Date();

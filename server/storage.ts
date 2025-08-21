@@ -3179,7 +3179,9 @@ export class DatabaseStorage implements IStorage {
           specifications: item.specifications,
           orderDate: new Date(),
           dueDate: itemDueDate,
-          productionStatus: 'PENDING'
+          productionStatus: 'PENDING',
+          currentDepartment: 'P1 Production Queue',
+          status: 'IN_PROGRESS'
         };
 
         const order = await this.createProductionOrder(orderData);

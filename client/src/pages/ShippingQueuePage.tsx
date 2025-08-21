@@ -455,7 +455,7 @@ export default function ShippingQueuePage() {
     
     toast({
       title: "Opening Shipping Dialog",
-      description: `Preparing shipping label for order ${orderId}. Dialog state: ${showShippingDialog}`,
+      description: `Preparing shipping label for order ${orderId}`,
     });
   };
 
@@ -1067,12 +1067,12 @@ export default function ShippingQueuePage() {
         />
       )}
 
-      {/* Shipping Details Dialog */}
+      {/* Shipping Details Dialog - Force visibility for debugging */}
       <Dialog open={showShippingDialog} onOpenChange={(open) => {
         console.log('Dialog open state changing to:', open);
         setShowShippingDialog(open);
-      }}>
-        <DialogContent className="max-w-2xl">
+      }} modal={true}>
+        <DialogContent className="max-w-2xl z-50 bg-white border shadow-lg">
           <DialogHeader>
             <DialogTitle>Shipping Details for Order {selectedOrderId}</DialogTitle>
           </DialogHeader>
@@ -1343,6 +1343,11 @@ export default function ShippingQueuePage() {
           </DialogContent>
         </Dialog>
       )}
+      
+      {/* Debug info - show at bottom of page */}
+      <div className="fixed bottom-4 right-4 bg-red-100 p-2 rounded text-xs">
+        Debug: showShippingDialog = {showShippingDialog.toString()}, selectedOrderId = {selectedOrderId}
+      </div>
     </div>
   );
 }

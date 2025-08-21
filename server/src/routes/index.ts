@@ -2190,7 +2190,7 @@ export function registerRoutes(app: Express): Server {
       const { PDFDocument, rgb } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.create();
       
-      // Add pages for labels (Avery 5160 format - 3 columns, 10 rows per page)
+      // Add pages for labels (Avery 8160 format - 3 columns, 10 rows per page)
       const labelsPerPage = 30;
       const pagesNeeded = Math.ceil(orderDetails.length / labelsPerPage);
       
@@ -2203,18 +2203,23 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
           
-          // Calculate label position (3x10 grid) - Avery 5160 format with proper spacing
+          // Calculate label position (3x10 grid) - Avery 8160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          const x = 38 + (col * 189); // Left margin + column width with spacing 
-          const y = 720 - (row * 74); // Top margin - row height with spacing
+          // Avery 8160 specifications: Left margin 0.21975", Top margin 0.5", Label size 1" x 2-5/8"
+          const leftMargin = 15.8; // 0.21975" * 72 points/inch
+          const topMargin = 36; // 0.5" * 72 points/inch  
+          const labelWidth = 189; // 2.625" * 72 points/inch
+          const labelHeight = 72; // 1" * 72 points/inch
+          const x = leftMargin + (col * labelWidth);
+          const y = 792 - topMargin - (row * labelHeight) - labelHeight; // Flip Y coordinate
           
-          // Draw label border with clear separation
+          // Draw label border with clear separation  
           page.drawRectangle({
             x: x,
             y: y,
-            width: 185,
-            height: 66,
+            width: labelWidth,
+            height: labelHeight,
             borderColor: rgb(0, 0, 0),
             borderWidth: 1,
           });

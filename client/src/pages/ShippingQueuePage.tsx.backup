@@ -1067,9 +1067,9 @@ export default function ShippingQueuePage() {
         />
       )}
 
-      {/* Working Shipping Details Modal */}
+      {/* Custom Shipping Details Modal - Bypass ShadCN Dialog Issues */}
       {showShippingDialog && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {/* Header */}
@@ -1082,113 +1082,279 @@ export default function ShippingQueuePage() {
                   ×
                 </button>
               </div>
-              
-              {/* Package Details */}
-              <div className="space-y-4 mb-6">
-                <h3 className="text-lg font-semibold">Package Details</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Weight (lbs)</label>
-                    <input
-                      type="number"
-                      value={shippingDetails.weight}
-                      onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Declared Value ($)</label>
-                    <input
-                      type="number"
-                      value={shippingDetails.value}
-                      onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="500"
-                    />
-                  </div>
+          <div className="space-y-6">
+            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+              Debug: Dialog is open for order {selectedOrderId} (showShippingDialog: {showShippingDialog.toString()})
+            </div>
+            
+            {/* Billing Options */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Billing Options</h3>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="bill-sender"
+                    name="billing"
+                    checked={shippingDetails.billingOption === 'sender'}
+                    onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="bill-sender">Bill to Sender (Our Account)</Label>
                 </div>
-              </div>
-              
-              {/* Billing Options */}
-              <div className="space-y-4 mb-6">
-                <h3 className="text-lg font-semibold">Billing Options</h3>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="billing"
-                      checked={shippingDetails.billingOption === 'sender'}
-                      onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
-                      className="mr-2"
-                    />
-                    Bill to Sender (Our Account)
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="billing"
-                      checked={shippingDetails.billingOption === 'receiver'}
-                      onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
-                      className="mr-2"
-                    />
-                    Bill to Receiver
-                  </label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="bill-receiver"
+                    name="billing"
+                    checked={shippingDetails.billingOption === 'receiver'}
+                    onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="bill-receiver">Bill to Receiver</Label>
                 </div>
                 
+                {/* Receiver Account Details */}
                 {shippingDetails.billingOption === 'receiver' && (
                   <div className="ml-6 space-y-3 p-4 bg-blue-50 rounded-lg">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium mb-1">UPS Account Number</label>
-                        <input
-                          type="text"
+                        <Label htmlFor="receiver-account">UPS Account Number</Label>
+                        <Input
+                          id="receiver-account"
                           value={shippingDetails.receiverAccount.accountNumber}
                           onChange={(e) => setShippingDetails(prev => ({ 
                             ...prev, 
                             receiverAccount: { ...prev.receiverAccount, accountNumber: e.target.value }
                           }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="Enter UPS account number"
+                          placeholder="1234567890"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">ZIP Code</label>
-                        <input
-                          type="text"
+                        <Label htmlFor="receiver-zip">Account ZIP Code</Label>
+                        <Input
+                          id="receiver-zip"
                           value={shippingDetails.receiverAccount.zipCode}
                           onChange={(e) => setShippingDetails(prev => ({ 
                             ...prev, 
                             receiverAccount: { ...prev.receiverAccount, zipCode: e.target.value }
                           }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
                           placeholder="12345"
                         />
                       </div>
                     </div>
+                    <p className="text-sm text-blue-600">
+                      The receiver's UPS account will be charged for shipping costs.
+                    </p>
                   </div>
                 )}
               </div>
-              
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowShippingDialog(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={generateShippingLabel}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Generate Label
-                </button>
+            </div>
+
+            {/* Package Details */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Package Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="weight">Weight (lbs)</Label>
+                  <Input
+                    id="weight"
+                    type="number"
+                    value={shippingDetails.weight}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="value">Declared Value ($)</Label>
+                  <Input
+                    id="value"
+                    type="number"
+                    value={shippingDetails.value}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
+                    placeholder="500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="length">Length (in)</Label>
+                  <Input
+                    id="length"
+                    type="number"
+                    value={shippingDetails.length}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, length: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="width">Width (in)</Label>
+                  <Input
+                    id="width"
+                    type="number"
+                    value={shippingDetails.width}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, width: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="height">Height (in)</Label>
+                  <Input
+                    id="height"
+                    type="number"
+                    value={shippingDetails.height}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, height: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Shipping Address */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Shipping Address</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={shippingDetails.address.name}
+                    onChange={(e) => setShippingDetails(prev => ({ 
+                      ...prev, 
+                      address: { ...prev.address, name: e.target.value }
+                    }))}
+                    placeholder="Customer Name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="street">Street Address</Label>
+                  <Input
+                    id="street"
+                    value={shippingDetails.address.street}
+                    onChange={(e) => setShippingDetails(prev => ({ 
+                      ...prev, 
+                      address: { ...prev.address, street: e.target.value }
+                    }))}
+                    placeholder="123 Main St"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={shippingDetails.address.city}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, city: e.target.value }
+                      }))}
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={shippingDetails.address.state}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, state: e.target.value }
+                      }))}
+                      placeholder="CA"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="zip">ZIP Code</Label>
+                    <Input
+                      id="zip"
+                      value={shippingDetails.address.zip}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, zip: e.target.value }
+                      }))}
+                      placeholder="12345"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowShippingDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={generateShippingLabel}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                Generate Label
+              </Button>
+            </div>
           </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
+
+      {/* Label Viewer Dialog */}
+      {showLabelViewer && labelData && (
+        <Dialog open={showLabelViewer} onOpenChange={setShowLabelViewer}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shipping Label Generated</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <p className="text-sm"><strong>Tracking Number:</strong> {labelData.trackingNumber}</p>
+                <p className="text-sm"><strong>Service:</strong> {labelData.serviceDescription}</p>
+                <p className="text-sm"><strong>Cost:</strong> ${labelData.totalCharges}</p>
+              </div>
+              {labelData.labelImageFormat && (
+                <div className="text-center">
+                  <Button
+                    onClick={() => {
+                      // Open label in new popup for printing
+                      const newWindow = window.open('', '_blank', 'width=800,height=600');
+                      if (newWindow) {
+                        newWindow.document.write(`
+                          <html>
+                            <head><title>UPS Shipping Label</title></head>
+                            <body style="margin:0; padding:20px; text-align:center;">
+                              <img src="data:image/gif;base64,${labelData.graphicImage}" style="max-width:100%;" />
+                              <br><br>
+                              <button onclick="window.print()">Print Label</button>
+                            </body>
+                          </html>
+                        `);
+                        newWindow.document.close();
+                      }
+                    }}
+                    className="mb-4"
+                  >
+                    Print Label
+                  </Button>
+                  <div className="border rounded-lg p-4 bg-white">
+                    <img 
+                      src={`data:image/gif;base64,${labelData.graphicImage}`}
+                      alt="Shipping Label"
+                      className="mx-auto max-w-full h-auto"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Debug info - show at bottom of page */}
+      <div className="fixed bottom-4 right-4 bg-red-100 p-2 rounded text-xs">
+        Debug: showShippingDialog = {showShippingDialog.toString()}, selectedOrderId = {selectedOrderId}
+      </div>
     </div>
   );
 }

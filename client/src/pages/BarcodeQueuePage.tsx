@@ -303,7 +303,13 @@ export default function BarcodeQueuePage() {
       ) : (
         <div className="space-y-6">
           {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
-            const modelName = categoryKey;
+            // Remove material prefixes from display name
+            const modelName = categoryKey
+              .replace(/^CF\s+/i, '')
+              .replace(/^FG\s+/i, '')
+              .replace(/^M1A\s+/i, '')
+              .replace(/^APR\s+/i, '')
+              .replace(/Tikka\s+/i, '');
             
             return (
               <Card key={categoryKey} className="overflow-hidden">
@@ -441,7 +447,13 @@ export default function BarcodeQueuePage() {
                   const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                   if (categoryOrders.length === 0) return null;
                   
-                  const modelName = categoryKey;
+                  // Remove material prefixes from display name
+                  const modelName = categoryKey
+                    .replace(/^CF\s+/i, '')
+                    .replace(/^FG\s+/i, '')
+                    .replace(/^M1A\s+/i, '')
+                    .replace(/^APR\s+/i, '')
+                    .replace(/Tikka\s+/i, '');
                   
                   return (
                     <div key={categoryKey} className="flex items-center justify-between">
@@ -460,7 +472,13 @@ export default function BarcodeQueuePage() {
                 const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                 if (categoryOrders.length === 0) return null;
                 
-                const modelName = categoryKey;
+                // Remove material prefixes from display name
+                const modelName = categoryKey
+                  .replace(/^CF\s+/i, '')
+                  .replace(/^FG\s+/i, '')
+                  .replace(/^M1A\s+/i, '')
+                  .replace(/^APR\s+/i, '')
+                  .replace(/Tikka\s+/i, '');
                 
                 return (
                   <Card key={categoryKey} className="overflow-hidden">

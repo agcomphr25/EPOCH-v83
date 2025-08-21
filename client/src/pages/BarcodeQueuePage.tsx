@@ -200,7 +200,7 @@ export default function BarcodeQueuePage() {
     // Check if the order exists in the current queue
     const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} selected automatically`);
     } else {
       toast.error(`Order ${orderId} is not in the Barcode department`);

@@ -90,11 +90,13 @@ export default function ShippingLabelPage() {
         body: JSON.stringify({
           orderId: orderId,
           shipTo: shippingDetails.address,
-          package: {
+          packageDetails: {
             weight: parseFloat(shippingDetails.weight),
-            length: parseFloat(shippingDetails.length),
-            width: parseFloat(shippingDetails.width),
-            height: parseFloat(shippingDetails.height)
+            dimensions: {
+              length: parseFloat(shippingDetails.length),
+              width: parseFloat(shippingDetails.width),
+              height: parseFloat(shippingDetails.height)
+            }
           },
           declaredValue: parseFloat(shippingDetails.value),
           billingOption: shippingDetails.billingOption,

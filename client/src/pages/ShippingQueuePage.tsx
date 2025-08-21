@@ -384,6 +384,7 @@ export default function ShippingQueuePage() {
     console.log('🚢 Ship Label button clicked!');
     console.log('selectedCard:', selectedCard);
     console.log('selectedOrders:', selectedOrders);
+    console.log('showShippingDialog before:', showShippingDialog);
     
     // Check for selected order - either from card selection or checkbox selection
     let targetOrder = null;
@@ -420,6 +421,16 @@ export default function ShippingQueuePage() {
     }
     
     console.log('Target order found:', targetOrder.orderId);
+    
+    // Force dialog to open
+    console.log('FORCING DIALOG TO OPEN NOW');
+    setSelectedOrderId(orderId);
+    setShowShippingDialog(true);
+    
+    // Debug check after state change
+    setTimeout(() => {
+      console.log('Dialog state after timeout:', showShippingDialog);
+    }, 500);
 
     // Pre-populate shipping address from customer data
     const customerInfo = getCustomerInfo(targetOrder.customerId);
@@ -439,24 +450,7 @@ export default function ShippingQueuePage() {
       }));
     }
 
-    console.log('Setting selectedOrderId to:', orderId);
-    console.log('Opening shipping dialog...');
-    console.log('Current showShippingDialog state:', showShippingDialog);
-    
-    setSelectedOrderId(orderId);
-    setShowShippingDialog(true);
-    
-    console.log('After setting state - showShippingDialog should be true');
-    
-    // Force a small delay to ensure state update
-    setTimeout(() => {
-      console.log('Delayed check - showShippingDialog state:', showShippingDialog);
-    }, 100);
-    
-    toast({
-      title: "Opening Shipping Dialog",
-      description: `Preparing shipping label for order ${orderId}`,
-    });
+
   };
 
   // Handle successful label creation
@@ -1021,6 +1015,26 @@ export default function ShippingQueuePage() {
         <div className="mt-8">
           <Card className="bg-gray-50 dark:bg-gray-800">
             <CardContent className="p-6">
+              {/* DEBUG TEST BUTTON */}
+              <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 rounded-lg">
+                <h3 className="font-bold text-yellow-800 mb-2">DEBUG TEST</h3>
+                <div className="space-y-2">
+                  <div>showShippingDialog: {showShippingDialog.toString()}</div>
+                  <div>selectedOrderId: {selectedOrderId || 'null'}</div>
+                  <button
+                    onClick={() => {
+                      console.log('TEST BUTTON: Force opening dialog');
+                      setSelectedOrderId('TEST123');
+                      setShowShippingDialog(true);
+                      console.log('TEST BUTTON: State should be set to true now');
+                    }}
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                  >
+                    FORCE OPEN DIALOG (TEST)
+                  </button>
+                </div>
+              </div>
+              
               {selectedCard ? (
                 <div>
                   <div className="flex items-center justify-between mb-4">
@@ -1067,14 +1081,17 @@ export default function ShippingQueuePage() {
         />
       )}
 
-      {/* Working Shipping Details Modal */}
+      {/* Working Shipping Details Modal - DEBUG VERSION */}
       {showShippingDialog && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 z-[9999] bg-black bg-opacity-75 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
+        >
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-4 border-red-500">
             <div className="p-6">
               {/* Header */}
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Shipping Details for Order {selectedOrderId}</h2>
+                <h2 className="text-xl font-bold text-red-600">SHIPPING DIALOG OPEN - Order {selectedOrderId}</h2>
                 <button
                   onClick={() => setShowShippingDialog(false)}
                   className="text-gray-400 hover:text-gray-600 text-2xl"

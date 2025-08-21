@@ -14,6 +14,7 @@ import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
 import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';
+import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import discountsRoutes from './discounts';
 import bomsRoutes from './boms';
@@ -71,6 +72,7 @@ export function registerRoutes(app: Express): Server {
 
   // Shipping management routes
   app.use('/api/shipping', shippingRoutes);
+  app.use('/api/shipping-test', shippingTestRoutes);
 
   // Discount management routes
   app.use('/api', discountsRoutes);

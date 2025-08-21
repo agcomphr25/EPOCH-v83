@@ -117,9 +117,17 @@ export default function ShippingLabelPage() {
         }
       } else {
         const error = await response.json();
+        let errorMessage = "Failed to create shipping label";
+        
+        if (error.error?.includes("Invalid Access License")) {
+          errorMessage = "UPS API credentials need to be updated. Please contact system administrator.";
+        } else if (error.error) {
+          errorMessage = error.error;
+        }
+        
         toast({
           title: "Error generating label",
-          description: error.message || "Failed to create shipping label",
+          description: errorMessage,
           variant: "destructive"
         });
       }

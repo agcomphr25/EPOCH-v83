@@ -272,11 +272,11 @@ function buildUPSShipmentPayload(details: any) {
   return {
     UPSSecurity: {
       UsernameToken: {
-        Username: process.env.UPS_USERNAME,
-        Password: process.env.UPS_PASSWORD,
+        Username: process.env.UPS_USERNAME?.trim(),
+        Password: process.env.UPS_PASSWORD?.trim(),
       },
       ServiceAccessToken: {
-        AccessLicenseNumber: process.env.UPS_ACCESS_KEY,
+        AccessLicenseNumber: process.env.UPS_ACCESS_KEY?.trim(),
       },
     },
     ShipmentRequest: {
@@ -296,7 +296,7 @@ function buildUPSShipmentPayload(details: any) {
             Number: shipFromAddress.phone || '5555551234',
             Extension: shipFromAddress.phoneExt || '',
           },
-          ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
+          ShipperNumber: process.env.UPS_SHIPPER_NUMBER?.trim(),
           Address: {
             AddressLine: [shipFromAddress.street, shipFromAddress.street2].filter(Boolean),
             City: shipFromAddress.city,
@@ -332,7 +332,7 @@ function buildUPSShipmentPayload(details: any) {
           } : {
             Type: '01', // Transportation
             BillShipper: {
-              AccountNumber: process.env.UPS_SHIPPER_NUMBER,
+              AccountNumber: process.env.UPS_SHIPPER_NUMBER?.trim(),
             },
           },
         },
@@ -393,6 +393,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
     const { orderId, shipTo, packageDetails, billingOption, receiverAccount } = req.body;
     
     console.log('Creating UPS label with billing option:', billingOption);
+    console.log('Request body received:', JSON.stringify(req.body, null, 2));
     
     // Build shipment details from request body
     const shipmentDetails = {
@@ -469,29 +470,29 @@ router.post('/create-label', async (req: Request, res: Response) => {
       const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
 
       if (labelBase64 && trackingNumber) {
-      // Update order with tracking information
-      if (order) {
-        try {
-          const updateData = {
-            trackingNumber,
-            shippingCarrier: 'UPS',
-            shippingMethod: getServiceName(shipmentDetails.serviceType || '03'),
-            shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
-            labelGenerated: true,
-            labelGeneratedAt: new Date(),
-          };
-
-          // Try updating finalized order first, fall back to draft
+        // Update order with tracking information
+        if (order) {
           try {
-            await storage.updateFinalizedOrder(orderId, updateData);
-          } catch (error) {
-            await storage.updateOrderDraft(orderId, updateData);
+            const updateData = {
+              trackingNumber,
+              shippingCarrier: 'UPS',
+              shippingMethod: getServiceName('03'),
+              shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
+              labelGenerated: true,
+              labelGeneratedAt: new Date(),
+            };
+
+            // Try updating finalized order first, fall back to draft
+            try {
+              await storage.updateFinalizedOrder(orderId, updateData);
+            } catch (error) {
+              await storage.updateOrderDraft(orderId, updateData);
+            }
+          } catch (updateError) {
+            console.error('Failed to update order with tracking info:', updateError);
+            // Don't fail the entire request
           }
-        } catch (updateError) {
-          console.error('Failed to update order with tracking info:', updateError);
-          // Don't fail the entire request
         }
-      }
 
         res.json({
           success: true,

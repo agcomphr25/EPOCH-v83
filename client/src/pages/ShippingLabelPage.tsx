@@ -36,29 +36,43 @@ export default function ShippingLabelPage() {
   });
 
   // Get order details
-  const { data: orderDetails } = useQuery({
+  const { data: orderDetails, isLoading: orderLoading } = useQuery({
     queryKey: [`/api/orders/${orderId}`],
     enabled: !!orderId
   });
 
   // Get customer data
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers']
   });
 
   // Get customer addresses
   const customerId = (orderDetails as any)?.customerId;
-  const { data: customerAddresses = [] } = useQuery({
+  const { data: customerAddresses = [], isLoading: addressLoading } = useQuery({
     queryKey: [`/api/customers/${customerId}/addresses`],
     enabled: !!customerId
   });
 
   const customerInfo = (customers as any[]).find((c: any) => c.id === customerId);
-  const customerAddress = (customerAddresses as any[])[0];
+  const customerAddress = (customerAddresses as any[])?.[0];
+  
+  // Debug logging
+  console.log('🔍 Shipping Label Page Debug:');
+  console.log('OrderID:', orderId);
+  console.log('Order Details:', orderDetails);
+  console.log('Customer ID:', customerId);
+  console.log('Customer Info:', customerInfo);
+  console.log('Customer Address:', customerAddress);
+  console.log('Loading states:', { orderLoading, customersLoading, addressLoading });
 
   // Pre-populate address when customer data loads
   useEffect(() => {
+    console.log('🔄 useEffect triggered for address population');
+    console.log('Customer Address:', customerAddress);
+    console.log('Customer Info:', customerInfo);
+    
     if (customerAddress && customerInfo) {
+      console.log('✅ Populating shipping details with customer data');
       setShippingDetails(prev => ({
         ...prev,
         address: {
@@ -70,6 +84,11 @@ export default function ShippingLabelPage() {
           country: customerAddress.country === 'United States' ? 'US' : customerAddress.country || 'US'
         }
       }));
+    } else {
+      console.log('❌ Missing data for address population:', { 
+        hasAddress: !!customerAddress, 
+        hasCustomer: !!customerInfo 
+      });
     }
   }, [customerAddress, customerInfo]);
 
@@ -259,7 +278,11 @@ export default function ShippingLabelPage() {
               {/* Shipping Address */}
               <div className="mb-6">
                 <h4 className="font-medium mb-2">Ship To Address</h4>
-                {customerAddress ? (
+                {addressLoading ? (
+                  <div className="p-3 bg-blue-50 rounded-md text-sm">
+                    Loading address...
+                  </div>
+                ) : customerAddress ? (
                   <div className="p-3 bg-gray-50 rounded-md text-sm">
                     <div className="font-medium">{customerInfo?.name || 'Customer'}</div>
                     <div>{customerAddress.street}</div>
@@ -270,7 +293,11 @@ export default function ShippingLabelPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="text-red-500 text-sm">⚠️ No shipping address found</div>
+                  <div className="text-red-500 text-sm">
+                    ⚠️ No shipping address found
+                    <br />
+                    <small>Customer ID: {customerId || 'None'}</small>
+                  </div>
                 )}
               </div>
 

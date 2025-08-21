@@ -15,11 +15,11 @@ export default function ShippingLabelPage() {
   const orderId = params?.orderId;
   
   const [shippingDetails, setShippingDetails] = useState({
-    weight: '10',
-    length: '12',
-    width: '12', 
-    height: '12',
-    value: '500',
+    weight: '3',
+    length: '8',
+    width: '4', 
+    height: '36',
+    value: '400',
     billingOption: 'sender', // 'sender', 'receiver'
     receiverAccount: {
       accountNumber: '',

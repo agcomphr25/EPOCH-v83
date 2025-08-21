@@ -813,19 +813,7 @@ export default function ShippingQueuePage() {
             >
               📦 Ship Label
             </Button>
-            <Button
-              size="sm"
-              variant="default"
-              onClick={(e) => {
-                e.stopPropagation();
-                fulfillOrderMutation.mutate(order.orderId);
-              }}
-              disabled={fulfillOrderMutation.isPending}
-              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 text-white"
-            >
-              <CheckCircle className="h-3 w-3 mr-1" />
-              {fulfillOrderMutation.isPending ? 'Fulfilling...' : 'Fulfilled'}
-            </Button>
+
           </div>
         </CardContent>
       </Card>
@@ -1015,34 +1003,7 @@ export default function ShippingQueuePage() {
         <div className="mt-8">
           <Card className="bg-gray-50 dark:bg-gray-800">
             <CardContent className="p-6">
-              {/* DEBUG TEST BUTTON */}
-              <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 rounded-lg">
-                <h3 className="font-bold text-yellow-800 mb-2">DEBUG TEST</h3>
-                <div className="space-y-2">
-                  <div>showShippingDialog: {showShippingDialog.toString()}</div>
-                  <div>selectedOrderId: {selectedOrderId || 'null'}</div>
-                  <button
-                    onClick={() => {
-                      console.log('TEST BUTTON CLICKED');
-                      alert('TEST BUTTON CLICKED! Check console.');
-                      setSelectedOrderId('TEST123');
-                      setShowShippingDialog(true);
-                      console.log('State set: showShippingDialog should be true');
-                    }}
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                  >
-                    FORCE OPEN DIALOG (TEST)
-                  </button>
-                  <button
-                    onClick={() => {
-                      alert(`Current state: showShippingDialog=${showShippingDialog}, selectedOrderId=${selectedOrderId}`);
-                    }}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 ml-2"
-                  >
-                    CHECK STATE
-                  </button>
-                </div>
-              </div>
+
               
               {selectedCard ? (
                 <div>
@@ -1216,56 +1177,125 @@ export default function ShippingQueuePage() {
         </div>
       )}
       
-      {/* ALWAYS VISIBLE TEST MODAL */}
-      <div className="fixed top-4 right-4 z-[10000] bg-red-500 text-white p-4 rounded-lg">
-        DEBUG: showShippingDialog = {showShippingDialog.toString()}
-      </div>
-      
-      {/* ULTRA SIMPLE MODAL TEST */}
+      {/* Shipping Details Modal */}
       {showShippingDialog && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(255, 0, 0, 0.9)',
-          zIndex: 999999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '50px',
-            borderRadius: '10px',
-            border: '5px solid black',
-            fontSize: '24px',
-            textAlign: 'center'
-          }}>
-            <h1 style={{color: 'red', fontSize: '36px', marginBottom: '20px'}}>
-              SHIPPING DIALOG WORKS!
-            </h1>
-            <p style={{marginBottom: '20px'}}>
-              Order: {selectedOrderId}
-            </p>
-            <button 
-              onClick={() => {
-                console.log('CLOSE BUTTON CLICKED');
-                setShowShippingDialog(false);
-              }}
-              style={{
-                backgroundColor: 'red',
-                color: 'white',
-                padding: '15px 30px',
-                border: 'none',
-                borderRadius: '5px',
-                fontSize: '18px',
-                cursor: 'pointer'
-              }}
-            >
-              CLOSE
-            </button>
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">Shipping Details for Order {selectedOrderId}</h2>
+                <button
+                  onClick={() => setShowShippingDialog(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {/* Package Details */}
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold">Package Details</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Weight (lbs)</label>
+                    <input
+                      type="number"
+                      value={shippingDetails.weight}
+                      onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Declared Value ($)</label>
+                    <input
+                      type="number"
+                      value={shippingDetails.value}
+                      onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="500"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Billing Options */}
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold">Billing Options</h3>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="billing"
+                      checked={shippingDetails.billingOption === 'sender'}
+                      onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
+                      className="mr-2"
+                    />
+                    Bill to Sender (Our Account)
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="billing"
+                      checked={shippingDetails.billingOption === 'receiver'}
+                      onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
+                      className="mr-2"
+                    />
+                    Bill to Receiver
+                  </label>
+                </div>
+                
+                {shippingDetails.billingOption === 'receiver' && (
+                  <div className="ml-6 space-y-3 p-4 bg-blue-50 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">UPS Account Number</label>
+                        <input
+                          type="text"
+                          value={shippingDetails.receiverAccount.accountNumber}
+                          onChange={(e) => setShippingDetails(prev => ({ 
+                            ...prev, 
+                            receiverAccount: { ...prev.receiverAccount, accountNumber: e.target.value }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Enter UPS account number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">ZIP Code</label>
+                        <input
+                          type="text"
+                          value={shippingDetails.receiverAccount.zipCode}
+                          onChange={(e) => setShippingDetails(prev => ({ 
+                            ...prev, 
+                            receiverAccount: { ...prev.receiverAccount, zipCode: e.target.value }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="12345"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowShippingDialog(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={generateShippingLabel}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Generate Label
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

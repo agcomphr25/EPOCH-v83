@@ -1068,11 +1068,12 @@ export default function ShippingQueuePage() {
       )}
 
       {/* Shipping Details Dialog - Force visibility for debugging */}
-      <Dialog open={showShippingDialog} onOpenChange={(open) => {
-        console.log('Dialog open state changing to:', open);
-        setShowShippingDialog(open);
-      }} modal={true}>
-        <DialogContent className="max-w-2xl z-50 bg-white border shadow-lg">
+      {showShippingDialog && (
+        <Dialog open={true} onOpenChange={(open) => {
+          console.log('Dialog open state changing to:', open);
+          if (!open) setShowShippingDialog(false);
+        }} modal={true}>
+          <DialogContent className="fixed inset-0 z-[9999] max-w-2xl mx-auto my-8 bg-white border shadow-lg rounded-lg p-6">
           <DialogHeader>
             <DialogTitle>Shipping Details for Order {selectedOrderId}</DialogTitle>
           </DialogHeader>
@@ -1290,8 +1291,9 @@ export default function ShippingQueuePage() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Label Viewer Dialog */}
       {showLabelViewer && labelData && (

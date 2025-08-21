@@ -306,19 +306,18 @@ function buildUPSShipmentPayload(details: any) {
           },
         },
         ShipTo: {
-          Name: shipToAddress.name,
-          AttentionName: shipToAddress.contact || shipToAddress.name,
-          CompanyDisplayableName: shipToAddress.company || '',
-          Phone: {
-            Number: shipToAddress.phone || '',
-          },
+          Name: (shipToAddress.name || '').substring(0, 35), // UPS limit
+          AttentionName: (shipToAddress.contact || shipToAddress.name || '').substring(0, 35),
+          CompanyDisplayableName: (shipToAddress.company || '').substring(0, 35),
+          Phone: shipToAddress.phone && shipToAddress.phone.length >= 10 ? {
+            Number: shipToAddress.phone.replace(/\D/g, '').substring(0, 15),
+          } : undefined,
           Address: {
-            AddressLine: [shipToAddress.street, shipToAddress.street2].filter(Boolean),
-            City: shipToAddress.city,
-            StateProvinceCode: shipToAddress.state,
-            PostalCode: shipToAddress.zipCode,
+            AddressLine: [shipToAddress.street, shipToAddress.street2].filter(Boolean).map(line => line.substring(0, 35)),
+            City: (shipToAddress.city || '').substring(0, 30),
+            StateProvinceCode: (shipToAddress.state || '').substring(0, 2),
+            PostalCode: (shipToAddress.zipCode || '').replace(/\D/g, '').substring(0, 9),
             CountryCode: shipToAddress.country || 'US',
-            ResidentialAddressIndicator: shipToAddress.isResidential ? '' : undefined,
           },
         },
         PaymentInformation: {
@@ -411,12 +410,12 @@ router.post('/create-label', async (req: Request, res: Response) => {
         name: 'AG Composites',
         company: 'AG Composites',
         contact: 'Shipping Department',
-        street: '123 Manufacturing Way', // Replace with actual address
-        city: 'Your City',
+        street: '16628 US Hwy 290 E',
+        city: 'Elgin',
         state: 'TX',
-        zipCode: '12345',
+        zipCode: '78621',
         country: 'US',
-        phone: '5555551234',
+        phone: '5127467639',
       },
       packageWeight: packageDetails.weight,
       packageDimensions: packageDetails.dimensions,
@@ -452,6 +451,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     console.log('Creating UPS shipping label for order:', orderId);
     console.log('Using UPS endpoint:', upsEndpoint);
+    console.log('UPS Payload:', JSON.stringify(payload, null, 2));
 
     // UPS API endpoint for shipment creation and label generation
     const response = await axios.post(upsEndpoint, payload, {

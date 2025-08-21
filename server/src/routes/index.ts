@@ -2391,7 +2391,13 @@ export function registerRoutes(app: Express): Server {
             updateData.cncCompletedAt = currentTimestamp;
           }
 
-          const updatedOrder = await storage.updateOrder(orderId, updateData);
+          // Try updating finalized order first, fall back to draft
+          let updatedOrder;
+          try {
+            updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+          } catch (error) {
+            updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+          }
           updatedOrders.push(updatedOrder);
           
           console.log(`✅ Progressed ${orderId} from ${order.currentDepartment} to ${toDepartment}`);

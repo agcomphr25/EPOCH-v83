@@ -7,20 +7,8 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Check if running on the deployed site (not localhost/development)
-  const hostname = window.location.hostname;
-  
-  // Consider it deployment if:
-  // 1. Not localhost
-  // 2. Not a replit.dev preview URL  
-  // 3. Has a custom domain or replit.app domain
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  const isReplitDev = hostname.includes('.repl.co') || hostname.includes('.replit.dev');
-  const isReplitApp = hostname.includes('.replit.app');
-  
-  // Enable authentication for production domains (replit.app or custom domains)
-  // Disable for localhost and repl.co development URLs
-  return !isLocalhost && !isReplitDev;
+  // Authentication disabled for all environments
+  return false;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

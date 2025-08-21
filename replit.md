@@ -12,7 +12,7 @@ Data integrity: Prevent orders from being saved with null/empty modelId fields t
 UI Performance: Department progression buttons use cache-first approach with disabled automatic refetching to prevent UI reversion issues (resolved August 2025).
 Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
-Authentication: Development mode (.repl.co URLs and localhost) bypasses authentication for easy development access. Production deployment requires login authentication for security.
+Authentication: Completely disabled for all environments - no login required on deployed sites or development.
 Navigation enhancement: STACITEST Dashboard includes 5 color-coded navigation cards for quick access to core functions.
 
 ## System Architecture

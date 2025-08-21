@@ -158,9 +158,12 @@ export default function BarcodeQueuePage() {
   // Progress to CNC mutation
   const progressToCNC = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', 'POST', { 
-        orderIds, 
-        toDepartment: 'CNC' 
+      return await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: { 
+          orderIds, 
+          toDepartment: 'CNC' 
+        }
       });
     },
     onSuccess: () => {
@@ -208,9 +211,9 @@ export default function BarcodeQueuePage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto px-6 pt-2 pb-6 space-y-6">
       {/* Header with Actions */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Scan className="h-6 w-6" />
           <h1 className="text-3xl font-bold">Barcode Department Manager</h1>

@@ -813,7 +813,18 @@ export default function ShippingQueuePage() {
             >
               📦 Ship Label
             </Button>
-
+            <Button
+              size="sm"
+              variant="default"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Add fulfill order functionality here
+                console.log('Fulfilling order:', order.orderId);
+              }}
+              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 text-white"
+            >
+              ✅ Fulfilled
+            </Button>
           </div>
         </CardContent>
       </Card>

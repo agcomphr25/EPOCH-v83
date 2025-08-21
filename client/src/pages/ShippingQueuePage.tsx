@@ -33,6 +33,11 @@ export default function ShippingQueuePage() {
     width: '12', 
     height: '12',
     value: '500',
+    billingOption: 'sender', // 'sender', 'receiver', 'third_party'
+    receiverAccount: {
+      accountNumber: '',
+      zipCode: ''
+    },
     address: {
       name: '',
       street: '',
@@ -459,7 +464,9 @@ export default function ShippingQueuePage() {
               height: parseFloat(shippingDetails.height)
             },
             declaredValue: parseFloat(shippingDetails.value)
-          }
+          },
+          billingOption: shippingDetails.billingOption,
+          receiverAccount: shippingDetails.billingOption === 'receiver' ? shippingDetails.receiverAccount : undefined
         })
       });
 
@@ -1041,6 +1048,70 @@ export default function ShippingQueuePage() {
             <DialogTitle>Shipping Details for Order {selectedOrderId}</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
+            {/* Billing Options */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Billing Options</h3>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="bill-sender"
+                    name="billing"
+                    checked={shippingDetails.billingOption === 'sender'}
+                    onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="bill-sender">Bill to Sender (Our Account)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="bill-receiver"
+                    name="billing"
+                    checked={shippingDetails.billingOption === 'receiver'}
+                    onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="bill-receiver">Bill to Receiver</Label>
+                </div>
+                
+                {/* Receiver Account Details */}
+                {shippingDetails.billingOption === 'receiver' && (
+                  <div className="ml-6 space-y-3 p-4 bg-blue-50 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="receiver-account">UPS Account Number</Label>
+                        <Input
+                          id="receiver-account"
+                          value={shippingDetails.receiverAccount.accountNumber}
+                          onChange={(e) => setShippingDetails(prev => ({ 
+                            ...prev, 
+                            receiverAccount: { ...prev.receiverAccount, accountNumber: e.target.value }
+                          }))}
+                          placeholder="1234567890"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="receiver-zip">Account ZIP Code</Label>
+                        <Input
+                          id="receiver-zip"
+                          value={shippingDetails.receiverAccount.zipCode}
+                          onChange={(e) => setShippingDetails(prev => ({ 
+                            ...prev, 
+                            receiverAccount: { ...prev.receiverAccount, zipCode: e.target.value }
+                          }))}
+                          placeholder="12345"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-sm text-blue-600">
+                      The receiver's UPS account will be charged for shipping costs.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Package Details */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Package Details</h3>

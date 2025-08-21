@@ -264,7 +264,9 @@ function buildUPSShipmentPayload(details: any) {
     serviceType = '03', // UPS Ground
     packageType = '02', // Customer Package
     reference1,
-    reference2
+    reference2,
+    billingOption = 'sender',
+    receiverAccount
   } = details;
 
   return {
@@ -320,7 +322,15 @@ function buildUPSShipmentPayload(details: any) {
           },
         },
         PaymentInformation: {
-          ShipmentCharge: {
+          ShipmentCharge: billingOption === 'receiver' ? {
+            Type: '01', // Transportation
+            BillReceiver: {
+              AccountNumber: receiverAccount?.accountNumber,
+              Address: {
+                PostalCode: receiverAccount?.zipCode,
+              },
+            },
+          } : {
             Type: '01', // Transportation
             BillShipper: {
               AccountNumber: process.env.UPS_SHIPPER_NUMBER,
@@ -381,8 +391,38 @@ function buildUPSShipmentPayload(details: any) {
 // Create shipping label using UPS API
 router.post('/create-label', async (req: Request, res: Response) => {
   try {
-    const shipmentDetails = req.body;
-    const { orderId } = shipmentDetails;
+    const { orderId, shipTo, packageDetails, billingOption, receiverAccount } = req.body;
+    
+    console.log('Creating UPS label with billing option:', billingOption);
+    
+    // Build shipment details from request body
+    const shipmentDetails = {
+      orderId,
+      shipToAddress: {
+        name: shipTo.name,
+        street: shipTo.street,
+        city: shipTo.city,
+        state: shipTo.state,
+        zipCode: shipTo.zip,
+        country: shipTo.country || 'US',
+        phone: shipTo.phone || '',
+      },
+      shipFromAddress: {
+        name: 'AG Composites',
+        company: 'AG Composites',
+        contact: 'Shipping Department',
+        street: '123 Manufacturing Way', // Replace with actual address
+        city: 'Your City',
+        state: 'TX',
+        zipCode: '12345',
+        country: 'US',
+        phone: '5555551234',
+      },
+      packageWeight: packageDetails.weight,
+      packageDimensions: packageDetails.dimensions,
+      billingOption,
+      receiverAccount,
+    };
 
     // Validate required UPS credentials
     if (!process.env.UPS_USERNAME || !process.env.UPS_PASSWORD || !process.env.UPS_ACCESS_KEY || !process.env.UPS_SHIPPER_NUMBER) {

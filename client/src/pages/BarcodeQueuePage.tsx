@@ -317,6 +317,7 @@ export default function BarcodeQueuePage() {
           {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
             const [modelName, actionLength] = categoryKey.split('_');
             const actionDisplay = actionLength === 'short' ? 'Short Action' : 
+                                 actionLength === 'medium' ? 'Medium Action' :
                                  actionLength === 'long' ? 'Long Action' : 
                                  'Unknown Action';
             
@@ -325,6 +326,8 @@ export default function BarcodeQueuePage() {
                 <CardHeader className={`pb-4 ${
                   actionLength === 'short' 
                     ? 'bg-red-50 dark:bg-red-900/20 border-b-red-200' 
+                    : actionLength === 'medium'
+                    ? 'bg-orange-50 dark:bg-orange-900/20 border-b-orange-200'
                     : actionLength === 'long'
                     ? 'bg-blue-50 dark:bg-blue-900/20 border-b-blue-200'
                     : 'bg-gray-50 dark:bg-gray-900/20'
@@ -333,6 +336,7 @@ export default function BarcodeQueuePage() {
                     <div className="flex items-center gap-2">
                       <Target className={`h-5 w-5 ${
                         actionLength === 'short' ? 'text-red-600' : 
+                        actionLength === 'medium' ? 'text-orange-600' :
                         actionLength === 'long' ? 'text-blue-600' : 'text-gray-600'
                       }`} />
                       <span className="text-lg font-bold">{modelName}</span>
@@ -340,6 +344,8 @@ export default function BarcodeQueuePage() {
                     <Badge variant="outline" className={`${
                       actionLength === 'short' 
                         ? 'border-red-300 text-red-700 bg-red-100' 
+                        : actionLength === 'medium'
+                        ? 'border-orange-300 text-orange-700 bg-orange-100'
                         : actionLength === 'long'
                         ? 'border-blue-300 text-blue-700 bg-blue-100'
                         : 'border-gray-300 text-gray-700'
@@ -368,8 +374,12 @@ export default function BarcodeQueuePage() {
                               : isOverdue
                               ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                               : actionLength === 'short'
+                              ? 'border-l-red-400 hover:bg-red-50 dark:hover:bg-red-900/10'
+                              : actionLength === 'medium'
                               ? 'border-l-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10'
-                              : 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                              : actionLength === 'long'
+                              ? 'border-l-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
+                              : 'border-l-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/10'
                           }`}
                           onClick={() => toggleOrderSelection(order.orderId)}
                         >
@@ -403,7 +413,9 @@ export default function BarcodeQueuePage() {
                                   
                                   <div className="flex items-center gap-2">
                                     <ArrowUp className={`h-3 w-3 ${
-                                      actionLength === 'short' ? 'text-red-500' : 'text-blue-500'
+                                      actionLength === 'short' ? 'text-red-500' : 
+                                      actionLength === 'medium' ? 'text-orange-500' :
+                                      actionLength === 'long' ? 'text-blue-500' : 'text-gray-500'
                                     }`} />
                                     <span className="font-bold text-lg">
                                       {actionDisplay.toUpperCase()}
@@ -457,6 +469,7 @@ export default function BarcodeQueuePage() {
                   
                   const [modelName, actionLength] = categoryKey.split('_');
                   const actionDisplay = actionLength === 'short' ? 'Short Action' : 
+                                       actionLength === 'medium' ? 'Medium Action' :
                                        actionLength === 'long' ? 'Long Action' : 'Unknown Action';
                   
                   return (
@@ -478,6 +491,7 @@ export default function BarcodeQueuePage() {
                 
                 const [modelName, actionLength] = categoryKey.split('_');
                 const actionDisplay = actionLength === 'short' ? 'Short Action' : 
+                                     actionLength === 'medium' ? 'Medium Action' :
                                      actionLength === 'long' ? 'Long Action' : 'Unknown Action';
                 
                 return (
@@ -485,6 +499,8 @@ export default function BarcodeQueuePage() {
                     <CardHeader className={`pb-3 ${
                       actionLength === 'short' 
                         ? 'bg-red-50 dark:bg-red-900/20' 
+                        : actionLength === 'medium'
+                        ? 'bg-orange-50 dark:bg-orange-900/20'
                         : actionLength === 'long'
                         ? 'bg-blue-50 dark:bg-blue-900/20'
                         : 'bg-gray-50 dark:bg-gray-900/20'
@@ -492,6 +508,7 @@ export default function BarcodeQueuePage() {
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Target className={`h-4 w-4 ${
                           actionLength === 'short' ? 'text-red-600' : 
+                          actionLength === 'medium' ? 'text-orange-600' :
                           actionLength === 'long' ? 'text-blue-600' : 'text-gray-600'
                         }`} />
                         {modelName} - {actionDisplay}
@@ -509,8 +526,12 @@ export default function BarcodeQueuePage() {
                                 isOverdue
                                   ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                                   : actionLength === 'short'
+                                  ? 'border-l-red-400 hover:bg-red-50 dark:hover:bg-red-900/10'
+                                  : actionLength === 'medium'
                                   ? 'border-l-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10'
-                                  : 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                                  : actionLength === 'long'
+                                  ? 'border-l-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10'
+                                  : 'border-l-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/10'
                               }`}
                               onClick={() => handlePrintLabels([order.orderId])}
                             >

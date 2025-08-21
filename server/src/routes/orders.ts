@@ -947,4 +947,36 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// PATCH route for updating order department progression
+router.patch('/:orderId', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.orderId;
+    const updates = req.body;
+    
+    console.log(`📋 PATCH /${orderId} - Department progression update`);
+    console.log('📋 Update data:', updates);
+    
+    // Try to find and update the order in finalized orders first
+    let updatedOrder;
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+      console.log(`✅ Updated finalized order ${orderId}`);
+    } catch (finalizedError) {
+      console.log(`📋 Order not found in finalized orders, trying drafts...`);
+      try {
+        updatedOrder = await storage.updateOrderDraft(orderId, updates);
+        console.log(`✅ Updated draft order ${orderId}`);
+      } catch (draftError) {
+        console.error(`❌ Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+    }
+    
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error(`❌ PATCH /${req.params.orderId} error:`, error);
+    res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
 export default router;

@@ -365,6 +365,11 @@ export default function AllOrdersPage() {
                           NOT PAID
                         </Badge>
                       )}
+                      {order.status === 'FULFILLED' && (
+                        <Badge className="bg-blue-500 hover:bg-blue-600 text-white">
+                          FULFILLED
+                        </Badge>
+                      )}
                       {order.isCancelled && (
                         <Badge variant="destructive" className="bg-red-100 text-red-800">
                           CANCELLED

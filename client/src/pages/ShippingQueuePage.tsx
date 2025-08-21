@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Package, ArrowLeft } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Package, ArrowLeft, CheckCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 
 import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -24,10 +25,40 @@ export default function ShippingQueuePage() {
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/with-payment-status'],
+  });
+
+  // Mutation to fulfill orders and move to shipping management
+  const fulfillOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return await apiRequest('/api/orders/fulfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId })
+      });
+    },
+    onSuccess: (_, orderId) => {
+      toast({
+        title: "Order Fulfilled",
+        description: `Order ${orderId} has been marked as fulfilled and moved to shipping management`,
+      });
+      // Invalidate and refetch orders to update the UI
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      setSelectedCard(null);
+      setSelectedOrders([]);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error fulfilling order",
+        description: error.message || "Failed to fulfill order",
+        variant: "destructive"
+      });
+    }
   });
 
   // Get orders in Shipping department, categorized by due date
@@ -673,6 +704,19 @@ export default function ShippingQueuePage() {
               className="flex-1 text-xs h-8"
             >
               📦 Ship Label
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={(e) => {
+                e.stopPropagation();
+                fulfillOrderMutation.mutate(order.orderId);
+              }}
+              disabled={fulfillOrderMutation.isPending}
+              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 text-white"
+            >
+              <CheckCircle className="h-3 w-3 mr-1" />
+              {fulfillOrderMutation.isPending ? 'Fulfilling...' : 'Fulfilled'}
             </Button>
           </div>
         </CardContent>

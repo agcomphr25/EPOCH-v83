@@ -372,6 +372,32 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Fulfill an order (move to shipping management with fulfilled badge)
+router.post('/fulfill', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required" });
+    }
+
+    // Update the order to be fulfilled and move to shipping management
+    const updatedOrder = await storage.fulfillOrder(orderId);
+    
+    res.json({ 
+      success: true, 
+      message: "Order fulfilled successfully",
+      order: updatedOrder 
+    });
+  } catch (error) {
+    console.error('Fulfill order error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to fulfill order" });
+  }
+});
+
 // Production Orders (must be before :id route)
 router.get('/production-orders', async (req: Request, res: Response) => {
   try {

@@ -584,6 +584,7 @@ export interface IStorage {
   finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
   updateFinalizedOrder(orderId: string, data: Partial<InsertAllOrder>): Promise<AllOrder>;
+  fulfillOrder(orderId: string): Promise<AllOrder>;
   syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
 
 
@@ -5602,6 +5603,25 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Finalized order with ID ${orderId} not found`);
     }
 
+    return order;
+  }
+
+  async fulfillOrder(orderId: string): Promise<AllOrder> {
+    // Update the order to be fulfilled and move to shipping management
+    const [order] = await db.update(allOrders)
+      .set({ 
+        currentDepartment: 'Shipping Management',
+        status: 'FULFILLED',
+        updatedAt: new Date()
+      })
+      .where(eq(allOrders.orderId, orderId))
+      .returning();
+
+    if (!order) {
+      throw new Error(`Order with ID ${orderId} not found`);
+    }
+
+    console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management`);
     return order;
   }
 

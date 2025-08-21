@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Package, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -24,6 +26,22 @@ export default function ShippingQueuePage() {
   const [showLabelCreator, setShowLabelCreator] = useState(false);
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
+  const [showShippingDialog, setShowShippingDialog] = useState(false);
+  const [shippingDetails, setShippingDetails] = useState({
+    weight: '10',
+    length: '12',
+    width: '12', 
+    height: '12',
+    value: '500',
+    address: {
+      name: '',
+      street: '',
+      city: '',
+      state: '',
+      zip: '',
+      country: 'US'
+    }
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -388,9 +406,26 @@ export default function ShippingQueuePage() {
       return;
     }
 
-    // Open UPS Label Creator dialog with weight/dimension inputs
+    // Pre-populate shipping address from customer data
+    const customerInfo = getCustomerInfo(targetOrder.customerId);
+    const customerAddress = getCustomerAddress(targetOrder.customerId);
+    
+    if (customerAddress && customerInfo) {
+      setShippingDetails(prev => ({
+        ...prev,
+        address: {
+          name: customerInfo.name || '',
+          street: customerAddress.street || '',
+          city: customerAddress.city || '',
+          state: customerAddress.state || '',
+          zip: customerAddress.zipCode || '',
+          country: customerAddress.country === 'United States' ? 'US' : customerAddress.country || 'US'
+        }
+      }));
+    }
+
     setSelectedOrderId(orderId);
-    setShowLabelCreator(true);
+    setShowShippingDialog(true);
   };
 
   // Handle successful label creation
@@ -403,6 +438,52 @@ export default function ShippingQueuePage() {
       title: "Shipping Label Generated",
       description: `Label created with tracking number: ${data.trackingNumber}`,
     });
+  };
+
+  // Generate shipping label with UPS API
+  const generateShippingLabel = async () => {
+    if (!selectedOrderId) return;
+    
+    try {
+      const response = await fetch('/api/ups/create-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: selectedOrderId,
+          shipTo: shippingDetails.address,
+          packageDetails: {
+            weight: parseFloat(shippingDetails.weight),
+            dimensions: {
+              length: parseFloat(shippingDetails.length),
+              width: parseFloat(shippingDetails.width),
+              height: parseFloat(shippingDetails.height)
+            },
+            declaredValue: parseFloat(shippingDetails.value)
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate shipping label');
+      }
+
+      const labelData = await response.json();
+      setLabelData(labelData);
+      setShowShippingDialog(false);
+      setShowLabelViewer(true);
+      
+      toast({
+        title: "Shipping Label Generated",
+        description: `Label created with tracking number: ${labelData.trackingNumber}`,
+      });
+    } catch (error) {
+      console.error('Error generating label:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate shipping label. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Download label function
@@ -953,6 +1034,161 @@ export default function ShippingQueuePage() {
         />
       )}
 
+      {/* Shipping Details Dialog */}
+      <Dialog open={showShippingDialog} onOpenChange={setShowShippingDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Shipping Details for Order {selectedOrderId}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6">
+            {/* Package Details */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Package Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="weight">Weight (lbs)</Label>
+                  <Input
+                    id="weight"
+                    type="number"
+                    value={shippingDetails.weight}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="value">Declared Value ($)</Label>
+                  <Input
+                    id="value"
+                    type="number"
+                    value={shippingDetails.value}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
+                    placeholder="500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="length">Length (in)</Label>
+                  <Input
+                    id="length"
+                    type="number"
+                    value={shippingDetails.length}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, length: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="width">Width (in)</Label>
+                  <Input
+                    id="width"
+                    type="number"
+                    value={shippingDetails.width}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, width: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="height">Height (in)</Label>
+                  <Input
+                    id="height"
+                    type="number"
+                    value={shippingDetails.height}
+                    onChange={(e) => setShippingDetails(prev => ({ ...prev, height: e.target.value }))}
+                    placeholder="12"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Shipping Address */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Shipping Address</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={shippingDetails.address.name}
+                    onChange={(e) => setShippingDetails(prev => ({ 
+                      ...prev, 
+                      address: { ...prev.address, name: e.target.value }
+                    }))}
+                    placeholder="Customer Name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="street">Street Address</Label>
+                  <Input
+                    id="street"
+                    value={shippingDetails.address.street}
+                    onChange={(e) => setShippingDetails(prev => ({ 
+                      ...prev, 
+                      address: { ...prev.address, street: e.target.value }
+                    }))}
+                    placeholder="123 Main St"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={shippingDetails.address.city}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, city: e.target.value }
+                      }))}
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={shippingDetails.address.state}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, state: e.target.value }
+                      }))}
+                      placeholder="CA"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="zip">ZIP Code</Label>
+                    <Input
+                      id="zip"
+                      value={shippingDetails.address.zip}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, zip: e.target.value }
+                      }))}
+                      placeholder="12345"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowShippingDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={generateShippingLabel}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                Generate Label
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Label Viewer Dialog */}
       {showLabelViewer && labelData && (
         <Dialog open={showLabelViewer} onOpenChange={setShowLabelViewer}>
@@ -969,10 +1205,26 @@ export default function ShippingQueuePage() {
               {labelData.labelImageFormat && (
                 <div className="text-center">
                   <Button
-                    onClick={() => downloadLabel(labelData.graphicImage, labelData.trackingNumber, selectedOrderId!)}
+                    onClick={() => {
+                      // Open label in new popup for printing
+                      const newWindow = window.open('', '_blank', 'width=800,height=600');
+                      if (newWindow) {
+                        newWindow.document.write(`
+                          <html>
+                            <head><title>UPS Shipping Label</title></head>
+                            <body style="margin:0; padding:20px; text-align:center;">
+                              <img src="data:image/gif;base64,${labelData.graphicImage}" style="max-width:100%;" />
+                              <br><br>
+                              <button onclick="window.print()">Print Label</button>
+                            </body>
+                          </html>
+                        `);
+                        newWindow.document.close();
+                      }
+                    }}
                     className="mb-4"
                   >
-                    Download Label
+                    Print Label
                   </Button>
                   <div className="border rounded-lg p-4 bg-white">
                     <img 

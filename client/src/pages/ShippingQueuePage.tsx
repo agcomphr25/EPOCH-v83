@@ -1221,23 +1221,50 @@ export default function ShippingQueuePage() {
         DEBUG: showShippingDialog = {showShippingDialog.toString()}
       </div>
       
-      {/* FORCE VISIBLE MODAL FOR TESTING */}
-      {(showShippingDialog || true) && (
-        <div className="fixed inset-0 z-[10001] bg-red-500 bg-opacity-90 flex items-center justify-center">
-          <div className="bg-yellow-300 p-8 rounded-lg border-8 border-black">
-            <h1 className="text-3xl font-bold text-red-600 mb-4">FORCE VISIBLE MODAL</h1>
-            <p className="text-black text-xl mb-4">
-              If you can see this, the modal system works!
-              <br />
-              showShippingDialog: {showShippingDialog.toString()}
-              <br />
-              selectedOrderId: {selectedOrderId || 'null'}
+      {/* ULTRA SIMPLE MODAL TEST */}
+      {showShippingDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 0, 0, 0.9)',
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '50px',
+            borderRadius: '10px',
+            border: '5px solid black',
+            fontSize: '24px',
+            textAlign: 'center'
+          }}>
+            <h1 style={{color: 'red', fontSize: '36px', marginBottom: '20px'}}>
+              SHIPPING DIALOG WORKS!
+            </h1>
+            <p style={{marginBottom: '20px'}}>
+              Order: {selectedOrderId}
             </p>
-            <button
-              onClick={() => setShowShippingDialog(false)}
-              className="bg-red-600 text-white px-6 py-3 rounded text-lg font-bold hover:bg-red-700"
+            <button 
+              onClick={() => {
+                console.log('CLOSE BUTTON CLICKED');
+                setShowShippingDialog(false);
+              }}
+              style={{
+                backgroundColor: 'red',
+                color: 'white',
+                padding: '15px 30px',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '18px',
+                cursor: 'pointer'
+              }}
             >
-              CLOSE MODAL
+              CLOSE
             </button>
           </div>
         </div>

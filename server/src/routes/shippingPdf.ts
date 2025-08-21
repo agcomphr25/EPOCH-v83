@@ -1155,171 +1155,229 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     currentY -= 25;
-    const boxStartY = currentY;
-    let summaryLineY = currentY;
+    
+    // Create bordered container for features table
+    const featuresTableHeight = 240; // Increased height to accommodate all features
+    page.drawRectangle({
+      x: margin,
+      y: currentY - featuresTableHeight,
+      width: printableWidth,
+      height: featuresTableHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
+    // Header row for features table
+    page.drawRectangle({
+      x: margin,
+      y: currentY - 20,
+      width: printableWidth,
+      height: 20,
+      color: rgb(0.9, 0.9, 0.9),
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+
+    page.drawText('Feature', {
+      x: margin + 8,
+      y: currentY - 12,
+      size: 9,
+      font: boldFont,
+    });
+
+    page.drawText('Selection', {
+      x: margin + 150,
+      y: currentY - 12,
+      size: 9,
+      font: boldFont,
+    });
+
+    page.drawText('Price', {
+      x: margin + printableWidth - 80,
+      y: currentY - 12,
+      size: 9,
+      font: boldFont,
+    });
+    
+    let summaryLineY = currentY - 35; // Start content below header
 
     // Stock Model - Base Price
-    page.drawText(`Stock Model (${model?.displayName || model?.name || 'Custom'}):`, {
-      x: margin + 10,
+    page.drawText('Stock Model:', {
+      x: margin + 8,
       y: summaryLineY,
       size: 9,
       font: font,
+    });
+
+    const modelDisplayName = model?.displayName || model?.name || 'Custom';
+    const wrappedModel = wrapText(modelDisplayName, 300, 9, font);
+    wrappedModel.forEach((line, index) => {
+      if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) { // Keep within table bounds
+        page.drawText(line, {
+          x: margin + 150,
+          y: summaryLineY - (index * 12),
+          size: 9,
+          font: font,
+        });
+      }
     });
 
     page.drawText(`$${basePrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
+      x: margin + printableWidth - 70,
       y: summaryLineY,
       size: 9,
       font: boldFont,
       color: rgb(0, 0.4, 0.8),
     });
 
-    summaryLineY -= 12;
+    summaryLineY -= Math.max(15, wrappedModel.length * 12);
 
     // Handedness
-    page.drawText('Handedness:', {
-      x: margin + 10,
-      y: summaryLineY,
-      size: 9,
-      font: font,
-    });
-
-    const handednessDisplay = order.features?.handedness ? 
-      ((order.features as any)?.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
-    const wrappedHandedness = wrapText(handednessDisplay, printableWidth - 200, 9, font);
-    wrappedHandedness.forEach((line, index) => {
-      page.drawText(line, {
-        x: margin + 120,
-        y: summaryLineY - (index * 12),
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      page.drawText('Handedness:', {
+        x: margin + 8,
+        y: summaryLineY,
         size: 9,
         font: font,
       });
-    });
-    if (wrappedHandedness.length > 1) {
-      summaryLineY -= (wrappedHandedness.length - 1) * 12;
+
+      const handednessDisplay = order.features?.handedness ? 
+        ((order.features as any)?.handedness === 'right' ? 'Right' : 'Left') : 'Not selected';
+      const wrappedHandedness = wrapText(handednessDisplay, 300, 9, font);
+      wrappedHandedness.forEach((line, index) => {
+        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 150,
+            y: summaryLineY - (index * 12),
+            size: 9,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText('$0.00', {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(15, wrappedHandedness.length * 12);
     }
-
-    page.drawText('$0.00', {
-      x: margin + printableWidth - 80,
-      y: summaryLineY,
-      size: 9,
-      font: boldFont,
-      color: rgb(0, 0.4, 0.8),
-    });
-
-    summaryLineY -= 12;
 
     // Action Length
-    const actionLengthFeature = features.find(f => f.id === 'action_length');
-    const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
-    const actionLengthPrice = actionLengthOption?.price || 0;
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      const actionLengthFeature = features.find(f => f.id === 'action_length');
+      const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
+      const actionLengthPrice = actionLengthOption?.price || 0;
 
-    page.drawText('Action Length:', {
-      x: margin + 10,
-      y: summaryLineY,
-      size: 9,
-      font: font,
-    });
-
-    const actionLengthDisplay = actionLengthOption?.label || 
-      (order.features?.action_length ? (order.features as any)?.action_length.charAt(0).toUpperCase() + (order.features as any)?.action_length.slice(1) : 'Not selected');
-    
-    // Wrap action length display across multiple lines if needed
-    const wrappedActionLength = wrapText(actionLengthDisplay, printableWidth - 200, 9, font);
-    wrappedActionLength.forEach((line, index) => {
-      page.drawText(line, {
-        x: margin + 120,
-        y: summaryLineY - (index * 12),
+      page.drawText('Action Length:', {
+        x: margin + 8,
+        y: summaryLineY,
         size: 9,
         font: font,
       });
-    });
-    // Adjust Y position for multiple lines
-    if (wrappedActionLength.length > 1) {
-      summaryLineY -= (wrappedActionLength.length - 1) * 12;
+
+      const actionLengthDisplay = actionLengthOption?.label || 
+        (order.features?.action_length ? (order.features as any)?.action_length.charAt(0).toUpperCase() + (order.features as any)?.action_length.slice(1) : 'Not selected');
+      
+      const wrappedActionLength = wrapText(actionLengthDisplay, 300, 9, font);
+      wrappedActionLength.forEach((line, index) => {
+        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 150,
+            y: summaryLineY - (index * 12),
+            size: 9,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(15, wrappedActionLength.length * 12);
     }
-
-    page.drawText(`$${actionLengthPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
-      y: summaryLineY,
-      size: 9,
-      font: boldFont,
-      color: rgb(0, 0.4, 0.8),
-    });
-
-    summaryLineY -= 12;
 
     // Action Inlet
-    const actionInletFeature = features.find(f => f.id === 'action_inlet');
-    const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === order.features?.action_inlet);
-    const actionInletPrice = actionInletOption?.price || 0;
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      const actionInletFeature = features.find(f => f.id === 'action_inlet');
+      const actionInletOption = actionInletFeature?.options?.find(opt => opt.value === order.features?.action_inlet);
+      const actionInletPrice = actionInletOption?.price || 0;
 
-    page.drawText('Action Inlet:', {
-      x: margin + 10,
-      y: summaryLineY,
-      size: 9,
-      font: font,
-    });
-
-    const actionInletDisplay = actionInletOption?.label || 'Not selected';
-    const wrappedActionInlet = wrapText(actionInletDisplay, printableWidth - 200, 9, font);
-    wrappedActionInlet.forEach((line, index) => {
-      page.drawText(line, {
-        x: margin + 120,
-        y: summaryLineY - (index * 12),
+      page.drawText('Action Inlet:', {
+        x: margin + 8,
+        y: summaryLineY,
         size: 9,
         font: font,
       });
-    });
-    if (wrappedActionInlet.length > 1) {
-      summaryLineY -= (wrappedActionInlet.length - 1) * 12;
+
+      const actionInletDisplay = actionInletOption?.label || 'Not selected';
+      const wrappedActionInlet = wrapText(actionInletDisplay, 300, 9, font);
+      wrappedActionInlet.forEach((line, index) => {
+        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 150,
+            y: summaryLineY - (index * 12),
+            size: 9,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText(`$${actionInletPrice.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(15, wrappedActionInlet.length * 12);
     }
-
-    page.drawText(`$${actionInletPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
-      y: summaryLineY,
-      size: 9,
-      font: boldFont,
-      color: rgb(0, 0.4, 0.8),
-    });
-
-    summaryLineY -= 12;
 
     // Bottom Metal
-    const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
-    const bottomMetalOption = bottomMetalFeature?.options?.find(opt => opt.value === order.features?.bottom_metal);
-    const bottomMetalPrice = bottomMetalOption?.price || 0;
+    if (summaryLineY > currentY - featuresTableHeight + 15) {
+      const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
+      const bottomMetalOption = bottomMetalFeature?.options?.find(opt => opt.value === order.features?.bottom_metal);
+      const bottomMetalPrice = bottomMetalOption?.price || 0;
 
-    page.drawText('Bottom Metal:', {
-      x: margin + 10,
-      y: summaryLineY,
-      size: 9,
-      font: font,
-    });
-
-    const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
-    const wrappedBottomMetal = wrapText(bottomMetalDisplay, printableWidth - 200, 9, font);
-    wrappedBottomMetal.forEach((line, index) => {
-      page.drawText(line, {
-        x: margin + 120,
-        y: summaryLineY - (index * 12),
+      page.drawText('Bottom Metal:', {
+        x: margin + 8,
+        y: summaryLineY,
         size: 9,
         font: font,
       });
-    });
-    if (wrappedBottomMetal.length > 1) {
-      summaryLineY -= (wrappedBottomMetal.length - 1) * 12;
+
+      const bottomMetalDisplay = bottomMetalOption?.label || 'Not selected';
+      const wrappedBottomMetal = wrapText(bottomMetalDisplay, 300, 9, font);
+      wrappedBottomMetal.forEach((line, index) => {
+        if (summaryLineY - (index * 12) > currentY - featuresTableHeight + 8) {
+          page.drawText(line, {
+            x: margin + 150,
+            y: summaryLineY - (index * 12),
+            size: 9,
+            font: font,
+          });
+        }
+      });
+
+      page.drawText(`$${bottomMetalPrice.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 9,
+        font: boldFont,
+        color: rgb(0, 0.4, 0.8),
+      });
+
+      summaryLineY -= Math.max(15, wrappedBottomMetal.length * 12);
     }
-
-    page.drawText(`$${bottomMetalPrice.toFixed(2)}`, {
-      x: margin + printableWidth - 80,
-      y: summaryLineY,
-      size: 9,
-      font: boldFont,
-      color: rgb(0, 0.4, 0.8),
-    });
-
-    summaryLineY -= 12;
 
     // Barrel Inlet
     const barrelInletFeature = features.find(f => f.id === 'barrel_inlet');

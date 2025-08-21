@@ -61,25 +61,11 @@ export default function ShippingLabelPage() {
   );
   const customerAddress = (customerAddresses as any[])?.[0];
   
-  // Debug logging with more detail
-  console.log('🔍 Shipping Label Page Debug:');
-  console.log('OrderID:', orderId);
-  console.log('Order Details:', orderDetails);
-  console.log('Customer ID from order:', customerId, 'Type:', typeof customerId);
-  console.log('First 5 customers with IDs:', (customers as any[]).slice(0, 5).map(c => ({ id: c.id, name: c.name, idType: typeof c.id })));
-  console.log('Looking for customer with ID:', customerId);
-  console.log('Customer Info found:', customerInfo);
-  console.log('Customer Address:', customerAddress);
-  console.log('Loading states:', { orderLoading, customersLoading, addressLoading });
+
 
   // Pre-populate address when customer data loads
   useEffect(() => {
-    console.log('🔄 useEffect triggered for address population');
-    console.log('Customer Address:', customerAddress);
-    console.log('Customer Info:', customerInfo);
-    
     if (customerAddress && customerInfo) {
-      console.log('✅ Populating shipping details with customer data');
       setShippingDetails(prev => ({
         ...prev,
         address: {
@@ -91,11 +77,6 @@ export default function ShippingLabelPage() {
           country: customerAddress.country === 'United States' ? 'US' : customerAddress.country || 'US'
         }
       }));
-    } else {
-      console.log('❌ Missing data for address population:', { 
-        hasAddress: !!customerAddress, 
-        hasCustomer: !!customerInfo 
-      });
     }
   }, [customerAddress, customerInfo]);
 
@@ -186,24 +167,6 @@ export default function ShippingLabelPage() {
           </div>
         </div>
 
-        {/* Debug Information */}
-        <Card className="mb-4 bg-yellow-50 border-yellow-200">
-          <CardContent className="p-4">
-            <h3 className="text-sm font-semibold mb-2">Debug Information</h3>
-            <div className="text-xs space-y-1">
-              <div>Order Loading: {orderLoading ? 'Yes' : 'No'}</div>
-              <div>Customers Loading: {customersLoading ? 'Yes' : 'No'}</div>
-              <div>Address Loading: {addressLoading ? 'Yes' : 'No'}</div>
-              <div>Customer ID from Order: {customerId || 'Not found'} (Type: {typeof customerId})</div>
-              <div>Total Customers Loaded: {(customers as any[]).length}</div>
-              <div>Sample Customer IDs: {(customers as any[]).slice(0, 3).map(c => `${c.id}(${typeof c.id})`).join(', ')}</div>
-              <div>Customer Found: {customerInfo ? 'Yes' : 'No'}</div>
-              <div>Customer Name: {customerInfo?.name || 'Not found'}</div>
-              <div>Address Found: {customerAddress ? 'Yes' : 'No'}</div>
-              <div>Address Street: {customerAddress?.street || 'Not found'}</div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Order Summary */}
         {orderDetails && (

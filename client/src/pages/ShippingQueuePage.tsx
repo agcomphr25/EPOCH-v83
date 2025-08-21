@@ -1023,14 +1023,23 @@ export default function ShippingQueuePage() {
                   <div>selectedOrderId: {selectedOrderId || 'null'}</div>
                   <button
                     onClick={() => {
-                      console.log('TEST BUTTON: Force opening dialog');
+                      console.log('TEST BUTTON CLICKED');
+                      alert('TEST BUTTON CLICKED! Check console.');
                       setSelectedOrderId('TEST123');
                       setShowShippingDialog(true);
-                      console.log('TEST BUTTON: State should be set to true now');
+                      console.log('State set: showShippingDialog should be true');
                     }}
                     className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
                   >
                     FORCE OPEN DIALOG (TEST)
+                  </button>
+                  <button
+                    onClick={() => {
+                      alert(`Current state: showShippingDialog=${showShippingDialog}, selectedOrderId=${selectedOrderId}`);
+                    }}
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 ml-2"
+                  >
+                    CHECK STATE
                   </button>
                 </div>
               </div>
@@ -1203,6 +1212,33 @@ export default function ShippingQueuePage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* ALWAYS VISIBLE TEST MODAL */}
+      <div className="fixed top-4 right-4 z-[10000] bg-red-500 text-white p-4 rounded-lg">
+        DEBUG: showShippingDialog = {showShippingDialog.toString()}
+      </div>
+      
+      {/* FORCE VISIBLE MODAL FOR TESTING */}
+      {(showShippingDialog || true) && (
+        <div className="fixed inset-0 z-[10001] bg-red-500 bg-opacity-90 flex items-center justify-center">
+          <div className="bg-yellow-300 p-8 rounded-lg border-8 border-black">
+            <h1 className="text-3xl font-bold text-red-600 mb-4">FORCE VISIBLE MODAL</h1>
+            <p className="text-black text-xl mb-4">
+              If you can see this, the modal system works!
+              <br />
+              showShippingDialog: {showShippingDialog.toString()}
+              <br />
+              selectedOrderId: {selectedOrderId || 'null'}
+            </p>
+            <button
+              onClick={() => setShowShippingDialog(false)}
+              className="bg-red-600 text-white px-6 py-3 rounded text-lg font-bold hover:bg-red-700"
+            >
+              CLOSE MODAL
+            </button>
           </div>
         </div>
       )}

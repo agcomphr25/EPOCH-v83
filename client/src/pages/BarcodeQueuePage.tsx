@@ -211,7 +211,7 @@ export default function BarcodeQueuePage() {
   };
 
   return (
-    <div className="container mx-auto px-6 pt-2 pb-6 space-y-6">
+    <div className="container mx-auto px-6 pt-1 pb-6 space-y-6">
       {/* Header with Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">

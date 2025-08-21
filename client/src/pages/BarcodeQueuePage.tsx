@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X } from 'lucide-react';
+import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -578,6 +578,49 @@ export default function BarcodeQueuePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Progression Button */}
+      {selectedOrders.size > 0 && !showLabelDialog && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                <span className="font-medium text-orange-800 dark:text-orange-200">
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for progression
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedOrders(new Set())}
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={() => setShowLabelDialog(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white mr-2"
+                  size="sm"
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Create Labels ({selectedOrders.size})
+                </Button>
+                <Button
+                  onClick={handleProgressToCNC}
+                  disabled={selectedOrders.size === 0 || progressToCNC.isPending}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {progressToCNC.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to CNC (${selectedOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

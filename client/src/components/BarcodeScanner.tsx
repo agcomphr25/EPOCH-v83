@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,6 +89,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   const [location] = useLocation();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Device detection for smart UI
   const { isMobile, hasCamera } = useDeviceDetection();
@@ -131,18 +132,50 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
   useEffect(() => {
     if (orderSummary && onOrderScanned) {
       onOrderScanned(orderSummary.orderId);
+      // Auto-select the input text for quick replacement with next scan
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.select();
+          inputRef.current.focus();
+        }
+      }, 100);
     }
   }, [orderSummary, onOrderScanned]);
 
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleScan();
+      // Auto-select the input text for quick replacement with next scan
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.select();
+          inputRef.current.focus();
+        }
+      }, 100);
     }
+  };
+
+  const handleManualScan = () => {
+    handleScan();
+    // Auto-select the input text for quick replacement with next scan
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.select();
+        inputRef.current.focus();
+      }
+    }, 100);
   };
 
   const handleCameraScan = (detectedBarcode: string) => {
     handleBarcodeDetected(detectedBarcode);
     setShowCameraScanner(false);
+    // Auto-select the input text for quick replacement with next scan
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.select();
+        inputRef.current.focus();
+      }
+    }, 500); // Slightly longer delay for camera scanning
   };
 
   const getPaymentStatusColor = (status: string) => {
@@ -188,6 +221,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
             {/* Input method selection */}
             <div className="flex gap-2">
               <Input
+                ref={inputRef}
                 placeholder="Scan or enter barcode (e.g., P1-AG185)"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
@@ -195,7 +229,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                 className={`flex-1 ${!isValidBarcode && barcode.length > 0 ? 'border-red-300' : ''}`}
               />
               <Button 
-                onClick={handleScan} 
+                onClick={handleManualScan} 
                 disabled={!isValidBarcode}
                 variant={isValidBarcode ? "default" : "secondary"}
               >

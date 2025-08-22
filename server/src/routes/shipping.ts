@@ -368,15 +368,7 @@ function buildUPSShipmentPayload(details: any) {
             reference2 ? { Code: '02', Value: reference2 } : undefined,
           ].filter(Boolean),
         },
-        ShipmentServiceOptions: {
-          Notification: {
-            NotificationCode: '6', // Ship Notification
-            EMail: {
-              EMailAddress: shipToAddress.email,
-              UndeliverableEMailAddress: shipFromAddress.email || 'shipping@agcomposites.com',
-            },
-          },
-        },
+
         LabelSpecification: {
           LabelImageFormat: {
             Code: 'GIF',
@@ -805,7 +797,7 @@ async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise
   }
 }
 
-// Build UPS shipment payload for OAuth REST API (2024+)
+// Build UPS shipment payload for OAuth REST API (2024+) - No notification to avoid validation errors
 function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: string): any {
   return {
     "ShipmentRequest": {
@@ -873,14 +865,6 @@ function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: strin
               "Code": "LBS"
             },
             "Weight": shipmentDetails.packageWeight.toString()
-          }
-        },
-        "ShipmentServiceOptions": {
-          "Notification": {
-            "NotificationCode": "6",
-            "EMail": {
-              "UndeliverableEMailAddress": "shipping@agcomposites.com"
-            }
           }
         },
         "LabelSpecification": {

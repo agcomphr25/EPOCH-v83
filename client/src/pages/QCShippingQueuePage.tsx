@@ -671,22 +671,38 @@ export default function QCShippingQueuePage() {
         </Card>
       )}
 
-      {/* Action Buttons */}
+      {/* Floating Progression Button */}
       {selectedOrders.size > 0 && (
-        <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-            {selectedOrders.size} orders selected
-          </span>
-          <Button
-            onClick={progressToShipping}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={selectedOrders.size === 0 || progressOrderMutation.isPending}
-          >
-            <ArrowRight className="h-4 w-4 mr-2" />
-            {progressOrderMutation.isPending 
-              ? 'Progressing...' 
-              : `Progress to Shipping (${selectedOrders.size})`}
-          </Button>
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <ArrowRight className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span className="font-medium text-blue-800 dark:text-blue-200">
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for shipping
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedOrders(new Set())}
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={progressToShipping}
+                  disabled={selectedOrders.size === 0 || progressOrderMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {progressOrderMutation.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to Shipping (${selectedOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

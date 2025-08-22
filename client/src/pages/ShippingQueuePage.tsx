@@ -844,14 +844,16 @@ export default function ShippingQueuePage() {
           <BarcodeScanner />
         </div>
 
-        {/* Bulk Actions */}
+        {/* Sticky Bulk Actions */}
         {selectedOrders.length > 0 && (
-          <div className="mb-6">
-            <BulkShippingActions 
-              selectedOrders={selectedOrders}
-              onClearSelection={() => setSelectedOrders([])}
-              shippingOrders={shippingOrders}
-            />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+            <div className="container mx-auto p-4">
+              <BulkShippingActions 
+                selectedOrders={selectedOrders}
+                onClearSelection={() => setSelectedOrders([])}
+                shippingOrders={shippingOrders}
+              />
+            </div>
           </div>
         )}
 

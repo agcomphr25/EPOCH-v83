@@ -421,6 +421,41 @@ export default function ProductionQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Floating Move to Edit Button */}
+      {selectedAttentionOrders.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                <span className="font-medium text-orange-800 dark:text-orange-200">
+                  {selectedAttentionOrders.length} order{selectedAttentionOrders.length > 1 ? 's' : ''} selected for editing
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedAttentionOrders([])}
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={handleMoveToEdit}
+                  disabled={moveToEditMutation.isPending}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  {moveToEditMutation.isPending 
+                    ? 'Moving...' 
+                    : `Move ${selectedAttentionOrders.length} to Edit`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

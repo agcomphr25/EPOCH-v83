@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Settings, ArrowLeft, ArrowRight, ArrowUp, Target, Wrench } from 'lucide-react';
+import { Settings, ArrowLeft, ArrowRight, ArrowUp, Target, Wrench, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -554,6 +554,76 @@ export default function CNCQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Floating Gunsmith Progression Button */}
+      {selectedGunsimthOrders.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <span className="font-medium text-purple-800 dark:text-purple-200">
+                  {selectedGunsimthOrders.size} order{selectedGunsimthOrders.size > 1 ? 's' : ''} selected for Gunsmith
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedGunsimthOrders(new Set())}
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={handleProgressToGunsmith}
+                  disabled={selectedGunsimthOrders.size === 0 || progressToGunsmith.isPending}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {progressToGunsmith.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to Gunsmith (${selectedGunsimthOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Finish Progression Button */}
+      {selectedFinishOrders.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <span className="font-medium text-green-800 dark:text-green-200">
+                  {selectedFinishOrders.size} order{selectedFinishOrders.size > 1 ? 's' : ''} selected for Finish
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedFinishOrders(new Set())}
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={handleProgressToFinish}
+                  disabled={selectedFinishOrders.size === 0 || progressToFinish.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {progressToFinish.isPending 
+                    ? 'Progressing...' 
+                    : `Progress to Finish (${selectedFinishOrders.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

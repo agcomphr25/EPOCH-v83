@@ -101,7 +101,7 @@ export default function CustomerSearchInput({
 
       const response = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
-        body: cleanedData,
+        body: JSON.stringify(cleanedData),
       });
 
       // Create customer address if all required fields are present
@@ -109,12 +109,12 @@ export default function CustomerSearchInput({
         try {
           await apiRequest('/api/addresses', {
             method: 'POST',
-            body: {
+            body: JSON.stringify({
               customerId: response.id.toString(),
               ...customerAddress,
               type: 'both',
               isDefault: true,
-            },
+            }),
           });
         } catch (error) {
           console.error('Failed to create customer address:', error);
@@ -272,64 +272,58 @@ export default function CustomerSearchInput({
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="name" className="text-right">
-                        Name *
-                      </Label>
-                      <Input
-                        id="name"
-                        value={newCustomer.name}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
-                        className="col-span-3"
-                        placeholder="John Smith"
-                      />
+                    {/* Name and Company on same row */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Name *</Label>
+                        <Input
+                          id="name"
+                          value={newCustomer.name}
+                          onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="John Smith"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="company">Company</Label>
+                        <Input
+                          id="company"
+                          value={newCustomer.company}
+                          onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
+                          placeholder="ABC Defense"
+                        />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="company" className="text-right">
-                        Company
-                      </Label>
-                      <Input
-                        id="company"
-                        value={newCustomer.company}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
-                        className="col-span-3"
-                        placeholder="ABC Defense"
-                      />
+                    
+                    {/* Email and Phone on same row */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={newCustomer.email}
+                          onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="john@example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input
+                          id="phone"
+                          value={newCustomer.phone}
+                          onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                          placeholder="555-0123"
+                        />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="email" className="text-right">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={newCustomer.email}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
-                        className="col-span-3"
-                        placeholder="john@example.com"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="phone" className="text-right">
-                        Phone
-                      </Label>
-                      <Input
-                        id="phone"
-                        value={newCustomer.phone}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
-                        className="col-span-3"
-                        placeholder="555-0123"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="notes" className="text-right">
-                        Notes
-                      </Label>
+                    
+                    {/* Notes full width */}
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
                       <Input
                         id="notes"
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
-                        className="col-span-3"
                         placeholder="Additional notes..."
                       />
                     </div>

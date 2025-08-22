@@ -267,35 +267,37 @@ export default function CustomerSearchInput({
                     Add New Customer
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Customer</DialogTitle>
                   </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    {/* Name and Company on same row */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Name *</Label>
-                        <Input
-                          id="name"
-                          value={newCustomer.name}
-                          onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="John Smith"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="company">Company</Label>
-                        <Input
-                          id="company"
-                          value={newCustomer.company}
-                          onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
-                          placeholder="ABC Defense"
-                        />
-                      </div>
+                  <div className="grid gap-6 py-4">
+                    {/* Name - Full width, larger */}
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name *</Label>
+                      <Input
+                        id="name"
+                        value={newCustomer.name}
+                        onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="John Smith"
+                        className="text-base h-12"
+                      />
                     </div>
                     
-                    {/* Email and Phone on same row */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Company - Full width, larger */}
+                    <div className="space-y-2">
+                      <Label htmlFor="company">Company</Label>
+                      <Input
+                        id="company"
+                        value={newCustomer.company}
+                        onChange={(e) => setNewCustomer(prev => ({ ...prev, company: e.target.value }))}
+                        placeholder="ABC Defense"
+                        className="text-base h-12"
+                      />
+                    </div>
+                    
+                    {/* Email and Phone on same row but wider */}
+                    <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
                         <Input
@@ -304,6 +306,7 @@ export default function CustomerSearchInput({
                           value={newCustomer.email}
                           onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
                           placeholder="john@example.com"
+                          className="text-base h-12"
                         />
                       </div>
                       <div className="space-y-2">
@@ -313,6 +316,7 @@ export default function CustomerSearchInput({
                           value={newCustomer.phone}
                           onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
                           placeholder="555-0123"
+                          className="text-base h-12"
                         />
                       </div>
                     </div>
@@ -325,11 +329,12 @@ export default function CustomerSearchInput({
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer(prev => ({ ...prev, notes: e.target.value }))}
                         placeholder="Additional notes..."
+                        className="text-base h-12"
                       />
                     </div>
 
                     {/* Address Field */}
-                    <div className="col-span-4">
+                    <div>
                       <div className="flex items-center gap-2 mb-2">
                         <MapPin className="h-4 w-4 text-gray-500" />
                         <Label>Address (Optional)</Label>

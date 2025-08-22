@@ -111,9 +111,82 @@ export default function ShippingLabelPage() {
           description: `Label created with tracking number: ${labelData.trackingNumber}`,
         });
         
-        // Open label PDF in new window
-        if (labelData.labelUrl) {
-          window.open(labelData.labelUrl, '_blank');
+        // Open label in popup window for printing
+        if (labelData.labelBase64) {
+          // Create a data URL from the Base64 string
+          const dataUrl = `data:image/gif;base64,${labelData.labelBase64}`;
+          
+          // Open popup window
+          const popup = window.open('', '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
+          if (popup) {
+            popup.document.write(`
+              <html>
+                <head>
+                  <title>UPS Shipping Label - Order ${orderId}</title>
+                  <style>
+                    body { 
+                      margin: 0; 
+                      padding: 20px; 
+                      font-family: Arial, sans-serif; 
+                      text-align: center; 
+                      background: #f5f5f5;
+                    }
+                    .label-container { 
+                      background: white; 
+                      padding: 20px; 
+                      border-radius: 8px; 
+                      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                      display: inline-block;
+                    }
+                    img { 
+                      max-width: 100%; 
+                      height: auto; 
+                      border: 1px solid #ddd;
+                    }
+                    .info { 
+                      margin-bottom: 15px; 
+                      color: #333;
+                    }
+                    .print-btn { 
+                      background: #1976d2; 
+                      color: white; 
+                      border: none; 
+                      padding: 10px 20px; 
+                      border-radius: 5px; 
+                      cursor: pointer; 
+                      font-size: 16px;
+                      margin-top: 15px;
+                    }
+                    .print-btn:hover { 
+                      background: #1565c0; 
+                    }
+                    @media print {
+                      body { background: white; padding: 0; }
+                      .label-container { box-shadow: none; padding: 0; }
+                      .print-btn, .info { display: none; }
+                    }
+                  </style>
+                </head>
+                <body>
+                  <div class="label-container">
+                    <div class="info">
+                      <h2>UPS Shipping Label</h2>
+                      <p><strong>Order:</strong> ${orderId}</p>
+                      <p><strong>Tracking:</strong> ${labelData.trackingNumber || 'Generated'}</p>
+                    </div>
+                    <img src="${dataUrl}" alt="UPS Shipping Label" />
+                    <div>
+                      <button class="print-btn" onclick="window.print()">Print Label</button>
+                    </div>
+                  </div>
+                </body>
+              </html>
+            `);
+            popup.document.close();
+            
+            // Auto-focus the popup window
+            popup.focus();
+          }
         }
       } else {
         const error = await response.json();

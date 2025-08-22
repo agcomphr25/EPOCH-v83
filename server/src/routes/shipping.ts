@@ -429,23 +429,21 @@ router.post('/create-label', async (req: Request, res: Response) => {
       receiverAccount,
     };
 
-    // Validate required UPS credentials
-    const upsUsername = process.env.UPS_USERNAME?.trim();
-    const upsPassword = process.env.UPS_PASSWORD?.trim();
-    const upsAccessKey = process.env.UPS_ACCESS_KEY?.trim();
+    // Validate required UPS OAuth credentials (2024+ API)
+    const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+    const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
     const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
     
-    if (!upsUsername || !upsPassword || !upsAccessKey || !upsShipperNumber) {
+    if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
       return res.status(500).json({ 
-        error: 'UPS API credentials not configured. Please set UPS_USERNAME, UPS_PASSWORD, UPS_ACCESS_KEY, and UPS_SHIPPER_NUMBER environment variables.' 
+        error: 'UPS OAuth credentials not configured. Please set UPS_CLIENT_ID, UPS_CLIENT_SECRET, and UPS_SHIPPER_NUMBER environment variables for the new UPS API.' 
       });
     }
 
-    console.log('UPS Credentials check:');
-    console.log('- Username:', upsUsername);
-    console.log('- Access Key:', upsAccessKey);
+    console.log('UPS OAuth Credentials check:');
+    console.log('- Client ID:', upsClientId);
     console.log('- Shipper Number:', upsShipperNumber);
-    console.log('- Password:', upsPassword);
+    console.log('- Client Secret:', upsClientSecret ? '[PROTECTED]' : 'MISSING');
 
     // Get order details for reference
     let order;
@@ -458,47 +456,64 @@ router.post('/create-label', async (req: Request, res: Response) => {
       console.log('Could not fetch order details:', error);
     }
 
-    const payload = buildUPSShipmentPayload(shipmentDetails);
+    // Step 1: Get OAuth Token from UPS (2024+ API requirement)
+    console.log('Getting UPS OAuth token...');
+    let accessToken;
+    try {
+      accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+      console.log('UPS OAuth token acquired successfully');
+    } catch (tokenError: any) {
+      console.error('Failed to get UPS OAuth token:', tokenError.message);
+      return res.status(500).json({ 
+        error: 'Failed to authenticate with UPS OAuth API',
+        details: tokenError.message
+      });
+    }
 
-    // Try both endpoints to determine which is working
-    let upsEndpoint = 'https://wwwcie.ups.com/rest/Ship'; // Test endpoint first
-    console.log('Trying UPS test endpoint first');
+    // Step 2: Build shipment payload for new REST API
+    const payload = buildUPSShipmentPayloadOAuth(shipmentDetails, upsShipperNumber);
+
+    // Use new UPS REST API endpoints (2024+)
+    let upsEndpoint = 'https://wwwcie.ups.com/api/shipments/v1/ship'; // Test endpoint first
+    console.log('Using new UPS OAuth REST API endpoint');
 
     console.log('Creating UPS shipping label for order:', orderId);
     console.log('Using UPS endpoint:', upsEndpoint);
-    console.log('UPS Payload:', JSON.stringify(payload, null, 2));
+    console.log('UPS OAuth Payload:', JSON.stringify(payload, null, 2));
 
-    // UPS API endpoint for shipment creation and label generation
+    // UPS OAuth API call for shipment creation and label generation
     let response;
     try {
-      console.log(`Attempting UPS API call to: ${upsEndpoint}`);
+      console.log(`Attempting UPS OAuth API call to: ${upsEndpoint}`);
       response = await axios.post(upsEndpoint, payload, {
         headers: { 
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         timeout: 30000, // 30 second timeout
       });
-      console.log('UPS API call successful');
+      console.log('UPS OAuth API call successful');
     } catch (initialError: any) {
-      console.log('First endpoint failed, trying production endpoint...');
+      console.log('Test endpoint failed, trying production OAuth endpoint...');
       console.error('Test endpoint error:', initialError.response?.data || initialError.message);
       
-      // Try production endpoint if test fails
-      upsEndpoint = 'https://onlinetools.ups.com/rest/Ship';
-      console.log(`Attempting UPS API call to production: ${upsEndpoint}`);
+      // Try production OAuth endpoint if test fails
+      upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship';
+      console.log(`Attempting UPS OAuth API call to production: ${upsEndpoint}`);
       
       try {
         response = await axios.post(upsEndpoint, payload, {
           headers: { 
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
           timeout: 30000, // 30 second timeout
         });
-        console.log('Production UPS API call successful');
+        console.log('Production UPS OAuth API call successful');
       } catch (productionError: any) {
-        console.error('Production endpoint also failed:', productionError.response?.data || productionError.message);
+        console.error('Production OAuth endpoint also failed:', productionError.response?.data || productionError.message);
         throw productionError; // Re-throw the production error
       }
     }
@@ -507,10 +522,12 @@ router.post('/create-label', async (req: Request, res: Response) => {
       throw new Error('No response from UPS API');
     }
 
-    // UPS returns the label as a Base64 string
-    const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-    const trackingNumber = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber;
-    const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    // UPS OAuth API returns the label in new format
+    const shipmentResults = response.data?.ShipmentResponse?.ShipmentResults;
+    const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage || 
+                       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+    const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+    const shipmentCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
 
     if (labelBase64 && trackingNumber) {
       // Update order with tracking information
@@ -751,5 +768,133 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
     });
   }
 });
+
+// UPS OAuth 2.0 Authentication (2024+ API)
+async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
+  const tokenEndpoint = process.env.NODE_ENV === 'production' 
+    ? 'https://onlinetools.ups.com/security/v1/oauth/token'
+    : 'https://wwwcie.ups.com/security/v1/oauth/token';
+    
+  console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
+  
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  
+  try {
+    const response = await axios.post(tokenEndpoint, 
+      'grant_type=client_credentials',
+      {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        },
+        timeout: 15000
+      }
+    );
+    
+    console.log('OAuth token response status:', response.status);
+    
+    if (response.data?.access_token) {
+      return response.data.access_token;
+    } else {
+      throw new Error('No access token in response');
+    }
+  } catch (error: any) {
+    console.error('OAuth token error details:', error.response?.data || error.message);
+    throw new Error(`Failed to get UPS OAuth token: ${error.response?.data?.error_description || error.message}`);
+  }
+}
+
+// Build UPS shipment payload for OAuth REST API (2024+)
+function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: string): any {
+  return {
+    "ShipmentRequest": {
+      "Request": {
+        "RequestOption": "nonvalidate",
+        "TransactionReference": {
+          "CustomerContext": `Order ${shipmentDetails.orderId}`
+        }
+      },
+      "Shipment": {
+        "Description": `Order ${shipmentDetails.orderId} - Manufacturing Product`,
+        "Shipper": {
+          "Name": "AG Composites",
+          "AttentionName": "Shipping Department",
+          "CompanyDisplayableName": "AG Composites",
+          "Phone": {
+            "Number": "5127467639"
+          },
+          "ShipperNumber": shipperNumber,
+          "Address": {
+            "AddressLine": ["16628 US Hwy 290 E"],
+            "City": "Elgin",
+            "StateProvinceCode": "TX",
+            "PostalCode": "78621",
+            "CountryCode": "US"
+          }
+        },
+        "ShipTo": {
+          "Name": shipmentDetails.shipToAddress.name,
+          "AttentionName": shipmentDetails.shipToAddress.name,
+          "Address": {
+            "AddressLine": [shipmentDetails.shipToAddress.street],
+            "City": shipmentDetails.shipToAddress.city,
+            "StateProvinceCode": shipmentDetails.shipToAddress.state,
+            "PostalCode": shipmentDetails.shipToAddress.zipCode.replace(/\D/g, ''),
+            "CountryCode": shipmentDetails.shipToAddress.country || "US"
+          }
+        },
+        "PaymentInformation": {
+          "ShipmentCharge": {
+            "Type": "01",
+            "BillShipper": {
+              "AccountNumber": shipperNumber
+            }
+          }
+        },
+        "Service": {
+          "Code": "03"  // UPS Ground
+        },
+        "Package": {
+          "Description": `Order ${shipmentDetails.orderId}`,
+          "Packaging": {
+            "Code": "02"  // Customer Supplied Package
+          },
+          "Dimensions": {
+            "UnitOfMeasurement": {
+              "Code": "IN"
+            },
+            "Length": shipmentDetails.packageDimensions.length.toString(),
+            "Width": shipmentDetails.packageDimensions.width.toString(),
+            "Height": shipmentDetails.packageDimensions.height.toString()
+          },
+          "PackageWeight": {
+            "UnitOfMeasurement": {
+              "Code": "LBS"
+            },
+            "Weight": shipmentDetails.packageWeight.toString()
+          }
+        },
+        "ShipmentServiceOptions": {
+          "Notification": {
+            "NotificationCode": "6",
+            "EMail": {
+              "UndeliverableEMailAddress": "shipping@agcomposites.com"
+            }
+          }
+        },
+        "LabelSpecification": {
+          "LabelImageFormat": {
+            "Code": "GIF"
+          },
+          "LabelStockSize": {
+            "Height": "6",
+            "Width": "4"
+          }
+        }
+      }
+    }
+  };
+}
 
 export default router;

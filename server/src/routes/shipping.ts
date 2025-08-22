@@ -31,8 +31,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(order.customerId);
-        addresses = await storage.getCustomerAddresses(order.customerId);
+        customer = await storage.getCustomer(parseInt(order.customerId));
+        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -503,53 +503,54 @@ router.post('/create-label', async (req: Request, res: Response) => {
       }
     }
 
-      // UPS returns the label as a Base64 string
-      const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-      const trackingNumber = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber;
-      const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+    if (!response) {
+      throw new Error('No response from UPS API');
+    }
 
-      if (labelBase64 && trackingNumber) {
-        // Update order with tracking information
-        if (order) {
+    // UPS returns the label as a Base64 string
+    const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
+    const trackingNumber = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentIdentificationNumber;
+    const shipmentCost = response.data?.ShipmentResponse?.ShipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
+
+    if (labelBase64 && trackingNumber) {
+      // Update order with tracking information
+      if (order) {
+        try {
+          const updateData = {
+            trackingNumber,
+            shippingCarrier: 'UPS',
+            shippingMethod: getServiceName('03'),
+            shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
+            labelGenerated: true,
+            labelGeneratedAt: new Date(),
+          };
+
+          // Try updating finalized order first, fall back to draft
           try {
-            const updateData = {
-              trackingNumber,
-              shippingCarrier: 'UPS',
-              shippingMethod: getServiceName('03'),
-              shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
-              labelGenerated: true,
-              labelGeneratedAt: new Date(),
-            };
-
-            // Try updating finalized order first, fall back to draft
-            try {
-              await storage.updateFinalizedOrder(orderId, updateData);
-            } catch (error) {
-              await storage.updateOrderDraft(orderId, updateData);
-            }
-          } catch (updateError) {
-            console.error('Failed to update order with tracking info:', updateError);
-            // Don't fail the entire request
+            await storage.updateFinalizedOrder(orderId, updateData);
+          } catch (error) {
+            await storage.updateOrderDraft(orderId, updateData);
           }
+        } catch (updateError) {
+          console.error('Failed to update order with tracking info:', updateError);
+          // Don't fail the entire request
         }
-
-        res.json({
-          success: true,
-          labelBase64,
-          trackingNumber,
-          shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
-          orderId,
-          message: 'Shipping label created successfully'
-        });
-      } else {
-        console.error('UPS API response missing required fields:', response.data);
-        res.status(500).json({ 
-          error: 'No label or tracking number returned from UPS.',
-          details: response.data 
-        });
       }
-    } catch (upsError: any) {
-      throw upsError; // Re-throw to be caught by outer catch
+
+      res.json({
+        success: true,
+        labelBase64,
+        trackingNumber,
+        shipmentCost: shipmentCost ? parseFloat(shipmentCost) : null,
+        orderId,
+        message: 'Shipping label created successfully'
+      });
+    } else {
+      console.error('UPS API response missing required fields:', response.data);
+      res.status(500).json({ 
+        error: 'No label or tracking number returned from UPS.',
+        details: response.data 
+      });
     }
   } catch (error: any) {
     console.error('UPS API error:', error.response?.data || error.message);
@@ -739,7 +740,7 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
       success: true,
       message: 'UPS shipment creation successful',
       trackingNumber: result.trackingNumber,
-      labelData: result.labelData ? 'Generated' : 'None'
+      labelBase64: result.labelBase64 ? 'Generated' : 'None'
     });
   } catch (error) {
     console.error('❌ UPS shipment creation failed:', error);

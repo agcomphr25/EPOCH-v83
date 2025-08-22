@@ -5616,6 +5616,7 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
+        shippedDate: new Date(), // Set shipped date to current date when fulfilled
         updatedAt: new Date()
       })
       .where(eq(allOrders.orderId, orderId))
@@ -5625,7 +5626,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Order with ID ${orderId} not found`);
     }
 
-    console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management`);
+    console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
     return order;
   }
 

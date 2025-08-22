@@ -817,12 +817,12 @@ export default function ShippingQueuePage() {
               variant="default"
               onClick={(e) => {
                 e.stopPropagation();
-                // Add fulfill order functionality here
-                console.log('Fulfilling order:', order.orderId);
+                fulfillOrderMutation.mutate(order.orderId);
               }}
-              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 text-white"
+              disabled={fulfillOrderMutation.isPending}
+              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
             >
-              ✅ Fulfilled
+              {fulfillOrderMutation.isPending ? '⏳' : '✅'} Fulfilled
             </Button>
           </div>
         </CardContent>

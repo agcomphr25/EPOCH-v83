@@ -43,7 +43,10 @@ const creditCardPaymentSchema = z.object({
 // Process credit card payment
 router.post('/credit-card', async (req, res) => {
   try {
+    console.log('🔄 Payment request received for body:', JSON.stringify(req.body, null, 2));
     const paymentData = creditCardPaymentSchema.parse(req.body);
+    console.log('💰 Processing payment for order:', paymentData.orderId, 'amount:', paymentData.amount);
+    console.log('🔑 Credentials check:', { hasApiLoginId: !!apiLoginId, hasTransactionKey: !!transactionKey, isTestMode });
     
     if (!apiLoginId || !transactionKey) {
       return res.status(500).json({ 
@@ -143,17 +146,26 @@ router.post('/credit-card', async (req, res) => {
 
     // Set up controller
     const ctrl = new apiControllers.CreateTransactionController(createRequest.getJSON());
+    console.log('🌐 Setting up Authorize.Net controller, test mode:', isTestMode);
     
     // Use sandbox for testing
     if (isTestMode) {
       ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
+      console.log('🧪 Using sandbox environment');
     }
 
-    // Execute transaction
+    // Execute transaction with timeout
     return new Promise((resolve, reject) => {
+      // Add timeout to prevent hanging
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Payment processing timeout - please try again'));
+      }, 30000); // 30 second timeout
+
       ctrl.execute(() => {
-        const apiResponse = ctrl.getResponse();
-        const response = new apiContracts.CreateTransactionResponse(apiResponse);
+        clearTimeout(timeoutId);
+        try {
+          const apiResponse = ctrl.getResponse();
+          const response = new apiContracts.CreateTransactionResponse(apiResponse);
         
         // Parse response
         const resultCode = response.getMessages().getResultCode();
@@ -174,8 +186,15 @@ router.post('/credit-card', async (req, res) => {
           authCode = transactionResponse.getAuthCode();
           transactionId = transactionResponse.getTransId();
           responseCode = transactionResponse.getResponseCode();
-          responseReasonCode = transactionResponse.getMessages().getMessage()[0].getCode();
-          responseReasonText = transactionResponse.getMessages().getMessage()[0].getDescription();
+          
+          // Safely get messages if they exist
+          if (transactionResponse.getMessages() && transactionResponse.getMessages().getMessage() && transactionResponse.getMessages().getMessage().length > 0) {
+            responseReasonCode = transactionResponse.getMessages().getMessage()[0].getCode();
+            responseReasonText = transactionResponse.getMessages().getMessage()[0].getDescription();
+          } else {
+            // Fallback for transactions without detailed messages
+            responseReasonText = `Transaction ${responseCode === '1' ? 'approved' : 'declined'}`;
+          }
           
           if (transactionResponse.getAvsResultCode()) {
             avsResult = transactionResponse.getAvsResultCode();
@@ -210,6 +229,11 @@ router.post('/credit-card', async (req, res) => {
           res.status(500).json({ error: 'Failed to save transaction result' });
           reject(error);
         });
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error('Error parsing Authorize.Net response:', error);
+          reject(error);
+        }
       });
     });
 

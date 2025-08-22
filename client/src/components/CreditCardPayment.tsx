@@ -86,7 +86,7 @@ export default function CreditCardPayment({
     mutationFn: async (data: CreditCardFormData) => {
       return await apiRequest('/api/payments/credit-card', {
         method: 'POST',
-        body: data,
+        body: data as any,
       });
     },
     onSuccess: (result) => {

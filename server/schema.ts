@@ -405,7 +405,7 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   orderId: text("order_id").notNull(),
   transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
   authCode: text("auth_code"), // Authorization code from Authorize.Net
-  responseCode: text("response_code").notNull(), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review
+  responseCode: text("response_code"), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
   responseReasonCode: text("response_reason_code"), // Detailed reason code
   responseReasonText: text("response_reason_text"), // Human readable response
   avsResult: text("avs_result"), // Address Verification Service result

@@ -44,8 +44,10 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
     credentials: 'include', // Include cookies for session-based auth
   };
 
-  if (options.body && typeof options.body === 'object' && !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')) {
+  if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData) && !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')) {
     config.body = JSON.stringify(options.body);
+  } else if (typeof options.body === 'string') {
+    config.body = options.body;
   }
 
   const response = await fetch(fullUrl, config);

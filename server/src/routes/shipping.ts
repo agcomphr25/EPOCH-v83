@@ -102,7 +102,9 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
     const allOrders = [...finalizedOrders, ...draftOrders];
     const shippingOrders = allOrders.filter((order: any) => 
       order.currentDepartment === 'Shipping' ||
+      order.currentDepartment === 'Shipping Management' ||
       order.status === 'Ready for Shipping' ||
+      order.status === 'FULFILLED' ||
       (order.qcCompletedAt && !order.shippedDate) ||
       (order.currentDepartment === 'QC' && order.qcPassed)
     );

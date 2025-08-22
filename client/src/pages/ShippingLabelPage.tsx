@@ -444,10 +444,10 @@ export default function ShippingLabelPage() {
         <div className="mt-6 flex gap-4 justify-end">
           <Button 
             variant="outline" 
-            onClick={() => setLocation('/shipping')}
+            onClick={() => setLocation('/departments/shipping')}
             className="px-6"
           >
-            Cancel
+            Back to Shipping Department
           </Button>
           <Button 
             onClick={generateShippingLabel}

@@ -35,7 +35,7 @@ const creditCardPaymentSchema = z.object({
     zip: z.string().min(5, "ZIP code is required"),
     country: z.string().default("US"),
   }),
-  customerEmail: z.string().email().optional(),
+  customerEmail: z.string().email().optional().or(z.literal("")),
   taxAmount: z.number().min(0).default(0),
   shippingAmount: z.number().min(0).default(0),
 });

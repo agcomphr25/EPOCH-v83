@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowRight, Search, Package, User, Calendar, FileText, AlertTriangle, Edit, Eye, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/queryClient';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'react-hot-toast';
 
 export default function ProductionQueuePage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,19 +89,12 @@ export default function ProductionQueuePage() {
       return Promise.all(promises);
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: `${selectedOrders.length} orders moved to Layup department`,
-      });
+      toast.success(`${selectedOrders.length} orders moved to Layup department`);
       setSelectedOrders([]);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/department'] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to progress orders",
-        variant: "destructive",
-      });
+      toast.error('Failed to progress orders');
       console.error('Error progressing orders:', error);
     },
   });
@@ -120,19 +113,12 @@ export default function ProductionQueuePage() {
       return Promise.all(promises);
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: `${selectedAttentionOrders.length} orders moved to draft for editing`,
-      });
+      toast.success(`${selectedAttentionOrders.length} orders moved to draft for editing`);
       setSelectedAttentionOrders([]);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/department'] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to move orders to draft",
-        variant: "destructive",
-      });
+      toast.error('Failed to move orders to draft');
       console.error('Error moving orders to draft:', error);
     },
   });

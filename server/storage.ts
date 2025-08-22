@@ -5385,19 +5385,21 @@ export class DatabaseStorage implements IStorage {
 
   // Create a finalized order directly (bypassing draft process)
   async createFinalizedOrder(orderData: InsertOrderDraft, finalizedBy?: string): Promise<AllOrder> {
-    // CRITICAL: Prevent orders with "None" stock model from going to Production Queue
-    if (!orderData.modelId || orderData.modelId.toLowerCase() === 'none' || orderData.modelId.toLowerCase().trim() === '') {
-      console.log(`❌ CREATE BLOCKED: Order ${orderData.orderId} has stock model "${orderData.modelId}" - cannot send to Production Queue`);
-      throw new Error(`Cannot create order ${orderData.orderId}: Orders with "None" or empty stock model cannot be sent to Production Queue. Please select a valid stock model.`);
+    // Special handling for orders with no stock model - route directly to Shipping QC
+    const hasNoStockModel = !orderData.modelId || orderData.modelId.toLowerCase() === 'none' || orderData.modelId.toLowerCase().trim() === '';
+    
+    let currentDepartment: string;
+    let barcode: string;
+    
+    if (hasNoStockModel) {
+      console.log(`🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`);
+      currentDepartment = 'Shipping QC';
+      barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
+    } else {
+      console.log(`✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`);
+      currentDepartment = 'P1 Production Queue';
+      barcode = orderData.barcode || `P1-${orderData.orderId}`;
     }
-
-    console.log(`✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`);
-
-    // Generate barcode if not provided
-    const barcode = orderData.barcode || `P1-${orderData.orderId}`;
-
-    // Set default currentDepartment to P1 Production Queue (not Layup)
-    const currentDepartment = 'P1 Production Queue';
 
     // Create the finalized order data directly
     const finalizedOrderData: InsertAllOrder = {

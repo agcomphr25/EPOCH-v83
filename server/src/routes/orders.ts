@@ -761,15 +761,24 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
     
+    // Special handling for orders with no stock model - they bypass manufacturing and go to Shipping QC
+    const hasNoStockModel = !existingOrder.modelId || existingOrder.modelId.trim() === '';
+    
     // If no nextDepartment provided, calculate it automatically
     let targetDepartment = nextDepartment;
     if (!targetDepartment) {
-      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
-      if (currentIndex >= 0 && currentIndex < departments.length - 1) {
-        targetDepartment = departments[currentIndex + 1];
+      // Orders with no stock model should skip manufacturing departments
+      if (hasNoStockModel && existingOrder.currentDepartment === 'P1 Production Queue') {
+        targetDepartment = 'Shipping QC';
+        console.log(`🚀 Order ${orderId} has no stock model - routing directly to Shipping QC`);
       } else {
-        console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
-        return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
+        const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+        if (currentIndex >= 0 && currentIndex < departments.length - 1) {
+          targetDepartment = departments[currentIndex + 1];
+        } else {
+          console.error(`❌ Cannot determine next department for ${existingOrder.currentDepartment}`);
+          return res.status(400).json({ error: `Invalid current department: ${existingOrder.currentDepartment}` });
+        }
       }
     }
 

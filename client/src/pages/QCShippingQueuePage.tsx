@@ -43,7 +43,31 @@ export default function QCShippingQueuePage() {
       (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     );
     
+    // Separate orders with stock models from orders without stock models
+    const regularOrders = filteredOrders.filter((order: any) => 
+      order.modelId && order.modelId.trim() !== '' && order.modelId.toLowerCase() !== 'none'
+    );
+    
     // Sort orders by due date
+    return regularOrders.sort((a: any, b: any) => {
+      const dateA = new Date(a.dueDate);
+      const dateB = new Date(b.dueDate);
+      return dateA.getTime() - dateB.getTime();
+    });
+  }, [allOrders]);
+
+  // Get orders with no stock model - these are special handling orders
+  const noStockModelOrders = useMemo(() => {
+    const orders = allOrders as any[];
+    const filteredOrders = orders.filter((order: any) => 
+      (order.currentDepartment === 'Shipping QC' || 
+       order.currentDepartment === 'QC' || 
+       (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
+       (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')) &&
+      (!order.modelId || order.modelId.trim() === '' || order.modelId.toLowerCase() === 'none')
+    );
+    
+    // Sort by due date
     return filteredOrders.sort((a: any, b: any) => {
       const dateA = new Date(a.dueDate);
       const dateB = new Date(b.dueDate);
@@ -612,6 +636,40 @@ export default function QCShippingQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* No Stock Model Orders - Special Handling Queue */}
+      {noStockModelOrders.length > 0 && (
+        <Card className="border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="h-6 w-6 text-purple-600" />
+                <span className="text-purple-700 dark:text-purple-300">Special Handling Orders (No Stock Model)</span>
+              </div>
+              <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300">
+                {noStockModelOrders.length} Orders
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4">
+              <p className="text-sm text-purple-600 dark:text-purple-400">
+                These orders have no stock model selected and require special handling before shipping.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {noStockModelOrders.map((order: any) => (
+                <OrderCard 
+                  key={order.orderId} 
+                  order={order} 
+                  borderColor="border-l-purple-500" 
+                  dueDateColor="text-purple-600"
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Action Buttons */}
       {selectedOrders.size > 0 && (

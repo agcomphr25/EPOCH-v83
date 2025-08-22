@@ -1016,13 +1016,15 @@ export default function CustomerManagement() {
             // Update existing address
             await apiRequest(`/api/addresses/${existingAddress.id}`, {
               method: 'PUT',
-              body: addressData
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(addressData)
             });
           } else {
             // Create new address
             await apiRequest('/api/addresses', {
               method: 'POST',
-              body: addressData
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(addressData)
             });
           }
           
@@ -1142,6 +1144,7 @@ export default function CustomerManagement() {
     setAddressFormData({
       customerId: address.customerId.toString(),
       street: address.street,
+      street2: address.street2 || '',
       city: address.city,
       state: address.state,
       zipCode: address.zipCode,
@@ -1259,7 +1262,8 @@ export default function CustomerManagement() {
       // Send to our customer CSV import endpoint
       const result = await apiRequest('/api/customers/import/csv', {
         method: 'POST',
-        body: { csvData: csvString },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvData: csvString }),
       });
 
       setIsProcessingCSV(false);

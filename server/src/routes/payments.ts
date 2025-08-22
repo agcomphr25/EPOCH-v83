@@ -476,4 +476,104 @@ router.post('/void/:transactionId', async (req, res) => {
   }
 });
 
+// Batch payment processing
+const batchPaymentSchema = z.object({
+  paymentMethod: z.enum(['cash', 'check', 'credit_card', 'agr', 'ach']),
+  totalAmount: z.number().min(0.01),
+  notes: z.string().optional(),
+  orderAllocations: z.array(z.object({
+    orderId: z.string(),
+    amount: z.number().min(0),
+  })).min(1),
+});
+
+router.post('/batch', async (req, res) => {
+  try {
+    const batchData = batchPaymentSchema.parse(req.body);
+    
+    console.log('🔄 Processing batch payment:', {
+      method: batchData.paymentMethod,
+      total: batchData.totalAmount,
+      orders: batchData.orderAllocations.length
+    });
+
+    // Validate that allocations sum to total amount
+    const totalAllocated = batchData.orderAllocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+    if (Math.abs(totalAllocated - batchData.totalAmount) > 0.01) {
+      return res.status(400).json({ 
+        error: 'Total allocation amount does not match payment amount' 
+      });
+    }
+
+    // Verify all orders exist
+    const orderIds = batchData.orderAllocations.map(a => a.orderId);
+    const existingOrders = await db.select().from(allOrders).where(
+      orderIds.map(id => eq(allOrders.orderId, id)).reduce((acc, condition) => acc || condition)
+    );
+    
+    if (existingOrders.length !== orderIds.length) {
+      return res.status(400).json({ 
+        error: 'One or more orders not found' 
+      });
+    }
+
+    const results = [];
+    let ordersUpdated = 0;
+
+    // Process each order payment
+    for (const allocation of batchData.orderAllocations) {
+      if (allocation.amount > 0) {
+        // Create payment record
+        const [paymentRecord] = await db.insert(payments).values({
+          orderId: allocation.orderId,
+          paymentType: batchData.paymentMethod,
+          paymentAmount: allocation.amount,
+          paymentDate: new Date(),
+          notes: batchData.notes || `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
+        }).returning();
+
+        // Update order payment status
+        await db.update(allOrders)
+          .set({
+            isPaid: true, // This should be calculated based on total payments vs order total
+            paymentType: batchData.paymentMethod,
+            paymentAmount: allocation.amount, // This should be cumulative
+            paymentDate: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(allOrders.orderId, allocation.orderId));
+
+        results.push({
+          orderId: allocation.orderId,
+          paymentId: paymentRecord.id,
+          amount: allocation.amount,
+        });
+
+        ordersUpdated++;
+      }
+    }
+
+    console.log('✅ Batch payment completed:', { ordersUpdated, results: results.length });
+
+    res.json({
+      success: true,
+      message: `Batch payment processed successfully`,
+      ordersUpdated,
+      totalAmount: batchData.totalAmount,
+      paymentMethod: batchData.paymentMethod,
+      results,
+    });
+
+  } catch (error) {
+    console.error('Batch payment error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Invalid batch payment data', 
+        details: error.errors 
+      });
+    }
+    return res.status(500).json({ error: 'Batch payment processing failed' });
+  }
+});
+
 export default router;

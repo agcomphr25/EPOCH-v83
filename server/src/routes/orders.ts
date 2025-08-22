@@ -44,6 +44,17 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
   }
 });
 
+// Get unpaid/partially paid orders for batch payment processing
+router.get('/unpaid', async (req: Request, res: Response) => {
+  try {
+    const unpaidOrders = await storage.getUnpaidOrders();
+    res.json(unpaidOrders);
+  } catch (error) {
+    console.error('Error retrieving unpaid orders:', error);
+    res.status(500).json({ error: "Failed to fetch unpaid orders", details: (error as any).message });
+  }
+});
+
 // Get pipeline counts for all departments (must be before :orderId route)
 router.get('/pipeline-counts', async (req: Request, res: Response) => {
   try {

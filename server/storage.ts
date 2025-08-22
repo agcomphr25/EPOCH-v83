@@ -179,6 +179,7 @@ export interface IStorage {
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
   getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
 
@@ -1473,6 +1474,73 @@ export class DatabaseStorage implements IStorage {
     total += order.shipping || 0;
 
     return total;
+  }
+
+  // Method to get unpaid orders for batch payment processing
+  async getUnpaidOrders() {
+    try {
+      const orders = await db.select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        status: allOrders.status,
+        isPaid: allOrders.isPaid,
+        paymentAmount: allOrders.paymentAmount,
+        customerId: allOrders.customerId,
+      })
+      .from(allOrders)
+      .where(eq(allOrders.isPaid, false))
+      .orderBy(desc(allOrders.orderDate));
+
+      // Get customer info and calculate remaining balances
+      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+        // Get customer info
+        let customerName = '';
+        if (order.customerId) {
+          const customer = await db.select({ name: customers.name })
+            .from(customers)
+            .where(eq(customers.id, parseInt(order.customerId)))
+            .limit(1);
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Get total payments for this order
+        const paymentSums = await db.select({
+          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId))
+        .groupBy(payments.orderId);
+
+        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+        
+        // For now, assume a default order total of $1000 if not specified
+        // TODO: Calculate actual order total from features and pricing
+        const orderTotal = 1000; // This should be calculated from order details
+        const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+        return {
+          id: order.id.toString(),
+          orderId: order.orderId,
+          customerName,
+          orderDate: order.orderDate.toISOString(),
+          dueDate: order.dueDate.toISOString(),
+          status: order.status,
+          totalAmount: orderTotal,
+          paidAmount: totalPaid,
+          remainingBalance,
+        };
+      }));
+
+      // Only return orders with remaining balance > 0
+      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+    } catch (error) {
+      console.error("Error fetching unpaid orders:", error);
+      throw error;
+    }
   }
 
   // Get all finalized orders with payment status

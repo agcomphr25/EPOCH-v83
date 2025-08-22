@@ -19,6 +19,7 @@ import {
   Eye
 } from 'lucide-react';
 import CreditCardPayment from '@/components/CreditCardPayment';
+import BatchPayment from '@/components/BatchPayment';
 
 interface Payment {
   payment: {
@@ -253,6 +254,7 @@ export default function PaymentManagement() {
           <TabsList>
             <TabsTrigger value="all-payments">All Payments</TabsTrigger>
             <TabsTrigger value="search-order">Search by Order</TabsTrigger>
+            <TabsTrigger value="batch-payment">Batch Payment</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all-payments" className="space-y-6">
@@ -336,6 +338,10 @@ export default function PaymentManagement() {
                 ) : null}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="batch-payment" className="space-y-6">
+            <BatchPayment onPaymentSuccess={() => handlePaymentSuccess()} />
           </TabsContent>
         </Tabs>
       </div>

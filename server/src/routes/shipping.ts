@@ -465,8 +465,8 @@ router.post('/create-label', async (req: Request, res: Response) => {
     // Step 2: Build shipment payload for new REST API
     const payload = buildUPSShipmentPayloadOAuth(shipmentDetails, upsShipperNumber);
 
-    // Use new UPS REST API endpoints (2024+)
-    let upsEndpoint = 'https://wwwcie.ups.com/api/shipments/v1/ship'; // Test endpoint first
+    // Use UPS Production REST API endpoints (2024+) for real tracking numbers
+    let upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship'; // Production endpoint for real tracking
     console.log('Using new UPS OAuth REST API endpoint');
 
     console.log('Creating UPS shipping label for order:', orderId);
@@ -486,28 +486,9 @@ router.post('/create-label', async (req: Request, res: Response) => {
         timeout: 30000, // 30 second timeout
       });
       console.log('UPS OAuth API call successful');
-    } catch (initialError: any) {
-      console.log('Test endpoint failed, trying production OAuth endpoint...');
-      console.error('Test endpoint error:', initialError.response?.data || initialError.message);
-      
-      // Try production OAuth endpoint if test fails
-      upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship';
-      console.log(`Attempting UPS OAuth API call to production: ${upsEndpoint}`);
-      
-      try {
-        response = await axios.post(upsEndpoint, payload, {
-          headers: { 
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          timeout: 30000, // 30 second timeout
-        });
-        console.log('Production UPS OAuth API call successful');
-      } catch (productionError: any) {
-        console.error('Production OAuth endpoint also failed:', productionError.response?.data || productionError.message);
-        throw productionError; // Re-throw the production error
-      }
+    } catch (error: any) {
+      console.error('UPS Production OAuth endpoint failed:', error.response?.data || error.message);
+      throw error; // Re-throw the error for handling
     }
 
     if (!response) {
@@ -763,9 +744,8 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
 
 // UPS OAuth 2.0 Authentication (2024+ API)
 async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise<string> {
-  const tokenEndpoint = process.env.NODE_ENV === 'production' 
-    ? 'https://onlinetools.ups.com/security/v1/oauth/token'
-    : 'https://wwwcie.ups.com/security/v1/oauth/token';
+  // Use production OAuth endpoint for real tracking numbers
+  const tokenEndpoint = 'https://onlinetools.ups.com/security/v1/oauth/token';
     
   console.log('UPS OAuth Token Endpoint:', tokenEndpoint);
   

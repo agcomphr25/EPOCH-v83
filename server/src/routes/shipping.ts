@@ -460,23 +460,48 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
     const payload = buildUPSShipmentPayload(shipmentDetails);
 
-    // Try production endpoint with new credentials
-    const upsEndpoint = 'https://onlinetools.ups.com/rest/Ship'; // Production endpoint
-    console.log('Trying UPS production endpoint with new credentials');
+    // Try both endpoints to determine which is working
+    let upsEndpoint = 'https://wwwcie.ups.com/rest/Ship'; // Test endpoint first
+    console.log('Trying UPS test endpoint first');
 
     console.log('Creating UPS shipping label for order:', orderId);
     console.log('Using UPS endpoint:', upsEndpoint);
     console.log('UPS Payload:', JSON.stringify(payload, null, 2));
 
     // UPS API endpoint for shipment creation and label generation
+    let response;
     try {
-      const response = await axios.post(upsEndpoint, payload, {
+      console.log(`Attempting UPS API call to: ${upsEndpoint}`);
+      response = await axios.post(upsEndpoint, payload, {
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         timeout: 30000, // 30 second timeout
       });
+      console.log('UPS API call successful');
+    } catch (initialError: any) {
+      console.log('First endpoint failed, trying production endpoint...');
+      console.error('Test endpoint error:', initialError.response?.data || initialError.message);
+      
+      // Try production endpoint if test fails
+      upsEndpoint = 'https://onlinetools.ups.com/rest/Ship';
+      console.log(`Attempting UPS API call to production: ${upsEndpoint}`);
+      
+      try {
+        response = await axios.post(upsEndpoint, payload, {
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 30000, // 30 second timeout
+        });
+        console.log('Production UPS API call successful');
+      } catch (productionError: any) {
+        console.error('Production endpoint also failed:', productionError.response?.data || productionError.message);
+        throw productionError; // Re-throw the production error
+      }
+    }
 
       // UPS returns the label as a Base64 string
       const labelBase64 = response.data?.ShipmentResponse?.ShipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;

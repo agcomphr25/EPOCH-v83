@@ -268,7 +268,7 @@ export function registerRoutes(app: Express): Server {
       `);
 
       // Format the direct production orders
-      const directProductionOrders = directProductionOrdersResult.rows.map((po: any) => ({
+      const directProductionOrders = (directProductionOrdersResult?.rows || []).map((po: any) => ({
         id: po.poId,
         orderId: po.orderId,
         orderDate: po.order_date,

@@ -244,10 +244,57 @@ export function registerRoutes(app: Express): Server {
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
+      // Directly fetch Mesa Universal production orders from production_orders table
+      const directProductionOrdersResult = await pool.query(`
+        SELECT 
+          po.order_id as "orderId",
+          po.customer_name as customer,
+          po.item_name as product,
+          po.date,
+          po.due_date as "dueDate",
+          po.current_department as "currentDepartment",
+          po.status,
+          po.po_number as "poNumber",
+          po.id as "poId",
+          po.id as "productionOrderId",
+          'production_order' as source
+        FROM production_orders po
+        LEFT JOIN layup_schedule ls ON po.order_id = ls.order_id
+        WHERE po.current_department = 'P1 Production Queue' 
+          AND ls.order_id IS NULL
+          AND po.status = 'IN_PROGRESS'
+          AND po.item_name LIKE '%Mesa%Universal%'
+        ORDER BY po.due_date ASC
+      `);
+
+      // Format the direct production orders
+      const directProductionOrders = directProductionOrdersResult.rows.map((po: any) => ({
+        id: po.poId,
+        orderId: po.orderId,
+        orderDate: po.date,
+        dueDate: po.dueDate,
+        currentDepartment: po.currentDepartment,
+        customerId: po.customer,
+        features: {},
+        modelId: 'mesa_universal',  // Set directly for Mesa Universal
+        stockModelId: 'mesa_universal',
+        product: po.product,
+        status: po.status,
+        source: po.source,  // This will be 'production_order'
+        poNumber: po.poNumber,
+        poId: po.poId,
+        productionOrderId: po.productionOrderId,
+        priorityScore: calculatePriorityScore(po.dueDate || po.date)
+      }));
+
+      console.log(`🏭 Found ${directProductionOrders.length} Mesa Universal production orders`);
+
       // Combine both order types into unified production queue with enhanced stock model inference
-      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total orders for P1 layup queue`);
+      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${directProductionOrders.length} production orders for P1 layup queue`);
       
       const combinedQueue = [
+        // Add the direct production orders first
+        ...directProductionOrders,
         ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
           // Only treat as production_order if it has poId or productionOrderId
@@ -1013,7 +1060,7 @@ export function registerRoutes(app: Express): Server {
           currentDepartment: po.currentDepartment || 'P1 Production Queue',
           priorityScore: priorityScore,
           dueDate: po.dueDate,
-          source: 'p1_purchase_order' as const, // Mark as P1 purchase order origin
+          source: 'production_order' as const, // Mark as production order for purple styling
           poId: po.poId,
           poItemId: po.poItemId,
           productionOrderId: po.id,
@@ -1419,7 +1466,7 @@ export function registerRoutes(app: Express): Server {
             currentDepartment: 'Layup',
             priorityScore: priorityScore,
             dueDate: po.expectedDelivery,
-            source: 'p1_purchase_order' as const,
+            source: 'production_order' as const,
             poId: po.id,
             poItemId: item.id,
             stockModelId: item.itemId, // Use item ID as stock model

@@ -3211,7 +3211,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Production Orders CRUD
-  async getAllProductionOrders(): Promise<ProductionOrder[]>;
   async getAllProductionOrders(): Promise<ProductionOrder[]> {
     return await db
       .select()

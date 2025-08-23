@@ -121,9 +121,17 @@ router.get('/current-week', async (req: Request, res: Response) => {
         o.fb_order_number as fbOrderNumber,
         o.modelId as stockModelId,
         o.customerId as customerId,
-        c.customer_name as customerName
+        c.customer_name as customerName,
+        po.po_number as poNumber,
+        po.id as poId,
+        po.id as productionOrderId,
+        CASE 
+          WHEN po.order_id IS NOT NULL THEN 'production_order'
+          ELSE 'main_orders'
+        END as source
       FROM layup_schedule ls
-      LEFT JOIN all_orders o ON ls.order_id = o.order_id OR ls.order_id = o.orderId
+      LEFT JOIN all_orders o ON ls.order_id = o.order_id
+      LEFT JOIN production_orders po ON ls.order_id = po.order_id
       LEFT JOIN customers c ON o.customerId = c.id
       WHERE ls.scheduled_date >= $1 AND ls.scheduled_date <= $2
       ORDER BY ls.scheduled_date ASC

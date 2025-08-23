@@ -2836,18 +2836,32 @@ export default function LayupScheduler() {
       return aDueDate - bDueDate;
     });
 
-    // Get compatible molds for an order
+    // Get compatible molds for an order - ENHANCED LOGGING
     const getCompatibleMolds = (order: any) => {
       const modelId = order.stockModelId || order.modelId;
+      
+      // DEBUG: Log what we're looking for
+      console.log(`🔍 MOLD MATCH: Order ${order.orderId} looking for model "${modelId}"`);
+      
       const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
         if (!mold.stockModels || mold.stockModels.length === 0) return true;
-        return mold.stockModels.includes(modelId);
+        
+        const hasMatch = mold.stockModels.includes(modelId);
+        
+        // DEBUG: Log specific mold checking for Mesa Universal
+        if (modelId === 'mesa_universal' || mold.moldId.includes('Mesa')) {
+          console.log(`🔍 MESA MOLD CHECK: ${mold.moldId} stockModels=[${mold.stockModels.join(', ')}] → Match: ${hasMatch}`);
+        }
+        
+        return hasMatch;
       });
 
       if (compatibleMolds.length === 0) {
         console.warn(`❌ No compatible molds for order ${order.orderId} with model ${modelId}`);
-        console.warn('Available molds:', molds.filter(m => m.enabled).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+        console.warn('Available Mesa molds:', molds.filter(m => m.enabled && m.moldId.includes('Mesa')).map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
+      } else if (modelId === 'mesa_universal') {
+        console.log(`✅ MESA MATCH: Order ${order.orderId} found ${compatibleMolds.length} compatible Mesa molds: ${compatibleMolds.map(m => m.moldId).join(', ')}`);
       }
 
       return compatibleMolds;

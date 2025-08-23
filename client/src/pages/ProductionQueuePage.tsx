@@ -35,13 +35,15 @@ export default function ProductionQueuePage() {
     if (order.features) {
       const features = typeof order.features === 'string' ? JSON.parse(order.features) : order.features;
       
-      // Check for missing action length
-      if (!features.action_length || features.action_length === '' || features.action_length === 'None') {
+      // Check for missing action length (except for Tikka models)
+      const modelId = order.modelId || '';
+      const isTikkaModel = modelId.toLowerCase().includes('tikka');
+      
+      if (!isTikkaModel && (!features.action_length || features.action_length === '' || features.action_length === 'None')) {
         reasons.push('Missing action length');
       }
       
       // Check for missing material type (CF/FG)
-      const modelId = order.modelId || '';
       const isCF = modelId.includes('cf_') || modelId.includes('carbon');
       const isFG = modelId.includes('fg_') || modelId.includes('fiberglass');
       if (!isCF && !isFG && !modelId.includes('mesa_universal')) {

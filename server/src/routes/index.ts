@@ -217,7 +217,7 @@ export function registerRoutes(app: Express): Server {
       const formattedActiveOrders = activeOrders.map(order => ({
         id: order.id,
         orderId: order.orderId,
-        orderDate: order.date, // Fixed: use 'date' column not 'order_date'
+        orderDate: order.orderDate || order.date, // Use orderDate field or fallback to date
         dueDate: order.dueDate,
         currentDepartment: order.currentDepartment,
         customerId: order.customer,

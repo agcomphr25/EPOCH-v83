@@ -25,7 +25,6 @@ import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
-import surveyRoutes from './surveys';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -99,8 +98,6 @@ export function registerRoutes(app: Express): Server {
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
   
-  // Survey management routes
-  app.use('/api/surveys', surveyRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

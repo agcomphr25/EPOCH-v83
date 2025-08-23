@@ -18,8 +18,6 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Customer satisfaction surveys
-  surveys,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -44,8 +42,6 @@ import {
   type UserSession, type InsertUserSession,
   type EmployeeDocument, type InsertEmployeeDocument,
   type EmployeeAuditLog, type InsertEmployeeAuditLog,
-  // Survey types
-  type Survey, type InsertSurvey,
   type QcDefinition, type InsertQcDefinition,
   type QcSubmission, InsertQcSubmission,
   type MaintenanceSchedule, type InsertMaintenanceSchedule,
@@ -585,13 +581,6 @@ export interface IStorage {
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
 
-  // Survey Methods
-  createSurvey(survey: InsertSurvey): Promise<Survey>;
-  updateSurvey(id: number, update: Partial<InsertSurvey>): Promise<Survey | null>;
-  getSurvey(id: number): Promise<Survey | null>;
-  getSurveys(filters?: any): Promise<Survey[]>;
-  deleteSurvey(id: number): Promise<boolean>;
-  getSurveyAnalytics(filters?: any): Promise<any>;
 
   // Add methods for finalized orders
   getAllFinalizedOrders(): Promise<AllOrder[]>;
@@ -5821,164 +5810,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Survey Methods Implementation
-  async createSurvey(survey: InsertSurvey): Promise<Survey> {
-    try {
-      const [newSurvey] = await db.insert(surveys).values(survey).returning();
-      return newSurvey;
-    } catch (error) {
-      console.error("Error creating survey:", error);
-      throw error;
-    }
-  }
-
-  async updateSurvey(id: number, update: Partial<InsertSurvey>): Promise<Survey | null> {
-    try {
-      const [updatedSurvey] = await db
-        .update(surveys)
-        .set(update)
-        .where(eq(surveys.id, id))
-        .returning();
-      return updatedSurvey || null;
-    } catch (error) {
-      console.error("Error updating survey:", error);
-      throw error;
-    }
-  }
-
-  async getSurvey(id: number): Promise<Survey | null> {
-    try {
-      const survey = await db.select().from(surveys).where(eq(surveys.id, id)).limit(1);
-      return survey[0] || null;
-    } catch (error) {
-      console.error("Error fetching survey:", error);
-      throw error;
-    }
-  }
-
-  async getSurveys(filters?: any): Promise<Survey[]> {
-    try {
-      let query = db.select().from(surveys);
-      
-      if (filters) {
-        const conditions = [];
-        
-        if (filters.customerId) {
-          conditions.push(eq(surveys.customerId, filters.customerId));
-        }
-        if (filters.orderId) {
-          conditions.push(eq(surveys.orderId, filters.orderId));
-        }
-        if (filters.status) {
-          conditions.push(eq(surveys.status, filters.status));
-        }
-        if (filters.npsType) {
-          conditions.push(eq(surveys.npsType, filters.npsType));
-        }
-        if (filters.dateFrom) {
-          conditions.push(gte(surveys.surveyDate, new Date(filters.dateFrom)));
-        }
-        if (filters.dateTo) {
-          conditions.push(lte(surveys.surveyDate, new Date(filters.dateTo)));
-        }
-
-        if (conditions.length > 0) {
-          query = query.where(and(...conditions));
-        }
-      }
-
-      return await query.orderBy(desc(surveys.surveyDate));
-    } catch (error) {
-      console.error("Error fetching surveys:", error);
-      throw error;
-    }
-  }
-
-  async deleteSurvey(id: number): Promise<boolean> {
-    try {
-      const result = await db.delete(surveys).where(eq(surveys.id, id));
-      return true;
-    } catch (error) {
-      console.error("Error deleting survey:", error);
-      return false;
-    }
-  }
-
-  async getSurveyAnalytics(filters?: any): Promise<any> {
-    try {
-      // Basic analytics queries
-      const allSurveys = await this.getSurveys(filters);
-      
-      if (allSurveys.length === 0) {
-        return {
-          avgCsat: 0,
-          nps: 0,
-          issuePct: 0,
-          csatByWeek: [],
-          npsBuckets: [
-            { type: 'Detractor', count: 0 },
-            { type: 'Passive', count: 0 },
-            { type: 'Promoter', count: 0 }
-          ],
-          csatByModel: []
-        };
-      }
-
-      // Calculate averages
-      const avgCsat = allSurveys.reduce((sum, s) => sum + s.csatScore, 0) / allSurveys.length;
-      
-      // Calculate NPS
-      const detractors = allSurveys.filter(s => s.nps <= 6).length;
-      const promoters = allSurveys.filter(s => s.nps >= 9).length;
-      const nps = Math.round(((promoters - detractors) / allSurveys.length) * 100);
-      
-      // Calculate issue percentage
-      const issueCount = allSurveys.filter(s => s.issueExperienced).length;
-      const issuePct = issueCount / allSurveys.length;
-
-      // NPS buckets
-      const npsBuckets = [
-        { type: 'Detractor', count: detractors },
-        { type: 'Passive', count: allSurveys.filter(s => s.nps === 7 || s.nps === 8).length },
-        { type: 'Promoter', count: promoters }
-      ];
-
-      // CSAT by stock model
-      const modelGroups = allSurveys.reduce((acc, survey) => {
-        const model = survey.stockModel || 'Unknown';
-        if (!acc[model]) {
-          acc[model] = [];
-        }
-        acc[model].push(survey.csatScore);
-        return acc;
-      }, {} as Record<string, number[]>);
-
-      const csatByModel = Object.entries(modelGroups).map(([model, scores]) => ({
-        model,
-        avg: scores.reduce((sum, score) => sum + score, 0) / scores.length
-      }));
-
-      // CSAT by week (simplified - using survey date)
-      const csatByWeek = allSurveys
-        .slice(0, 12) // Last 12 surveys as weeks
-        .map((survey, index) => ({
-          week: `Week ${index + 1}`,
-          avg: survey.csatScore
-        }));
-
-      return {
-        avgCsat,
-        nps,
-        issuePct,
-        csatByWeek,
-        npsBuckets,
-        csatByModel
-      };
-    } catch (error) {
-      console.error("Error generating survey analytics:", error);
-      throw error;
-    }
-  }
 
 }
 

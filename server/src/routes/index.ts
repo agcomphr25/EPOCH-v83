@@ -250,7 +250,7 @@ export function registerRoutes(app: Express): Server {
           po.order_id as "orderId",
           po.customer_name as customer,
           po.item_name as product,
-          po.date,
+          po.order_date,
           po.due_date as "dueDate",
           po.current_department as "currentDepartment",
           po.status,
@@ -271,7 +271,7 @@ export function registerRoutes(app: Express): Server {
       const directProductionOrders = directProductionOrdersResult.rows.map((po: any) => ({
         id: po.poId,
         orderId: po.orderId,
-        orderDate: po.date,
+        orderDate: po.order_date,
         dueDate: po.dueDate,
         currentDepartment: po.currentDepartment,
         customerId: po.customer,
@@ -284,7 +284,7 @@ export function registerRoutes(app: Express): Server {
         poNumber: po.poNumber,
         poId: po.poId,
         productionOrderId: po.productionOrderId,
-        priorityScore: calculatePriorityScore(po.dueDate || po.date)
+        priorityScore: calculatePriorityScore(po.dueDate || po.order_date)
       }));
 
       console.log(`🏭 Found ${directProductionOrders.length} Mesa Universal production orders`);

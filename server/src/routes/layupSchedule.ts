@@ -120,7 +120,7 @@ router.get('/current-week', async (req: Request, res: Response) => {
         ls.is_override as isOverride,
         o.fb_order_number as fbOrderNumber,
         o.modelId as stockModelId,
-        o.customerId as customerId,
+        o.customer_id as customerId,
         c.customer_name as customerName,
         po.po_number as poNumber,
         po.id as poId,
@@ -132,7 +132,7 @@ router.get('/current-week', async (req: Request, res: Response) => {
       FROM layup_schedule ls
       LEFT JOIN all_orders o ON ls.order_id = o.order_id
       LEFT JOIN production_orders po ON ls.order_id = po.order_id
-      LEFT JOIN customers c ON o.customerId = c.id
+      LEFT JOIN customers c ON o.customer_id = c.id::text
       WHERE ls.scheduled_date >= $1 AND ls.scheduled_date <= $2
       ORDER BY ls.scheduled_date ASC
     `;

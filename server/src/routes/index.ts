@@ -1583,9 +1583,7 @@ export function registerRoutes(app: Express): Server {
               sourcePoNumber: purchaseOrder.poNumber,
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery
-            },
-            createdAt: new Date(),
-            updatedAt: new Date()
+            }
           };
 
           console.log('🏭 Production order data before creation:', JSON.stringify(productionOrderData, null, 2));

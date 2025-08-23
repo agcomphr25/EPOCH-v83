@@ -1143,6 +1143,14 @@ export default function LayupScheduler() {
 
   // Include all orders from the production queue (regular orders, Mesa production orders, P1 purchase orders)
   const orders = useMemo(() => {
+    // CRITICAL MESA UNIVERSAL DEBUGGING
+    const mesaUniversalOrders = allOrders?.filter(order => order.modelId === 'mesa_universal') || [];
+    console.log('🏔️ MESA UNIVERSAL DEBUG:', {
+      totalOrders: allOrders?.length || 0,
+      mesaUniversalCount: mesaUniversalOrders.length,
+      mesaOrders: mesaUniversalOrders.slice(0, 3).map(o => ({ orderId: o.orderId, modelId: o.modelId, product: o.product }))
+    });
+    
     console.log('🔍 LayupScheduler orders debug:', {
       allOrdersCount: allOrders?.length || 0,
       loading: ordersLoading,
@@ -1156,11 +1164,15 @@ export default function LayupScheduler() {
       sampleOrders: allOrders?.slice(0, 3)?.map(o => ({ id: o.orderId, product: o.product, source: o.source }))
     });
 
-    // If we have no orders but backend shows 1008, there's a data loading issue
+    // If we have no orders but backend shows orders, there's a data loading issue
     if (!allOrders || allOrders.length === 0) {
       console.error('❌ LayupScheduler: No orders loaded from useUnifiedLayupOrders');
-      console.error('❌ Backend shows 1008 orders but frontend received empty array');
+      console.error('❌ Backend shows orders but frontend received empty array');
     }
+
+    // CRITICAL: Check Mesa Universal orders before returning
+    const finalMesaCount = allOrders?.filter(order => order.modelId === 'mesa_universal').length || 0;
+    console.log(`🏔️ FINAL ORDERS: Returning ${allOrders?.length || 0} total orders, ${finalMesaCount} are Mesa Universal`);
 
     // Return ALL orders from the production queue - no filtering by source
     return allOrders || [];

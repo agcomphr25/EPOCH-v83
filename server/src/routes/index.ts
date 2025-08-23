@@ -245,6 +245,8 @@ export function registerRoutes(app: Express): Server {
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
       // Combine both order types into unified production queue with enhanced stock model inference
+      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total orders for P1 layup queue`);
+      
       const combinedQueue = [
         ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
@@ -256,6 +258,11 @@ export function registerRoutes(app: Express): Server {
             ...order,
             source: sourceType
           });
+          
+          // DEBUG: Log Mesa Universal orders specifically
+          if (stockModelId === 'mesa_universal') {
+            console.log(`🏔️ MESA ORDER: ${order.orderId} → ${stockModelId} (source: ${sourceType})`);
+          }
           
           return {
             ...order,
@@ -269,6 +276,10 @@ export function registerRoutes(app: Express): Server {
           };
         })
       ];
+      
+      // Count Mesa Universal orders in final result
+      const mesaCount = combinedQueue.filter(order => order.modelId === 'mesa_universal').length;
+      console.log(`🏔️ FINAL MESA COUNT: ${mesaCount} Mesa Universal orders in P1 layup queue API response`);
       
       // Sort by priority score (lower = higher priority)
       combinedQueue.sort((a, b) => a.priorityScore - b.priorityScore);

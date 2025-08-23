@@ -1563,6 +1563,8 @@ export function registerRoutes(app: Express): Server {
         for (let i = 0; i < item.quantity; i++) {
           const productionOrderData = {
             orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
+            customerId: purchaseOrder.customerId.toString(), // Add required customer_id
+            customerName: purchaseOrder.customerName, // Add customer name
             partName: item.itemId,
             quantity: 1, // Individual units for scheduling
             department: 'Layup' as const, // Start at Layup department

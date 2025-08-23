@@ -1565,22 +1565,21 @@ export function registerRoutes(app: Express): Server {
             orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
             customerId: purchaseOrder.customerId.toString(), // Add required customer_id
             customerName: purchaseOrder.customerName, // Add customer name
-            partName: item.itemId,
-            quantity: 1, // Individual units for scheduling
-            department: 'Layup' as const, // Start at Layup department
-            status: 'PENDING' as const,
-            priority: 3, // Default priority
+            poNumber: purchaseOrder.poNumber, // Add PO number
+            itemType: 'stock_model' as const, // Add item type
+            itemId: item.itemId, // Add item ID
+            itemName: item.itemId, // Add item name (using itemId as name)
+            orderDate: new Date(), // Add order date
             dueDate: (() => {
               const expectedDue = purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate);
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
+            productionStatus: 'PENDING' as const, // Use correct field name
+            currentDepartment: 'Layup' as const, // Use correct field name
+            status: 'IN_PROGRESS' as const, // Set status
             poId: poId, // P1 purchase order ID
             poItemId: item.id, // P1 purchase order item ID
-            sku: item.itemId,
-            stockModelId: item.itemId,
-            bomDefinitionId: 0,
-            bomItemId: 0,
             specifications: {
               ...(item.specifications || {}),
               sourcePoNumber: purchaseOrder.poNumber,
@@ -1591,6 +1590,7 @@ export function registerRoutes(app: Express): Server {
             updatedAt: new Date()
           };
 
+          console.log('🏭 Production order data before creation:', JSON.stringify(productionOrderData, null, 2));
           const createdOrder = await storage.createProductionOrder(productionOrderData);
           createdOrders.push(createdOrder);
 

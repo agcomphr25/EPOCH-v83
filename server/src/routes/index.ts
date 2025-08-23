@@ -1544,6 +1544,15 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const poId = parseInt(req.params.id);
 
+      // Check if production orders already exist for this PO
+      const existingOrders = await storage.getProductionOrdersByPoId(poId);
+      if (existingOrders.length > 0) {
+        return res.status(409).json({ 
+          error: `Production orders already exist for this PO (${existingOrders.length} orders found). Cannot generate duplicates.`,
+          existingCount: existingOrders.length
+        });
+      }
+
       // Get the purchase order details
       const purchaseOrder = await storage.getPurchaseOrder(poId);
       if (!purchaseOrder) {

@@ -83,18 +83,117 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   );
 }
 
-// Hook to check if production orders exist for a PO
-function useHasProductionOrders(poId: number) {
+// Component for individual PO card to safely use hooks
+function POCard({ po, onEdit, onDelete, onViewItems, onCalculateSchedule, onGenerateProductionOrders, isGeneratingOrders }: {
+  po: PurchaseOrder;
+  onEdit: (po: PurchaseOrder) => void;
+  onDelete: (id: number) => void;
+  onViewItems: (po: PurchaseOrder) => void;
+  onCalculateSchedule: (id: number) => void;
+  onGenerateProductionOrders: (id: number) => void;
+  isGeneratingOrders: boolean;
+}) {
   const { data: productionOrders = [], isLoading } = useQuery({
-    queryKey: [`/api/production-orders/by-po/${poId}`],
-    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`)
+    queryKey: [`/api/production-orders/by-po/${po.id}`],
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${po.id}`)
   });
 
-  return {
-    hasOrders: productionOrders.length > 0,
-    orderCount: productionOrders.length,
-    isLoading
+  const hasOrders = productionOrders.length > 0;
+  const orderCount = productionOrders.length;
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'OPEN': return 'bg-green-100 text-green-800';
+      case 'CLOSED': return 'bg-gray-100 text-gray-800';
+      case 'CANCELED': return 'bg-red-100 text-red-800';
+      default: return 'bg-blue-100 text-blue-800';
+    }
   };
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{po.poNumber}</CardTitle>
+            <CardDescription className="mt-1">
+              {po.customerName} ({po.customerId})
+            </CardDescription>
+            <div className="mt-2">
+              <POQuantityDisplay poId={po.id} />
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Badge className={getStatusColor(po.status)}>
+              {po.status}
+            </Badge>
+            <ProductionStatusBadge poId={po.id} />
+            <div className="flex gap-1 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onViewItems(po)}
+                className="flex items-center gap-1"
+              >
+                <Package className="w-4 h-4" />
+                Manage Items
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(po)}
+                title="Edit PO Details"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onCalculateSchedule(po.id)}
+                >
+                  Calculate Schedule
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onGenerateProductionOrders(po.id)}
+                  disabled={isGeneratingOrders || hasOrders}
+                  title={hasOrders ? `Production orders already exist (${orderCount} orders)` : 'Generate production orders from this PO'}
+                >
+                  {isGeneratingOrders ? 'Generating...' : hasOrders ? `Orders Generated (${orderCount})` : 'Generate Production Orders'}
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDelete(po.id)}
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="font-medium">PO Date:</span> {new Date(po.poDate).toLocaleDateString()}
+          </div>
+          <div>
+            <span className="font-medium">Expected Delivery:</span> {new Date(po.expectedDelivery).toLocaleDateString()}
+          </div>
+        </div>
+        {po.notes && (
+          <div className="mt-3 pt-3 border-t">
+            <span className="font-medium text-sm">Notes:</span> {po.notes}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 interface Customer {
@@ -597,94 +696,18 @@ export default function POManager() {
                 {searchTerm || statusFilter !== 'ALL' ? 'No purchase orders match your search.' : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
               </div>
             ) : (
-              filteredPOs.map((po) => {
-                const { hasOrders, orderCount, isLoading: ordersLoading } = useHasProductionOrders(po.id);
-                
-                return (
-                <Card key={po.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{po.poNumber}</CardTitle>
-                        <CardDescription className="mt-1">
-                          {po.customerName} ({po.customerId})
-                        </CardDescription>
-                        <div className="mt-2">
-                          <POQuantityDisplay poId={po.id} />
-                        </div>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <Badge className={getStatusColor(po.status)}>
-                          {po.status}
-                        </Badge>
-                        <ProductionStatusBadge poId={po.id} />
-                        <div className="flex gap-1 flex-wrap">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewItems(po)}
-                            className="flex items-center gap-1"
-                          >
-                            <Package className="w-4 h-4" />
-                            Manage Items
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(po)}
-                            title="Edit PO Details"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleCalculateSchedule(po.id)}
-                            >
-                              Calculate Schedule
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleGenerateProductionOrders(po.id)}
-                              disabled={isGeneratingOrders || hasOrders}
-                              title={hasOrders ? `Production orders already exist (${orderCount} orders)` : 'Generate production orders from this PO'}
-                            >
-                              {isGeneratingOrders ? 'Generating...' : hasOrders ? `Orders Generated (${orderCount})` : 'Generate Production Orders'}
-                            </Button>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(po.id)}
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium">PO Date:</span> {new Date(po.poDate).toLocaleDateString()}
-                      </div>
-                      <div>
-                        <span className="font-medium">Expected Delivery:</span> {new Date(po.expectedDelivery).toLocaleDateString()}
-                      </div>
-                    </div>
-                    {po.notes && (
-                      <div className="mt-3 pt-3 border-t">
-                        <span className="font-medium text-sm">Notes:</span> {po.notes}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                );
-              })
+              filteredPOs.map((po) => (
+                <POCard 
+                  key={po.id}
+                  po={po}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onViewItems={handleViewItems}
+                  onCalculateSchedule={handleCalculateSchedule}
+                  onGenerateProductionOrders={handleGenerateProductionOrders}
+                  isGeneratingOrders={isGeneratingOrders}
+                />
+              ))
             )}
           </div>
         </div>

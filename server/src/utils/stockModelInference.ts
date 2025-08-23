@@ -5,8 +5,9 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
   let stockModelId = order.stockModelId || order.modelId;
   let product = 'Unknown Product';
   
-  // FIXED: Only check for Mesa Precision Summit if no valid model ID exists
+  // CRITICAL FIX: Only check for Mesa Precision Summit if no valid model ID exists
   // Don't override existing valid model IDs like 'privateer-tikka'
+  // IMPORTANT: Be very strict about Mesa Universal classification to prevent over-classification
   if (!stockModelId && order.features && typeof order.features === 'object') {
     const features = order.features;
     
@@ -33,8 +34,8 @@ export function inferStockModelFromFeatures(order: any): { stockModelId: string;
     return { stockModelId, product };
   }
   
-  // Then check if it's a mesa order from production orders
-  if ((order.source === 'mesa_production_order' || order.source === 'p1_purchase_order') && order.itemName?.includes('Mesa')) {
+  // STRICT: Only classify as Mesa if explicitly Mesa production order with Mesa in itemName
+  if (order.source === 'mesa_production_order' && order.itemName?.toLowerCase().includes('mesa')) {
     stockModelId = 'mesa_universal';
     product = 'Mesa Universal';
     console.log(`🎯 MESA INFERENCE: ${order.orderId || order.order_id} → Mesa Universal (itemName: ${order.itemName})`);

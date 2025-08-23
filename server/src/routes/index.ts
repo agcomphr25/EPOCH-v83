@@ -1614,6 +1614,21 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get Production Orders by PO ID
+  app.get('/api/production-orders/by-po/:poId', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.poId);
+      
+      const productionOrders = await storage.getProductionOrdersByPoId(poId);
+      
+      res.json(productionOrders);
+    } catch (error) {
+      console.error('🔧 Get production orders by PO error:', error);
+      res.status(500).json({ error: "Failed to fetch production orders" });
+    }
+  });
+
   // P1 Production Schedule Calculation
   app.post('/api/pos/:id/calculate-production-schedule', async (req, res) => {
     try {

@@ -42,6 +42,47 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
+// Component to display production status badge
+function ProductionStatusBadge({ poId }: { poId: number }) {
+  const { data: productionOrders = [], isLoading } = useQuery({
+    queryKey: [`/api/production-orders/by-po/${poId}`],
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`)
+  });
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (productionOrders.length === 0) {
+    return null; // No production orders yet
+  }
+
+  const totalOrders = productionOrders.length;
+  const pendingOrders = productionOrders.filter((order: any) => order.productionStatus === 'PENDING').length;
+  const laidUpOrders = productionOrders.filter((order: any) => order.productionStatus === 'LAID_UP').length;
+  const shippedOrders = productionOrders.filter((order: any) => order.productionStatus === 'SHIPPED').length;
+
+  let badgeColor = "bg-blue-100 text-blue-800";
+  let statusText = "In Production";
+  
+  if (shippedOrders === totalOrders) {
+    badgeColor = "bg-green-100 text-green-800";
+    statusText = "Shipped";
+  } else if (laidUpOrders > 0) {
+    badgeColor = "bg-yellow-100 text-yellow-800"; 
+    statusText = "In Progress";
+  } else {
+    badgeColor = "bg-blue-100 text-blue-800";
+    statusText = "Scheduled";
+  }
+
+  return (
+    <Badge className={badgeColor}>
+      {statusText} ({totalOrders})
+    </Badge>
+  );
+}
+
 interface Customer {
   id: number;
   name: string;
@@ -555,10 +596,11 @@ export default function POManager() {
                           <POQuantityDisplay poId={po.id} />
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Badge className={getStatusColor(po.status)}>
                           {po.status}
                         </Badge>
+                        <ProductionStatusBadge poId={po.id} />
                         <div className="flex gap-1 flex-wrap">
                           <Button
                             variant="outline"

@@ -3246,6 +3246,15 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
+  async getProductionOrdersByPoId(poId: number): Promise<ProductionOrder[]> {
+    const orders = await db
+      .select()
+      .from(productionOrders)
+      .where(eq(productionOrders.poId, poId))
+      .orderBy(productionOrders.createdAt);
+    return orders;
+  }
+
   async createProductionOrder(data: InsertProductionOrder): Promise<ProductionOrder> {
     const [order] = await db.insert(productionOrders).values(data).returning();
     return order;

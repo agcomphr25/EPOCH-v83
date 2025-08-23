@@ -200,14 +200,40 @@ export function registerRoutes(app: Express): Server {
       await cleanupOrphanedLayupScheduleEntries(storage);
       
       // Get all orders that haven't entered production yet (P1 Production Queue)
+      // Include both finalized orders and active production orders
       const allOrders = await storage.getAllOrders();
       const unscheduledOrders = allOrders.filter(order => 
         order.currentDepartment === 'P1 Production Queue'
       );
       
+      // Also get active orders from the orders table (for P1 PO production orders)
+      const { db } = await import('../../db');
+      const { orders } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const activeOrders = await db.select().from(orders).where(eq(orders.currentDepartment, 'P1 Production Queue'));
+      
+      // Convert active orders to the expected format and combine
+      const formattedActiveOrders = activeOrders.map(order => ({
+        id: order.id,
+        orderId: order.orderId,
+        orderDate: order.date,
+        dueDate: order.dueDate,
+        currentDepartment: order.currentDepartment,
+        customerId: order.customer,
+        features: {},
+        modelId: order.product,
+        status: order.status,
+        poId: null,
+        productionOrderId: null
+      }));
+      
+      // Combine both sources  
+      const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
+      
       // Combine both order types into unified production queue with enhanced stock model inference
       const combinedQueue = [
-        ...unscheduledOrders.map(order => {
+        ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
           // Only treat as production_order if it has poId or productionOrderId
           // customerPO field is unreliable - often contains customer names instead of PO numbers

@@ -1438,6 +1438,11 @@ export default function LayupScheduler() {
         return [];
       }
 
+      // CRITICAL DEBUG: Enhanced logging for Mesa Universal
+      if (modelId === 'mesa_universal' || order.orderId === 'AG1563') {
+        console.log(`🏔️ MESA DEBUG: Order ${order.orderId} → Stock model: ${modelId} → Source: ${order.source}`);
+      }
+
       console.log(`🔍 Checking compatibility for Order ${order.orderId} with stock model: ${modelId}`);
 
       const compatibleMolds = molds.filter(mold => {
@@ -1453,6 +1458,8 @@ export default function LayupScheduler() {
         // MESA UNIVERSAL RESTRICTION: Mesa Universal orders can ONLY use Mesa Universal molds
         if (modelId === 'mesa_universal') {
           const isMesaMold = mold.stockModels.includes('mesa_universal');
+          console.log(`🏔️ MESA MOLD CHECK: ${order.orderId} checking mold ${mold.moldId} → Stock models: [${mold.stockModels.join(', ')}] → Mesa compatible: ${isMesaMold}`);
+          
           if (isMesaMold) {
             console.log(`✅ MESA UNIVERSAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
             return true;

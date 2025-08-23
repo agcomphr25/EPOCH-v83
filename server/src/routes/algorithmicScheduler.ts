@@ -73,13 +73,33 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     const activeMolds = moldsResult || [];
     console.log(`🏭 Found ${activeMolds.length} active molds`);
 
-    // Helper function for exact stock model matching
+    // Helper function for flexible stock model matching
     const findExactMatchingMolds = (stockModelId: string) => {
+      const normalizedStockModel = stockModelId.toLowerCase().replace(/[\s\-]/g, '_');
+      const isMesaUniversal = normalizedStockModel.includes('mesa_universal') || 
+                              normalizedStockModel.includes('mesauniversal');
+      
       return activeMolds.filter((mold: any) => {
         const moldStockModels = mold.stock_models || [];
+        
+        // For Mesa Universal orders, allow them to use any compatible mold
+        if (isMesaUniversal) {
+          // Mesa Universal can use:
+          // 1. Mesa Universal specific molds
+          // 2. Universal/generic molds  
+          // 3. Any mold that accepts "universal" orders
+          return moldStockModels.some((moldModel: string) => {
+            const normalizedMoldModel = moldModel.toLowerCase().replace(/[\s\-]/g, '_');
+            return normalizedMoldModel.includes('mesa_universal') ||
+                   normalizedMoldModel.includes('universal') ||
+                   normalizedMoldModel.includes('regular') ||
+                   moldStockModels.length === 0; // Empty stock models = accepts all
+          });
+        }
+        
+        // For non-Mesa Universal orders, use exact matching
         return moldStockModels.some((moldModel: string) => {
           const normalizedMoldModel = moldModel.toLowerCase().replace(/[\s\-]/g, '_');
-          const normalizedStockModel = stockModelId.toLowerCase().replace(/[\s\-]/g, '_');
           return normalizedMoldModel === normalizedStockModel;
         });
       });

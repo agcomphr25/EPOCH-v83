@@ -1562,32 +1562,32 @@ export function registerRoutes(app: Express): Server {
         // Create individual production orders for each quantity
         for (let i = 0; i < item.quantity; i++) {
           const productionOrderData = {
-            orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
-            customerId: purchaseOrder.customerId.toString(), // Add required customer_id
-            customerName: purchaseOrder.customerName, // Add customer name
-            poNumber: purchaseOrder.poNumber, // Add PO number
-            itemType: 'stock_model' as const, // Add item type
-            itemId: item.itemId, // Add item ID
-            itemName: item.itemId, // Add item name (using itemId as name)
-            orderDate: new Date(), // Add order date
-            dueDate: (() => {
+            order_id: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
+            customer_id: purchaseOrder.customerId.toString(),
+            customer_name: purchaseOrder.customerName,
+            po_number: purchaseOrder.poNumber,
+            item_type: 'stock_model' as const,
+            item_id: item.itemId,
+            item_name: item.itemId,
+            order_date: new Date(),
+            due_date: (() => {
               const expectedDue = purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate);
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
-            productionStatus: 'PENDING' as const, // Use correct field name
-            currentDepartment: 'Layup' as const, // Use correct field name
-            status: 'IN_PROGRESS' as const, // Set status
-            poId: poId, // P1 purchase order ID
-            poItemId: item.id, // P1 purchase order item ID
+            production_status: 'PENDING' as const,
+            current_department: 'Layup' as const,
+            status: 'IN_PROGRESS' as const,
+            po_id: poId,
+            po_item_id: item.id,
             specifications: {
               ...(item.specifications || {}),
               sourcePoNumber: purchaseOrder.poNumber,
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery
             },
-            createdAt: new Date(),
-            updatedAt: new Date()
+            created_at: new Date(),
+            updated_at: new Date()
           };
 
           console.log('🏭 Production order data before creation:', JSON.stringify(productionOrderData, null, 2));

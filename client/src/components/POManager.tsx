@@ -83,6 +83,20 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   );
 }
 
+// Hook to check if production orders exist for a PO
+function useHasProductionOrders(poId: number) {
+  const { data: productionOrders = [], isLoading } = useQuery({
+    queryKey: [`/api/production-orders/by-po/${poId}`],
+    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`)
+  });
+
+  return {
+    hasOrders: productionOrders.length > 0,
+    orderCount: productionOrders.length,
+    isLoading
+  };
+}
+
 interface Customer {
   id: number;
   name: string;
@@ -583,7 +597,10 @@ export default function POManager() {
                 {searchTerm || statusFilter !== 'ALL' ? 'No purchase orders match your search.' : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
               </div>
             ) : (
-              filteredPOs.map((po) => (
+              filteredPOs.map((po) => {
+                const { hasOrders, orderCount, isLoading: ordersLoading } = useHasProductionOrders(po.id);
+                
+                return (
                 <Card key={po.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
@@ -632,9 +649,10 @@ export default function POManager() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleGenerateProductionOrders(po.id)}
-                              disabled={isGeneratingOrders}
+                              disabled={isGeneratingOrders || hasOrders}
+                              title={hasOrders ? `Production orders already exist (${orderCount} orders)` : 'Generate production orders from this PO'}
                             >
-                              {isGeneratingOrders ? 'Generating...' : 'Generate Production Orders'}
+                              {isGeneratingOrders ? 'Generating...' : hasOrders ? `Orders Generated (${orderCount})` : 'Generate Production Orders'}
                             </Button>
                           </div>
                           <Button
@@ -665,7 +683,8 @@ export default function POManager() {
                     )}
                   </CardContent>
                 </Card>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -2351,6 +2351,45 @@ export const documentCollectionRelations = pgTable("document_collection_relation
   pk: { primaryKey: table.collectionId, documentId: table.documentId },
 }));
 
+// Customer Satisfaction Surveys
+export const surveys = pgTable("surveys", {
+  id: serial("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  orderId: text("order_id"), // Optional - can be null if general feedback
+  stockModel: text("stock_model"),
+  surveyDate: date("survey_date").notNull(),
+  
+  // Likert scale ratings (1-5)
+  overall: integer("overall").notNull(),
+  quality: integer("quality").notNull(),
+  communications: integer("communications").notNull(),
+  onTime: integer("on_time").notNull(),
+  value: integer("value").notNull(),
+  
+  // Net Promoter Score (0-10)
+  nps: integer("nps").notNull(),
+  npsType: text("nps_type").notNull(), // 'Detractor', 'Passive', 'Promoter'
+  
+  // Calculated scores
+  csatScore: real("csat_score").notNull(), // Average of Likert ratings
+  totalScore: real("total_score").notNull(), // Weighted combined score
+  
+  // Issues and feedback
+  issueExperienced: boolean("issue_experienced").default(false),
+  issueDetails: text("issue_details"),
+  comments: text("comments"),
+  
+  // Survey metadata
+  status: text("status").default("Completed"), // 'Completed', 'In Progress', 'Cancelled'
+  csrUserId: text("csr_user_id"), // Customer service rep who collected survey
+  followUpRequired: boolean("follow_up_required").default(false),
+  followUpNotes: text("follow_up_notes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+});
+
 // Document Management Insert Schemas
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
@@ -2403,6 +2442,9 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
+export type InsertSurvey = z.infer<typeof insertSurveySchema>;
+export type Survey = typeof surveys.$inferSelect;
+
 // New validation schema for Customer Communications
 export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({
   id: true,
@@ -2417,6 +2459,35 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
   // Include fields from communicationLogs that might be relevant here, if needed
   // This depends on how customerCommunications is intended to be used alongside communicationLogs
   // For now, assuming it augments communicationLogs with customer-specific context
+});
+
+// Surveys Insert Schema
+export const insertSurveySchema = createInsertSchema(surveys).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerId: z.string().min(1, "Customer ID is required"),
+  customerName: z.string().min(1, "Customer name is required"),
+  orderId: z.string().optional().nullable(),
+  stockModel: z.string().optional().nullable(),
+  surveyDate: z.coerce.date(),
+  overall: z.number().int().min(1).max(5),
+  quality: z.number().int().min(1).max(5),
+  communications: z.number().int().min(1).max(5),
+  onTime: z.number().int().min(1).max(5),
+  value: z.number().int().min(1).max(5),
+  nps: z.number().int().min(0).max(10),
+  npsType: z.enum(['Detractor', 'Passive', 'Promoter']),
+  csatScore: z.number(),
+  totalScore: z.number(),
+  issueExperienced: z.boolean().default(false),
+  issueDetails: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
+  status: z.enum(['Completed', 'In Progress', 'Cancelled']).default('Completed'),
+  csrUserId: z.string().optional().nullable(),
+  followUpRequired: z.boolean().default(false),
+  followUpNotes: z.string().optional().nullable(),
 });
 
 export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({

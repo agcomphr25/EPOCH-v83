@@ -60,6 +60,8 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
+import SurveysPage from '@/pages/SurveysPage';
+import SurveyAnalyticsPage from '@/pages/SurveyAnalyticsPage';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
@@ -244,6 +246,10 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/kickback-tracking" component={KickbackTracking} />
                   <Route path="/document-management" component={DocumentManagement} />
+
+                  {/* Customer Satisfaction Survey Routes */}
+                  <Route path="/surveys" component={SurveysPage} />
+                  <Route path="/surveys/analytics" component={SurveyAnalyticsPage} />
 
                   {/* Queue Management Routes */}
                   <Route path="/purchase-order-items-queue" component={PurchaseOrderItemsQueuePage} />

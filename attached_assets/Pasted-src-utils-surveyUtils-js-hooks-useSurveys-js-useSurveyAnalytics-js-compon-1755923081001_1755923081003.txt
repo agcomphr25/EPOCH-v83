@@ -1,0 +1,446 @@
+src/
+  utils/
+    surveyUtils.js
+  hooks/
+    useSurveys.js
+    useSurveyAnalytics.js
+  components/
+    SurveyFormModal.jsx
+    SurveyDashboard.jsx
+    SurveyAnalytics.jsx
+  pages/
+    SurveysPage.jsx         // route: /surveys
+    SurveyAnalyticsPage.jsx // route: /surveys/analytics
+App.jsx
+tailwind.config.js
+1) Utilities – src/utils/surveyUtils.js
+js
+Copy
+Edit
+import axios from 'axios';
+
+// Search helpers
+export function searchCustomers(q) {
+  return axios.get(`/api/customers/search?query=${encodeURIComponent(q)}`);
+}
+export function searchOrders(q) {
+  return axios.get(`/api/orders/search?query=${encodeURIComponent(q)}`);
+}
+
+// CRUD
+export function createSurvey(payload) {
+  return axios.post('/api/surveys', payload);
+}
+export function updateSurvey(id, p) {
+  return axios.put(`/api/surveys/${id}`, p);
+}
+export function fetchSurvey(id) {
+  return axios.get(`/api/surveys/${id}`);
+}
+export function fetchSurveys(filters) {
+  const params = new URLSearchParams(filters || {}).toString();
+  return axios.get(`/api/surveys?${params}`);
+}
+
+// Analytics
+export function fetchSurveyAnalytics(filters) {
+  const params = new URLSearchParams(filters || {}).toString();
+  return axios.get(`/api/surveys/analytics?${params}`);
+}
+2) Hooks
+src/hooks/useSurveys.js
+js
+Copy
+Edit
+import { useState, useEffect } from 'react';
+import { fetchSurveys } from '../utils/surveyUtils';
+
+export default function useSurveys(filters) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchSurveys(filters)
+      .then(res => setData(res.data))
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  return { data, loading };
+}
+src/hooks/useSurveyAnalytics.js
+js
+Copy
+Edit
+import { useState, useEffect } from 'react';
+import { fetchSurveyAnalytics } from '../utils/surveyUtils';
+
+export default function useSurveyAnalytics(filters) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchSurveyAnalytics(filters)
+      .then(res => setData(res.data))
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  return { data, loading };
+}
+3) Components
+SurveyFormModal – src/components/SurveyFormModal.jsx
+jsx
+Copy
+Edit
+import { useState, useContext, useEffect } from 'react';
+import { Dialog } from '@headlessui/react';
+import { searchCustomers, searchOrders, createSurvey, updateSurvey } from '../utils/surveyUtils';
+
+export default function SurveyFormModal({ open, onClose, onSaved, recordToEdit }) {
+  const isEdit = Boolean(recordToEdit);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [form, setForm] = useState({
+    customer: null,
+    order: null,
+    surveyDate: todayStr,
+    overall: 3, quality: 3, communications: 3, onTime: 3, value: 3,
+    nps: 5,
+    issueExperienced: false,
+    issueDetails: '',
+    comments: '',
+    status: 'Completed',
+  });
+
+  useEffect(() => {
+    if (recordToEdit) {
+      setForm({ ...recordToEdit });
+    }
+  }, [recordToEdit]);
+
+  const handleSave = async () => {
+    const likertAvg = (form.overall + form.quality + form.communications + form.onTime + form.value) / 5;
+    const csatScore = likertAvg;
+
+    const npsType =
+      form.nps <= 6 ? 'Detractor' :
+      form.nps <= 8 ? 'Passive' : 'Promoter';
+
+    // Normalize: e.g. CSAT (1–5) → 0–70 weight, NPS normalized → 0–100 → 0–30 weight
+    const npsNormalized = (form.nps / 10) * 100; 
+    const totalScore = ((csatScore - 1) / 4) * 70 + (npsNormalized / 100) * 30;
+
+    const payload = {
+      ...form,
+      csatScore,
+      npsType,
+      totalScore,
+    };
+
+    try {
+      if (isEdit) await updateSurvey(recordToEdit.id, payload);
+      else await createSurvey(payload);
+      onSaved();
+      onClose();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} className="fixed inset-0 flex items-center justify-center z-50">
+      <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+      <Dialog.Panel className="bg-white p-6 rounded-lg max-w-xl w-full">
+        <Dialog.Title>{isEdit ? 'Edit Survey' : 'New Survey'}</Dialog.Title>
+        {/* Customer Combobox */}
+        <div className="mt-4">
+          <label>Customer</label>
+          <input
+            type="text" placeholder="Search customer…" className="w-full border rounded p-2"
+            onChange={e => searchCustomers(e.target.value).then(res => {/* show dropdown */})}
+          />
+        </div>
+
+        {/* Order Combobox */}
+        <div className="mt-4">
+          <label>Order (optional)</label>
+          <input
+            type="text" placeholder="Search order…" className="w-full border rounded p-2"
+            onChange={e => searchOrders(e.target.value).then(res => {/* show dropdown */})}
+          />
+        </div>
+
+        {/* Survey Date */}
+        <div className="mt-4">
+          <label>Date</label>
+          <input
+            type="date" className="w-full border rounded p-2"
+            value={form.surveyDate}
+            onChange={e => setForm({ ...form, surveyDate: e.target.value })}
+          />
+        </div>
+
+        {/* Likert questions */}
+        {['overall','quality','communications','onTime','value'].map(q => (
+          <div key={q} className="mt-4">
+            <label>{q.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</label>
+            <input
+              type="number" min="1" max="5" className="w-full border rounded p-2"
+              value={form[q]} onChange={e => setForm({ ...form, [q]: +e.target.value })}
+            />
+          </div>
+        ))}
+
+        {/* NPS */}
+        <div className="mt-4">
+          <label>NPS (0–10)</label>
+          <input
+            type="number" min="0" max="10" className="w-full border rounded p-2"
+            value={form.nps} onChange={e => setForm({ ...form, nps: +e.target.value })}
+          />
+        </div>
+
+        {/* Issue Experienced */}
+        <div className="mt-4">
+          <label>Issue Experienced?</label>
+          <select
+            className="w-full border rounded p-2"
+            value={form.issueExperienced ? 'Yes' : 'No'}
+            onChange={e => setForm({ ...form, issueExperienced: e.target.value === 'Yes' })}
+          >
+            <option>No</option>
+            <option>Yes</option>
+          </select>
+        </div>
+
+        {form.issueExperienced && (
+          <div className="mt-4">
+            <label>Issue Details</label>
+            <textarea
+              className="w-full border rounded p-2"
+              value={form.issueDetails}
+              onChange={e => setForm({ ...form, issueDetails: e.target.value })}
+            />
+          </div>
+        )}
+
+        {/* Comments */}
+        <div className="mt-4">
+          <label>Open Comments</label>
+          <textarea
+            className="w-full border rounded p-2"
+            value={form.comments}
+            onChange={e => setForm({ ...form, comments: e.target.value })}
+          />
+        </div>
+
+        {/* Buttons */}
+        <div className="mt-6 flex justify-end space-x-4">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+          <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+        </div>
+      </Dialog.Panel>
+    </Dialog>
+  );
+}
+Note: This modal uses Headless UI’s Dialog component with accessible modal behavior, as per the documentation 
+headlessui.com
+. For true Combobox behavior you'd wrap search inputs with @headlessui/react's Combobox—leveraging their Combobox + input + options structure.
+
+SurveyDashboard – src/components/SurveyDashboard.jsx
+jsx
+Copy
+Edit
+import { useState } from 'react';
+import useSurveys from '../hooks/useSurveys';
+import SurveyFormModal from './SurveyFormModal';
+
+export default function SurveyDashboard() {
+  const [filters, setFilters] = useState({});
+  const { data: surveys, loading } = useSurveys(filters);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [toEdit, setToEdit] = useState(null);
+
+  const openNew = () => { setToEdit(null); setModalOpen(true); };
+  const openEdit = survey => { setToEdit(survey); setModalOpen(true); };
+  const onSaved = () => { /* optionally reload */ };
+
+  return (
+    <div className="p-6">
+      {/* Filters: date range, product line, model, agent, NPS type */}
+      <div className="mb-4">
+        {/* implement filter inputs */}
+        <button onClick={openNew} className="px-4 py-2 bg-green-600 text-white rounded">New Survey</button>
+      </div>
+
+      {loading ? <p>Loading…</p> : (
+        <table className="min-w-full border">
+          <thead>
+            <tr className="bg-gray-100">
+              {['Date','Customer','Order','Model','CSAT','NPS','Total Score','NPS Type','CSR','Status','Actions'].map(h => (
+                <th key={h} className="p-2 border">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {surveys.map(s => (
+              <tr key={s.id} className="border-t">
+                <td className="p-2">{s.surveyDate}</td>
+                <td className="p-2">{s.customerName || s.customer}</td>
+                <td className="p-2">{s.orderId || '-'}</td>
+                <td className="p-2">{s.stockModel}</td>
+                <td className="p-2">{s.csatScore?.toFixed(2)}</td>
+                <td className="p-2">{s.nps}</td>
+                <td className="p-2">{s.totalScore?.toFixed(2)}</td>
+                <td className="p-2">{s.npsType}</td>
+                <td className="p-2">{s.csrUserId}</td>
+                <td className="p-2">{s.status}</td>
+                <td className="p-2">
+                  <button onClick={() => openEdit(s)} className="text-blue-500">Edit</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <SurveyFormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSaved={onSaved}
+        recordToEdit={toEdit}
+      />
+    </div>
+  );
+}
+SurveyAnalytics – src/components/SurveyAnalytics.jsx
+jsx
+Copy
+Edit
+import { useState } from 'react';
+import useSurveyAnalytics from '../hooks/useSurveyAnalytics';
+import {
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip,
+  BarChart, Bar, Legend
+} from 'recharts';
+
+export default function SurveyAnalytics() {
+  const [filters, setFilters] = useState({});
+  const { data, loading } = useSurveyAnalytics(filters);
+
+  if (loading) return <p>Loading analytics…</p>;
+
+  const { avgCsat, nps: npsValue, issuePct, csatByWeek, npsBuckets, csatByModel } = data;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="p-4 bg-white rounded shadow">
+          <div className="text-sm text-gray-500">Avg CSAT</div>
+          <div className="text-xl">{avgCsat.toFixed(2)}</div>
+        </div>
+        <div className="p-4 bg-white rounded shadow">
+          <div className="text-sm text-gray-500">NPS</div>
+          <div className="text-xl">{npsValue}</div>
+        </div>
+        <div className="p-4 bg-white rounded shadow">
+          <div className="text-sm text-gray-500">% with Issues</div>
+          <div className="text-xl">{(issuePct * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+
+      {/* Charts */}
+      <LineChart width={600} height={300} data={csatByWeek} className="mx-auto">
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="week" />
+        <YAxis domain={[1, 5]} />
+        <Tooltip />
+        <Line type="monotone" dataKey="avg" stroke="#8884d8" />
+      </LineChart>
+
+      <BarChart width={600} height={300} data={npsBuckets} className="mx-auto">
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="type" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Bar dataKey="count" fill="#82ca9d" />
+      </BarChart>
+
+      <BarChart width={600} height={300} data={csatByModel} className="mx-auto">
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="model" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Bar dataKey="avg" fill="#ffc658" />
+      </BarChart>
+
+      {/* Export buttons (stubs) */}
+      <div className="space-x-4 text-center">
+        <button className="px-4 py-2 bg-gray-200 rounded">Export CSV</button>
+        <button className="px-4 py-2 bg-gray-200 rounded">Export PNG</button>
+      </div>
+    </div>
+  );
+}
+4) Routes / Pages
+src/pages/SurveysPage.jsx
+jsx
+Copy
+Edit
+export default function SurveysPage() {
+  return <SurveyDashboard />;
+}
+src/pages/SurveyAnalyticsPage.jsx
+jsx
+Copy
+Edit
+export default function SurveyAnalyticsPage() {
+  return <SurveyAnalytics />;
+}
+In App.jsx, route them via your favorite router:
+
+jsx
+Copy
+Edit
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import SurveysPage from './pages/SurveysPage';
+import SurveyAnalyticsPage from './pages/SurveyAnalyticsPage';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/surveys" element={<SurveysPage />} />
+        <Route path="/surveys/analytics" element={<SurveyAnalyticsPage />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+5) Dependencies
+Run this once:
+
+bash
+Copy
+Edit
+npm install axios @headlessui/react react-hot-toast recharts date-fns
+6) Backend Contracts (documented in comments)
+As you outlined—admin endpoints, expected response shapes, analytics schema, etc.
+
+7) Data Model Notes (for backend devs):
+customer_surveys table columns as specified—fully indexed for surveyDate, stockModel, csrUserId. Include computed columns for csatScore, npsType, totalScore.
+
+8) Future Auto‑Send (placeholder)
+Just comments and plan in code or docs:
+
+js
+Copy
+Edit
+// TODO: implement cron job or scheduled task to:
+// 1. Find orders shipped exactly 14 days ago
+// 2. Send survey invite via email/SMS
+// 3. On response, create customer_surveys record with csrUserId = 'auto'

@@ -1432,14 +1432,26 @@ export default function LayupScheduler() {
           return false;
         }
 
-        // Check for exact match first
+        // MESA UNIVERSAL RESTRICTION: Mesa Universal orders can ONLY use Mesa Universal molds
+        if (modelId === 'mesa_universal') {
+          const isMesaMold = mold.stockModels.includes('mesa_universal');
+          if (isMesaMold) {
+            console.log(`✅ MESA UNIVERSAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
+            return true;
+          } else {
+            console.log(`❌ MESA RESTRICTION: Order ${order.orderId} (mesa_universal) CANNOT use Mold ${mold.moldId} (stockModels: ${mold.stockModels.join(', ')})`);
+            return false;
+          }
+        }
+
+        // For NON-mesa universal orders, check for exact match first
         const exactMatch = mold.stockModels.includes(modelId);
         if (exactMatch) {
           console.log(`✅ EXACT MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId}`);
           return true;
         }
 
-        // Check for universal compatibility
+        // For NON-mesa universal orders, check for universal compatibility
         const hasUniversal = mold.stockModels.includes('universal');
         if (hasUniversal) {
           console.log(`✅ UNIVERSAL MATCH: Order ${order.orderId} (${modelId}) → Mold ${mold.moldId} (universal)`);

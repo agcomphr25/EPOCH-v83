@@ -14,7 +14,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, CreditCard, Banknote, FileText, Building, University } from 'lucide-react';
+import { DollarSign, CreditCard, Banknote, FileText, Building, University, Users, Search } from 'lucide-react';
+import CustomerSearchInput from '@/components/CustomerSearchInput';
+import type { Customer } from '@shared/schema';
 
 // Payment method configuration
 const PAYMENT_METHODS = [
@@ -58,6 +60,8 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [orderAllocations, setOrderAllocations] = useState<Record<string, number>>({});
   const [autoAllocate, setAutoAllocate] = useState(true);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [searchMode, setSearchMode] = useState<'all' | 'customer'>('all');
 
   const form = useForm<BatchPaymentFormData>({
     resolver: zodResolver(batchPaymentSchema),
@@ -69,10 +73,21 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     },
   });
 
-  // Fetch unpaid/partially paid orders
+  // Fetch unpaid/partially paid orders (all or by customer)
   const { data: ordersData, isLoading } = useQuery({
-    queryKey: ['/api/orders/unpaid'],
-    enabled: true,
+    queryKey: searchMode === 'customer' && selectedCustomer
+      ? ['/api/orders/unpaid/customer', selectedCustomer.id]
+      : ['/api/orders/unpaid'],
+    queryFn: async () => {
+      if (searchMode === 'customer' && selectedCustomer) {
+        const response = await apiRequest(`/api/orders/unpaid/customer/${selectedCustomer.id}`);
+        return response;
+      } else {
+        const response = await apiRequest('/api/orders/unpaid');
+        return response;
+      }
+    },
+    enabled: searchMode === 'all' || (searchMode === 'customer' && selectedCustomer !== null),
   });
 
   const orders: Order[] = (ordersData as Order[]) || [];
@@ -107,6 +122,25 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     form.reset();
     setSelectedOrders(new Set());
     setOrderAllocations({});
+  };
+
+  const handleSearchModeChange = (mode: 'all' | 'customer') => {
+    setSearchMode(mode);
+    if (mode === 'all') {
+      setSelectedCustomer(null);
+    }
+    // Reset order selections when changing mode
+    setSelectedOrders(new Set());
+    setOrderAllocations({});
+    form.setValue('orderAllocations', []);
+  };
+
+  const handleCustomerChange = (customer: Customer | null) => {
+    setSelectedCustomer(customer);
+    // Reset order selections when changing customer
+    setSelectedOrders(new Set());
+    setOrderAllocations({});
+    form.setValue('orderAllocations', []);
   };
 
   const handleOrderSelection = (orderId: string, checked: boolean) => {
@@ -273,6 +307,40 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
               />
             </div>
 
+            {/* Order Search Mode */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Search Orders</Label>
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant={searchMode === 'all' ? 'default' : 'outline'}
+                  onClick={() => handleSearchModeChange('all')}
+                  className="flex-1"
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  All Unpaid Orders
+                </Button>
+                <Button
+                  type="button"
+                  variant={searchMode === 'customer' ? 'default' : 'outline'}
+                  onClick={() => handleSearchModeChange('customer')}
+                  className="flex-1"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  By Customer
+                </Button>
+              </div>
+              
+              {searchMode === 'customer' && (
+                <CustomerSearchInput
+                  value={selectedCustomer}
+                  onValueChange={handleCustomerChange}
+                  placeholder="Search customer to see their unpaid orders"
+                  className="w-full"
+                />
+              )}
+            </div>
+
             {/* Payment Summary */}
             {watchedTotalAmount > 0 && (
               <div className="bg-gray-50 p-4 rounded-lg">
@@ -290,6 +358,14 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
                     ${remainingAmount.toFixed(2)}
                   </span>
                 </div>
+                {searchMode === 'customer' && selectedCustomer && (
+                  <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t">
+                    <span>Customer:</span>
+                    <span className="font-medium text-blue-600">
+                      {selectedCustomer.company ? `${selectedCustomer.name} (${selectedCustomer.company})` : selectedCustomer.name}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -310,11 +386,27 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
 
             {/* Order Selection */}
             <div>
-              <Label className="text-base font-medium">Select Orders to Pay</Label>
+              <Label className="text-base font-medium">
+                Select Orders to Pay
+                {searchMode === 'customer' && selectedCustomer && (
+                  <span className="font-normal text-sm text-gray-600 ml-2">
+                    - Showing orders for {selectedCustomer.name}
+                  </span>
+                )}
+              </Label>
               <div className="mt-3 space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4">
-                {orders.length === 0 ? (
+                {isLoading ? (
                   <div className="text-center py-4 text-gray-500">
-                    No unpaid orders found
+                    Loading orders...
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    {searchMode === 'customer' && selectedCustomer
+                      ? `No unpaid orders found for ${selectedCustomer.name}`
+                      : searchMode === 'customer'
+                      ? 'Select a customer to see their unpaid orders'
+                      : 'No unpaid orders found'
+                    }
                   </div>
                 ) : (
                   orders.map((order) => (

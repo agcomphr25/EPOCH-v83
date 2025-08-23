@@ -155,11 +155,7 @@ export default function POManager() {
 
     } catch (error) {
       console.error('Calculate schedule error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to calculate production schedule",
-        variant: "destructive"
-      });
+      toast.error("Failed to calculate production schedule");
     }
   };
 
@@ -171,20 +167,13 @@ export default function POManager() {
       });
 
       console.log('Generated production orders:', result);
-      toast({
-        title: "Production Orders Generated",
-        description: `Generated ${result.createdOrders} production orders`,
-      });
+      toast.success(`Generated ${result.createdOrders} production orders`);
 
       // Refresh PO list
       refetch();
     } catch (error) {
       console.error('Generate production orders error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to generate production orders",
-        variant: "destructive"
-      });
+      toast.error("Failed to generate production orders");
     } finally {
       setIsGeneratingOrders(false);
     }

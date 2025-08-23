@@ -1573,8 +1573,8 @@ export function registerRoutes(app: Express): Server {
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
-            p2PoId: poId,
-            p2PoItemId: item.id,
+            poId: poId, // P1 purchase order ID
+            poItemId: item.id, // P1 purchase order item ID
             sku: item.itemId,
             stockModelId: item.itemId,
             bomDefinitionId: 0,
@@ -1589,7 +1589,7 @@ export function registerRoutes(app: Express): Server {
             updatedAt: new Date()
           };
 
-          const createdOrder = await storage.createP2ProductionOrder(productionOrderData);
+          const createdOrder = await storage.createProductionOrder(productionOrderData);
           createdOrders.push(createdOrder);
 
           console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);

@@ -1664,6 +1664,41 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
+  // Auto-advance to next week when current week is finished
+  useEffect(() => {
+    // Only check if we're not loading and have data
+    if (ordersLoading || isLoadingSchedule) {
+      return;
+    }
+
+    // Get orders for the current week
+    const currentWeekOrders = getOrdersForCurrentWeek();
+    
+    // Only advance if:
+    // 1. Current week has no orders scheduled
+    // 2. We have some orders in the overall system (not empty state)
+    // 3. Current date is not in the future (don't advance beyond needed dates)
+    if (currentWeekOrders.length === 0 && orders.length > 0) {
+      const today = new Date();
+      const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+      const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+      
+      // Only auto-advance if current week is today's week or earlier
+      // This prevents advancing too far into the future
+      if (currentWeekStart.getTime() <= todayWeekStart.getTime()) {
+        console.log('📅 AUTO-ADVANCE: Current week has no orders, advancing to next week');
+        const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
+        setCurrentDate(nextWeekStart);
+        
+        // Show a notification to the user
+        toast({
+          title: "Week Advanced",
+          description: `Automatically advanced to next week since current week is completed`,
+        });
+      }
+    }
+  }, [orders, orderAssignments, currentDate, ordersLoading, isLoadingSchedule, getOrdersForCurrentWeek, toast]);
+
   // Function to generate algorithmic schedule automatically
   const generateAlgorithmicSchedule = useCallback(async () => {
     if (!orders.length || !molds.length || !employees.length) {

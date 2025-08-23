@@ -1599,6 +1599,25 @@ export function registerRoutes(app: Express): Server {
           const createdOrder = await storage.createProductionOrder(productionOrderData);
           createdOrders.push(createdOrder);
 
+          // Also create entry in main orders table for layup scheduler
+          const mainOrderData = {
+            orderId: createdOrder.orderId,
+            customer: purchaseOrder.customerName,
+            product: item.itemId,
+            quantity: 1,
+            status: 'Active',
+            date: new Date(),
+            currentDepartment: 'P1 Production Queue',
+            isOnSchedule: true,
+            priorityScore: 50,
+            poId: purchaseOrder.poNumber,
+            dueDate: createdOrder.dueDate,
+            createdAt: new Date()
+          };
+
+          await storage.createOrder(mainOrderData);
+          console.log(`🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`);
+
           console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);
         }
       }

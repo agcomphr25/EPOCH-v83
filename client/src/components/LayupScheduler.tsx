@@ -1674,28 +1674,34 @@ export default function LayupScheduler() {
     // Get orders for the current week
     const currentWeekOrders = getOrdersForCurrentWeek();
     
-    // Only advance if:
-    // 1. Current week has no orders scheduled
-    // 2. We have some orders in the overall system (not empty state)
-    // 3. Current date is not in the future (don't advance beyond needed dates)
-    if (currentWeekOrders.length === 0 && orders.length > 0) {
-      const today = new Date();
-      const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-      const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+    // AUTO-ADVANCE LOGIC: Move to current week if viewing old completed weeks
+    const today = new Date();
+    const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+    const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+    
+    // ENHANCED: Always advance to current week if we're viewing a past week
+    if (currentWeekStart.getTime() < todayWeekStart.getTime()) {
+      console.log(`📅 AUTO-ADVANCE: Viewing past week (${currentWeekStart.toDateString()}), advancing to current week (${todayWeekStart.toDateString()})`);
+      setCurrentDate(todayWeekStart);
       
-      // Only auto-advance if current week is today's week or earlier
-      // This prevents advancing too far into the future
-      if (currentWeekStart.getTime() <= todayWeekStart.getTime()) {
-        console.log('📅 AUTO-ADVANCE: Current week has no orders, advancing to next week');
-        const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-        setCurrentDate(nextWeekStart);
-        
-        // Show a notification to the user
-        toast({
-          title: "Week Advanced",
-          description: `Automatically advanced to next week since current week is completed`,
-        });
-      }
+      // Show notification
+      toast({
+        title: "Advanced to Current Week",
+        description: `Moved from ${format(currentWeekStart, 'MMM d')} to current week of ${format(todayWeekStart, 'MMM d')}`,
+      });
+      return; // Exit early since we're changing currentDate
+    }
+    
+    // FALLBACK: Original logic - advance if current week is empty and not in future
+    if (currentWeekOrders.length === 0 && orders.length > 0 && currentWeekStart.getTime() <= todayWeekStart.getTime()) {
+      console.log('📅 AUTO-ADVANCE: Current week has no orders, advancing to next week');
+      const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
+      setCurrentDate(nextWeekStart);
+      
+      toast({
+        title: "Week Advanced",
+        description: `Advanced to next week - current week completed`,
+      });
     }
   }, [orders, orderAssignments, currentDate, ordersLoading, isLoadingSchedule, getOrdersForCurrentWeek, toast]);
 

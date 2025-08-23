@@ -581,7 +581,6 @@ export interface IStorage {
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
 
-
   // Add methods for finalized orders
   getAllFinalizedOrders(): Promise<AllOrder[]>;
   finalizeOrder(orderId: string, finalizedBy?: string): Promise<AllOrder>;
@@ -5809,6 +5808,8 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Failed to sync verification status: ${(error as Error).message}`);
     }
   }
+
+
 
 
 }

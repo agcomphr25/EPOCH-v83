@@ -73,13 +73,6 @@ export default function OrderEntry() {
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Special Shipping Instructions state
-  const [shippingInstructions, setShippingInstructions] = useState({
-    international: false,
-    nextDayAir: false,
-    billToReceiver: false
-  });
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
   const [customerPO, setCustomerPO] = useState('');
   const [fbOrderNumber, setFbOrderNumber] = useState('');
@@ -1162,9 +1155,7 @@ export default function OrderEntry() {
         altShipToCompany: hasAltShipTo && altShipToMode === 'manual' ? altShipToCompany : null,
         altShipToEmail: hasAltShipTo && altShipToMode === 'manual' ? altShipToEmail : null,
         altShipToPhone: hasAltShipTo && altShipToMode === 'manual' ? altShipToPhone : null,
-        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null,
-        // Special Shipping Instructions
-        shippingInstructions
+        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -3174,59 +3165,6 @@ export default function OrderEntry() {
                 >
                   {isSubmitting ? "Processing..." : (isEditMode ? "Update Order" : "Create Order")}
                 </Button>
-              </div>
-
-              {/* Special Shipping Instructions - Accordion */}
-              <div className="mt-6">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="shipping-instructions">
-                    <AccordionTrigger className="text-left">
-                      <span className="font-medium">Special Shipping Instructions</span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-4 p-2">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="international"
-                            checked={shippingInstructions.international}
-                            onCheckedChange={(checked) => 
-                              setShippingInstructions(prev => ({ ...prev, international: checked as boolean }))
-                            }
-                          />
-                          <Label htmlFor="international" className="text-sm font-medium">
-                            International
-                          </Label>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="next-day-air"
-                            checked={shippingInstructions.nextDayAir}
-                            onCheckedChange={(checked) => 
-                              setShippingInstructions(prev => ({ ...prev, nextDayAir: checked as boolean }))
-                            }
-                          />
-                          <Label htmlFor="next-day-air" className="text-sm font-medium">
-                            Send Next Day Air
-                          </Label>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="bill-to-receiver"
-                            checked={shippingInstructions.billToReceiver}
-                            onCheckedChange={(checked) => 
-                              setShippingInstructions(prev => ({ ...prev, billToReceiver: checked as boolean }))
-                            }
-                          />
-                          <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
-                            Bill to Receiver
-                          </Label>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
               </div>
 
               {/* Order Attachments - Accordion at bottom */}

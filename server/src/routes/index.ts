@@ -98,7 +98,6 @@ export function registerRoutes(app: Express): Server {
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
   
-  
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {

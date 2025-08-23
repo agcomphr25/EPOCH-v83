@@ -2403,7 +2403,6 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
-
 // New validation schema for Customer Communications
 export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({
   id: true,
@@ -2419,7 +2418,6 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
   // This depends on how customerCommunications is intended to be used alongside communicationLogs
   // For now, assuming it augments communicationLogs with customer-specific context
 });
-
 
 export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
   order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })

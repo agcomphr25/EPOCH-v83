@@ -17,6 +17,7 @@ interface OrderDraft {
   dueDate: string;
   customerId: string | null;
   customerPO: string | null;
+  fbOrderNumber: string | null;
   modelId: string | null;
   handedness: string | null;
   features: Record<string, any> | null;
@@ -89,6 +90,7 @@ export default function DraftOrders() {
       draft.orderId.toLowerCase().includes(searchTerm) ||
       (draft.customerId && draft.customerId.toLowerCase().includes(searchTerm)) ||
       (draft.customerPO && draft.customerPO.toLowerCase().includes(searchTerm)) ||
+      (draft.fbOrderNumber && draft.fbOrderNumber.toLowerCase().includes(searchTerm)) ||
       (draft.modelId && draft.modelId.toLowerCase().includes(searchTerm))
     );
   });
@@ -132,7 +134,7 @@ export default function DraftOrders() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               type="text"
-              placeholder="Search by Order ID, Customer, PO, or Model..."
+              placeholder="Search by Order ID, Customer, PO, FB Number, or Model..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 pr-10"

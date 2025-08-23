@@ -128,7 +128,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customer_name,
         item_name,
         due_date,
-        date as order_date,
+        date,
         current_department,
         status,
         po_number

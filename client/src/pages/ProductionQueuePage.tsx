@@ -26,6 +26,11 @@ export default function ProductionQueuePage() {
   const needsAttention = (order: any) => {
     const reasons = [];
     
+    // Skip attention checks for "no_stock" models
+    if (order.modelId === 'no_stock') {
+      return reasons; // Return empty array - no attention needed
+    }
+    
     // Check if model is "None" or null
     if (!order.modelId || order.modelId === 'None' || order.modelId === '') {
       reasons.push('Missing stock model');

@@ -608,7 +608,13 @@ function DroppableCell({
 
 export default function LayupScheduler() {
   const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => {
+    // FORCE CURRENT WEEK: Initialize to start of current week to fix auto-advance issue
+    const now = new Date();
+    const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+    console.log(`📅 FORCE CURRENT WEEK: Initialized to ${currentWeekStart.toDateString()}`);
+    return currentWeekStart;
+  });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMold, setNewMold] = useState({ moldName: '', stockModels: [] as string[], instanceNumber: 1, multiplier: 2 });
   const [bulkMoldCount, setBulkMoldCount] = useState(1);
@@ -1540,7 +1546,14 @@ export default function LayupScheduler() {
 
     const schedulableOrders = activeOrders.filter(order => {
       const compatibleMolds = getCompatibleMolds(order);
-      return compatibleMolds.length > 0;
+      const hasCompatibleMolds = compatibleMolds.length > 0;
+      
+      // CRITICAL DEBUG: Log Mesa Universal filtering
+      if (order.modelId === 'mesa_universal') {
+        console.log(`🏔️ MESA FILTER: ${order.orderId} → Compatible molds: ${compatibleMolds.length} → Schedulable: ${hasCompatibleMolds}`);
+      }
+      
+      return hasCompatibleMolds;
     });
 
     console.log(`📦 Filtered orders: ${sortedOrders.length} total → ${schedulableOrders.length} schedulable (${sortedOrders.length - schedulableOrders.length} excluded due to no compatible molds)`);

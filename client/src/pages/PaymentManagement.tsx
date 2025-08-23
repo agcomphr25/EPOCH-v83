@@ -341,7 +341,7 @@ export default function PaymentManagement() {
           </TabsContent>
 
           <TabsContent value="batch-payment" className="space-y-6">
-            <BatchPayment onPaymentSuccess={() => handlePaymentSuccess()} />
+            <BatchPayment onPaymentSuccess={() => handlePaymentSuccess(null)} />
           </TabsContent>
         </Tabs>
       </div>

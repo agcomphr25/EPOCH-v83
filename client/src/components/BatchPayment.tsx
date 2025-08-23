@@ -75,7 +75,7 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
     enabled: true,
   });
 
-  const orders: Order[] = ordersData || [] as Order[];
+  const orders: Order[] = (ordersData as Order[]) || [];
 
   const batchPaymentMutation = useMutation({
     mutationFn: async (data: BatchPaymentFormData) => {
@@ -178,7 +178,7 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
 
   const getPaymentMethodIcon = (method: string) => {
     const config = PAYMENT_METHODS.find(m => m.value === method);
-    if (!config) return DollarSign;
+    if (!config) return <DollarSign className="h-4 w-4" />;
     const IconComponent = config.icon;
     return <IconComponent className="h-4 w-4" />;
   };
@@ -298,7 +298,7 @@ export default function BatchPayment({ onPaymentSuccess }: BatchPaymentProps) {
               <Checkbox
                 id="auto-allocate"
                 checked={autoAllocate}
-                onCheckedChange={setAutoAllocate}
+                onCheckedChange={(checked) => setAutoAllocate(Boolean(checked))}
               />
               <Label htmlFor="auto-allocate">Auto-allocate to oldest orders first</Label>
               {!autoAllocate && (

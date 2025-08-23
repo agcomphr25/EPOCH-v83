@@ -2004,11 +2004,27 @@ export default function LayupScheduler() {
     // Get relevant molds (same logic as scheduler)
     const getCompatibleMolds = (order: any) => {
       const modelId = order.stockModelId || order.modelId;
-      return molds.filter(mold => {
+      const compatibleMolds = molds.filter(mold => {
         if (!mold.enabled) return false;
         if (!mold.stockModels || mold.stockModels.length === 0) return true;
-        return mold.stockModels.includes(modelId);
+        
+        // STRICT VALIDATION: Stock model MUST match exactly - NO EXCEPTIONS
+        const hasExactMatch = mold.stockModels.includes(modelId);
+        
+        // CRITICAL: Log any mismatches for validation
+        if (!hasExactMatch && mold.stockModels.length > 0) {
+          console.warn(`🚨 STRICT VALIDATION: Order ${order.orderId} with model "${modelId}" does not match mold ${mold.moldId} stock models: [${mold.stockModels.join(', ')}]`);
+        }
+        
+        return hasExactMatch;
       });
+      
+      // FAIL SAFE: If no compatible molds found, log critical error
+      if (compatibleMolds.length === 0) {
+        console.error(`🚨 CRITICAL: No compatible molds found for order ${order.orderId} with stock model "${modelId}". This order cannot be scheduled.`);
+      }
+      
+      return compatibleMolds;
     };
 
     const compatibleMoldIds = new Set<string>();

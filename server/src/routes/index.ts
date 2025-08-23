@@ -207,17 +207,30 @@ export function registerRoutes(app: Express): Server {
       );
       
       // Also get active orders from the orders table (for P1 PO production orders)
-      const { db } = await import('../../db');
-      const { orders } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { pool } = await import('../../db');
       
-      const activeOrders = await db.select().from(orders).where(eq(orders.currentDepartment, 'P1 Production Queue'));
+      // Use direct SQL query to avoid schema conflicts
+      const activeOrdersResult = await pool.query(`
+        SELECT 
+          id,
+          order_id as "orderId",
+          customer,
+          product,
+          date,
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          status
+        FROM orders 
+        WHERE current_department = 'P1 Production Queue'
+      `);
+      
+      const activeOrders = activeOrdersResult || [];
       
       // Convert active orders to the expected format and combine
-      const formattedActiveOrders = activeOrders.map(order => ({
+      const formattedActiveOrders = activeOrders.map((order: any) => ({
         id: order.id,
         orderId: order.orderId,
-        orderDate: order.orderDate || order.date, // Use orderDate field or fallback to date
+        orderDate: order.date, // Use date field directly
         dueDate: order.dueDate,
         currentDepartment: order.currentDepartment,
         customerId: order.customer,

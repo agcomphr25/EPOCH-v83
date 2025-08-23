@@ -88,11 +88,18 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           });
         }
         
-        // For all other orders, use exact matching
-        return moldStockModels.some((moldModel: string) => {
+        // For all other orders, use STRICT exact matching - NO EXCEPTIONS
+        const hasMatch = moldStockModels.some((moldModel: string) => {
           const normalizedMoldModel = moldModel.toLowerCase().replace(/[\s\-]/g, '_');
           return normalizedMoldModel === normalizedStockModel;
         });
+        
+        // CRITICAL: Log any potential mismatches for validation
+        if (!hasMatch) {
+          console.warn(`🚨 STRICT VALIDATION: No mold match found for stock model "${stockModelId}" (normalized: "${normalizedStockModel}"). Available molds for this model: ${moldStockModels.join(', ')}`);
+        }
+        
+        return hasMatch;
       });
     };
 
@@ -211,6 +218,32 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         dailyMoldUsage.set(moldKey, 0);
       });
     });
+
+    // CRITICAL VALIDATION: Verify all orders have compatible molds - NO EXCEPTIONS
+    console.log('🚨 PERFORMING STRICT MOLD VALIDATION - NO EXCEPTIONS ALLOWED');
+    const invalidOrders: any[] = [];
+    
+    prioritizedOrders.forEach((order: any) => {
+      const stockModelId = order.stockModelId || order.modelId || 'unknown';
+      const compatibleMolds = findExactMatchingMolds(stockModelId);
+      
+      if (compatibleMolds.length === 0) {
+        console.error(`🚨 CRITICAL VALIDATION FAILURE: Order ${order.orderId} with stock model "${stockModelId}" has NO compatible molds. SCHEDULING BLOCKED.`);
+        invalidOrders.push({ orderId: order.orderId, stockModel: stockModelId });
+      }
+    });
+    
+    if (invalidOrders.length > 0) {
+      console.error(`🚨 SCHEDULING BLOCKED: ${invalidOrders.length} orders have no compatible molds:`, invalidOrders);
+      return res.status(400).json({
+        success: false,
+        error: 'STRICT VALIDATION FAILED - Orders have no compatible molds',
+        invalidOrders: invalidOrders,
+        message: 'Under no circumstances will a stock model not match the mold. Fix mold configuration before scheduling.'
+      });
+    }
+    
+    console.log('✅ STRICT VALIDATION PASSED: All orders have compatible molds');
 
     // Process each order (now prioritized by score and due date)
     for (const order of prioritizedOrders) {

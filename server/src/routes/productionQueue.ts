@@ -15,7 +15,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.modelId as modelId,
         o.modelId as stockModelId,
         o.due_date as dueDate,
-        o.order_date as orderDate,
+        o.date as orderDate,
         o.current_department as currentDepartment,
         o.status,
         o.features,
@@ -128,7 +128,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customer_name,
         item_name,
         due_date,
-        order_date,
+        date as order_date,
         current_department,
         status,
         po_number
@@ -143,7 +143,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
     // Calculate current priority metrics
     const now = new Date();
     const enhancedQueue = orders.map((order: any) => {
-      const dueDate = new Date(order.due_date || order.order_date);
+      const dueDate = new Date(order.due_date || order.date);
       const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
       return {
@@ -151,7 +151,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         customerName: order.customer_name,
         itemName: order.item_name,
         dueDate: order.due_date,
-        orderDate: order.order_date,
+        orderDate: order.date,
         currentDepartment: order.current_department,
         status: order.status,
         poNumber: order.po_number,
@@ -188,7 +188,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.modelId as modelId,
         o.modelId as stockModelId,
         o.due_date as dueDate,
-        o.order_date as orderDate,
+        o.date as orderDate,
         o.current_department as currentDepartment,
         o.status,
         o.customerId as customerId,

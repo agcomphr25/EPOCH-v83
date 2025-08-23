@@ -1562,32 +1562,30 @@ export function registerRoutes(app: Express): Server {
         // Create individual production orders for each quantity
         for (let i = 0; i < item.quantity; i++) {
           const productionOrderData = {
-            order_id: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
-            customer_id: purchaseOrder.customerId.toString(),
-            customer_name: purchaseOrder.customerName,
-            po_number: purchaseOrder.poNumber,
-            item_type: 'stock_model' as const,
-            item_id: item.itemId,
-            item_name: item.itemId,
-            order_date: new Date(),
-            due_date: (() => {
+            orderId: `PO-${purchaseOrder.poNumber}-${item.id}-${i + 1}`,
+            customerId: purchaseOrder.customerId.toString(),
+            customerName: purchaseOrder.customerName,
+            poNumber: purchaseOrder.poNumber,
+            itemType: 'stock_model' as const,
+            itemId: item.itemId,
+            itemName: item.itemId,
+            orderDate: new Date(),
+            dueDate: (() => {
               const expectedDue = purchaseOrder.expectedDelivery ? new Date(purchaseOrder.expectedDelivery) : new Date(purchaseOrder.poDate);
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
-            production_status: 'PENDING' as const,
-            current_department: 'Layup' as const,
-            status: 'IN_PROGRESS' as const,
-            po_id: poId,
-            po_item_id: item.id,
+            productionStatus: 'PENDING' as const,
+            poId: poId,
+            poItemId: item.id,
             specifications: {
               ...(item.specifications || {}),
               sourcePoNumber: purchaseOrder.poNumber,
               customerName: purchaseOrder.customerName,
               expectedDelivery: purchaseOrder.expectedDelivery
             },
-            created_at: new Date(),
-            updated_at: new Date()
+            createdAt: new Date(),
+            updatedAt: new Date()
           };
 
           console.log('🏭 Production order data before creation:', JSON.stringify(productionOrderData, null, 2));

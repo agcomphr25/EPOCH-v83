@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Package, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Package, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -18,6 +18,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -49,11 +50,44 @@ export default function ShippingQueuePage() {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   // Get all orders from production pipeline with payment status
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/with-payment-status'],
   });
+
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
+  };
 
   // Mutation to fulfill orders and move to shipping management
   const fulfillOrderMutation = useMutation({
@@ -802,6 +836,25 @@ export default function ShippingQueuePage() {
             </div>
           </div>
           
+          {/* Show Kickback Badge if order has kickbacks */}
+          {hasKickbacks(order.orderId) && (
+            <div className="mb-2">
+              <Badge
+                variant="destructive"
+                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                  getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                  getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                  getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                  'bg-gray-600 hover:bg-gray-700'
+                }`}
+                onClick={() => handleKickbackClick(order.orderId)}
+              >
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Kickback
+              </Badge>
+            </div>
+          )}
+
           {/* Quick Action Buttons */}
           <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
             <Button

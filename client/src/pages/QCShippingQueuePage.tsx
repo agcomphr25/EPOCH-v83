@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar, Truck, DollarSign, Package } from 'lucide-react';
+import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar, Truck, DollarSign, Package, AlertTriangle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,6 +12,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 
 export default function QCShippingQueuePage() {
   // State for selected orders and shipping functionality
@@ -22,6 +23,7 @@ export default function QCShippingQueuePage() {
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -32,6 +34,38 @@ export default function QCShippingQueuePage() {
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
   });
+
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
+  };
 
   // Get orders in QC/Shipping department and categorize by due date
   const qcShippingOrders = useMemo(() => {
@@ -419,6 +453,25 @@ export default function QCShippingQueuePage() {
             </div>
           ))}
         </div>
+
+        {/* Show Kickback Badge if order has kickbacks */}
+        {hasKickbacks(order.orderId) && (
+          <div className="mb-2">
+            <Badge
+              variant="destructive"
+              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                'bg-gray-600 hover:bg-gray-700'
+              }`}
+              onClick={() => handleKickbackClick(order.orderId)}
+            >
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Kickback
+            </Badge>
+          </div>
+        )}
 
         <div className="flex gap-1 mt-2">
           <Button

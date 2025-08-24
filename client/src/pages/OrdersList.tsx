@@ -29,7 +29,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare, MoreHorizontal, XCircle } from 'lucide-react';
+import { Edit, Eye, Package, CalendarDays, User, FileText, Download, QrCode, ArrowRight, Search, TrendingDown, Plus, CalendarIcon, Mail, MessageSquare, MoreHorizontal, XCircle, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
@@ -123,6 +123,9 @@ export default function OrdersList() {
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('orderDate');
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [salesOrderContent, setSalesOrderContent] = useState('');
+  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
     isOpen: boolean;
@@ -337,6 +340,26 @@ export default function OrdersList() {
 
   const handleKickbackClick = () => {
     setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order view in modal
+  const handleSalesOrderView = async (orderId: string) => {
+    setSalesOrderLoading(true);
+    setSalesOrderModalOpen(true);
+    
+    try {
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
+      if (response.ok) {
+        const htmlContent = await response.text();
+        setSalesOrderContent(htmlContent);
+      } else {
+        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      }
+    } catch (error) {
+      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+    } finally {
+      setSalesOrderLoading(false);
+    }
   };
 
   const handleCancelOrder = (orderId: string) => {
@@ -971,14 +994,28 @@ export default function OrdersList() {
                             <Edit className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleReportKickback(order)}
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSalesOrderView(order.orderId);
+                          }}
+                        >
+                          <Eye className="w-3 h-3" />
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReportKickback(order);
+                          }}
                           title="Report Kickback"
                         >
-                          <TrendingDown className="h-4 w-4" />
-                        </Button>
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          Kickback
+                        </Badge>
                         {(() => {
                           // Use local update if available, otherwise server data
                           const displayDepartment = localOrderUpdates[order.orderId] || order.currentDepartment;
@@ -1299,6 +1336,28 @@ export default function OrdersList() {
           orderId={communicationModal.orderId}
         />
       )}
+
+      {/* Sales Order Modal */}
+      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {salesOrderLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-2">Loading sales order...</span>
+              </div>
+            ) : (
+              <div 
+                className="sales-order-content"
+                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
   } catch (error) {

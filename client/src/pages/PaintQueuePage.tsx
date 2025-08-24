@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -16,6 +17,9 @@ import { useLocation } from 'wouter';
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [salesOrderContent, setSalesOrderContent] = useState('');
+  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -56,13 +60,24 @@ export default function PaintQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order download
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Function to handle sales order view in modal
+  const handleSalesOrderView = async (orderId: string) => {
+    setSalesOrderLoading(true);
+    setSalesOrderModalOpen(true);
+    
+    try {
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
+      if (response.ok) {
+        const htmlContent = await response.text();
+        setSalesOrderContent(htmlContent);
+      } else {
+        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      }
+    } catch (error) {
+      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+    } finally {
+      setSalesOrderLoading(false);
+    }
   };
 
   // Get orders in Paint department
@@ -204,6 +219,55 @@ export default function PaintQueuePage() {
     }
     
     return 'No paint';
+  };
+
+  // Helper function to normalize feature values
+  const normalizeFeatureValue = (value: any): string => {
+    if (!value) return '';
+    return String(value).toLowerCase().trim();
+  };
+
+  // Helper function to get order features for display
+  const getOrderFeatures = (order: any) => {
+    if (!order.features) return [];
+    const features = order.features;
+    const displayFeatures = [];
+
+    // Texture
+    if (features.texture && !normalizeFeatureValue(features.texture).includes('no')) {
+      displayFeatures.push({ label: 'Texture', value: features.texture });
+    }
+
+    // QDs (Quick Detach)
+    const qdValue = normalizeFeatureValue(features.qd_accessory);
+    if (qdValue && qdValue !== 'no_qds' && qdValue !== 'none' && qdValue !== '') {
+      displayFeatures.push({ label: 'QDs', value: features.qd_accessory });
+    }
+
+    // Swivels
+    if (features.swivel_studs && !normalizeFeatureValue(features.swivel_studs).includes('no')) {
+      displayFeatures.push({ label: 'Swivels', value: features.swivel_studs });
+    }
+
+    // Rails
+    const railValue = normalizeFeatureValue(features.rail_accessory);
+    if (railValue && railValue !== 'no_rail' && railValue !== 'none' && railValue !== '') {
+      displayFeatures.push({ label: 'Rails', value: features.rail_accessory });
+    }
+
+    // Tripod
+    if ((features.tripod_tap && normalizeFeatureValue(features.tripod_tap) === 'true') ||
+        (features.tripod_mount && !normalizeFeatureValue(features.tripod_mount).includes('no'))) {
+      displayFeatures.push({ label: 'Tripod', value: 'Yes' });
+    }
+
+    // Bipod
+    if ((features.bipod_accessory && !normalizeFeatureValue(features.bipod_accessory).includes('no')) ||
+        (features.spartan_bipod && normalizeFeatureValue(features.spartan_bipod) === 'true')) {
+      displayFeatures.push({ label: 'Bipod', value: 'Yes' });
+    }
+
+    return displayFeatures;
   };
 
 
@@ -352,22 +416,59 @@ export default function PaintQueuePage() {
                             {order.customerName}
                           </div>
                           
-                          {/* Paint Color Badge */}
+                          {/* Paint and Feature Details */}
+                          <div className="space-y-1 mb-2">
+                            {/* Paint Color */}
+                            <div className="flex items-center gap-1">
+                              <Badge 
+                                variant="secondary" 
+                                className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100"
+                                title={paintColor}
+                              >
+                                🎨 {paintColor.includes('No') ? 'None' : paintColor}
+                              </Badge>
+                            </div>
+                            
+                            {/* Additional Features */}
+                            {(() => {
+                              const orderFeatures = getOrderFeatures(order);
+                              if (orderFeatures.length === 0) return null;
+                              
+                              return (
+                                <div className="grid grid-cols-2 gap-1 text-xs text-gray-600 dark:text-gray-400">
+                                  {orderFeatures.map((feature, index) => (
+                                    <div key={index} className="truncate">
+                                      <span className="font-medium">{feature.label}:</span> {feature.value}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          
+                          {/* Action Buttons */}
                           <div className="flex items-center gap-1 flex-wrap">
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 truncate max-w-full"
-                              title={paintColor}
+                            <Badge
+                              variant="outline"
+                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSalesOrderView(order.orderId);
+                              }}
                             >
-                              🎨 {paintColor.includes('No') ? 'None' : paintColor.split(' ').slice(0, 2).join(' ')}
+                              <Eye className="w-3 h-3" />
                             </Badge>
                             <Badge
                               variant="outline"
-                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs px-1 py-0 border-blue-300 text-blue-700 dark:text-blue-300"
-                              onClick={() => handleSalesOrderDownload(order.orderId)}
+                              className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleKickbackClick(order.orderId);
+                              }}
+                              title="Report Kickback"
                             >
-                              <FileText className="w-3 h-3 mr-1" />
-                              Sales Order
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Kickback
                             </Badge>
                             {hasKickbacks(order.orderId) && (
                               <Badge
@@ -441,6 +542,28 @@ export default function PaintQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Sales Order Modal */}
+      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {salesOrderLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-2">Loading sales order...</span>
+              </div>
+            ) : (
+              <div 
+                className="sales-order-content"
+                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

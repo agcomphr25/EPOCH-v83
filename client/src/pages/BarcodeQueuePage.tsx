@@ -5,13 +5,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
+import { Scan, ArrowLeft, ArrowRight, QrCode, ArrowUp, Calendar, Target, Printer, X, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown, Edit } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -613,9 +613,14 @@ export default function BarcodeQueuePage() {
                                          actionLength === 'medium' ? 'Medium' :
                                          actionLength === 'long' ? 'Long' : 'Unknown'} Action
                                       </Badge>
+                                      <Link href={`/order-entry?draft=${order.orderId}`}>
+                                        <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                      </Link>
                                       <Badge
                                         variant="outline"
-                                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleSalesOrderView(order.orderId);
@@ -623,21 +628,18 @@ export default function BarcodeQueuePage() {
                                       >
                                         <Eye className="w-3 h-3" />
                                       </Badge>
-                                      {hasKickbacks(order.orderId) && (
-                                        <Badge
-                                          variant="destructive"
-                                          className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                            getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                            getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                            getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                            'bg-gray-600 hover:bg-gray-700'
-                                          }`}
-                                          onClick={() => handleKickbackClick(order.orderId)}
-                                        >
-                                          <AlertTriangle className="w-3 h-3 mr-1" />
-                                          Kickback
-                                        </Badge>
-                                      )}
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleKickbackClick(order.orderId);
+                                        }}
+                                        title="Report Kickback"
+                                        className="h-6 w-6 p-0 ml-1"
+                                      >
+                                        <TrendingDown className="h-3 w-3" />
+                                      </Button>
                                     </div>
                                     
                                     <div className="flex items-center gap-2">

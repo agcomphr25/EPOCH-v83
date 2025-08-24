@@ -1162,7 +1162,11 @@ export default function OrderEntry() {
         altShipToCompany: hasAltShipTo && altShipToMode === 'manual' ? altShipToCompany : null,
         altShipToEmail: hasAltShipTo && altShipToMode === 'manual' ? altShipToEmail : null,
         altShipToPhone: hasAltShipTo && altShipToMode === 'manual' ? altShipToPhone : null,
-        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null
+        altShipToAddress: hasAltShipTo && altShipToMode === 'manual' ? altShipToAddress : null,
+        // Special Shipping Instructions
+        specialShippingInternational: specialShipping.international,
+        specialShippingNextDayAir: specialShipping.nextDayAir,
+        specialShippingBillToReceiver: specialShipping.billToReceiver
         // Payment fields removed - now handled by PaymentManager
       };
 

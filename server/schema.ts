@@ -105,6 +105,10 @@ export const allOrders = pgTable("all_orders", {
   altShipToEmail: text("alt_ship_to_email"), // Manual entry email
   altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
   altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
+  // Special Shipping Instructions
+  specialShippingInternational: boolean("special_shipping_international").default(false),
+  specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
+  specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -384,6 +388,10 @@ export const orderDrafts = pgTable("order_drafts", {
   altShipToEmail: text("alt_ship_to_email"), // Manual entry email
   altShipToPhone: text("alt_ship_to_phone"), // Manual entry phone
   altShipToAddress: jsonb("alt_ship_to_address"), // Manual entry address object
+  // Special Shipping Instructions
+  specialShippingInternational: boolean("special_shipping_international").default(false),
+  specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
+  specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

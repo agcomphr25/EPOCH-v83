@@ -1632,7 +1632,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get all finalized orders with payment status
-  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+  async getAllOrdersWithPaymentStatus(): Promise<Array<{ paymentTotal: number; isFullyPaid: boolean; customer: string; [key: string]: any }>> {
     // Optimized: Use single query to get orders with customer names and payment totals
     const ordersWithCustomers = await db
       .select({

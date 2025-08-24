@@ -147,7 +147,7 @@ export function registerRoutes(app: Express): Server {
         })
       });
       
-      const result = await response.json();
+      const result = await response.json() as any;
       console.log(`🏭 LAYUP SCHEDULER FLOW: Generated ${result.allocations?.length || 0} schedule allocations`);
       res.json(result);
     } catch (error) {
@@ -276,7 +276,7 @@ export function registerRoutes(app: Express): Server {
       `);
 
       // Format the direct production orders
-      const directProductionOrders = (directProductionOrdersResult?.rows || []).map((po: any) => ({
+      const directProductionOrders = ((directProductionOrdersResult as any)?.rows || []).map((po: any) => ({
         id: po.poId,
         orderId: po.orderId,
         orderDate: po.order_date,
@@ -1949,12 +1949,12 @@ export function registerRoutes(app: Express): Server {
       // Get stock model details and extract color information
       let baseModel = null;
       let color = null;
-      if (order.modelId || order.itemId) {
+      if ((order as any).modelId || (order as any).itemId) {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(sm => 
-            sm.id === (order.modelId || order.itemId) || 
-            sm.name === (order.modelId || order.itemId)
+            sm.id === ((order as any).modelId || (order as any).itemId) || 
+            sm.name === ((order as any).modelId || (order as any).itemId)
           );
         } catch (e) {
           console.error('Error fetching stock model:', e);
@@ -1962,15 +1962,15 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Extract color from features or specifications
-      if (order.features) {
-        if (order.features.color) color = order.features.color;
-        if (order.features.paintOption) color = order.features.paintOption;
-        if (order.features.finish) color = order.features.finish;
+      if ((order as any).features) {
+        if ((order as any).features.color) color = (order as any).features.color;
+        if ((order as any).features.paintOption) color = (order as any).features.paintOption;
+        if ((order as any).features.finish) color = (order as any).features.finish;
       }
-      if (order.specifications) {
-        if (order.specifications.color) color = order.specifications.color;
-        if (order.specifications.paintOption) color = order.specifications.paintOption;
-        if (order.specifications.finish) color = order.specifications.finish;
+      if ((order as any).specifications) {
+        if ((order as any).specifications.color) color = (order as any).specifications.color;
+        if ((order as any).specifications.paintOption) color = (order as any).specifications.paintOption;
+        if ((order as any).specifications.finish) color = (order as any).specifications.finish;
       }
 
       // Build comprehensive order summary
@@ -1984,7 +1984,7 @@ export function registerRoutes(app: Express): Server {
           company: customer.company || '',
           phone: customer.phone || ''
         } : {
-          name: order.customerId || order.customerName || 'Unknown Customer',
+          name: order.customerId || (order as any).customerName || 'Unknown Customer',
           email: '',
           company: '',
           phone: ''
@@ -1994,12 +1994,12 @@ export function registerRoutes(app: Express): Server {
           id: baseModel.id,
           price: baseModel.price || 0
         } : {
-          name: order.modelId || order.itemId || order.itemName || 'Unknown Model',
-          id: order.modelId || order.itemId || '',
+          name: (order as any).modelId || (order as any).itemId || (order as any).itemName || 'Unknown Model',
+          id: (order as any).modelId || (order as any).itemId || '',
           price: 0
         },
-        features: order.features || {},
-        specifications: order.specifications || {},
+        features: (order as any).features || {},
+        specifications: (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: order.subtotal || 0,
@@ -2117,8 +2117,8 @@ export function registerRoutes(app: Express): Server {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(sm => 
-            sm.id === (order.modelId || order.itemId) || 
-            sm.name === (order.modelId || order.itemId)
+            sm.id === ((order as any).modelId || (order as any).itemId) || 
+            sm.name === ((order as any).modelId || (order as any).itemId)
           );
         } catch (e) {
           console.error('Error fetching stock model:', e);
@@ -2149,8 +2149,8 @@ export function registerRoutes(app: Express): Server {
           id: order.modelId || order.itemId || '',
           price: 0
         },
-        features: order.features || {},
-        specifications: order.specifications || {},
+        features: (order as any).features || {},
+        specifications: (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: order.subtotal || 0,

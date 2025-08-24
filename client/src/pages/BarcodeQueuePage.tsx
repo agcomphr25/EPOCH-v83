@@ -17,6 +17,9 @@ export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [salesOrderContent, setSalesOrderContent] = useState('');
+  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -57,13 +60,24 @@ export default function BarcodeQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order download
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Function to handle sales order view in modal
+  const handleSalesOrderView = async (orderId: string) => {
+    setSalesOrderLoading(true);
+    setSalesOrderModalOpen(true);
+    
+    try {
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
+      if (response.ok) {
+        const htmlContent = await response.text();
+        setSalesOrderContent(htmlContent);
+      } else {
+        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      }
+    } catch (error) {
+      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+    } finally {
+      setSalesOrderLoading(false);
+    }
   };
 
   // Get orders in barcode department
@@ -602,10 +616,12 @@ export default function BarcodeQueuePage() {
                                       <Badge
                                         variant="outline"
                                         className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                        onClick={() => handleSalesOrderDownload(order.orderId)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSalesOrderView(order.orderId);
+                                        }}
                                       >
-                                        <FileText className="w-3 h-3 mr-1" />
-                                        Sales Order
+                                        <Eye className="w-3 h-3" />
                                       </Badge>
                                       {hasKickbacks(order.orderId) && (
                                         <Badge
@@ -722,6 +738,28 @@ export default function BarcodeQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Sales Order Modal */}
+      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {salesOrderLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-2">Loading sales order...</span>
+              </div>
+            ) : (
+              <div 
+                className="sales-order-content"
+                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

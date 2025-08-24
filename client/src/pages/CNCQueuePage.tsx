@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Settings, ArrowLeft, ArrowRight, ArrowUp, Target, Wrench, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Settings, ArrowLeft, ArrowRight, ArrowUp, Target, Wrench, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -20,6 +21,9 @@ export default function CNCQueuePage() {
   const [selectAllGunsmith, setSelectAllGunsmith] = useState(false);
   const [selectAllFinish, setSelectAllFinish] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [salesOrderContent, setSalesOrderContent] = useState('');
+  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -60,13 +64,24 @@ export default function CNCQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order download
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Function to handle sales order view in modal
+  const handleSalesOrderView = async (orderId: string) => {
+    setSalesOrderLoading(true);
+    setSalesOrderModalOpen(true);
+    
+    try {
+      const response = await fetch(`/api/sales-order/${orderId}`);
+      if (response.ok) {
+        const htmlContent = await response.text();
+        setSalesOrderContent(htmlContent);
+      } else {
+        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      }
+    } catch (error) {
+      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+    } finally {
+      setSalesOrderLoading(false);
+    }
   };
 
   // Get stock models for display names
@@ -461,11 +476,10 @@ export default function CNCQueuePage() {
                             className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSalesOrderDownload(order.orderId);
+                              handleSalesOrderView(order.orderId);
                             }}
                           >
-                            <FileText className="w-3 h-3 mr-1" />
-                            Sales Order
+                            <Eye className="w-3 h-3" />
                           </Badge>
                           <Badge
                             variant="outline"
@@ -620,6 +634,28 @@ export default function CNCQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Sales Order Modal */}
+      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {salesOrderLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-2">Loading sales order...</span>
+              </div>
+            ) : (
+              <div 
+                className="sales-order-content"
+                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

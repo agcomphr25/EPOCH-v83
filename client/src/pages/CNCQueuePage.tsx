@@ -517,6 +517,26 @@ export default function CNCQueuePage() {
                           <div className="text-gray-700 dark:text-gray-300 font-medium">
                             {getModelDisplayName(order.modelId || order.stockModelId)}
                           </div>
+                          
+                          {/* Order Details */}
+                          <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                            {order.handedness && (
+                              <div><span className="font-medium">Hand:</span> {order.handedness}</div>
+                            )}
+                            {order.features?.action_length && (
+                              <div><span className="font-medium">Action:</span> {order.features.action_length}</div>
+                            )}
+                            {order.features?.barrel_inlet && (
+                              <div><span className="font-medium">Inlet:</span> {order.features.barrel_inlet}</div>
+                            )}
+                            {order.features?.bottom_metal && (
+                              <div><span className="font-medium">Bottom:</span> {order.features.bottom_metal}</div>
+                            )}
+                            {order.features?.barrel_contour && (
+                              <div><span className="font-medium">Barrel:</span> {order.features.barrel_contour}</div>
+                            )}
+                          </div>
+                          
                           <div className={`font-medium ${isGunsmith ? 'text-purple-600' : 'text-green-600'}`}>
                             {isGunsmith ? (
                               (() => {

@@ -4,21 +4,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Factory, Calendar, ArrowRight, Package, CheckCircle } from 'lucide-react';
+import { Factory, Calendar, ArrowRight, Package, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
 
+// Props interface for QueueOrderItem component
+interface QueueOrderItemProps {
+  order: any;
+  getModelDisplayName?: (modelId: string) => string;
+  processedOrders?: any[];
+  hasKickbacks?: (orderId: string) => boolean;
+  getKickbackStatus?: (orderId: string) => string | null;
+  handleKickbackClick?: (orderId: string) => void;
+}
+
 // Queue Order Item Component - simplified version of DraggableOrderItem for display only
-function QueueOrderItem({ order, getModelDisplayName, processedOrders }: { 
-  order: any, 
-  getModelDisplayName?: (modelId: string) => string, 
-  processedOrders?: any[] 
-}) {
+function QueueOrderItem({ 
+  order, 
+  getModelDisplayName, 
+  processedOrders,
+  hasKickbacks,
+  getKickbackStatus,
+  handleKickbackClick
+}: QueueOrderItemProps) {
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
     if (modelId.startsWith('cf_')) return 'CF';
@@ -247,6 +261,25 @@ function QueueOrderItem({ order, getModelDisplayName, processedOrders }: {
             </div>
           ) : null;
         })()}
+
+        {/* Show Kickback Badge if order has kickbacks */}
+        {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
+          <div className="text-xs mt-0.5">
+            <Badge
+              variant="destructive"
+              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                'bg-gray-600 hover:bg-gray-700'
+              }`}
+              onClick={() => handleKickbackClick(order.orderId)}
+            >
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Kickback
+            </Badge>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -256,6 +289,39 @@ export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, 1 = next week, -1 = previous week
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
+  };
 
   // Calculate week info first  
   const weekInfo = useMemo(() => {
@@ -931,6 +997,9 @@ export default function LayupPluggingQueuePage() {
                                   order={order}
                                   getModelDisplayName={getModelDisplayName}
                                   processedOrders={processedOrders}
+                                  hasKickbacks={hasKickbacks}
+                                  getKickbackStatus={getKickbackStatus}
+                                  handleKickbackClick={handleKickbackClick}
                                 />
 
                                 {/* Additional queue-specific info */}

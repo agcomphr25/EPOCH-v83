@@ -9,18 +9,52 @@ import { ArrowRight, Search, Package, User, Calendar, FileText, AlertTriangle, E
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'wouter';
 
 export default function ProductionQueuePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedAttentionOrders, setSelectedAttentionOrders] = useState<string[]>([]);
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // Fetch orders in Production Queue
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['/api/orders/department', 'P1 Production Queue'],
     queryFn: () => apiRequest(`/api/orders/department/P1%20Production%20Queue`),
   });
+
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
+  };
 
   // Function to detect orders that need attention
   const needsAttention = (order: any) => {
@@ -401,6 +435,21 @@ export default function ProductionQueuePage() {
                       {order.dueDate && (
                         <Badge variant="secondary" className="text-xs">
                           Due: {new Date(order.dueDate).toLocaleDateString()}
+                        </Badge>
+                      )}
+                      {hasKickbacks(order.orderId) && (
+                        <Badge
+                          variant="destructive"
+                          className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                            getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                            getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                            getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                            'bg-gray-600 hover:bg-gray-700'
+                          }`}
+                          onClick={() => handleKickbackClick(order.orderId)}
+                        >
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          Kickback
                         </Badge>
                       )}
                     </div>

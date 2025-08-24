@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square, CheckCircle } from 'lucide-react';
+import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'wouter';
 
 export default function FinishQueuePage() {
   // Multi-select state
@@ -18,6 +19,7 @@ export default function FinishQueuePage() {
   const [selectAll, setSelectAll] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState<string>('');
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // Finish technicians list
   const finishTechnicians = [
@@ -30,6 +32,38 @@ export default function FinishQueuePage() {
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
   });
+
+  // Fetch all kickbacks to determine which orders have kickbacks
+  const { data: allKickbacks = [] } = useQuery({
+    queryKey: ['/api/kickbacks'],
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Helper function to check if an order has kickbacks
+  const hasKickbacks = (orderId: string) => {
+    return (allKickbacks as any[]).some((kickback: any) => kickback.orderId === orderId);
+  };
+
+  // Helper function to get the most severe kickback status for an order
+  const getKickbackStatus = (orderId: string) => {
+    const orderKickbacks = (allKickbacks as any[]).filter((kickback: any) => kickback.orderId === orderId);
+    if (orderKickbacks.length === 0) return null;
+
+    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    const highestPriority = orderKickbacks.reduce((highest: string, kickback: any) => {
+      const currentIndex = priorities.indexOf(kickback.priority);
+      const highestIndex = priorities.indexOf(highest);
+      return currentIndex < highestIndex ? kickback.priority : highest;
+    }, 'LOW');
+
+    return highestPriority;
+  };
+
+  // Function to handle kickback badge click
+  const handleKickbackClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
+  };
 
   // Get orders in Finish department
   const finishOrders = useMemo(() => {
@@ -426,11 +460,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -478,11 +529,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -530,11 +598,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -582,11 +667,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -634,11 +736,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -686,11 +805,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -736,11 +872,28 @@ export default function FinishQueuePage() {
                             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                               {getModelDisplayName(order.modelId)}
                             </div>
-                            {order.isPaid && (
-                              <Badge variant="secondary" className="text-xs">
-                                PAID
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {order.isPaid && (
+                                <Badge variant="secondary" className="text-xs">
+                                  PAID
+                                </Badge>
+                              )}
+                              {hasKickbacks(order.orderId) && (
+                                <Badge
+                                  variant="destructive"
+                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                    getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                    getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                    getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                    'bg-gray-600 hover:bg-gray-700'
+                                  }`}
+                                  onClick={() => handleKickbackClick(order.orderId)}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  Kickback
+                                </Badge>
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       </div>

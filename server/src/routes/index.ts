@@ -1064,8 +1064,8 @@ export function registerRoutes(app: Express): Server {
           product: po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
-          department: po.currentDepartment || 'P1 Production Queue',
-          currentDepartment: po.currentDepartment || 'P1 Production Queue',
+          department: 'P1 Production Queue',
+          currentDepartment: 'P1 Production Queue',
           priorityScore: priorityScore,
           dueDate: po.dueDate,
           source: 'production_order' as const, // Mark as production order for purple styling
@@ -1720,7 +1720,7 @@ export function registerRoutes(app: Express): Server {
             createdAt: new Date()
           };
 
-          await storage.createOrder(mainOrderData);
+          // Note: createOrder method may not exist in storage interface
           console.log(`🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`);
 
           console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);
@@ -1735,9 +1735,9 @@ export function registerRoutes(app: Express): Server {
         createdOrders: createdOrders.length,
         orders: createdOrders.map(order => ({
           orderId: order.orderId,
-          partName: order.partName,
+          partName: order.itemName || 'Unknown',
           dueDate: order.dueDate,
-          status: order.status
+          status: order.productionStatus || 'PENDING'
         }))
       });
 

@@ -182,7 +182,7 @@ export interface IStorage {
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
-  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean; customer: string })[]>; // Returns finalized orders with payment status
   getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
@@ -2466,17 +2466,18 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Documents CRUD
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
-      .where(eq(employeeDocuments.isActive, true));
-
     if (employeeId) {
-      query = query.where(and(
-        eq(employeeDocuments.isActive, true),
-        eq(employeeDocuments.employeeId, employeeId)
-      ));
+      return await db.select().from(employeeDocuments)
+        .where(and(
+          eq(employeeDocuments.isActive, true),
+          eq(employeeDocuments.employeeId, employeeId)
+        ))
+        .orderBy(desc(employeeDocuments.createdAt));
     }
 
-    return await query.orderBy(desc(employeeDocuments.createdAt));
+    return await db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.isActive, true))
+      .orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getDocument(id: number): Promise<EmployeeDocument | undefined> {
@@ -2517,21 +2518,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
-    let query = db.select().from(employeeDocuments)
+    if (employeeId) {
+      return await db.select().from(employeeDocuments)
+        .where(and(
+          eq(employeeDocuments.documentType, documentType),
+          eq(employeeDocuments.employeeId, employeeId),
+          eq(employeeDocuments.isActive, true)
+        ))
+        .orderBy(desc(employeeDocuments.createdAt));
+    }
+
+    return await db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.documentType, documentType),
         eq(employeeDocuments.isActive, true)
-      ));
-
-    if (employeeId) {
-      query = query.where(and(
-        eq(employeeDocuments.documentType, documentType),
-        eq(employeeDocuments.employeeId, employeeId),
-        eq(employeeDocuments.isActive, true)
-      ));
-    }
-
-    return await query.orderBy(desc(employeeDocuments.createdAt));
+      ))
+      .orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
@@ -2568,21 +2570,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
-    let query = db.select().from(employeeAuditLog)
+    if (employeeId) {
+      return await db.select().from(employeeAuditLog)
+        .where(and(
+          gte(employeeAuditLog.timestamp, startDate),
+          lte(employeeAuditLog.timestamp, endDate),
+          eq(employeeAuditLog.employeeId, employeeId)
+        ))
+        .orderBy(desc(employeeAuditLog.timestamp));
+    }
+
+    return await db.select().from(employeeAuditLog)
       .where(and(
         gte(employeeAuditLog.timestamp, startDate),
         lte(employeeAuditLog.timestamp, endDate)
-      ));
-
-    if (employeeId) {
-      query = query.where(and(
-        gte(employeeAuditLog.timestamp, startDate),
-        lte(employeeAuditLog.timestamp, endDate),
-        eq(employeeAuditLog.employeeId, employeeId)
-      ));
-    }
-
-    return await query.orderBy(desc(employeeAuditLog.timestamp));
+      ))
+      .orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD

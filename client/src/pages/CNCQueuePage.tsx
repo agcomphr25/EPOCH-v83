@@ -95,6 +95,36 @@ export default function CNCQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Helper function to convert feature values to display names
+  const getFeatureDisplayValue = (featureType: string, value: string) => {
+    if (!value) return '';
+    
+    switch (featureType) {
+      case 'action_length':
+        if (value.includes('short')) return 'Short Action';
+        if (value.includes('long')) return 'Long Action';
+        if (value.includes('medium')) return 'Medium Action';
+        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+      case 'action_inlet':
+        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+      case 'handedness':
+        if (value === 'left') return 'Left Hand';
+        if (value === 'right') return 'Right Hand';
+        return value.replace(/\b\w/g, l => l.toUpperCase());
+        
+      case 'bottom_metal':
+        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+      case 'barrel_inlet':
+        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+      default:
+        return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+  };
+
   // Features that go to Gunsmith department (using actual feature names from database)
   const gunsimthFeatures = [
     'rail_accessory',    // Rails
@@ -522,19 +552,19 @@ export default function CNCQueuePage() {
                           {/* Order Details */}
                           <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
                             {order.features?.action_length && (
-                              <div><span className="font-medium">Action Length:</span> {order.features.action_length}</div>
+                              <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', order.features.action_length)}</div>
                             )}
                             {order.features?.action_inlet && (
-                              <div><span className="font-medium">Action Inlet:</span> {order.features.action_inlet}</div>
+                              <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', order.features.action_inlet)}</div>
                             )}
                             {order.handedness && (
-                              <div><span className="font-medium">Handedness:</span> {order.handedness}</div>
+                              <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', order.handedness)}</div>
                             )}
                             {order.features?.bottom_metal && (
-                              <div><span className="font-medium">Bottom Metal:</span> {order.features.bottom_metal}</div>
+                              <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
                             )}
                             {order.features?.barrel_inlet && (
-                              <div><span className="font-medium">Barrel Inlet:</span> {order.features.barrel_inlet}</div>
+                              <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet)}</div>
                             )}
                           </div>
                           

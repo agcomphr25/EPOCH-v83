@@ -98,6 +98,7 @@ export default function PaintQueuePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast.success(`${selectedOrders.size} orders moved to Shipping QC department`);
       setSelectedOrders(new Set());
       setSelectAll(false);

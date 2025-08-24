@@ -95,6 +95,7 @@ export default function FinishQCPage() {
       setSelectedOrders(new Set());
       setSelectAllByTechnician({});
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Paint'] });
     },

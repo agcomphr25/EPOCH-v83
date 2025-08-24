@@ -834,6 +834,13 @@ export default function OrderEntry() {
         setShowPriceOverride(!!order.priceOverride);
         setIsVerified(order.isVerified || false);
 
+        // Load special shipping state from saved order data
+        setSpecialShipping({
+          international: order.specialShippingInternational || false,
+          nextDayAir: order.specialShippingNextDayAir || false,
+          billToReceiver: order.specialShippingBillToReceiver || false
+        });
+
         // Load Alt Ship To data
         setHasAltShipTo(order.hasAltShipTo || false);
         if (order.hasAltShipTo) {

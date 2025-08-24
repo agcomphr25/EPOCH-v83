@@ -349,10 +349,10 @@ export default function UserManagement() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required={!editingUser}
-                  placeholder="Enter password (min 6 characters)"
-                  minLength={6}
+                  placeholder="Enter password (min 4 characters)"
+                  minLength={4}
                 />
-                <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
+                <p className="text-xs text-gray-500 mt-1">Password must be at least 4 characters long</p>
               </div>
               
               <div>

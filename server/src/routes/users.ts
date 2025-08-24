@@ -7,7 +7,7 @@ const router = Router();
 // User schema for validation
 const insertUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(4, "Password must be at least 4 characters"),
   role: z.string().optional().default('EMPLOYEE'),
   employeeId: z.number().optional(),
   canOverridePrices: z.boolean().optional().default(false),
@@ -16,7 +16,7 @@ const insertUserSchema = z.object({
 
 const updateUserSchema = z.object({
   username: z.string().min(1).optional(),
-  password: z.string().min(6).optional(),
+  password: z.string().min(4).optional(),
   role: z.string().optional(),
   employeeId: z.number().optional(),
   canOverridePrices: z.boolean().optional(),
@@ -185,8 +185,8 @@ router.post('/:id/reset-password', async (req: Request, res: Response) => {
     }
 
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (!newPassword || newPassword.length < 4) {
+      return res.status(400).json({ error: "New password must be at least 4 characters" });
     }
 
     console.log(`Resetting password for user ${id}`);

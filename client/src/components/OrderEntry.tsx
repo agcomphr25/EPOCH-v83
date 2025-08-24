@@ -1462,7 +1462,7 @@ export default function OrderEntry() {
               </div>
 
               {/* Shipping Options & Address - Combined Accordion */}
-              <div className="mt-6">
+              <div className="mt-6 border rounded-lg p-4 bg-blue-50">
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="shipping-options">
                     <AccordionTrigger className="text-left">

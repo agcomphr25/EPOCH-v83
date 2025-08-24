@@ -1461,177 +1461,234 @@ export default function OrderEntry() {
                 </div>
               </div>
 
-              {/* Alt Ship To Address */}
-              <div className="border rounded-lg p-4 bg-blue-50">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Checkbox 
-                    id="alt-ship-to-checkbox"
-                    checked={hasAltShipTo}
-                    onCheckedChange={(checked) => {
-                      setHasAltShipTo(!!checked);
-                      if (!checked) {
-                        // Clear all alt ship to data when disabled
-                        setAltShipToCustomer(null);
-                        setAltShipToCustomerId('');
-                        setAltShipToName('');
-                        setAltShipToCompany('');
-                        setAltShipToEmail('');
-                        setAltShipToPhone('');
-                        setAltShipToAddress({
-                          street: '',
-                          city: '',
-                          state: '',
-                          zipCode: '',
-                          country: 'United States'
-                        });
-                      }
-                    }}
-                  />
-                  <Label 
-                    htmlFor="alt-ship-to-checkbox" 
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Ship to Different Address
-                  </Label>
-                </div>
+              {/* Shipping Options & Address - Combined Accordion */}
+              <div className="mt-6">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="shipping-options">
+                    <AccordionTrigger className="text-left">
+                      <span className="font-medium">Shipping Options & Address</span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-6">
+                        {/* Special Shipping Instructions */}
+                        <div>
+                          <Label className="text-base font-medium mb-3 block">Special Shipping Instructions</Label>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="international"
+                                checked={specialShipping.international}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, international: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="international" className="text-sm font-medium">
+                                International
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="next-day-air"
+                                checked={specialShipping.nextDayAir}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, nextDayAir: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="next-day-air" className="text-sm font-medium">
+                                Next Day Air
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="bill-to-receiver"
+                                checked={specialShipping.billToReceiver}
+                                onCheckedChange={(checked) =>
+                                  setSpecialShipping(prev => ({ ...prev, billToReceiver: !!checked }))
+                                }
+                              />
+                              <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
+                                Bill to Receiver
+                              </Label>
+                            </div>
+                          </div>
+                        </div>
 
-                {hasAltShipTo && (
-                  <div className="space-y-4">
-                    {/* Mode Selection */}
-                    <div>
-                      <Label className="text-sm font-medium">Address Type</Label>
-                      <div className="flex gap-4 mt-2">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="existing-customer"
-                            name="alt-ship-mode"
-                            value="existing"
-                            checked={altShipToMode === 'existing'}
-                            onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
-                          />
-                          <Label htmlFor="existing-customer" className="text-sm">Existing Customer</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="manual-address"
-                            name="alt-ship-mode"
-                            value="manual"
-                            checked={altShipToMode === 'manual'}
-                            onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
-                          />
-                          <Label htmlFor="manual-address" className="text-sm">Manual Entry</Label>
-                        </div>
-                      </div>
-                    </div>
+                        {/* Ship to Different Address */}
+                        <div className="border-t pt-6">
+                          <div className="flex items-center space-x-2 mb-4">
+                            <Checkbox 
+                              id="alt-ship-to-checkbox"
+                              checked={hasAltShipTo}
+                              onCheckedChange={(checked) => {
+                                setHasAltShipTo(!!checked);
+                                if (!checked) {
+                                  // Clear all alt ship to data when disabled
+                                  setAltShipToCustomer(null);
+                                  setAltShipToCustomerId('');
+                                  setAltShipToName('');
+                                  setAltShipToCompany('');
+                                  setAltShipToEmail('');
+                                  setAltShipToPhone('');
+                                  setAltShipToAddress({
+                                    street: '',
+                                    city: '',
+                                    state: '',
+                                    zipCode: '',
+                                    country: 'United States'
+                                  });
+                                }
+                              }}
+                            />
+                            <Label 
+                              htmlFor="alt-ship-to-checkbox" 
+                              className="text-base font-medium"
+                            >
+                              Ship to Different Address
+                            </Label>
+                          </div>
 
-                    {altShipToMode === 'existing' ? (
-                      <div>
-                        <CustomerSearchInput
-                          value={altShipToCustomer}
-                          onValueChange={(selectedCustomer) => {
-                            setAltShipToCustomer(selectedCustomer);
-                            if (selectedCustomer) {
-                              setAltShipToCustomerId(selectedCustomer.id.toString());
-                              // Clear manual fields when selecting existing customer
-                              setAltShipToName('');
-                              setAltShipToCompany('');
-                              setAltShipToEmail('');
-                              setAltShipToPhone('');
-                              setAltShipToAddress({
-                                street: '',
-                                city: '',
-                                state: '',
-                                zipCode: '',
-                                country: 'United States'
-                              });
-                            } else {
-                              setAltShipToCustomerId('');
-                            }
-                          }}
-                          placeholder="Search for existing customer..."
-                        />
+                          {hasAltShipTo && (
+                            <div className="space-y-4">
+                              {/* Mode Selection */}
+                              <div>
+                                <Label className="text-sm font-medium">Address Type</Label>
+                                <div className="flex gap-4 mt-2">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="existing-customer"
+                                      name="alt-ship-mode"
+                                      value="existing"
+                                      checked={altShipToMode === 'existing'}
+                                      onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                                    />
+                                    <Label htmlFor="existing-customer" className="text-sm">Existing Customer</Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="manual-address"
+                                      name="alt-ship-mode"
+                                      value="manual"
+                                      checked={altShipToMode === 'manual'}
+                                      onChange={(e) => setAltShipToMode(e.target.value as 'existing' | 'manual')}
+                                    />
+                                    <Label htmlFor="manual-address" className="text-sm">Manual Entry</Label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {altShipToMode === 'existing' ? (
+                                <div>
+                                  <CustomerSearchInput
+                                    value={altShipToCustomer}
+                                    onValueChange={(selectedCustomer) => {
+                                      setAltShipToCustomer(selectedCustomer);
+                                      if (selectedCustomer) {
+                                        setAltShipToCustomerId(selectedCustomer.id.toString());
+                                        // Clear manual fields when selecting existing customer
+                                        setAltShipToName('');
+                                        setAltShipToCompany('');
+                                        setAltShipToEmail('');
+                                        setAltShipToPhone('');
+                                        setAltShipToAddress({
+                                          street: '',
+                                          city: '',
+                                          state: '',
+                                          zipCode: '',
+                                          country: 'United States'
+                                        });
+                                      } else {
+                                        setAltShipToCustomerId('');
+                                      }
+                                    }}
+                                    placeholder="Search for existing customer..."
+                                  />
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <Label>Name *</Label>
+                                    <Input
+                                      value={altShipToName}
+                                      onChange={(e) => setAltShipToName(e.target.value)}
+                                      placeholder="Enter recipient name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Company</Label>
+                                    <Input
+                                      value={altShipToCompany}
+                                      onChange={(e) => setAltShipToCompany(e.target.value)}
+                                      placeholder="Enter company name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Email</Label>
+                                    <Input
+                                      type="email"
+                                      value={altShipToEmail}
+                                      onChange={(e) => setAltShipToEmail(e.target.value)}
+                                      placeholder="Enter email address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Phone</Label>
+                                    <Input
+                                      value={altShipToPhone}
+                                      onChange={(e) => setAltShipToPhone(e.target.value)}
+                                      placeholder="Enter phone number"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <Label>Street Address *</Label>
+                                    <Input
+                                      value={altShipToAddress.street}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, street: e.target.value }))}
+                                      placeholder="Enter street address"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>City *</Label>
+                                    <Input
+                                      value={altShipToAddress.city}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, city: e.target.value }))}
+                                      placeholder="Enter city"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>State *</Label>
+                                    <Input
+                                      value={altShipToAddress.state}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, state: e.target.value }))}
+                                      placeholder="Enter state"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>ZIP Code *</Label>
+                                    <Input
+                                      value={altShipToAddress.zipCode}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
+                                      placeholder="Enter ZIP code"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Country</Label>
+                                    <Input
+                                      value={altShipToAddress.country}
+                                      onChange={(e) => setAltShipToAddress(prev => ({ ...prev, country: e.target.value }))}
+                                      placeholder="United States"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Name *</Label>
-                          <Input
-                            value={altShipToName}
-                            onChange={(e) => setAltShipToName(e.target.value)}
-                            placeholder="Enter recipient name"
-                          />
-                        </div>
-                        <div>
-                          <Label>Company</Label>
-                          <Input
-                            value={altShipToCompany}
-                            onChange={(e) => setAltShipToCompany(e.target.value)}
-                            placeholder="Enter company name"
-                          />
-                        </div>
-                        <div>
-                          <Label>Email</Label>
-                          <Input
-                            type="email"
-                            value={altShipToEmail}
-                            onChange={(e) => setAltShipToEmail(e.target.value)}
-                            placeholder="Enter email address"
-                          />
-                        </div>
-                        <div>
-                          <Label>Phone</Label>
-                          <Input
-                            value={altShipToPhone}
-                            onChange={(e) => setAltShipToPhone(e.target.value)}
-                            placeholder="Enter phone number"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Label>Street Address *</Label>
-                          <Input
-                            value={altShipToAddress.street}
-                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, street: e.target.value }))}
-                            placeholder="Enter street address"
-                          />
-                        </div>
-                        <div>
-                          <Label>City *</Label>
-                          <Input
-                            value={altShipToAddress.city}
-                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, city: e.target.value }))}
-                            placeholder="Enter city"
-                          />
-                        </div>
-                        <div>
-                          <Label>State *</Label>
-                          <Input
-                            value={altShipToAddress.state}
-                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, state: e.target.value }))}
-                            placeholder="Enter state"
-                          />
-                        </div>
-                        <div>
-                          <Label>ZIP Code *</Label>
-                          <Input
-                            value={altShipToAddress.zipCode}
-                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, zipCode: e.target.value }))}
-                            placeholder="Enter ZIP code"
-                          />
-                        </div>
-                        <div>
-                          <Label>Country</Label>
-                          <Input
-                            value={altShipToAddress.country}
-                            onChange={(e) => setAltShipToAddress(prev => ({ ...prev, country: e.target.value }))}
-                            placeholder="United States"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
 
               {/* Flattop Option */}
@@ -3194,56 +3251,6 @@ export default function OrderEntry() {
                 </Button>
               </div>
 
-              {/* Special Shipping Instructions */}
-              <div className="mt-6">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="shipping-instructions">
-                    <AccordionTrigger className="text-left">
-                      <span className="font-medium">Special Shipping Instructions</span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="international"
-                            checked={specialShipping.international}
-                            onCheckedChange={(checked) =>
-                              setSpecialShipping(prev => ({ ...prev, international: !!checked }))
-                            }
-                          />
-                          <Label htmlFor="international" className="text-sm font-medium">
-                            International
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="next-day-air"
-                            checked={specialShipping.nextDayAir}
-                            onCheckedChange={(checked) =>
-                              setSpecialShipping(prev => ({ ...prev, nextDayAir: !!checked }))
-                            }
-                          />
-                          <Label htmlFor="next-day-air" className="text-sm font-medium">
-                            Next Day Air
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="bill-to-receiver"
-                            checked={specialShipping.billToReceiver}
-                            onCheckedChange={(checked) =>
-                              setSpecialShipping(prev => ({ ...prev, billToReceiver: !!checked }))
-                            }
-                          />
-                          <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
-                            Bill to Receiver
-                          </Label>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
 
             </CardContent>
           </Card>

@@ -1641,6 +1641,10 @@ export class DatabaseStorage implements IStorage {
         isCancelled: allOrders.isCancelled,
         cancelledAt: allOrders.cancelledAt,
         cancelReason: allOrders.cancelReason,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
         // Customer name
         customerName: customers.name,
       })

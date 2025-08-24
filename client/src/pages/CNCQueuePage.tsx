@@ -16,8 +16,10 @@ import { useLocation } from 'wouter';
 export default function CNCQueuePage() {
   const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<Set<string>>(new Set());
   const [selectedFinishOrders, setSelectedFinishOrders] = useState<Set<string>>(new Set());
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAllGunsmith, setSelectAllGunsmith] = useState(false);
   const [selectAllFinish, setSelectAllFinish] = useState(false);
+  const [selectAll, setSelectAll] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -163,28 +165,24 @@ export default function CNCQueuePage() {
     return false;
   };
 
-  // Get orders in CNC department, split by destination
-  const gunsimthQueue = useMemo(() => {
-    const cncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
-    const uniqueOrders = cncOrders.filter((order, index, self) => 
+  // Get all CNC orders with department type for unified queue
+  const cncOrders = useMemo(() => {
+    const allCncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
+    const uniqueOrders = allCncOrders.filter((order, index, self) => 
       index === self.findIndex(o => o.orderId === order.orderId)
     );
     
     return uniqueOrders
-      .filter(order => requiresGunsmith(order))
+      .map(order => ({
+        ...order,
+        departmentType: requiresGunsmith(order) ? 'gunsmith' : 'finish'
+      }))
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [allOrders]);
 
-  const finishQueue = useMemo(() => {
-    const cncOrders = (allOrders as any[]).filter(order => order.currentDepartment === 'CNC');
-    const uniqueOrders = cncOrders.filter((order, index, self) => 
-      index === self.findIndex(o => o.orderId === order.orderId)
-    );
-    
-    return uniqueOrders
-      .filter(order => !requiresGunsmith(order))
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }, [allOrders]);
+  // Legacy queues for count calculations  
+  const gunsimthQueue = cncOrders.filter(order => order.departmentType === 'gunsmith');
+  const finishQueue = cncOrders.filter(order => order.departmentType === 'finish');
 
   // Count orders in previous department (Barcode)
   const barcodeCount = useMemo(() => {
@@ -210,46 +208,36 @@ export default function CNCQueuePage() {
     ).length;
   }, [allOrders]);
 
-  // Selection handlers for Gunsmith queue
-  const toggleGunsimthOrderSelection = (orderId: string) => {
-    const newSelected = new Set(selectedGunsimthOrders);
-    if (newSelected.has(orderId)) {
-      newSelected.delete(orderId);
+  // Unified selection handlers
+  const toggleOrderSelection = (orderId: string, departmentType: string) => {
+    if (departmentType === 'gunsmith') {
+      const newSelected = new Set(selectedGunsimthOrders);
+      if (newSelected.has(orderId)) {
+        newSelected.delete(orderId);
+      } else {
+        newSelected.add(orderId);
+      }
+      setSelectedGunsimthOrders(newSelected);
     } else {
-      newSelected.add(orderId);
+      const newSelected = new Set(selectedFinishOrders);
+      if (newSelected.has(orderId)) {
+        newSelected.delete(orderId);
+      } else {
+        newSelected.add(orderId);
+      }
+      setSelectedFinishOrders(newSelected);
     }
-    setSelectedGunsimthOrders(newSelected);
-    setSelectAllGunsmith(newSelected.size === gunsimthQueue.length);
   };
 
-  const toggleAllGunsimthSelection = () => {
-    if (selectAllGunsmith) {
+  const toggleAllSelection = () => {
+    if (selectAll) {
       setSelectedGunsimthOrders(new Set());
-    } else {
-      setSelectedGunsimthOrders(new Set(gunsimthQueue.map(order => order.orderId)));
-    }
-    setSelectAllGunsmith(!selectAllGunsmith);
-  };
-
-  // Selection handlers for Finish queue
-  const toggleFinishOrderSelection = (orderId: string) => {
-    const newSelected = new Set(selectedFinishOrders);
-    if (newSelected.has(orderId)) {
-      newSelected.delete(orderId);
-    } else {
-      newSelected.add(orderId);
-    }
-    setSelectedFinishOrders(newSelected);
-    setSelectAllFinish(newSelected.size === finishQueue.length);
-  };
-
-  const toggleAllFinishSelection = () => {
-    if (selectAllFinish) {
       setSelectedFinishOrders(new Set());
     } else {
+      setSelectedGunsimthOrders(new Set(gunsimthQueue.map(order => order.orderId)));
       setSelectedFinishOrders(new Set(finishQueue.map(order => order.orderId)));
     }
-    setSelectAllFinish(!selectAllFinish);
+    setSelectAll(!selectAll);
   };
 
   // Progress to Gunsmith mutation
@@ -381,25 +369,24 @@ export default function CNCQueuePage() {
         </Card>
       </div>
 
-      {/* Gunsmith Queue - Orders with rails, tripods, bipods, QDS, adjustable stocks */}
+      {/* Unified CNC Queue - All orders with color coding by department */}
       <Card className="mb-6">
-        <CardHeader className="bg-purple-50 dark:bg-purple-900/20">
+        <CardHeader className="bg-gray-50 dark:bg-gray-900/20">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-purple-600" />
-              <span>Gunsmith Queue</span>
-              <Badge variant="outline" className="ml-2 border-purple-300">
-                {gunsimthQueue.length} Orders
+              <Settings className="h-5 w-5 text-gray-600" />
+              <span>CNC Queue</span>
+              <Badge variant="outline" className="ml-2 border-gray-300">
+                {cncOrders.length} Orders
+              </Badge>
+              <Badge variant="outline" className="ml-2 border-purple-300 text-purple-700">
+                {gunsimthQueue.length} Gunsmith
+              </Badge>
+              <Badge variant="outline" className="ml-2 border-green-300 text-green-700">
+                {finishQueue.length} Finish
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={selectAllGunsmith}
-                  onCheckedChange={toggleAllGunsimthSelection}
-                />
-                Select All
-              </label>
               <Button
                 onClick={handleProgressToGunsmith}
                 disabled={selectedGunsimthOrders.size === 0 || progressToGunsmith.isPending}
@@ -409,21 +396,31 @@ export default function CNCQueuePage() {
                 <ArrowRight className="h-4 w-4 mr-1" />
                 Progress to Gunsmith ({selectedGunsimthOrders.size})
               </Button>
+              <Button
+                onClick={handleProgressToFinish}
+                disabled={selectedFinishOrders.size === 0 || progressToFinish.isPending}
+                className="bg-green-600 hover:bg-green-700"
+                size="sm"
+              >
+                <ArrowRight className="h-4 w-4 mr-1" />
+                Progress to Finish ({selectedFinishOrders.size})
+              </Button>
             </div>
           </CardTitle>
-          <p className="text-sm text-purple-600 dark:text-purple-400 mt-2">
-            Orders with rails, tripods, bipods, QDS, or adjustable stocks requiring gunsmith work
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+            Purple borders: Gunsmith required • Green borders: Ready for Finish
           </p>
         </CardHeader>
         <CardContent className="p-4">
-          {gunsimthQueue.length === 0 ? (
+          {cncOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No orders requiring gunsmith work
+              No orders in CNC department
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-              {gunsimthQueue.map((order: any) => {
-                const isSelected = selectedGunsimthOrders.has(order.orderId);
+              {cncOrders.map((order: any) => {
+                const isGunsmith = order.departmentType === 'gunsmith';
+                const isSelected = isGunsmith ? selectedGunsimthOrders.has(order.orderId) : selectedFinishOrders.has(order.orderId);
                 const isOverdue = isAfter(new Date(), new Date(order.dueDate));
                 
                 return (
@@ -433,15 +430,19 @@ export default function CNCQueuePage() {
                       isOverdue
                         ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
                         : isSelected
-                        ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                        : 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                        ? isGunsmith 
+                          ? 'border-l-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                          : 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
+                        : isGunsmith
+                        ? 'border-l-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10'
+                        : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
                     }`}
-                    onClick={() => toggleGunsimthOrderSelection(order.orderId)}
+                    onClick={() => toggleOrderSelection(order.orderId, order.departmentType)}
                   >
                     <div className="flex items-center gap-2">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => toggleGunsimthOrderSelection(order.orderId)}
+                        onCheckedChange={() => toggleOrderSelection(order.orderId, order.departmentType)}
                         className="flex-shrink-0"
                       />
                       
@@ -502,37 +503,41 @@ export default function CNCQueuePage() {
                           <div className="text-gray-700 dark:text-gray-300 font-medium">
                             {getModelDisplayName(order.modelId || order.stockModelId)}
                           </div>
-                          <div className="text-purple-600 font-medium">
-                            {(() => {
-                              const activeFeatures = [];
-                              
-                              const railVal = normalizeFeatureValue(order.features?.rail_accessory);
-                              if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
-                                activeFeatures.push('RAILS');
-                              }
-                              
-                              const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
-                              if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
-                                activeFeatures.push('QDS');
-                              }
-                              
-                              gunsimthFeatures.forEach(feature => {
-                                if (feature === 'rail_accessory' || feature === 'qd_accessory') return;
+                          <div className={`font-medium ${isGunsmith ? 'text-purple-600' : 'text-green-600'}`}>
+                            {isGunsmith ? (
+                              (() => {
+                                const activeFeatures = [];
                                 
-                                const value = normalizeFeatureValue(order.features?.[feature]);
-                                if (value === 'true' || value === 'yes' ||
-                                    (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
-                                  
-                                  if (feature === 'tripod_tap') activeFeatures.push('TRIPOD');
-                                  else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD');
-                                  else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
-                                  else if (feature === 'spartan_bipod') activeFeatures.push('BIPOD');
-                                  else if (feature === 'adjustable_stock') activeFeatures.push('ADJ STOCK');
+                                const railVal = normalizeFeatureValue(order.features?.rail_accessory);
+                                if (railVal && railVal !== 'no_rail' && railVal !== 'none' && railVal !== '') {
+                                  activeFeatures.push('RAILS');
                                 }
-                              });
-                              
-                              return Array.from(new Set(activeFeatures)).join(', ') || 'GUNSMITH';
-                            })()}
+                                
+                                const qdVal = normalizeFeatureValue(order.features?.qd_accessory);
+                                if (qdVal && qdVal !== 'no_qds' && qdVal !== 'none' && qdVal !== '') {
+                                  activeFeatures.push('QDS');
+                                }
+                                
+                                gunsimthFeatures.forEach(feature => {
+                                  if (feature === 'rail_accessory' || feature === 'qd_accessory') return;
+                                  
+                                  const value = normalizeFeatureValue(order.features?.[feature]);
+                                  if (value === 'true' || value === 'yes' ||
+                                      (value !== 'none' && value !== 'no' && value !== '' && value !== 'false')) {
+                                    
+                                    if (feature === 'tripod_tap') activeFeatures.push('TRIPOD');
+                                    else if (feature === 'tripod_mount') activeFeatures.push('TRIPOD');
+                                    else if (feature === 'bipod_accessory') activeFeatures.push('BIPOD');
+                                    else if (feature === 'spartan_bipod') activeFeatures.push('BIPOD');
+                                    else if (feature === 'adjustable_stock') activeFeatures.push('ADJ STOCK');
+                                  }
+                                });
+                                
+                                return Array.from(new Set(activeFeatures)).join(', ') || 'GUNSMITH';
+                              })()
+                            ) : (
+                              'READY FOR FINISH'
+                            )}
                           </div>
                         </div>
                       </div>
@@ -545,138 +550,6 @@ export default function CNCQueuePage() {
         </CardContent>
       </Card>
 
-      {/* Finish Queue - Orders without special features */}
-      <Card>
-        <CardHeader className="bg-green-50 dark:bg-green-900/20">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ArrowRight className="h-5 w-5 text-green-600" />
-              <span>Finish Queue</span>
-              <Badge variant="outline" className="ml-2 border-green-300">
-                {finishQueue.length} Orders
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={selectAllFinish}
-                  onCheckedChange={toggleAllFinishSelection}
-                />
-                Select All
-              </label>
-              <Button
-                onClick={handleProgressToFinish}
-                disabled={selectedFinishOrders.size === 0 || progressToFinish.isPending}
-                className="bg-green-600 hover:bg-green-700"
-                size="sm"
-              >
-                <ArrowRight className="h-4 w-4 mr-1" />
-                Progress to Finish ({selectedFinishOrders.size})
-              </Button>
-            </div>
-          </CardTitle>
-          <p className="text-sm text-green-600 dark:text-green-400 mt-2">
-            Orders ready for finish work (no gunsmith features required)
-          </p>
-        </CardHeader>
-        <CardContent className="p-4">
-          {finishQueue.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No orders ready for finish
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-              {finishQueue.map((order: any) => {
-                const isSelected = selectedFinishOrders.has(order.orderId);
-                const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                
-                return (
-                  <div 
-                    key={order.orderId}
-                    className={`p-2 border-l-4 rounded cursor-pointer transition-all duration-200 ${
-                      isOverdue
-                        ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                        : isSelected
-                        ? 'border-l-green-500 bg-green-50 dark:bg-green-900/20'
-                        : 'border-l-green-400 hover:bg-green-50 dark:hover:bg-green-900/10'
-                    }`}
-                    onClick={() => toggleFinishOrderSelection(order.orderId)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleFinishOrderSelection(order.orderId)}
-                        className="flex-shrink-0"
-                      />
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm truncate">
-                            {getDisplayOrderId(order)}
-                          </span>
-                          {isOverdue && (
-                            <Badge variant="destructive" className="text-xs ml-1">
-                              OVERDUE
-                            </Badge>
-                          )}
-                          <Badge
-                            variant="outline"
-                            className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSalesOrderDownload(order.orderId);
-                            }}
-                          >
-                            <FileText className="w-3 h-3 mr-1" />
-                            Sales Order
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleKickbackClick(order.orderId);
-                            }}
-                          >
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                            Kickback
-                          </Badge>
-                          {hasKickbacks(order.orderId) && (
-                            <Badge
-                              variant="destructive"
-                              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ml-1 ${
-                                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                'bg-gray-600 hover:bg-gray-700'
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleKickbackClick(order.orderId);
-                              }}
-                            >
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Active Kickback
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        <div className="text-xs text-gray-600 space-y-1">
-                          <div>Due: {format(new Date(order.dueDate), 'M/d/yy')}</div>
-                          <div className="text-gray-700 dark:text-gray-300 font-medium">
-                            {getModelDisplayName(order.modelId || order.stockModelId)}
-                          </div>
-                          <div className="text-green-600 font-medium">READY FOR FINISH</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Floating Gunsmith Progression Button */}
       {selectedGunsimthOrders.size > 0 && (

@@ -75,9 +75,10 @@ export default function UserManagement() {
       setShowUserModal(false);
     },
     onError: (error: any) => {
+      const errorMessage = error.details || error.message || "Failed to create user.";
       toast({
-        title: "Error",
-        description: error.message || "Failed to create user.",
+        title: "User Creation Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -100,9 +101,10 @@ export default function UserManagement() {
       setShowUserModal(false);
     },
     onError: (error: any) => {
+      const errorMessage = error.details || error.message || "Failed to update user.";
       toast({
-        title: "Error",
-        description: error.message || "Failed to update user.",
+        title: "User Update Failed", 
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -347,8 +349,10 @@ export default function UserManagement() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required={!editingUser}
-                  placeholder="Enter password"
+                  placeholder="Enter password (min 6 characters)"
+                  minLength={6}
                 />
+                <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
               </div>
               
               <div>

@@ -551,21 +551,44 @@ export default function CNCQueuePage() {
                           
                           {/* Order Details */}
                           <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                            {order.features?.action_length && (
-                              <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', order.features.action_length)}</div>
-                            )}
-                            {order.features?.action_inlet && (
-                              <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', order.features.action_inlet)}</div>
-                            )}
-                            {order.handedness && (
-                              <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', order.handedness)}</div>
-                            )}
-                            {order.features?.bottom_metal && (
-                              <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
-                            )}
-                            {order.features?.barrel_inlet && (
-                              <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet)}</div>
-                            )}
+                            {(() => {
+                              const modelName = getModelDisplayName(order.modelId || order.stockModelId);
+                              const isTikka = modelName.toLowerCase().includes('tikka');
+                              
+                              if (isTikka) {
+                                // For Tikka orders, only show what's available
+                                return (
+                                  <>
+                                    {order.features?.action_length && (
+                                      <div><span className="font-medium">Action Length:</span> {getFeatureDisplayValue('action_length', order.features.action_length)}</div>
+                                    )}
+                                    {order.features?.action_inlet && (
+                                      <div><span className="font-medium">Action Inlet:</span> {getFeatureDisplayValue('action_inlet', order.features.action_inlet)}</div>
+                                    )}
+                                    {order.handedness && (
+                                      <div><span className="font-medium">Handedness:</span> {getFeatureDisplayValue('handedness', order.handedness)}</div>
+                                    )}
+                                    {order.features?.bottom_metal && (
+                                      <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
+                                    )}
+                                    {order.features?.barrel_inlet && (
+                                      <div><span className="font-medium">Barrel Inlet:</span> {getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet)}</div>
+                                    )}
+                                  </>
+                                );
+                              } else {
+                                // For all non-Tikka orders, always show all 5 fields
+                                return (
+                                  <>
+                                    <div><span className="font-medium">Action Length:</span> {order.features?.action_length ? getFeatureDisplayValue('action_length', order.features.action_length) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Action Inlet:</span> {order.features?.action_inlet ? getFeatureDisplayValue('action_inlet', order.features.action_inlet) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Handedness:</span> {order.handedness ? getFeatureDisplayValue('handedness', order.handedness) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Bottom Metal:</span> {order.features?.bottom_metal ? getFeatureDisplayValue('bottom_metal', order.features.bottom_metal) : 'Not specified'}</div>
+                                    <div><span className="font-medium">Barrel Inlet:</span> {order.features?.barrel_inlet ? getFeatureDisplayValue('barrel_inlet', order.features.barrel_inlet) : 'Not specified'}</div>
+                                  </>
+                                );
+                              }
+                            })()}
                           </div>
                           
                           <div className={`font-medium ${isGunsmith ? 'text-purple-600' : 'text-green-600'}`}>

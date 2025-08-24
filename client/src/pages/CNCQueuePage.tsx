@@ -458,10 +458,24 @@ export default function CNCQueuePage() {
                           <Badge
                             variant="outline"
                             className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                            onClick={() => handleSalesOrderDownload(order.orderId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSalesOrderDownload(order.orderId);
+                            }}
                           >
                             <FileText className="w-3 h-3 mr-1" />
                             Sales Order
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleKickbackClick(order.orderId);
+                            }}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Kickback
                           </Badge>
                           {hasKickbacks(order.orderId) && (
                             <Badge
@@ -472,10 +486,13 @@ export default function CNCQueuePage() {
                                 getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
                                 'bg-gray-600 hover:bg-gray-700'
                               }`}
-                              onClick={() => handleKickbackClick(order.orderId)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleKickbackClick(order.orderId);
+                              }}
                             >
                               <AlertTriangle className="w-3 h-3 mr-1" />
-                              Kickback
+                              Active Kickback
                             </Badge>
                           )}
                         </div>
@@ -605,10 +622,24 @@ export default function CNCQueuePage() {
                           <Badge
                             variant="outline"
                             className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                            onClick={() => handleSalesOrderDownload(order.orderId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSalesOrderDownload(order.orderId);
+                            }}
                           >
                             <FileText className="w-3 h-3 mr-1" />
                             Sales Order
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleKickbackClick(order.orderId);
+                            }}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Kickback
                           </Badge>
                           {hasKickbacks(order.orderId) && (
                             <Badge
@@ -619,10 +650,13 @@ export default function CNCQueuePage() {
                                 getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
                                 'bg-gray-600 hover:bg-gray-700'
                               }`}
-                              onClick={() => handleKickbackClick(order.orderId)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleKickbackClick(order.orderId);
+                              }}
                             >
                               <AlertTriangle className="w-3 h-3 mr-1" />
-                              Kickback
+                              Active Kickback
                             </Badge>
                           )}
                         </div>

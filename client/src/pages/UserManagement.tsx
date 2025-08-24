@@ -54,10 +54,13 @@ export default function UserManagement() {
   });
 
   // Fetch users
-  const { data: users = [], isLoading, refetch } = useQuery({
+  const { data: allUsers = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/users'],
     queryFn: () => apiRequest('/api/users'),
   });
+
+  // Filter to show only active users
+  const users = allUsers.filter((user: User) => user.isActive);
 
   // Create user mutation
   const createUserMutation = useMutation({
@@ -117,8 +120,8 @@ export default function UserManagement() {
     }),
     onSuccess: () => {
       toast({
-        title: "User Deleted",
-        description: "User has been successfully deleted.",
+        title: "User Deactivated",
+        description: "User has been deactivated and removed from the active user list.",
       });
       refetch();
     },
@@ -161,7 +164,7 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = (id: number, username: string) => {
-    if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+    if (confirm(`Are you sure you want to deactivate user "${username}"? This will remove them from the active user list but preserve their data for audit purposes.`)) {
       deleteUserMutation.mutate(id);
     }
   };

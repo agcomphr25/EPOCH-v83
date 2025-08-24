@@ -610,9 +610,10 @@ export class DatabaseStorage implements IStorage {
     // Hash the password before inserting
     const passwordHash = await bcrypt.hash(insertUser.password, 12);
 
-    // Create user data with hashed password
+    // Create user data with both original password and hashed password
     const userData = {
       username: insertUser.username,
+      password: insertUser.password, // Include original password for database requirement
       passwordHash,
       role: insertUser.role,
       canOverridePrices: insertUser.canOverridePrices,

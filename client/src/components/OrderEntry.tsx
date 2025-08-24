@@ -2588,6 +2588,21 @@ export default function OrderEntry() {
                 )}
               </div>
 
+              {/* Order Attachments */}
+              {orderId && (
+                <div className="mt-6">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="attachments">
+                      <AccordionTrigger className="text-left">
+                        <span className="font-medium">Order Attachments</span>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <OrderAttachments orderId={orderId} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
 
               </form>
             </CardContent>
@@ -3179,74 +3194,55 @@ export default function OrderEntry() {
                 </Button>
               </div>
 
-              {/* Special Shipping Instructions & Order Attachments - Accordions at bottom */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Special Shipping Instructions */}
-                <div>
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="shipping-instructions">
-                      <AccordionTrigger className="text-left">
-                        <span className="font-medium">Special Shipping Instructions</span>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-3">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="international"
-                              checked={specialShipping.international}
-                              onCheckedChange={(checked) =>
-                                setSpecialShipping(prev => ({ ...prev, international: !!checked }))
-                              }
-                            />
-                            <Label htmlFor="international" className="text-sm font-medium">
-                              International
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="next-day-air"
-                              checked={specialShipping.nextDayAir}
-                              onCheckedChange={(checked) =>
-                                setSpecialShipping(prev => ({ ...prev, nextDayAir: !!checked }))
-                              }
-                            />
-                            <Label htmlFor="next-day-air" className="text-sm font-medium">
-                              Next Day Air
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="bill-to-receiver"
-                              checked={specialShipping.billToReceiver}
-                              onCheckedChange={(checked) =>
-                                setSpecialShipping(prev => ({ ...prev, billToReceiver: !!checked }))
-                              }
-                            />
-                            <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
-                              Bill to Receiver
-                            </Label>
-                          </div>
+              {/* Special Shipping Instructions */}
+              <div className="mt-6">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="shipping-instructions">
+                    <AccordionTrigger className="text-left">
+                      <span className="font-medium">Special Shipping Instructions</span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="international"
+                            checked={specialShipping.international}
+                            onCheckedChange={(checked) =>
+                              setSpecialShipping(prev => ({ ...prev, international: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="international" className="text-sm font-medium">
+                            International
+                          </Label>
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </div>
-
-                {/* Order Attachments */}
-                {orderId && (
-                  <div>
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="attachments">
-                        <AccordionTrigger className="text-left">
-                          <span className="font-medium">Order Attachments</span>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <OrderAttachments orderId={orderId} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
-                )}
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="next-day-air"
+                            checked={specialShipping.nextDayAir}
+                            onCheckedChange={(checked) =>
+                              setSpecialShipping(prev => ({ ...prev, nextDayAir: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="next-day-air" className="text-sm font-medium">
+                            Next Day Air
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="bill-to-receiver"
+                            checked={specialShipping.billToReceiver}
+                            onCheckedChange={(checked) =>
+                              setSpecialShipping(prev => ({ ...prev, billToReceiver: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="bill-to-receiver" className="text-sm font-medium">
+                            Bill to Receiver
+                          </Label>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
 
             </CardContent>

@@ -6,7 +6,8 @@ import { relations } from "drizzle-orm";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  password: text("password").notNull(),
+  passwordHash: text("password_hash"),
   role: text("role").notNull().default("EMPLOYEE"), // ADMIN, HR, MANAGER, EMPLOYEE
   canOverridePrices: boolean("can_override_prices").default(false),
   employeeId: integer("employee_id").references(() => employees.id),
@@ -14,6 +15,7 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at"),
   passwordChangedAt: timestamp("password_changed_at").defaultNow(),
   failedLoginAttempts: integer("failed_login_attempts").default(0),
+  accountLockedUntil: timestamp("account_locked_until"),
   lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -722,10 +724,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   lastLoginAt: true,
   passwordChangedAt: true,
   failedLoginAttempts: true,
+  accountLockedUntil: true,
   lockedUntil: true,
 }).extend({
   username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(4, "Password must be at least 4 characters"),
   role: z.enum(['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE']).default('EMPLOYEE'),
   employeeId: z.number().optional().nullable(),
   isActive: z.boolean().default(true),

@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { db } from '../../db';
+import { payments } from '../../../shared/schema';
+import { eq } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import { authenticateToken } from '../../middleware/auth';
@@ -696,11 +699,42 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
 router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+    
+    // Validate payment ID
+    if (isNaN(paymentId)) {
+      console.error('Invalid payment ID:', req.params.paymentId);
+      return res.status(400).json({ error: "Invalid payment ID" });
+    }
+    
+    console.log(`🗑️ Attempting to delete payment ID: ${paymentId}`);
+    
+    // Check if payment exists by trying to get it directly
+    try {
+      const result = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
+      if (result.length === 0) {
+        console.error('Payment not found:', paymentId);
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      console.log(`✅ Payment found: ${paymentId}, orderId: ${result[0].orderId}`);
+    } catch (checkError) {
+      console.error('Error checking payment existence:', checkError);
+      return res.status(500).json({ error: "Error validating payment" });
+    }
+    
     await storage.deletePayment(paymentId);
+    console.log(`✅ Successfully deleted payment ID: ${paymentId}`);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete payment error:', error);
-    res.status(500).json({ error: "Failed to delete payment" });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      paymentId: req.params.paymentId
+    });
+    res.status(500).json({ 
+      error: "Failed to delete payment", 
+      details: error.message 
+    });
   }
 });
 

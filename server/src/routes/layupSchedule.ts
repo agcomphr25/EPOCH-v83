@@ -119,7 +119,7 @@ router.get('/current-week', async (req: Request, res: Response) => {
         ls.employee_assignments as employeeAssignments,
         ls.is_override as isOverride,
         o.fb_order_number as fbOrderNumber,
-        o.modelId as stockModelId,
+        o.model_id as stockModelId,
         o.customer_id as customerId,
         c.customer_name as customerName,
         po.po_number as poNumber,

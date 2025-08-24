@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Paintbrush, ArrowLeft, ArrowRight, Users, ArrowUp, CheckSquare, Square, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -63,6 +63,15 @@ export default function FinishQueuePage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order download
+  const handleSalesOrderDownload = (orderId: string) => {
+    window.open(`/api/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
   };
 
   // Get orders in Finish department
@@ -466,6 +475,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -535,6 +552,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -604,6 +629,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -673,6 +706,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -742,6 +783,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -811,6 +860,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -878,6 +935,14 @@ export default function FinishQueuePage() {
                                   PAID
                                 </Badge>
                               )}
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Sales Order
+                              </Badge>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"

@@ -10,7 +10,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 export default function FinishQCPage() {
@@ -61,6 +61,15 @@ export default function FinishQCPage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order download
+  const handleSalesOrderDownload = (orderId: string) => {
+    window.open(`/api/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
   };
 
   // Group orders by technician and sort (memoized to prevent re-renders)
@@ -383,6 +392,14 @@ export default function FinishQCPage() {
                                   </Badge>
                                   <Badge variant="secondary" className="text-xs px-1 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100">
                                     {getPaintColor(order)}
+                                  </Badge>
+                                  <Badge
+                                    variant="outline"
+                                    className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs px-1 py-0 border-blue-300 text-blue-700 dark:text-blue-300"
+                                    onClick={() => handleSalesOrderDownload(order.orderId)}
+                                  >
+                                    <FileText className="w-3 h-3 mr-1" />
+                                    Sales Order
                                   </Badge>
                                   {hasKickbacks(order.orderId) && (
                                     <Badge

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Factory, Calendar, ArrowRight, Package, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Factory, Calendar, ArrowRight, Package, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -22,6 +22,7 @@ interface QueueOrderItemProps {
   hasKickbacks?: (orderId: string) => boolean;
   getKickbackStatus?: (orderId: string) => string | null;
   handleKickbackClick?: (orderId: string) => void;
+  handleSalesOrderDownload?: (orderId: string) => void;
 }
 
 // Queue Order Item Component - simplified version of DraggableOrderItem for display only
@@ -31,7 +32,8 @@ function QueueOrderItem({
   processedOrders,
   hasKickbacks,
   getKickbackStatus,
-  handleKickbackClick
+  handleKickbackClick,
+  handleSalesOrderDownload
 }: QueueOrderItemProps) {
   // Determine material type for styling
   const getMaterialType = (modelId: string) => {
@@ -262,9 +264,19 @@ function QueueOrderItem({
           ) : null;
         })()}
 
-        {/* Show Kickback Badge if order has kickbacks */}
-        {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
-          <div className="text-xs mt-0.5">
+        {/* Show Sales Order and Kickback Badges */}
+        <div className="text-xs mt-0.5 flex gap-1 flex-wrap">
+          {handleSalesOrderDownload && (
+            <Badge
+              variant="outline"
+              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+              onClick={() => handleSalesOrderDownload(order.orderId)}
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              Sales Order
+            </Badge>
+          )}
+          {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
             <Badge
               variant="destructive"
               className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
@@ -278,8 +290,8 @@ function QueueOrderItem({
               <AlertTriangle className="w-3 h-3 mr-1" />
               Kickback
             </Badge>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -321,6 +333,15 @@ export default function LayupPluggingQueuePage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order download
+  const handleSalesOrderDownload = (orderId: string) => {
+    window.open(`/api/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
   };
 
   // Calculate week info first  
@@ -1000,6 +1021,7 @@ export default function LayupPluggingQueuePage() {
                                   hasKickbacks={hasKickbacks}
                                   getKickbackStatus={getKickbackStatus}
                                   handleKickbackClick={handleKickbackClick}
+                                  handleSalesOrderDownload={handleSalesOrderDownload}
                                 />
 
                                 {/* Additional queue-specific info */}

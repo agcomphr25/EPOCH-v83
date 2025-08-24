@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -54,6 +54,15 @@ export default function PaintQueuePage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Function to handle sales order download
+  const handleSalesOrderDownload = (orderId: string) => {
+    window.open(`/api/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
   };
 
   // Get orders in Paint department
@@ -344,7 +353,7 @@ export default function PaintQueuePage() {
                           </div>
                           
                           {/* Paint Color Badge */}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
                             <Badge 
                               variant="secondary" 
                               className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 truncate max-w-full"
@@ -352,6 +361,29 @@ export default function PaintQueuePage() {
                             >
                               🎨 {paintColor.includes('No') ? 'None' : paintColor.split(' ').slice(0, 2).join(' ')}
                             </Badge>
+                            <Badge
+                              variant="outline"
+                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs px-1 py-0 border-blue-300 text-blue-700 dark:text-blue-300"
+                              onClick={() => handleSalesOrderDownload(order.orderId)}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Sales Order
+                            </Badge>
+                            {hasKickbacks(order.orderId) && (
+                              <Badge
+                                variant="destructive"
+                                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs px-1 py-0 ${
+                                  getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                  getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                  getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                  'bg-gray-600 hover:bg-gray-700'
+                                }`}
+                                onClick={() => handleKickbackClick(order.orderId)}
+                              >
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                Kickback
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>

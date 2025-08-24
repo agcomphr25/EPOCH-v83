@@ -56,6 +56,15 @@ export default function ProductionQueuePage() {
     setLocation('/kickback-tracking');
   };
 
+  // Function to handle sales order download
+  const handleSalesOrderDownload = (orderId: string) => {
+    window.open(`/api/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
+  };
+
   // Function to detect orders that need attention
   const needsAttention = (order: any) => {
     const reasons = [];
@@ -437,6 +446,14 @@ export default function ProductionQueuePage() {
                           Due: {new Date(order.dueDate).toLocaleDateString()}
                         </Badge>
                       )}
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                        onClick={() => handleSalesOrderDownload(order.orderId)}
+                      >
+                        <FileText className="w-3 h-3 mr-1" />
+                        Sales Order
+                      </Badge>
                       {hasKickbacks(order.orderId) && (
                         <Badge
                           variant="destructive"

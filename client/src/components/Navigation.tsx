@@ -227,6 +227,12 @@ export default function Navigation() {
       description: 'Manage employee profiles, certifications, and evaluations'
     },
     {
+      path: '/user-management',
+      label: 'User Management',
+      icon: User,
+      description: 'Manage usernames, passwords, and user access'
+    },
+    {
       path: '/employee-portal',
       label: 'Employee Portal',
       icon: User,

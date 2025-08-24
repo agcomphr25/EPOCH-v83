@@ -55,6 +55,7 @@ import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeDetail from "./pages/EmployeeDetail";
 import EmployeePortal from "./pages/EmployeePortal";
+import UserManagement from "./pages/UserManagement";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import P2Forms from '@/pages/P2Forms';
@@ -196,6 +197,7 @@ function App() {
 
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
+                  <Route path="/user-management" component={UserManagement} />
                   <Route path="/employee-portal" component={EmployeePortalPage} />
                   <Route path="/employee-dashboard" component={EmployeeDashboard} />
                   <Route path="/employee-detail/:id" component={EmployeeDetail} />

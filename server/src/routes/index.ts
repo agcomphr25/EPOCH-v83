@@ -2,6 +2,7 @@ import { Express } from 'express';
 import { createServer, type Server } from "http";
 import authRoutes from './auth';
 import employeesRoutes from './employees';
+import usersRoutes from './users';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
@@ -33,6 +34,9 @@ export function registerRoutes(app: Express): Server {
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // User management routes
+  app.use('/api/users', usersRoutes);
 
   // Order management routes  
   app.use('/api/orders', ordersRoutes);

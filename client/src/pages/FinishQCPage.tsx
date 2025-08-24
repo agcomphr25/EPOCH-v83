@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +11,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { AlertTriangle, FileText } from 'lucide-react';
+import { AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 export default function FinishQCPage() {

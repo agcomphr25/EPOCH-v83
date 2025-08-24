@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react';
+import { Package, ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -458,18 +458,18 @@ export default function PaintQueuePage() {
                             >
                               <Eye className="w-3 h-3" />
                             </Badge>
-                            <Badge
-                              variant="outline"
-                              className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs ml-1 border-orange-300 text-orange-700 dark:text-orange-300"
+                            <Button 
+                              variant="outline" 
+                              size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleKickbackClick(order.orderId);
                               }}
                               title="Report Kickback"
+                              className="h-6 w-6 p-0"
                             >
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Kickback
-                            </Badge>
+                              <TrendingDown className="h-3 w-3" />
+                            </Button>
                             {hasKickbacks(order.orderId) && (
                               <Badge
                                 variant="destructive"

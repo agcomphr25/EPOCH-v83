@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Target, ArrowLeft, ArrowRight, CheckSquare, Square, ArrowRightCircle, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Target, ArrowLeft, ArrowRight, CheckSquare, Square, ArrowRightCircle, CheckCircle, AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';

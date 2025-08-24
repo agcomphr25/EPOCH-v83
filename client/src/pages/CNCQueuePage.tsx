@@ -521,14 +521,14 @@ export default function CNCQueuePage() {
                           
                           {/* Order Details */}
                           <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                            {order.handedness && (
-                              <div><span className="font-medium">Hand:</span> {order.handedness}</div>
-                            )}
                             {order.features?.action_length && (
                               <div><span className="font-medium">Action:</span> {order.features.action_length}</div>
                             )}
                             {order.features?.barrel_inlet && (
                               <div><span className="font-medium">Inlet:</span> {order.features.barrel_inlet}</div>
+                            )}
+                            {order.handedness && (
+                              <div><span className="font-medium">Hand:</span> {order.handedness}</div>
                             )}
                             {order.features?.bottom_metal && (
                               <div><span className="font-medium">Bottom:</span> {order.features.bottom_metal}</div>

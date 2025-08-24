@@ -70,7 +70,7 @@ export default function CNCQueuePage() {
     setSalesOrderModalOpen(true);
     
     try {
-      const response = await fetch(`/api/sales-order/${orderId}`);
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
       if (response.ok) {
         const htmlContent = await response.text();
         setSalesOrderContent(htmlContent);

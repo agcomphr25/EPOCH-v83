@@ -18,6 +18,8 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
+  // Daily activity tracking table
+  dailyActivityCounts,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -84,6 +86,8 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
+  // Daily activity count types
+  type DailyActivityCount, type InsertDailyActivityCount,
 
 
 } from "./schema";
@@ -593,6 +597,16 @@ export interface IStorage {
 
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
+
+  // Daily Activity Count CRUD methods
+  getAllDailyActivityCounts(): Promise<DailyActivityCount[]>;
+  getDailyActivityCountsByDate(date: string): Promise<DailyActivityCount[]>;
+  getDailyActivityCountsByDateRange(startDate: string, endDate: string): Promise<DailyActivityCount[]>;
+  getDailyActivityCount(id: number): Promise<DailyActivityCount | undefined>;
+  createDailyActivityCount(data: InsertDailyActivityCount): Promise<DailyActivityCount>;
+  updateDailyActivityCount(id: number, data: Partial<InsertDailyActivityCount>): Promise<DailyActivityCount>;
+  deleteDailyActivityCount(id: number): Promise<void>;
+  upsertDailyActivityCount(date: string, activityType: string, count: number, enteredBy?: string, notes?: string): Promise<DailyActivityCount>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5834,8 +5848,80 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Daily Activity Count CRUD methods implementation
+  async getAllDailyActivityCounts(): Promise<DailyActivityCount[]> {
+    return await db.select().from(dailyActivityCounts).orderBy(desc(dailyActivityCounts.date), dailyActivityCounts.activityType);
+  }
 
+  async getDailyActivityCountsByDate(date: string): Promise<DailyActivityCount[]> {
+    return await db.select().from(dailyActivityCounts)
+      .where(eq(dailyActivityCounts.date, date))
+      .orderBy(dailyActivityCounts.activityType);
+  }
 
+  async getDailyActivityCountsByDateRange(startDate: string, endDate: string): Promise<DailyActivityCount[]> {
+    return await db.select().from(dailyActivityCounts)
+      .where(and(
+        gte(dailyActivityCounts.date, startDate),
+        lte(dailyActivityCounts.date, endDate)
+      ))
+      .orderBy(desc(dailyActivityCounts.date), dailyActivityCounts.activityType);
+  }
+
+  async getDailyActivityCount(id: number): Promise<DailyActivityCount | undefined> {
+    const [result] = await db.select().from(dailyActivityCounts).where(eq(dailyActivityCounts.id, id));
+    return result || undefined;
+  }
+
+  async createDailyActivityCount(data: InsertDailyActivityCount): Promise<DailyActivityCount> {
+    const [result] = await db.insert(dailyActivityCounts).values(data).returning();
+    return result;
+  }
+
+  async updateDailyActivityCount(id: number, data: Partial<InsertDailyActivityCount>): Promise<DailyActivityCount> {
+    const [result] = await db
+      .update(dailyActivityCounts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(dailyActivityCounts.id, id))
+      .returning();
+    
+    if (!result) {
+      throw new Error(`Daily activity count with ID ${id} not found`);
+    }
+    
+    return result;
+  }
+
+  async deleteDailyActivityCount(id: number): Promise<void> {
+    await db.delete(dailyActivityCounts).where(eq(dailyActivityCounts.id, id));
+  }
+
+  async upsertDailyActivityCount(date: string, activityType: string, count: number, enteredBy?: string, notes?: string): Promise<DailyActivityCount> {
+    // First try to find existing record
+    const [existing] = await db.select().from(dailyActivityCounts)
+      .where(and(
+        eq(dailyActivityCounts.date, date),
+        eq(dailyActivityCounts.activityType, activityType)
+      ));
+
+    if (existing) {
+      // Update existing record
+      return await this.updateDailyActivityCount(existing.id, {
+        count,
+        enteredBy,
+        notes
+      });
+    } else {
+      // Create new record
+      return await this.createDailyActivityCount({
+        date,
+        activityType,
+        count,
+        enteredBy,
+        notes
+      });
+    }
+  }
 
 }
 

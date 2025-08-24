@@ -88,6 +88,7 @@ import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PaymentManagement from "./pages/PaymentManagement";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
+import DailyActivityTrackerPage from "./pages/DailyActivityTrackerPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -280,6 +281,9 @@ function App() {
 
                   {/* Shipping Management Routes */}
                   <Route path="/shipping-management" component={ShippingManagement} />
+
+                  {/* Daily Activity Tracking Routes */}
+                  <Route path="/daily-activity-tracker" component={DailyActivityTrackerPage} />
 
                   {/* Catch-all route for 404 */}
                   <Route component={NotFound} />

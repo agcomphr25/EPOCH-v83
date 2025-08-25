@@ -1103,6 +1103,40 @@ export default function OrderEntry() {
     }
   }, [featureDefs, isEditMode, features.rail_accessory]);
 
+  // Set default length of pull (LOP) value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.length_of_pull) {
+      const lopFeature = featureDefs.find(f => 
+        f.id === 'length_of_pull' || 
+        f.name === 'length_of_pull' || 
+        f.id?.toLowerCase().includes('length') ||
+        f.name?.toLowerCase().includes('length') ||
+        f.displayName?.toLowerCase().includes('length') ||
+        f.displayName?.toLowerCase().includes('lop')
+      );
+
+      if (lopFeature?.options) {
+        // Find "No Additional Length (STD 13.5")" option (check various possible values)
+        const standardLopOption = lopFeature.options.find(option => 
+          option.label?.includes('No Additional Length (STD 13.5")') ||
+          option.label?.toLowerCase().includes('no additional length') ||
+          option.value?.toLowerCase().includes('no_additional_length') ||
+          option.label?.toLowerCase().includes('std 13.5') ||
+          option.value?.toLowerCase().includes('std_13_5')
+        );
+
+        if (standardLopOption) {
+          setFeatures(prev => ({
+            ...prev,
+            length_of_pull: standardLopOption.value
+          }));
+          console.log('✅ Set default length of pull to:', standardLopOption.label, 'with value:', standardLopOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.length_of_pull]);
+
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([

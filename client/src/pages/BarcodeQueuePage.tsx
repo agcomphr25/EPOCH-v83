@@ -618,18 +618,16 @@ export default function BarcodeQueuePage() {
                                           <Edit className="h-3 w-3" />
                                         </Button>
                                       </Link>
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm"
+                                      <Badge
+                                        variant="outline"
+                                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleSalesOrderView(order.orderId);
                                         }}
-                                        title="View Sales Order"
-                                        className="h-6 w-6 p-0 ml-1"
                                       >
-                                        <Eye className="h-3 w-3" />
-                                      </Button>
+                                        <Eye className="w-3 h-3" />
+                                      </Badge>
                                       <Button 
                                         variant="outline" 
                                         size="sm"

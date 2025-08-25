@@ -18,8 +18,6 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Gateway reports table
-  gatewayReports,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -86,8 +84,6 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
-  // Gateway report types
-  type GatewayReport, type InsertGatewayReport,
 
 
 } from "./schema";
@@ -584,12 +580,6 @@ export interface IStorage {
   getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
-
-  // Gateway Report Methods
-  getGatewayReportByDate(date: string): Promise<GatewayReport | undefined>;
-  getGatewayReportsByWeek(weekStart: string): Promise<GatewayReport[]>;
-  createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
-  getWeeklySummary(weekStart: string): Promise<{ [key: string]: number }>;
 
   // Add methods for finalized orders
   getAllFinalizedOrders(): Promise<AllOrder[]>;
@@ -1331,8 +1321,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
-    // Get finalized orders from all_orders table
-    const finalizedOrders = await db.select({
+    // Select only the columns that actually exist in the all_orders table
+    const orders = await db.select({
       id: allOrders.id,
       orderId: allOrders.orderId,
       orderDate: allOrders.orderDate,
@@ -1397,145 +1387,39 @@ export class DatabaseStorage implements IStorage {
       isVerified: allOrders.isVerified,
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
-    }).from(allOrders);
-
-    // Get legacy orders from orders table that are not in all_orders (grandfathered in)
-    const legacyOrders = await db.select({
-      id: orders.id,
-      orderId: orders.orderId,
-      orderDate: orders.date,
-      dueDate: orders.dueDate,
-      customer: orders.customer,
-      product: orders.product,
-      currentDepartment: orders.currentDepartment,
-      status: orders.status,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt
-    }).from(orders)
+    }).from(allOrders)
     .where(
       and(
-        eq(orders.status, 'Active'),
-        notInArray(orders.orderId, db.select({ orderId: allOrders.orderId }).from(allOrders))
+        ne(allOrders.status, 'CANCELLED'),
+        eq(allOrders.isCancelled, false)
       )
-    );
+    )
+    .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select({
       id: customers.id,
-      name: customers.name
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
     }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
-    // Convert legacy orders to AllOrder format (grandfathered in from old system)
-    const convertedLegacyOrders = legacyOrders.map(order => ({
-      id: order.id,
-      orderId: order.orderId,
-      orderDate: order.orderDate,
-      dueDate: order.dueDate,
-      customerId: '',
-      customerPO: '',
-      fbOrderNumber: '',
-      agrOrderDetails: '',
-      isCustomOrder: false,
-      modelId: order.product || '',
-      handedness: '',
-      shankLength: 0,
-      features: {},
-      featureQuantities: {},
-      discountCode: '',
-      notes: 'Legacy order from old system',
-      customDiscountType: '',
-      customDiscountValue: 0,
-      showCustomDiscount: false,
-      priceOverride: null,
-      shipping: 0,
-      tikkaOption: '',
-      status: order.status,
-      barcode: '',
-      currentDepartment: order.currentDepartment,
-      departmentHistory: [],
-      scrappedQuantity: 0,
-      totalProduced: 0,
-      layupCompletedAt: null,
-      pluggingCompletedAt: null,
-      cncCompletedAt: null,
-      finishCompletedAt: null,
-      gunsmithCompletedAt: null,
-      paintCompletedAt: null,
-      qcCompletedAt: null,
-      shippingCompletedAt: null,
-      scrapDate: null,
-      scrapReason: '',
-      scrapDisposition: '',
-      scrapAuthorization: '',
-      isReplacement: false,
-      replacedOrderId: '',
-      isPaid: false,
-      paymentType: '',
-      paymentAmount: 0,
-      paymentDate: null,
-      paymentTimestamp: null,
-      trackingNumber: '',
-      shippingCarrier: '',
-      shippingMethod: '',
-      shippedDate: null,
-      estimatedDelivery: null,
-      shippingLabelGenerated: false,
-      customerNotified: false,
-      notificationMethod: '',
-      notificationSentAt: null,
-      deliveryConfirmed: false,
-      deliveryConfirmedAt: null,
-      isCancelled: false,
-      cancelledAt: null,
-      cancelReason: '',
-      isVerified: false,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-      customer: order.customer || 'Unknown Customer',
-      product: order.product || 'Unknown Product',
-      isFlattop: false
-    }));
-
-    // Combine finalized orders and legacy orders
-    const allOrdersResult = [
-      ...finalizedOrders.map(order => ({
-        ...order,
-        customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
-        product: order.modelId || 'Unknown Product',
-        isFlattop: false
-      })),
-      ...convertedLegacyOrders
-    ];
-
-    return allOrdersResult.sort((a, b) => 
-      new Date(b.updatedAt || b.createdAt || 0).getTime() - 
-      new Date(a.updatedAt || a.createdAt || 0).getTime()
-    ) as any;
-  }
-
-  // Get orphaned orders that exist in orders table but not in all_orders table
-  async getOrphanedOrders(): Promise<any[]> {
-    const orphanedOrders = await db.select({
-      id: orders.id,
-      orderId: orders.orderId,
-      date: orders.date,
-      dueDate: orders.dueDate,
-      customer: orders.customer,
-      product: orders.product,
-      currentDepartment: orders.currentDepartment,
-      status: orders.status,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt
-    }).from(orders)
-    .where(
-      and(
-        eq(orders.status, 'Active'),
-        notInArray(orders.orderId, db.select({ orderId: allOrders.orderId }).from(allOrders))
-      )
-    );
-
-    return orphanedOrders;
+    // Enrich orders with customer names and add required frontend fields
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
+    })) as any;
   }
 
   // Helper function to calculate order total from features and pricing
@@ -1733,10 +1617,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Get all orders with payment status (finalized + legacy orders)
+  // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
-    // Get finalized orders with customer names and payment totals
-    const finalizedOrdersWithCustomers = await db
+    // Optimized: Use single query to get orders with customer names and payment totals
+    const ordersWithCustomers = await db
       .select({
         // Order fields
         id: allOrders.id,
@@ -1765,27 +1649,8 @@ export class DatabaseStorage implements IStorage {
         customerName: customers.name,
       })
       .from(allOrders)
-      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`));
-
-    // Get legacy orders that are not in all_orders (grandfathered in)
-    const legacyOrders = await db.select({
-      id: orders.id,
-      orderId: orders.orderId,
-      orderDate: orders.date,
-      dueDate: orders.dueDate,
-      customer: orders.customer,
-      product: orders.product,
-      currentDepartment: orders.currentDepartment,
-      status: orders.status,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt
-    }).from(orders)
-    .where(
-      and(
-        eq(orders.status, 'Active'),
-        notInArray(orders.orderId, db.select({ orderId: allOrders.orderId }).from(allOrders))
-      )
-    );
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .orderBy(desc(allOrders.updatedAt));
 
     // Get all payments aggregated by order ID in parallel
     const paymentTotals = await db
@@ -1799,8 +1664,8 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process finalized orders with payment info
-    const finalizedOrdersWithPaymentInfo = finalizedOrdersWithCustomers.map(order => {
+    // Process orders with payment info (much faster without async calculateOrderTotal calls)
+    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
       const orderTotal = order.paymentAmount || 0;
 
@@ -1816,48 +1681,7 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    // Convert legacy orders to AllOrder format with payment info
-    const legacyOrdersWithPaymentInfo = legacyOrders.map(order => {
-      const paymentTotal = paymentMap.get(order.orderId) || 0;
-
-      return {
-        id: order.id,
-        orderId: order.orderId,
-        orderDate: order.orderDate,
-        dueDate: order.dueDate,
-        customerId: '',
-        currentDepartment: order.currentDepartment,
-        status: order.status,
-        modelId: order.product || '',
-        shipping: 0,
-        paymentAmount: 0,
-        isPaid: false,
-        isVerified: false,
-        fbOrderNumber: '',
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-        isCancelled: false,
-        cancelledAt: null,
-        cancelReason: '',
-        specialShippingInternational: false,
-        specialShippingNextDayAir: false,
-        specialShippingBillToReceiver: false,
-        customer: order.customer || 'Unknown Customer',
-        paymentTotal,
-        isFullyPaid: false // Legacy orders default to unpaid
-      };
-    });
-
-    // Combine finalized and legacy orders
-    const allOrdersWithPaymentInfo = [
-      ...finalizedOrdersWithPaymentInfo,
-      ...legacyOrdersWithPaymentInfo
-    ];
-
-    return allOrdersWithPaymentInfo.sort((a, b) => 
-      new Date(b.updatedAt || b.createdAt || 0).getTime() - 
-      new Date(a.updatedAt || a.createdAt || 0).getTime()
-    );
+    return ordersWithPaymentInfo;
   }
 
   async getOrdersByDepartment(department: string): Promise<AllOrder[]> {
@@ -5696,73 +5520,6 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(orderAttachments)
       .where(eq(orderAttachments.id, attachmentId));
-  }
-
-  // Gateway Report Methods
-  async getGatewayReportByDate(date: string): Promise<GatewayReport | undefined> {
-    const [report] = await db
-      .select()
-      .from(gatewayReports)
-      .where(eq(gatewayReports.date, date));
-    return report || undefined;
-  }
-
-  async getGatewayReportsByWeek(weekStart: string): Promise<GatewayReport[]> {
-    // Calculate week end (Sunday to Saturday, assuming weekStart is Sunday)
-    const startDate = new Date(weekStart);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    
-    return await db
-      .select()
-      .from(gatewayReports)
-      .where(
-        and(
-          gte(gatewayReports.date, weekStart),
-          lte(gatewayReports.date, endDate.toISOString().split('T')[0])
-        )
-      )
-      .orderBy(asc(gatewayReports.date));
-  }
-
-  async createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport> {
-    // Check if report exists for this date
-    const existing = await this.getGatewayReportByDate(data.date);
-    
-    if (existing) {
-      // Update existing report
-      const [updated] = await db
-        .update(gatewayReports)
-        .set({
-          buttpads: data.buttpads,
-          duratec: data.duratec,
-          sandblasting: data.sandblasting,
-          texture: data.texture,
-          updatedAt: sql`NOW()`
-        })
-        .where(eq(gatewayReports.date, data.date))
-        .returning();
-      return updated;
-    } else {
-      // Create new report
-      const [created] = await db
-        .insert(gatewayReports)
-        .values(data)
-        .returning();
-      return created;
-    }
-  }
-
-  async getWeeklySummary(weekStart: string): Promise<{ [key: string]: number }> {
-    const weekReports = await this.getGatewayReportsByWeek(weekStart);
-    
-    return weekReports.reduce((summary, report) => {
-      summary.buttpads = (summary.buttpads || 0) + (report.buttpads || 0);
-      summary.duratec = (summary.duratec || 0) + (report.duratec || 0);
-      summary.sandblasting = (summary.sandblasting || 0) + (report.sandblasting || 0);
-      summary.texture = (summary.texture || 0) + (report.texture || 0);
-      return summary;
-    }, {} as { [key: string]: number });
   }
 
   // Add methods for finalized orders

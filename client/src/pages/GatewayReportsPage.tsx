@@ -203,7 +203,7 @@ const GatewayReportsPage = () => {
     setSelectedWeek(weekStart.toISOString().split('T')[0]);
   };
 
-  // Calculate running totals for a specific week
+  // Calculate running totals for a specific week (weekdays only)
   const getWeeklyRunningTotals = (reports: GatewayReport[], weekStart: string) => {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
@@ -216,14 +216,15 @@ const GatewayReportsPage = () => {
       return reportDate >= start && reportDate <= end;
     });
 
-    // Create array for each day of the week
-    const dailyRunningTotals = [];
+    // Create array for weekdays only (Monday-Friday)
+    const dailyTotals = [];
     let runningButtpadTotal = 0;
     let runningDuratecTotal = 0;
     let runningSandblastingTotal = 0;
     let runningTextureTotal = 0;
 
-    for (let i = 0; i < 7; i++) {
+    // Loop through weekdays only (Monday = 1, Sunday = 0, so we want 1-5)
+    for (let i = 1; i <= 5; i++) {
       const currentDate = new Date(weekStart);
       currentDate.setDate(currentDate.getDate() + i);
       const dateString = currentDate.toISOString().split('T')[0];
@@ -238,22 +239,26 @@ const GatewayReportsPage = () => {
         runningTextureTotal += dayReport.textureUnits;
       }
 
-      dailyRunningTotals.push({
+      dailyTotals.push({
         date: dateString,
         dayName: getDayOfWeek(dateString),
         dailyButtpad: dayReport?.buttpadsUnits || 0,
         dailyDuratec: dayReport?.duratecUnits || 0,
         dailySandblasting: dayReport?.sandblastingUnits || 0,
         dailyTexture: dayReport?.textureUnits || 0,
-        runningButtpadTotal,
-        runningDuratecTotal,
-        runningSandblastingTotal,
-        runningTextureTotal,
         hasReport: !!dayReport
       });
     }
 
-    return dailyRunningTotals;
+    return {
+      dailyTotals,
+      runningTotals: {
+        runningButtpadTotal,
+        runningDuratecTotal,
+        runningSandblastingTotal,
+        runningTextureTotal
+      }
+    };
   };
 
   // Calculate weekly totals for historical view
@@ -341,58 +346,64 @@ const GatewayReportsPage = () => {
               {isLoading ? (
                 <div className="text-center py-8">Loading reports...</div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Day</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-center">Daily<br/>Buttpads</TableHead>
-                      <TableHead className="text-center">Running<br/>Buttpads</TableHead>
-                      <TableHead className="text-center">Daily<br/>Duratec</TableHead>
-                      <TableHead className="text-center">Running<br/>Duratec</TableHead>
-                      <TableHead className="text-center">Daily<br/>Sandblasting</TableHead>
-                      <TableHead className="text-center">Running<br/>Sandblasting</TableHead>
-                      <TableHead className="text-center">Daily<br/>Texture</TableHead>
-                      <TableHead className="text-center">Running<br/>Texture</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getWeeklyRunningTotals(reports, selectedWeek).map((day, index) => (
-                      <TableRow key={day.date} className={!day.hasReport ? "opacity-50" : ""}>
-                        <TableCell className="font-medium">
-                          {day.dayName}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(day.date)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {day.dailyButtpad}
-                        </TableCell>
-                        <TableCell className="text-center font-semibold text-blue-600">
-                          {day.runningButtpadTotal}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {day.dailyDuratec}
-                        </TableCell>
-                        <TableCell className="text-center font-semibold text-green-600">
-                          {day.runningDuratecTotal}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {day.dailySandblasting}
-                        </TableCell>
-                        <TableCell className="text-center font-semibold text-orange-600">
-                          {day.runningSandblastingTotal}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {day.dailyTexture}
-                        </TableCell>
-                        <TableCell className="text-center font-semibold text-purple-600">
-                          {day.runningTextureTotal}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                (() => {
+                  const weekData = getWeeklyRunningTotals(reports, selectedWeek);
+                  return (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Day</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-center">Buttpads</TableHead>
+                          <TableHead className="text-center">Duratec</TableHead>
+                          <TableHead className="text-center">Sandblasting</TableHead>
+                          <TableHead className="text-center">Texture</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {weekData.dailyTotals.map((day, index) => (
+                          <TableRow key={day.date} className={!day.hasReport ? "opacity-50" : ""}>
+                            <TableCell className="font-medium">
+                              {day.dayName}
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(day.date)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {day.dailyButtpad}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {day.dailyDuratec}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {day.dailySandblasting}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {day.dailyTexture}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Running totals row at bottom */}
+                        <TableRow className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                          <TableCell className="font-bold">Week Total</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-center text-blue-600 font-bold">
+                            {weekData.runningTotals.runningButtpadTotal}
+                          </TableCell>
+                          <TableCell className="text-center text-green-600 font-bold">
+                            {weekData.runningTotals.runningDuratecTotal}
+                          </TableCell>
+                          <TableCell className="text-center text-orange-600 font-bold">
+                            {weekData.runningTotals.runningSandblastingTotal}
+                          </TableCell>
+                          <TableCell className="text-center text-purple-600 font-bold">
+                            {weekData.runningTotals.runningTextureTotal}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  );
+                })()
               )}
             </CardContent>
           </Card>

@@ -19,6 +19,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, Link } from 'wouter';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
@@ -44,6 +45,7 @@ export default function BarcodeQueuePage() {
   const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
   const [kickbackOrderId, setKickbackOrderId] = useState('');
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Kickback form
@@ -419,6 +421,31 @@ export default function BarcodeQueuePage() {
     }
   };
 
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = barcodeOrders.some((o: any) => o.orderId === order.orderId);
+    if (orderExists) {
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast({
+        title: "Order found",
+        description: `Order ${order.orderId} highlighted in the list`
+      });
+    } else {
+      toast({
+        title: "Order not in this department",
+        description: `Order ${order.orderId} is not in the Barcode department`,
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto px-6 pb-6 space-y-6" style={{ paddingTop: '2px' }}>
       {/* Header with Actions */}
@@ -467,6 +494,29 @@ export default function BarcodeQueuePage() {
 
       {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
+
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={barcodeOrders}
+              placeholder="Search orders by Order ID or FB Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -552,9 +602,12 @@ export default function BarcodeQueuePage() {
 
                       return (
                         <Card 
-                          key={order.orderId} 
+                          key={order.orderId}
+                          id={`order-${order.orderId}`}
                           className={`cursor-pointer transition-all duration-200 border-l-4 ${
-                            isSelected 
+                            highlightedOrderId === order.orderId
+                              ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-l-yellow-500 shadow-lg'
+                              : isSelected 
                               ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-l-blue-500' 
                               : isOverdue
                               ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'

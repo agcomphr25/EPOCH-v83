@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
@@ -21,6 +22,7 @@ export default function CNCQueuePage() {
   const [selectAllGunsmith, setSelectAllGunsmith] = useState(false);
   const [selectAllFinish, setSelectAllFinish] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -417,6 +419,51 @@ export default function CNCQueuePage() {
 
       {/* Facebook Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
+
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={[...gunsimthOrders, ...finishOrders]}
+              placeholder="Search orders by Order ID or FB Number..."
+              onOrderSelect={(order) => {
+                const allOrders = [...gunsimthOrders, ...finishOrders];
+                const orderExists = allOrders.some((o: any) => o.orderId === order.orderId);
+                if (orderExists) {
+                  setHighlightedOrderId(order.orderId);
+                  setTimeout(() => {
+                    const element = document.getElementById(`order-${order.orderId}`);
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }, 100);
+                  toast({
+                    title: "Order found",
+                    description: `Order ${order.orderId} highlighted in the list`
+                  });
+                } else {
+                  toast({
+                    title: "Order not in this department",
+                    description: `Order ${order.orderId} is not in the CNC department`,
+                    variant: "destructive"
+                  });
+                }
+              }}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

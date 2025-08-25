@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -21,6 +22,7 @@ export default function PaintQueuePage() {
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [salesOrderContent, setSalesOrderContent] = useState('');
   const [salesOrderLoading, setSalesOrderLoading] = useState(false);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -100,6 +102,24 @@ export default function PaintQueuePage() {
       } else {
         toast.error(`Order ${orderId} not found`);
       }
+    }
+  };
+
+  // Handle order search selection
+  const handleOrderSearchSelect = (order: any) => {
+    const orderExists = paintOrders.some((o: any) => o.orderId === order.orderId);
+    if (orderExists) {
+      setHighlightedOrderId(order.orderId);
+      // Auto-scroll to the highlighted order
+      setTimeout(() => {
+        const element = document.getElementById(`order-${order.orderId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      toast.success(`Order ${order.orderId} highlighted in the list`);
+    } else {
+      toast.error(`Order ${order.orderId} is not in the Paint department`);
     }
   };
 
@@ -308,6 +328,29 @@ export default function PaintQueuePage() {
       {/* Facebook Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
 
+      {/* Order Search Box */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <OrderSearchBox 
+              orders={paintOrders}
+              placeholder="Search orders by Order ID or FB Number..."
+              onOrderSelect={handleOrderSearchSelect}
+            />
+            {highlightedOrderId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHighlightedOrderId(null)}
+                className="text-sm"
+              >
+                Clear highlight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Previous Department Count */}
@@ -405,8 +448,11 @@ export default function PaintQueuePage() {
                 return (
                   <div 
                     key={order.orderId}
+                    id={`order-${order.orderId}`}
                     className={`p-2 border rounded cursor-pointer transition-all duration-200 ${
-                      isOverdue
+                      highlightedOrderId === order.orderId
+                        ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+                        : isOverdue
                         ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
                         : isSelected
                           ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'

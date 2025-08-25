@@ -492,7 +492,11 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       })()}`,
       
       `4) Custom options are present and completed:\n    ${Object.entries(orderFeatures)
-        .filter(([key]) => ['qd_accessory', 'lop_adjustment', 'rail_accessory', 'texture', 'tripod_tap', 'tripod_mount', 'bipod_accessory'].includes(key))
+        .filter(([key, value]) => {
+          // Exclude basic configuration items that are displayed elsewhere
+          const excludedKeys = ['handedness', 'action', 'action_length', 'bottom_metal', 'barrel_inlet', 'paint_options', 'metallic_finishes', 'paint_options_combined'];
+          return !excludedKeys.includes(key) && value && value !== 'none' && value !== '';
+        })
         .map(([key, value]) => {
           const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
           return `${displayKey}: ${value}`;

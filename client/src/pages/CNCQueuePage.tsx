@@ -614,10 +614,13 @@ export default function CNCQueuePage() {
                                     {order.features?.bottom_metal && (
                                       <div><span className="font-medium">Bottom Metal:</span> {getFeatureDisplayValue('bottom_metal', order.features.bottom_metal)}</div>
                                     )}
+                                    {order.features?.custom_bolt_notch && (
+                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                    )}
                                   </>
                                 );
                               } else {
-                                // For all non-Tikka orders, always show all 5 fields in the requested order
+                                // For all non-Tikka orders, always show all fields in the requested order
                                 return (
                                   <>
                                     <div><span className="font-medium">Handedness:</span> {order.handedness ? getFeatureDisplayValue('handedness', order.handedness) : 'Not specified'}</div>
@@ -625,6 +628,9 @@ export default function CNCQueuePage() {
                                     <div><span className="font-medium">Action Length:</span> {order.features?.action_length ? getFeatureDisplayValue('action_length', order.features.action_length) : 'Not specified'}</div>
                                     <div><span className="font-medium">Action Inlet:</span> {order.features?.action_inlet ? getFeatureDisplayValue('action_inlet', order.features.action_inlet) : 'Not specified'}</div>
                                     <div><span className="font-medium">Bottom Metal:</span> {order.features?.bottom_metal ? getFeatureDisplayValue('bottom_metal', order.features.bottom_metal) : 'Not specified'}</div>
+                                    {order.features?.custom_bolt_notch && (
+                                      <div><span className="font-medium">Custom Bolt Notch:</span> {getFeatureDisplayValue('custom_bolt_notch', order.features.custom_bolt_notch)}</div>
+                                    )}
                                   </>
                                 );
                               }

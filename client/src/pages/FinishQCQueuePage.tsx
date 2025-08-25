@@ -7,6 +7,8 @@ import { Shield, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import FBNumberSearch from '@/components/FBNumberSearch';
+import { toast } from 'react-hot-toast';
 
 export default function FinishQCQueuePage() {
   // Get all orders from production pipeline
@@ -44,7 +46,22 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/stock-models'],
   });
 
-
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Finish QC queue
+    const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      toast.success(`Order ${orderId} found in Finish QC department`);
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Finish QC`);
+      } else {
+        toast.error(`Order ${orderId} not found`);
+      }
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -55,6 +72,9 @@ export default function FinishQCQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

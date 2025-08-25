@@ -13,6 +13,7 @@ import { format, differenceInDays } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function QCShippingQueuePage() {
   // State for selected orders and shipping functionality
@@ -65,6 +66,35 @@ export default function QCShippingQueuePage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current QC/Shipping queue
+    const orderExists = qcShippingOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast({
+        title: "Success",
+        description: `Order ${orderId} found and selected`,
+      });
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast({
+          title: "Error",
+          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not QC/Shipping`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error", 
+          description: `Order ${orderId} not found`,
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   // Get orders in QC/Shipping department and categorize by due date
@@ -497,6 +527,9 @@ export default function QCShippingQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

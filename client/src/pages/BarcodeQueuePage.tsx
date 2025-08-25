@@ -12,6 +12,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation, Link } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -267,6 +268,24 @@ export default function BarcodeQueuePage() {
     }
   };
 
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Barcode queue
+    const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
+      toast.success(`Order ${orderId} found and selected`);
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Barcode`);
+      } else {
+        toast.error(`Order ${orderId} not found`);
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto px-6 pb-6 space-y-6" style={{ paddingTop: '2px' }}>
       {/* Header with Actions */}
@@ -315,6 +334,9 @@ export default function BarcodeQueuePage() {
 
       {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

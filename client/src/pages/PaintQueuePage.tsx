@@ -13,6 +13,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -77,6 +78,24 @@ export default function PaintQueuePage() {
       setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
     } finally {
       setSalesOrderLoading(false);
+    }
+  };
+
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Paint queue
+    const orderExists = paintOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast.success(`Order ${orderId} found and selected`);
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Paint`);
+      } else {
+        toast.error(`Order ${orderId} not found`);
+      }
     }
   };
 
@@ -281,6 +300,9 @@ export default function PaintQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

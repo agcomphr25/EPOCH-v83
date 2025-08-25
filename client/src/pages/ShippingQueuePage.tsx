@@ -19,6 +19,7 @@ import { fetchPdf, downloadPdf } from '@/utils/pdfUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -87,6 +88,34 @@ export default function ShippingQueuePage() {
   // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
+  };
+
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Shipping queue
+    const orderExists = shippingOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      toast({
+        title: "Success",
+        description: `Order ${orderId} found in Shipping department`,
+      });
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast({
+          title: "Error",
+          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Shipping`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: `Order ${orderId} not found`,
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   // Mutation to fulfill orders and move to shipping management
@@ -564,6 +593,9 @@ export default function ShippingQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Bulk Shipping Actions */}
       {selectedOrders.length > 0 && (

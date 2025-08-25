@@ -10,6 +10,7 @@ import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
@@ -751,6 +752,24 @@ export default function LayupPluggingQueuePage() {
     }
   };
 
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Layup/Plugging queue
+    const orderExists = currentWeekOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      setSelectedOrders(prev => [...prev, orderId]);
+      toast.success(`Order ${orderId} found and selected`);
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Layup/Plugging`);
+      } else {
+        toast.error(`Order ${orderId} not found`);
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -760,6 +779,9 @@ export default function LayupPluggingQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

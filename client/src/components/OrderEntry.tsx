@@ -1001,6 +1001,38 @@ export default function OrderEntry() {
     }
   };
 
+  // Set default texture value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.texture_options) {
+      const textureFeature = featureDefs.find(f => 
+        f.id === 'texture_options' || 
+        f.name === 'texture_options' || 
+        f.id?.toLowerCase().includes('texture') ||
+        f.name?.toLowerCase().includes('texture') ||
+        f.displayName?.toLowerCase().includes('texture')
+      );
+
+      if (textureFeature?.options) {
+        // Find "No Texture" option (check various possible values)
+        const noTextureOption = textureFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no texture') ||
+          option.value?.toLowerCase().includes('no_texture') ||
+          option.value?.toLowerCase().includes('none') ||
+          option.label?.toLowerCase() === 'none'
+        );
+
+        if (noTextureOption) {
+          setFeatures(prev => ({
+            ...prev,
+            texture_options: noTextureOption.value
+          }));
+          console.log('✅ Set default texture to:', noTextureOption.label, 'with value:', noTextureOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.texture_options]);
+
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([

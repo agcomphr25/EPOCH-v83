@@ -1071,6 +1071,38 @@ export default function OrderEntry() {
     }
   }, [featureDefs, isEditMode, features.swivel_studs]);
 
+  // Set default rail accessory value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && (!features.rail_accessory || features.rail_accessory.length === 0)) {
+      const railFeature = featureDefs.find(f => 
+        f.id === 'rail_accessory' || 
+        f.name === 'rail_accessory' || 
+        f.id?.toLowerCase().includes('rail') ||
+        f.name?.toLowerCase().includes('rail') ||
+        f.displayName?.toLowerCase().includes('rail')
+      );
+
+      if (railFeature?.options) {
+        // Find "No Rail" option (check various possible values)
+        const noRailOption = railFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no rail') ||
+          option.value?.toLowerCase().includes('no_rail') ||
+          option.label?.toLowerCase() === 'none' ||
+          option.value?.toLowerCase() === 'none'
+        );
+
+        if (noRailOption) {
+          setFeatures(prev => ({
+            ...prev,
+            rail_accessory: [noRailOption.value] // Rails is an array field
+          }));
+          console.log('✅ Set default rail accessory to:', noRailOption.label, 'with value:', noRailOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.rail_accessory]);
+
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([

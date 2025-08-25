@@ -71,7 +71,7 @@ export default function AGTestDashboard() {
       </div>
 
       {/* Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card 
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
           onClick={() => navigateTo('/layup-scheduler')}
@@ -140,6 +140,24 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Finish department queue and technician assignment
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card 
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
+          onClick={() => navigateTo('/gateway-reports')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-red-600" />
+                <span className="text-sm font-medium">Gateway Report</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Track daily activity for Buttpads, Duratec, Sandblasting, Texture
             </p>
           </CardContent>
         </Card>

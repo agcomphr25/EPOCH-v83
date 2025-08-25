@@ -521,6 +521,7 @@ export default function AllOrdersList() {
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
+                const isFulfilled = order.status === 'FULFILLED' || order.status === 'FINALIZED';
 
                 // Apply local department updates for immediate visual feedback
 

@@ -88,6 +88,7 @@ const GatewayReportsPage = () => {
       queryClient.invalidateQueries({ queryKey: ["/api/gateway-reports"] });
       toast({ title: "Success", description: "Gateway report updated successfully" });
       setEditingReport(null);
+      resetForm();
     },
     onError: (error: any) => {
       toast({ 
@@ -126,9 +127,30 @@ const GatewayReportsPage = () => {
     setShowForm(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    createReportMutation.mutate(formData);
+    
+    // Check if a report already exists for this date
+    const existingReport = reports.find(report => report.reportDate === formData.reportDate);
+    
+    if (existingReport) {
+      if (confirm(`A report already exists for ${formatDate(formData.reportDate)}. Would you like to update it instead?`)) {
+        // Update existing report
+        updateReportMutation.mutate({
+          id: existingReport.id,
+          data: {
+            buttpadsUnits: formData.buttpadsUnits,
+            duratecUnits: formData.duratecUnits,
+            sandblastingUnits: formData.sandblastingUnits,
+            textureUnits: formData.textureUnits,
+            notes: formData.notes
+          }
+        });
+      }
+    } else {
+      // Create new report
+      createReportMutation.mutate(formData);
+    }
   };
 
   const handleEdit = (report: GatewayReport) => {

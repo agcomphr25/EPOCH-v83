@@ -521,7 +521,6 @@ export default function AllOrdersList() {
                 const nextDept = getNextDepartment(displayDepartment);
                 const isComplete = displayDepartment === 'Shipping';
                 const isScrapped = order.status === 'SCRAPPED';
-                const isFulfilled = order.status === 'FULFILLED' || order.status === 'FINALIZED';
 
                 // Apply local department updates for immediate visual feedback
 
@@ -650,7 +649,7 @@ export default function AllOrdersList() {
                           </Button>
                         </Link>
 
-                        {!isScrapped && !isComplete && !isFulfilled && order.currentDepartment === 'P1 Production Queue' && (
+                        {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
                           <Button
                             size="sm"
                             onClick={() => handlePushToLayupPlugging(order.orderId)}
@@ -661,7 +660,7 @@ export default function AllOrdersList() {
                           </Button>
                         )}
 
-                        {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
+                        {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                           <Button
                             size="sm"
                             onClick={() => handleProgressOrder(order.orderId, displayDepartment)}

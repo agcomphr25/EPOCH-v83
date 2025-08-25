@@ -125,10 +125,36 @@ export default function PaintQueuePage() {
 
   // Get orders in Paint department
   const paintOrders = useMemo(() => {
-    return (allOrders as any[]).filter((order: any) => 
+    const filtered = (allOrders as any[]).filter((order: any) => 
       order.currentDepartment === 'Paint' || 
       (order.department === 'Paint' && order.status === 'IN_PROGRESS')
     );
+
+    // Sort orders alphabetically and numerically
+    return filtered.sort((a: any, b: any) => {
+      const aId = getDisplayOrderId(a);
+      const bId = getDisplayOrderId(b);
+
+      // Extract letter prefix and numeric suffix
+      const aMatch = aId.match(/^([A-Za-z]+)(\d+)$/);
+      const bMatch = bId.match(/^([A-Za-z]+)(\d+)$/);
+
+      if (aMatch && bMatch) {
+        const [, aPrefix, aNumber] = aMatch;
+        const [, bPrefix, bNumber] = bMatch;
+        
+        // First sort by prefix alphabetically
+        if (aPrefix !== bPrefix) {
+          return aPrefix.localeCompare(bPrefix);
+        }
+        
+        // Then sort by number numerically
+        return parseInt(aNumber, 10) - parseInt(bNumber, 10);
+      }
+
+      // Fallback to string comparison if pattern doesn't match
+      return aId.localeCompare(bId);
+    });
   }, [allOrders]);
 
   // Count orders in previous department (Finish QC)

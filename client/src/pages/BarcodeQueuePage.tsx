@@ -501,7 +501,7 @@ export default function BarcodeQueuePage() {
           <div className="flex items-center gap-4">
             <OrderSearchBox 
               orders={barcodeOrders}
-              placeholder="Search orders by Order ID or FB Number..."
+              placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={handleOrderSearchSelect}
             />
             {highlightedOrderId && (

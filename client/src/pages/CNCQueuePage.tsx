@@ -384,7 +384,7 @@ export default function CNCQueuePage() {
     }
   };
 
-  // Handle order found via Facebook number search
+  // Handle order found via FishBowl number search
   const handleOrderFound = (orderId: string) => {
     // Check if the order exists in the current CNC queue
     const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
@@ -417,7 +417,7 @@ export default function CNCQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Facebook Number Search */}
+      {/* FishBowl Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Order Search Box */}
@@ -426,7 +426,7 @@ export default function CNCQueuePage() {
           <div className="flex items-center gap-4">
             <OrderSearchBox 
               orders={[...gunsimthOrders, ...finishOrders]}
-              placeholder="Search orders by Order ID or FB Number..."
+              placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={(order) => {
                 const allOrders = [...gunsimthOrders, ...finishOrders];
                 const orderExists = allOrders.some((o: any) => o.orderId === order.orderId);

@@ -22,7 +22,7 @@ export default function FBNumberSearch({
     queryKey: ['/api/orders/all'],
   });
 
-  // Filter orders by Facebook number
+  // Filter orders by FishBowl number
   const searchResults = useMemo(() => {
     if (!searchValue.trim()) return [];
     
@@ -49,7 +49,7 @@ export default function FBNumberSearch({
       <div className="flex items-center gap-2 mb-2">
         <Search className="h-4 w-4" />
         <Label htmlFor="fb-search" className="text-sm font-medium">
-          Search by Facebook Number
+          Search by FishBowl Number
         </Label>
       </div>
       
@@ -57,7 +57,7 @@ export default function FBNumberSearch({
         <Input
           id="fb-search"
           type="text"
-          placeholder="Enter Facebook order number..."
+          placeholder="Enter FishBowl order number..."
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           className="pr-8"
@@ -112,7 +112,7 @@ export default function FBNumberSearch({
             </div>
           ) : (
             <div className="p-3 text-sm text-gray-500 dark:text-gray-400 border rounded-md bg-gray-50 dark:bg-gray-800">
-              No orders found with Facebook number containing "{searchValue}"
+              No orders found with FishBowl number containing "{searchValue}"
             </div>
           )}
         </div>

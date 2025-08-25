@@ -100,14 +100,30 @@ export default function BarcodeQueuePage() {
   const handleSalesOrderView = async (orderId: string) => {
     setSalesOrderLoading(true);
     setSalesOrderModalOpen(true);
+    setSalesOrderContent('');
 
     try {
-      // This would fetch the sales order content or render it
       const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      const content = await response.text();
-      setSalesOrderContent(content);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setSalesOrderContent(url);
+      } else {
+        setSalesOrderContent('');
+        toast({
+          title: "Error loading sales order",
+          description: "Failed to load sales order PDF",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      setSalesOrderContent('<p>Error loading sales order</p>');
+      console.error('Error loading sales order:', error);
+      setSalesOrderContent('');
+      toast({
+        title: "Error loading sales order", 
+        description: "Failed to load sales order PDF",
+        variant: "destructive"
+      });
     } finally {
       setSalesOrderLoading(false);
     }
@@ -517,6 +533,39 @@ export default function BarcodeQueuePage() {
                                       FB: {order.fbOrderNumber}
                                     </div>
                                   )}
+
+                                  {/* Action Buttons */}
+                                  <div className="flex gap-1 pt-2">
+                                    <Link href={`/order-entry?draft=${order.orderId}`}>
+                                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                    </Link>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 ml-1"
+                                      title="View Sales Order"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSalesOrderView(order.orderId);
+                                      }}
+                                    >
+                                      <FileText className="w-3 h-3" />
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleKickbackClick(order.orderId);
+                                      }}
+                                      title="Report Kickback"
+                                      className="h-6 w-6 p-0 ml-1"
+                                    >
+                                      <TrendingDown className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -669,7 +718,7 @@ export default function BarcodeQueuePage() {
                                         title="View Sales Order"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleSalesOrderDownload(order.orderId);
+                                          handleSalesOrderView(order.orderId);
                                         }}
                                       >
                                         <FileText className="w-3 h-3" />
@@ -788,22 +837,36 @@ export default function BarcodeQueuePage() {
       )}
 
       {/* Sales Order Modal */}
-      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={salesOrderModalOpen} onOpenChange={(open) => {
+        setSalesOrderModalOpen(open);
+        if (!open && salesOrderContent) {
+          // Clean up blob URL to prevent memory leaks
+          URL.revokeObjectURL(salesOrderContent);
+          setSalesOrderContent('');
+        }
+      }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Sales Order</DialogTitle>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="flex-1 overflow-hidden">
             {salesOrderLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 <span className="ml-2">Loading sales order...</span>
               </div>
+            ) : salesOrderContent ? (
+              <div className="w-full h-[70vh]">
+                <iframe 
+                  src={salesOrderContent}
+                  className="w-full h-full border-0"
+                  title="Sales Order PDF"
+                />
+              </div>
             ) : (
-              <div 
-                className="sales-order-content"
-                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
-              />
+              <div className="flex items-center justify-center py-8">
+                <p className="text-gray-500">Failed to load sales order</p>
+              </div>
             )}
           </div>
         </DialogContent>

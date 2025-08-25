@@ -1038,8 +1038,9 @@ export default function OrdersList() {
                           const nextDept = getNextDepartment(displayDepartment || '');
                           const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';
+                          const isFulfilled = order.status === 'FULFILLED' || order.status === 'FINALIZED';
 
-                          if (!isScrapped && !isComplete && nextDept) {
+                          if (!isScrapped && !isComplete && !isFulfilled && nextDept) {
                             return (
                               <Button
                                 size="sm"

@@ -1416,6 +1416,30 @@ export class DatabaseStorage implements IStorage {
     })) as any;
   }
 
+  // Get orphaned orders that exist in orders table but not in all_orders table
+  async getOrphanedOrders(): Promise<any[]> {
+    const orphanedOrders = await db.select({
+      id: orders.id,
+      orderId: orders.orderId,
+      date: orders.date,
+      dueDate: orders.dueDate,
+      customer: orders.customer,
+      product: orders.product,
+      currentDepartment: orders.currentDepartment,
+      status: orders.status,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt
+    }).from(orders)
+    .where(
+      and(
+        eq(orders.status, 'Active'),
+        notInArray(orders.orderId, db.select({ orderId: allOrders.orderId }).from(allOrders))
+      )
+    );
+
+    return orphanedOrders;
+  }
+
   // Helper function to calculate order total from features and pricing
   private async calculateOrderTotal(order: AllOrder): Promise<number> {
     let total = 0;

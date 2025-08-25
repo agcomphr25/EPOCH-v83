@@ -30,6 +30,20 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get orphaned orders that exist in orders table but not in all_orders table
+router.get('/orphaned', async (req: Request, res: Response) => {
+  try {
+    const orphanedOrders = await storage.getOrphanedOrders();
+    res.json({
+      count: orphanedOrders.length,
+      orders: orphanedOrders
+    });
+  } catch (error) {
+    console.error('Error retrieving orphaned orders:', error);
+    res.status(500).json({ error: "Failed to fetch orphaned orders", details: (error as any).message });
+  }
+});
+
 // Get all orders with payment status for All Orders List with payment column
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {

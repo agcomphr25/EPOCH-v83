@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Calendar, Edit, Trash2, Save, X } from "lucide-react";
+import { Plus, Calendar, Edit, Trash2, Save, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -38,6 +38,14 @@ const GatewayReportsPage = () => {
   const queryClient = useQueryClient();
   const [editingReport, setEditingReport] = useState<GatewayReport | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  // Week navigation state
+  const [selectedWeek, setSelectedWeek] = useState(() => {
+    const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay()); // Start of current week (Sunday)
+    return weekStart.toISOString().split('T')[0];
+  });
 
   const [formData, setFormData] = useState<ReportFormData>({
     reportDate: new Date().toISOString().split('T')[0], // Today's date
@@ -175,7 +183,80 @@ const GatewayReportsPage = () => {
     return `${startFormatted} - ${endFormatted}`;
   };
 
-  // Calculate weekly totals
+  // Week navigation functions
+  const goToPreviousWeek = () => {
+    const currentWeek = new Date(selectedWeek);
+    currentWeek.setDate(currentWeek.getDate() - 7);
+    setSelectedWeek(currentWeek.toISOString().split('T')[0]);
+  };
+
+  const goToNextWeek = () => {
+    const currentWeek = new Date(selectedWeek);
+    currentWeek.setDate(currentWeek.getDate() + 7);
+    setSelectedWeek(currentWeek.toISOString().split('T')[0]);
+  };
+
+  const goToCurrentWeek = () => {
+    const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    setSelectedWeek(weekStart.toISOString().split('T')[0]);
+  };
+
+  // Calculate running totals for a specific week
+  const getWeeklyRunningTotals = (reports: GatewayReport[], weekStart: string) => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    // Filter reports for the selected week
+    const weekReports = reports.filter(report => {
+      const reportDate = new Date(report.reportDate);
+      const start = new Date(weekStart);
+      const end = new Date(weekEnd);
+      return reportDate >= start && reportDate <= end;
+    });
+
+    // Create array for each day of the week
+    const dailyRunningTotals = [];
+    let runningButtpadTotal = 0;
+    let runningDuratecTotal = 0;
+    let runningSandblastingTotal = 0;
+    let runningTextureTotal = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(weekStart);
+      currentDate.setDate(currentDate.getDate() + i);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      // Find report for this specific date
+      const dayReport = weekReports.find(report => report.reportDate === dateString);
+      
+      if (dayReport) {
+        runningButtpadTotal += dayReport.buttpadsUnits;
+        runningDuratecTotal += dayReport.duratecUnits;
+        runningSandblastingTotal += dayReport.sandblastingUnits;
+        runningTextureTotal += dayReport.textureUnits;
+      }
+
+      dailyRunningTotals.push({
+        date: dateString,
+        dayName: getDayOfWeek(dateString),
+        dailyButtpad: dayReport?.buttpadsUnits || 0,
+        dailyDuratec: dayReport?.duratecUnits || 0,
+        dailySandblasting: dayReport?.sandblastingUnits || 0,
+        dailyTexture: dayReport?.textureUnits || 0,
+        runningButtpadTotal,
+        runningDuratecTotal,
+        runningSandblastingTotal,
+        runningTextureTotal,
+        hasReport: !!dayReport
+      });
+    }
+
+    return dailyRunningTotals;
+  };
+
+  // Calculate weekly totals for historical view
   const getWeeklyTotals = (reports: GatewayReport[]) => {
     const weeklyData: { [weekKey: string]: {
       weekStart: string;
@@ -228,14 +309,99 @@ const GatewayReportsPage = () => {
 
       <Tabs defaultValue="weekly" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="weekly">Weekly Totals</TabsTrigger>
+          <TabsTrigger value="weekly">Weekly Running Totals</TabsTrigger>
+          <TabsTrigger value="historical">Historical Weeks</TabsTrigger>
           <TabsTrigger value="daily">Daily Reports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="weekly" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Weekly Production Totals</CardTitle>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Weekly Running Totals</CardTitle>
+                  <CardDescription>
+                    Running totals for {formatWeekRange(selectedWeek)}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={goToPreviousWeek}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToCurrentWeek}>
+                    Current Week
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToNextWeek}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8">Loading reports...</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Day</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-center">Daily<br/>Buttpads</TableHead>
+                      <TableHead className="text-center">Running<br/>Buttpads</TableHead>
+                      <TableHead className="text-center">Daily<br/>Duratec</TableHead>
+                      <TableHead className="text-center">Running<br/>Duratec</TableHead>
+                      <TableHead className="text-center">Daily<br/>Sandblasting</TableHead>
+                      <TableHead className="text-center">Running<br/>Sandblasting</TableHead>
+                      <TableHead className="text-center">Daily<br/>Texture</TableHead>
+                      <TableHead className="text-center">Running<br/>Texture</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getWeeklyRunningTotals(reports, selectedWeek).map((day, index) => (
+                      <TableRow key={day.date} className={!day.hasReport ? "opacity-50" : ""}>
+                        <TableCell className="font-medium">
+                          {day.dayName}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(day.date)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {day.dailyButtpad}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold text-blue-600">
+                          {day.runningButtpadTotal}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {day.dailyDuratec}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold text-green-600">
+                          {day.runningDuratecTotal}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {day.dailySandblasting}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold text-orange-600">
+                          {day.runningSandblastingTotal}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {day.dailyTexture}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold text-purple-600">
+                          {day.runningTextureTotal}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="historical" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Historical Weekly Totals</CardTitle>
               <CardDescription>
                 Weekly totals for each production area
               </CardDescription>

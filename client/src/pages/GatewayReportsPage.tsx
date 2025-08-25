@@ -128,10 +128,10 @@ export default function GatewayReportsPage() {
 
     const reportData = {
       date: dateStr,
-      buttpads: dayData.buttpads || getValue(dateStr, 'buttpads'),
-      duratec: dayData.duratec || getValue(dateStr, 'duratec'),
-      sandblasting: dayData.sandblasting || getValue(dateStr, 'sandblasting'),
-      texture: dayData.texture || getValue(dateStr, 'texture'),
+      buttpads: dayData.buttpads !== undefined ? dayData.buttpads : getValue(dateStr, 'buttpads'),
+      duratec: dayData.duratec !== undefined ? dayData.duratec : getValue(dateStr, 'duratec'),
+      sandblasting: dayData.sandblasting !== undefined ? dayData.sandblasting : getValue(dateStr, 'sandblasting'),
+      texture: dayData.texture !== undefined ? dayData.texture : getValue(dateStr, 'texture'),
     };
 
     await saveReportMutation.mutateAsync(reportData);

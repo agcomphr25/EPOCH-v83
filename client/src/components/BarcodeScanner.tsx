@@ -136,14 +136,16 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
       if (!processedOrdersRef.current.has(orderSummary.orderId)) {
         processedOrdersRef.current.add(orderSummary.orderId);
         onOrderScanned(orderSummary.orderId);
-        // Auto-select the input text for quick replacement with next scan
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.select();
-            inputRef.current.focus();
-          }
-        }, 100);
       }
+    }
+    // Always select the input after any successful scan for quick replacement
+    if (orderSummary) {
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.select();
+          inputRef.current.focus();
+        }
+      }, 200);
     }
   }, [orderSummary?.orderId, onOrderScanned]);
 

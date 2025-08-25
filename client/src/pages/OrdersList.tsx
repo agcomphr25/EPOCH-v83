@@ -129,7 +129,7 @@ export default function OrdersList() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
     isOpen: boolean;
-    customer: { id: string; name: string; email?: string; phone?: string };
+    customer: { id: number; name: string; email?: string; phone?: string };
     orderId?: string;
   } | null>(null);
   const { toast: showToast } = useToast();
@@ -183,7 +183,7 @@ export default function OrdersList() {
     mutationFn: async (data: KickbackFormData) => {
       return apiRequest('/api/kickbacks', {
         method: 'POST',
-        body: data,
+        body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
@@ -318,13 +318,13 @@ export default function OrdersList() {
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation, queryClient]);
 
-  const handleOpenCommunication = (order: Order) => {
-    const customer = customers?.find(c => c.id.toString() === order.customerId);
+  const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
+    const customer = customersList?.find(c => c.id.toString() === order.customerId);
     if (customer) {
       setCommunicationModal({
         isOpen: true,
         customer: {
-          id: customer.id.toString(),
+          id: customer.id,
           name: customer.name,
           email: customer.email,
           phone: customer.phone
@@ -424,7 +424,7 @@ export default function OrdersList() {
     });
 
     // Fetch kickbacks to check for unresolved issues
-    const { data: kickbacks } = useQuery({
+    const { data: kickbacks } = useQuery<any[]>({
       queryKey: ['/api/kickbacks'],
       refetchInterval: 60000, // Auto-refresh every 60 seconds
     });
@@ -562,7 +562,7 @@ export default function OrdersList() {
   // Check if an order has unresolved kickbacks
   const hasUnresolvedKickback = (orderId: string) => {
     if (!kickbacks) return false;
-    return kickbacks.some((kickback: any) => 
+    return kickbacks?.some((kickback: any) => 
       kickback.orderId === orderId && 
       kickback.status !== 'RESOLVED' && 
       kickback.status !== 'CLOSED'
@@ -950,7 +950,7 @@ export default function OrdersList() {
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 hover:bg-blue-50"
-                            onClick={() => handleOpenCommunication(order)}
+                            onClick={() => handleOpenCommunication(order, customers || [])}
                             title="Send Email"
                           >
                             <Mail className="h-4 w-4 text-blue-600" />
@@ -959,7 +959,7 @@ export default function OrdersList() {
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 hover:bg-green-50"
-                            onClick={() => handleOpenCommunication(order)}
+                            onClick={() => handleOpenCommunication(order, customers || [])}
                             title="Send SMS"
                           >
                             <MessageSquare className="h-4 w-4 text-green-600" />
@@ -1027,7 +1027,7 @@ export default function OrdersList() {
                             return (
                               <Button
                                 size="sm"
-                                onClick={() => handleProgressOrder(order.orderId, displayDepartment)}
+                                onClick={() => handleProgressOrder(order.orderId, displayDepartment || '')}
                                 disabled={progressOrderMutation.isPending}
                               >
                                 <ArrowRight className="w-4 h-4 mr-1" />

@@ -1039,6 +1039,38 @@ export default function OrderEntry() {
     }
   }, [featureDefs, isEditMode, features.texture_options]);
 
+  // Set default swivel studs value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.swivel_studs) {
+      const swivelStudsFeature = featureDefs.find(f => 
+        f.id === 'swivel_studs' || 
+        f.name === 'swivel_studs' || 
+        f.id?.toLowerCase().includes('swivel') ||
+        f.name?.toLowerCase().includes('swivel') ||
+        f.displayName?.toLowerCase().includes('swivel')
+      );
+
+      if (swivelStudsFeature?.options) {
+        // Find "Standard Swivel Studs" option (check various possible values)
+        const standardSwivelOption = swivelStudsFeature.options.find(option => 
+          option.label?.toLowerCase().includes('standard swivel studs') ||
+          option.value?.toLowerCase().includes('standard_swivel_studs') ||
+          option.label?.toLowerCase().includes('standard swivel') ||
+          option.value?.toLowerCase().includes('standard_swivel')
+        );
+
+        if (standardSwivelOption) {
+          setFeatures(prev => ({
+            ...prev,
+            swivel_studs: standardSwivelOption.value
+          }));
+          console.log('✅ Set default swivel studs to:', standardSwivelOption.label, 'with value:', standardSwivelOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.swivel_studs]);
+
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([

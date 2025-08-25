@@ -13,6 +13,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function CNCQueuePage() {
   const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<Set<string>>(new Set());
@@ -360,6 +361,27 @@ export default function CNCQueuePage() {
     }
   };
 
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current CNC queue
+    const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      const order = cncOrders.find((order: any) => order.orderId === orderId);
+      if (order) {
+        toggleOrderSelection(order.orderId, order.departmentType);
+        toast.success(`Order ${orderId} found and selected`);
+      }
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not CNC`);
+      } else {
+        toast.error(`Order ${orderId} not found`);
+      }
+    }
+  };
+
 
 
   return (
@@ -371,6 +393,9 @@ export default function CNCQueuePage() {
 
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

@@ -1137,6 +1137,39 @@ export default function OrderEntry() {
     }
   }, [featureDefs, isEditMode, features.length_of_pull]);
 
+  // Set default QD accessory value for new orders
+  useEffect(() => {
+    // Only set defaults for new orders (not editing existing orders)
+    if (!isEditMode && featureDefs.length > 0 && !features.qd_accessory) {
+      const qdFeature = featureDefs.find(f => 
+        f.id === 'qd_accessory' || 
+        f.name === 'qd_accessory' || 
+        f.id?.toLowerCase().includes('qd') ||
+        f.name?.toLowerCase().includes('qd') ||
+        f.displayName?.toLowerCase().includes('qd') ||
+        f.displayName?.toLowerCase().includes('quick detach')
+      );
+
+      if (qdFeature?.options) {
+        // Find "No QD" option (check various possible values)
+        const noQdOption = qdFeature.options.find(option => 
+          option.label?.toLowerCase().includes('no qd') ||
+          option.value?.toLowerCase().includes('no_qd') ||
+          option.label?.toLowerCase() === 'none' ||
+          option.value?.toLowerCase() === 'none'
+        );
+
+        if (noQdOption) {
+          setFeatures(prev => ({
+            ...prev,
+            qd_accessory: noQdOption.value
+          }));
+          console.log('✅ Set default QD accessory to:', noQdOption.label, 'with value:', noQdOption.value);
+        }
+      }
+    }
+  }, [featureDefs, isEditMode, features.qd_accessory]);
+
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([

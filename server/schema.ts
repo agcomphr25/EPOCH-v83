@@ -2433,3 +2433,36 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
 export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
   order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
 }));
+
+// Gateway Reports table for daily activity tracking
+export const gatewayReports = pgTable("gateway_reports", {
+  id: serial("id").primaryKey(),
+  reportDate: date("report_date").notNull(), // The specific date for this report (YYYY-MM-DD)
+  buttpadsUnits: integer("buttpads_units").notNull().default(0), // Units processed in Buttpads area
+  duratecUnits: integer("duratec_units").notNull().default(0), // Units processed in Duratec area
+  sandblastingUnits: integer("sandblasting_units").notNull().default(0), // Units processed in Sandblasting area
+  textureUnits: integer("texture_units").notNull().default(0), // Units processed in Texture area
+  notes: text("notes"), // Optional notes for the day
+  createdBy: integer("created_by").references(() => users.id), // User who created this report
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for Gateway Reports
+export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  buttpadsUnits: z.number().int().min(0, "Buttpads units must be 0 or greater"),
+  duratecUnits: z.number().int().min(0, "Duratec units must be 0 or greater"),
+  sandblastingUnits: z.number().int().min(0, "Sandblasting units must be 0 or greater"),
+  textureUnits: z.number().int().min(0, "Texture units must be 0 or greater"),
+  notes: z.string().optional().nullable(),
+  createdBy: z.number().optional().nullable(),
+});
+
+// Types for Gateway Reports
+export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
+export type GatewayReport = typeof gatewayReports.$inferSelect;

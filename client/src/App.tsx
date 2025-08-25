@@ -88,6 +88,7 @@ import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PaymentManagement from "./pages/PaymentManagement";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
+import GatewayReportsPage from "./pages/GatewayReportsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -280,6 +281,9 @@ function App() {
 
                   {/* Shipping Management Routes */}
                   <Route path="/shipping-management" component={ShippingManagement} />
+
+                  {/* Gateway Reports Route */}
+                  <Route path="/gateway-reports" component={GatewayReportsPage} />
 
                   {/* Catch-all route for 404 */}
                   <Route component={NotFound} />

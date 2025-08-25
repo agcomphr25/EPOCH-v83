@@ -2,6 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +20,21 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, Link } from 'wouter';
 
+// Kickback form validation schema
+const kickbackFormSchema = z.object({
+  kickbackDept: z.enum(['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'], {
+    required_error: "Please select a department"
+  }),
+  reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER'], {
+    required_error: "Please select a reason code"
+  }),
+  reasonText: z.string().min(1, "Please describe the issue"),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+  reportedBy: z.string().min(1, "Reporter name is required")
+});
+
+type KickbackFormData = z.infer<typeof kickbackFormSchema>;
+
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
@@ -20,7 +42,18 @@ export default function BarcodeQueuePage() {
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [salesOrderContent, setSalesOrderContent] = useState('');
   const [salesOrderLoading, setSalesOrderLoading] = useState(false);
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [kickbackOrderId, setKickbackOrderId] = useState('');
   const queryClient = useQueryClient();
+
+  // Kickback form
+  const kickbackForm = useForm<KickbackFormData>({
+    resolver: zodResolver(kickbackFormSchema),
+    defaultValues: {
+      priority: 'MEDIUM',
+      reportedBy: 'Production Floor'
+    }
+  });
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -56,44 +89,74 @@ export default function BarcodeQueuePage() {
     return highestPriority;
   };
 
-  // Create kickback mutation
-  const createKickbackMutation = useMutation({
-    mutationFn: (kickbackData: any) =>
-      fetch('/api/kickbacks', {
+  // Create kickback and move order mutation
+  const submitKickbackMutation = useMutation({
+    mutationFn: async (data: { formData: KickbackFormData; orderId: string }) => {
+      const { formData, orderId } = data;
+      
+      // Create kickback data
+      const kickbackData = {
+        orderId: orderId,
+        kickbackDept: 'Barcode', // Where kickback originated
+        reasonCode: formData.reasonCode,
+        reasonText: formData.reasonText,
+        kickbackDate: new Date().toISOString(),
+        reportedBy: formData.reportedBy,
+        priority: formData.priority,
+        status: 'OPEN'
+      };
+
+      // First create the kickback
+      const kickbackResponse = await fetch('/api/kickbacks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kickbackData),
-      }).then(res => res.json()),
-    onSuccess: () => {
+      });
+
+      if (!kickbackResponse.ok) {
+        throw new Error('Failed to create kickback');
+      }
+
+      // Then move the order to the selected department
+      const moveResponse = await apiRequest('/api/orders/progress-department', {
+        method: 'POST',
+        body: { 
+          orderIds: [orderId], 
+          toDepartment: formData.kickbackDept 
+        }
+      });
+
+      return { kickback: await kickbackResponse.json(), move: moveResponse };
+    },
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      setKickbackModalOpen(false);
+      kickbackForm.reset();
+      
       toast({
-        title: "Kickback reported",
-        description: "Kickback report has been created successfully"
+        title: "Kickback submitted",
+        description: `Order ${variables.orderId} has been kicked back to ${variables.formData.kickbackDept} department`
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to create kickback report",
+        description: `Failed to submit kickback: ${error.message}`,
         variant: "destructive"
       });
     },
   });
 
-  // Function to handle kickback badge click - now creates a new kickback
+  // Function to handle kickback badge click - open modal
   const handleKickbackClick = (orderId: string) => {
-    const kickbackData = {
-      orderId: orderId,
-      kickbackDept: "Barcode", // Current department
-      reasonCode: "QUALITY_ISSUE", // Default reason
-      priority: "MEDIUM", // Default priority
-      kickbackDate: new Date().toISOString(),
-      reportedBy: "Production Floor", // Default reporter
-      reasonText: `Issue reported from Barcode department for order ${orderId}`,
-      status: "OPEN"
-    };
-    
-    createKickbackMutation.mutate(kickbackData);
+    setKickbackOrderId(orderId);
+    setKickbackModalOpen(true);
+  };
+
+  // Handle kickback form submission
+  const onKickbackSubmit = (formData: KickbackFormData) => {
+    submitKickbackMutation.mutate({ formData, orderId: kickbackOrderId });
   };
 
   // Function to handle sales order view in modal
@@ -869,6 +932,147 @@ export default function BarcodeQueuePage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kickback Modal */}
+      <Dialog open={kickbackModalOpen} onOpenChange={setKickbackModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Report Kickback for Order {kickbackOrderId}</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...kickbackForm}>
+            <form onSubmit={kickbackForm.handleSubmit(onKickbackSubmit)} className="space-y-4">
+              <FormField
+                control={kickbackForm.control}
+                name="kickbackDept"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kick Back To Department *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select department to kick back to" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Layup">Layup</SelectItem>
+                        <SelectItem value="Plugging">Plugging</SelectItem>
+                        <SelectItem value="CNC">CNC</SelectItem>
+                        <SelectItem value="Finish">Finish</SelectItem>
+                        <SelectItem value="Gunsmith">Gunsmith</SelectItem>
+                        <SelectItem value="Paint">Paint</SelectItem>
+                        <SelectItem value="QC">QC</SelectItem>
+                        <SelectItem value="Shipping">Shipping</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={kickbackForm.control}
+                name="reasonCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reason Code *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select reason for kickback" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="MATERIAL_DEFECT">Material Defect</SelectItem>
+                        <SelectItem value="OPERATOR_ERROR">Operator Error</SelectItem>
+                        <SelectItem value="MACHINE_FAILURE">Machine Failure</SelectItem>
+                        <SelectItem value="DESIGN_ISSUE">Design Issue</SelectItem>
+                        <SelectItem value="QUALITY_ISSUE">Quality Issue</SelectItem>
+                        <SelectItem value="PROCESS_ISSUE">Process Issue</SelectItem>
+                        <SelectItem value="SUPPLIER_ISSUE">Supplier Issue</SelectItem>
+                        <SelectItem value="OTHER">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={kickbackForm.control}
+                name="reasonText"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Describe the issue in detail..."
+                        className="min-h-[80px]"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={kickbackForm.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priority</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={kickbackForm.control}
+                name="reportedBy"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reported By *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Your name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setKickbackModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit"
+                  disabled={submitKickbackMutation.isPending}
+                >
+                  {submitKickbackMutation.isPending ? 'Submitting...' : 'Submit Kickback'}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

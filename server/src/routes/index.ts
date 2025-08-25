@@ -26,7 +26,6 @@ import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
-import dailyActivitiesRoutes from './dailyActivities';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -103,9 +102,6 @@ export function registerRoutes(app: Express): Server {
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
   
-  // Daily activity tracking routes
-  app.use('/api/daily-activities', dailyActivitiesRoutes);
-  
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {
     try {
@@ -147,7 +143,7 @@ export function registerRoutes(app: Express): Server {
         })
       });
       
-      const result = await response.json() as any;
+      const result = await response.json();
       console.log(`🏭 LAYUP SCHEDULER FLOW: Generated ${result.allocations?.length || 0} schedule allocations`);
       res.json(result);
     } catch (error) {
@@ -276,7 +272,7 @@ export function registerRoutes(app: Express): Server {
       `);
 
       // Format the direct production orders
-      const directProductionOrders = ((directProductionOrdersResult as any)?.rows || []).map((po: any) => ({
+      const directProductionOrders = (directProductionOrdersResult?.rows || []).map((po: any) => ({
         id: po.poId,
         orderId: po.orderId,
         orderDate: po.order_date,
@@ -1064,8 +1060,8 @@ export function registerRoutes(app: Express): Server {
           product: po.itemName,
           quantity: 1, // Each production order is for 1 unit
           status: po.productionStatus,
-          department: 'P1 Production Queue',
-          currentDepartment: 'P1 Production Queue',
+          department: po.currentDepartment || 'P1 Production Queue',
+          currentDepartment: po.currentDepartment || 'P1 Production Queue',
           priorityScore: priorityScore,
           dueDate: po.dueDate,
           source: 'production_order' as const, // Mark as production order for purple styling
@@ -1720,7 +1716,7 @@ export function registerRoutes(app: Express): Server {
             createdAt: new Date()
           };
 
-          // Note: createOrder method may not exist in storage interface
+          await storage.createOrder(mainOrderData);
           console.log(`🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`);
 
           console.log(`🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`);
@@ -1735,9 +1731,9 @@ export function registerRoutes(app: Express): Server {
         createdOrders: createdOrders.length,
         orders: createdOrders.map(order => ({
           orderId: order.orderId,
-          partName: order.itemName || 'Unknown',
+          partName: order.partName,
           dueDate: order.dueDate,
-          status: order.productionStatus || 'PENDING'
+          status: order.status
         }))
       });
 
@@ -1949,12 +1945,12 @@ export function registerRoutes(app: Express): Server {
       // Get stock model details and extract color information
       let baseModel = null;
       let color = null;
-      if ((order as any).modelId || (order as any).itemId) {
+      if (order.modelId || order.itemId) {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(sm => 
-            sm.id === ((order as any).modelId || (order as any).itemId) || 
-            sm.name === ((order as any).modelId || (order as any).itemId)
+            sm.id === (order.modelId || order.itemId) || 
+            sm.name === (order.modelId || order.itemId)
           );
         } catch (e) {
           console.error('Error fetching stock model:', e);
@@ -1962,15 +1958,15 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Extract color from features or specifications
-      if ((order as any).features) {
-        if ((order as any).features.color) color = (order as any).features.color;
-        if ((order as any).features.paintOption) color = (order as any).features.paintOption;
-        if ((order as any).features.finish) color = (order as any).features.finish;
+      if (order.features) {
+        if (order.features.color) color = order.features.color;
+        if (order.features.paintOption) color = order.features.paintOption;
+        if (order.features.finish) color = order.features.finish;
       }
-      if ((order as any).specifications) {
-        if ((order as any).specifications.color) color = (order as any).specifications.color;
-        if ((order as any).specifications.paintOption) color = (order as any).specifications.paintOption;
-        if ((order as any).specifications.finish) color = (order as any).specifications.finish;
+      if (order.specifications) {
+        if (order.specifications.color) color = order.specifications.color;
+        if (order.specifications.paintOption) color = order.specifications.paintOption;
+        if (order.specifications.finish) color = order.specifications.finish;
       }
 
       // Build comprehensive order summary
@@ -1984,7 +1980,7 @@ export function registerRoutes(app: Express): Server {
           company: customer.company || '',
           phone: customer.phone || ''
         } : {
-          name: order.customerId || (order as any).customerName || 'Unknown Customer',
+          name: order.customerId || order.customerName || 'Unknown Customer',
           email: '',
           company: '',
           phone: ''
@@ -1994,12 +1990,12 @@ export function registerRoutes(app: Express): Server {
           id: baseModel.id,
           price: baseModel.price || 0
         } : {
-          name: (order as any).modelId || (order as any).itemId || (order as any).itemName || 'Unknown Model',
-          id: (order as any).modelId || (order as any).itemId || '',
+          name: order.modelId || order.itemId || order.itemName || 'Unknown Model',
+          id: order.modelId || order.itemId || '',
           price: 0
         },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: order.features || {},
+        specifications: order.specifications || {},
         lineItems: [],
         pricing: {
           subtotal: order.subtotal || 0,
@@ -2117,8 +2113,8 @@ export function registerRoutes(app: Express): Server {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(sm => 
-            sm.id === ((order as any).modelId || (order as any).itemId) || 
-            sm.name === ((order as any).modelId || (order as any).itemId)
+            sm.id === (order.modelId || order.itemId) || 
+            sm.name === (order.modelId || order.itemId)
           );
         } catch (e) {
           console.error('Error fetching stock model:', e);
@@ -2149,8 +2145,8 @@ export function registerRoutes(app: Express): Server {
           id: order.modelId || order.itemId || '',
           price: 0
         },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: order.features || {},
+        specifications: order.specifications || {},
         lineItems: [],
         pricing: {
           subtotal: order.subtotal || 0,

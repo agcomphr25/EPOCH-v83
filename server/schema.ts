@@ -724,18 +724,6 @@ export const onboardingDocs = pgTable("onboarding_docs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Daily Activity Tracking
-export const dailyActivityCounts = pgTable("daily_activity_counts", {
-  id: serial("id").primaryKey(),
-  date: date("date").notNull(),
-  activityType: text("activity_type").notNull(), // "Buttpads", "Duratec", "Texture", "Sandblaster"
-  count: integer("count").notNull().default(0),
-  enteredBy: text("entered_by"), // User who entered the data
-  notes: text("notes"), // Optional notes about the count
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   passwordHash: true,
@@ -2425,24 +2413,6 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
-
-// Daily Activity Count Types
-export const insertDailyActivityCountSchema = createInsertSchema(dailyActivityCounts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  date: z.string().min(1, "Date is required"),
-  activityType: z.enum(["Buttpads", "Duratec", "Texture", "Sandblaster"], {
-    required_error: "Activity type is required",
-  }),
-  count: z.number().int().min(0, "Count must be non-negative"),
-  enteredBy: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-export type InsertDailyActivityCount = z.infer<typeof insertDailyActivityCountSchema>;
-export type DailyActivityCount = typeof dailyActivityCounts.$inferSelect;
 
 // New validation schema for Customer Communications
 export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({

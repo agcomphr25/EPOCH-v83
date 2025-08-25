@@ -18,8 +18,6 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Daily activity tracking table
-  dailyActivityCounts,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -86,8 +84,6 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
-  // Daily activity count types
-  type DailyActivityCount, type InsertDailyActivityCount,
 
 
 } from "./schema";
@@ -182,7 +178,7 @@ export interface IStorage {
   getLastOrderId(): Promise<string>;
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
-  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean; customer: string })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
   getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
@@ -597,16 +593,6 @@ export interface IStorage {
 
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
-
-  // Daily Activity Count CRUD methods
-  getAllDailyActivityCounts(): Promise<DailyActivityCount[]>;
-  getDailyActivityCountsByDate(date: string): Promise<DailyActivityCount[]>;
-  getDailyActivityCountsByDateRange(startDate: string, endDate: string): Promise<DailyActivityCount[]>;
-  getDailyActivityCount(id: number): Promise<DailyActivityCount | undefined>;
-  createDailyActivityCount(data: InsertDailyActivityCount): Promise<DailyActivityCount>;
-  updateDailyActivityCount(id: number, data: Partial<InsertDailyActivityCount>): Promise<DailyActivityCount>;
-  deleteDailyActivityCount(id: number): Promise<void>;
-  upsertDailyActivityCount(date: string, activityType: string, count: number, enteredBy?: string, notes?: string): Promise<DailyActivityCount>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1632,7 +1618,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get all finalized orders with payment status
-  async getAllOrdersWithPaymentStatus(): Promise<Array<{ paymentTotal: number; isFullyPaid: boolean; customer: string; [key: string]: any }>> {
+  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
     // Optimized: Use single query to get orders with customer names and payment totals
     const ordersWithCustomers = await db
       .select({
@@ -2466,18 +2452,17 @@ export class DatabaseStorage implements IStorage {
 
   // Employee Documents CRUD
   async getAllDocuments(employeeId?: number): Promise<EmployeeDocument[]> {
+    let query = db.select().from(employeeDocuments)
+      .where(eq(employeeDocuments.isActive, true));
+
     if (employeeId) {
-      return await db.select().from(employeeDocuments)
-        .where(and(
-          eq(employeeDocuments.isActive, true),
-          eq(employeeDocuments.employeeId, employeeId)
-        ))
-        .orderBy(desc(employeeDocuments.createdAt));
+      query = query.where(and(
+        eq(employeeDocuments.isActive, true),
+        eq(employeeDocuments.employeeId, employeeId)
+      ));
     }
 
-    return await db.select().from(employeeDocuments)
-      .where(eq(employeeDocuments.isActive, true))
-      .orderBy(desc(employeeDocuments.createdAt));
+    return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getDocument(id: number): Promise<EmployeeDocument | undefined> {
@@ -2518,22 +2503,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDocumentsByType(documentType: string, employeeId?: number): Promise<EmployeeDocument[]> {
-    if (employeeId) {
-      return await db.select().from(employeeDocuments)
-        .where(and(
-          eq(employeeDocuments.documentType, documentType),
-          eq(employeeDocuments.employeeId, employeeId),
-          eq(employeeDocuments.isActive, true)
-        ))
-        .orderBy(desc(employeeDocuments.createdAt));
-    }
-
-    return await db.select().from(employeeDocuments)
+    let query = db.select().from(employeeDocuments)
       .where(and(
         eq(employeeDocuments.documentType, documentType),
         eq(employeeDocuments.isActive, true)
-      ))
-      .orderBy(desc(employeeDocuments.createdAt));
+      ));
+
+    if (employeeId) {
+      query = query.where(and(
+        eq(employeeDocuments.documentType, documentType),
+        eq(employeeDocuments.employeeId, employeeId),
+        eq(employeeDocuments.isActive, true)
+      ));
+    }
+
+    return await query.orderBy(desc(employeeDocuments.createdAt));
   }
 
   async getExpiringDocuments(days: number): Promise<EmployeeDocument[]> {
@@ -2570,22 +2554,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAuditLogsByDateRange(startDate: Date, endDate: Date, employeeId?: number): Promise<EmployeeAuditLog[]> {
-    if (employeeId) {
-      return await db.select().from(employeeAuditLog)
-        .where(and(
-          gte(employeeAuditLog.timestamp, startDate),
-          lte(employeeAuditLog.timestamp, endDate),
-          eq(employeeAuditLog.employeeId, employeeId)
-        ))
-        .orderBy(desc(employeeAuditLog.timestamp));
-    }
-
-    return await db.select().from(employeeAuditLog)
+    let query = db.select().from(employeeAuditLog)
       .where(and(
         gte(employeeAuditLog.timestamp, startDate),
         lte(employeeAuditLog.timestamp, endDate)
-      ))
-      .orderBy(desc(employeeAuditLog.timestamp));
+      ));
+
+    if (employeeId) {
+      query = query.where(and(
+        gte(employeeAuditLog.timestamp, startDate),
+        lte(employeeAuditLog.timestamp, endDate),
+        eq(employeeAuditLog.employeeId, employeeId)
+      ));
+    }
+
+    return await query.orderBy(desc(employeeAuditLog.timestamp));
   }
 
   // QC Definitions CRUD
@@ -5851,80 +5834,8 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Daily Activity Count CRUD methods implementation
-  async getAllDailyActivityCounts(): Promise<DailyActivityCount[]> {
-    return await db.select().from(dailyActivityCounts).orderBy(desc(dailyActivityCounts.date), dailyActivityCounts.activityType);
-  }
 
-  async getDailyActivityCountsByDate(date: string): Promise<DailyActivityCount[]> {
-    return await db.select().from(dailyActivityCounts)
-      .where(eq(dailyActivityCounts.date, date))
-      .orderBy(dailyActivityCounts.activityType);
-  }
 
-  async getDailyActivityCountsByDateRange(startDate: string, endDate: string): Promise<DailyActivityCount[]> {
-    return await db.select().from(dailyActivityCounts)
-      .where(and(
-        gte(dailyActivityCounts.date, startDate),
-        lte(dailyActivityCounts.date, endDate)
-      ))
-      .orderBy(desc(dailyActivityCounts.date), dailyActivityCounts.activityType);
-  }
-
-  async getDailyActivityCount(id: number): Promise<DailyActivityCount | undefined> {
-    const [result] = await db.select().from(dailyActivityCounts).where(eq(dailyActivityCounts.id, id));
-    return result || undefined;
-  }
-
-  async createDailyActivityCount(data: InsertDailyActivityCount): Promise<DailyActivityCount> {
-    const [result] = await db.insert(dailyActivityCounts).values(data).returning();
-    return result;
-  }
-
-  async updateDailyActivityCount(id: number, data: Partial<InsertDailyActivityCount>): Promise<DailyActivityCount> {
-    const [result] = await db
-      .update(dailyActivityCounts)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(dailyActivityCounts.id, id))
-      .returning();
-    
-    if (!result) {
-      throw new Error(`Daily activity count with ID ${id} not found`);
-    }
-    
-    return result;
-  }
-
-  async deleteDailyActivityCount(id: number): Promise<void> {
-    await db.delete(dailyActivityCounts).where(eq(dailyActivityCounts.id, id));
-  }
-
-  async upsertDailyActivityCount(date: string, activityType: string, count: number, enteredBy?: string, notes?: string): Promise<DailyActivityCount> {
-    // First try to find existing record
-    const [existing] = await db.select().from(dailyActivityCounts)
-      .where(and(
-        eq(dailyActivityCounts.date, date),
-        eq(dailyActivityCounts.activityType, activityType)
-      ));
-
-    if (existing) {
-      // Update existing record
-      return await this.updateDailyActivityCount(existing.id, {
-        count,
-        enteredBy,
-        notes
-      });
-    } else {
-      // Create new record
-      return await this.createDailyActivityCount({
-        date,
-        activityType,
-        count,
-        enteredBy,
-        notes
-      });
-    }
-  }
 
 }
 

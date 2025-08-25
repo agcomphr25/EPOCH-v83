@@ -64,6 +64,7 @@ import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from "./pages/DocumentManagement";
 import PurchaseOrderItemsQueuePage from "./pages/PurchaseOrderItemsQueuePage";
+import GatewayReportsPage from "./pages/GatewayReportsPage";
 import LayupPluggingQueuePage from "./pages/LayupPluggingQueuePage";
 import BarcodeQueuePage from "./pages/BarcodeQueuePage";
 import CNCQueuePage from "./pages/CNCQueuePage";
@@ -262,6 +263,7 @@ function App() {
 
                   {/* Reports */}
                   <Route path="/ag-bottom-metal-report" component={AGBottomMetalReport} />
+                  <Route path="/gateway-reports" component={GatewayReportsPage} />
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />

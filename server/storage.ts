@@ -18,6 +18,8 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
+  // Gateway reports table
+  gatewayReports,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -84,6 +86,8 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
+  // Gateway report types
+  type GatewayReport, type InsertGatewayReport,
 
 
 } from "./schema";
@@ -580,6 +584,12 @@ export interface IStorage {
   getOrderAttachment(attachmentId: number): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
+
+  // Gateway Report Methods
+  getGatewayReportByDate(date: string): Promise<GatewayReport | undefined>;
+  getGatewayReportsByWeek(weekStart: string): Promise<GatewayReport[]>;
+  createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
+  getWeeklySummary(weekStart: string): Promise<{ [key: string]: number }>;
 
   // Add methods for finalized orders
   getAllFinalizedOrders(): Promise<AllOrder[]>;
@@ -5686,6 +5696,73 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(orderAttachments)
       .where(eq(orderAttachments.id, attachmentId));
+  }
+
+  // Gateway Report Methods
+  async getGatewayReportByDate(date: string): Promise<GatewayReport | undefined> {
+    const [report] = await db
+      .select()
+      .from(gatewayReports)
+      .where(eq(gatewayReports.date, date));
+    return report || undefined;
+  }
+
+  async getGatewayReportsByWeek(weekStart: string): Promise<GatewayReport[]> {
+    // Calculate week end (Sunday to Saturday, assuming weekStart is Sunday)
+    const startDate = new Date(weekStart);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    
+    return await db
+      .select()
+      .from(gatewayReports)
+      .where(
+        and(
+          gte(gatewayReports.date, weekStart),
+          lte(gatewayReports.date, endDate.toISOString().split('T')[0])
+        )
+      )
+      .orderBy(asc(gatewayReports.date));
+  }
+
+  async createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport> {
+    // Check if report exists for this date
+    const existing = await this.getGatewayReportByDate(data.date);
+    
+    if (existing) {
+      // Update existing report
+      const [updated] = await db
+        .update(gatewayReports)
+        .set({
+          buttpads: data.buttpads,
+          duratec: data.duratec,
+          sandblasting: data.sandblasting,
+          texture: data.texture,
+          updatedAt: sql`NOW()`
+        })
+        .where(eq(gatewayReports.date, data.date))
+        .returning();
+      return updated;
+    } else {
+      // Create new report
+      const [created] = await db
+        .insert(gatewayReports)
+        .values(data)
+        .returning();
+      return created;
+    }
+  }
+
+  async getWeeklySummary(weekStart: string): Promise<{ [key: string]: number }> {
+    const weekReports = await this.getGatewayReportsByWeek(weekStart);
+    
+    return weekReports.reduce((summary, report) => {
+      summary.buttpads = (summary.buttpads || 0) + (report.buttpads || 0);
+      summary.duratec = (summary.duratec || 0) + (report.duratec || 0);
+      summary.sandblasting = (summary.sandblasting || 0) + (report.sandblasting || 0);
+      summary.texture = (summary.texture || 0) + (report.texture || 0);
+      return summary;
+    }, {} as { [key: string]: number });
   }
 
   // Add methods for finalized orders

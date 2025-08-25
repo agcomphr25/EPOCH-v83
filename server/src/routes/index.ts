@@ -26,6 +26,7 @@ import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
+import { createGatewayReportsRoutes } from './gatewayReports';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -101,6 +102,18 @@ export function registerRoutes(app: Express): Server {
   
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
+
+  // Gateway Reports routes  
+  app.use('/api/gateway-reports', async (req, res, next) => {
+    try {
+      const { storage } = await import('../../storage');
+      const gatewayReportsRouter = createGatewayReportsRoutes(storage);
+      gatewayReportsRouter(req, res, next);
+    } catch (error) {
+      console.error('Error loading gateway reports routes:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

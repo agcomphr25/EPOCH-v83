@@ -2433,3 +2433,32 @@ export const insertCustomerCommunicationSchema = createInsertSchema(customerComm
 export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) => ({
   order: one(orderDrafts, { fields: [orderAttachments.orderId], references: [orderDrafts.orderId] })
 }));
+
+// Gateway Report table for tracking daily activity
+export const gatewayReports = pgTable("gateway_reports", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(), // Date for the entry
+  // Daily activity numbers for each area
+  buttpads: integer("buttpads").default(0),
+  duratec: integer("duratec").default(0),
+  sandblasting: integer("sandblasting").default(0),
+  texture: integer("texture").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Create insert schema and types for Gateway Reports
+export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  date: z.string().min(1, "Date is required"),
+  buttpads: z.number().int().min(0, "Buttpads must be a positive integer").default(0),
+  duratec: z.number().int().min(0, "Duratec must be a positive integer").default(0),
+  sandblasting: z.number().int().min(0, "Sandblasting must be a positive integer").default(0),
+  texture: z.number().int().min(0, "Texture must be a positive integer").default(0),
+});
+
+export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
+export type GatewayReport = typeof gatewayReports.$inferSelect;

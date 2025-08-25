@@ -167,6 +167,12 @@ export default function Navigation() {
       description: 'Orders with AG bottom metal specifications'
     },
     {
+      path: '/gateway-reports',
+      label: 'Gateway Report',
+      icon: BarChart,
+      description: 'Track daily activity for Buttpads, Duratec, Sandblasting, Texture'
+    },
+    {
       path: '/p2-forms',
       label: 'P2 Forms',
       icon: ClipboardList,

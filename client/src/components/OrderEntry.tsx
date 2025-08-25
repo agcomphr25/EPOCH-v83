@@ -1107,6 +1107,8 @@ export default function OrderEntry() {
   useEffect(() => {
     // Only set defaults for new orders (not editing existing orders)
     if (!isEditMode && featureDefs.length > 0 && !features.length_of_pull) {
+      console.log('🔍 Looking for LOP feature in featureDefs:', featureDefs.map(f => ({ id: f.id, name: f.name, displayName: f.displayName })));
+      
       const lopFeature = featureDefs.find(f => 
         f.id === 'length_of_pull' || 
         f.name === 'length_of_pull' || 
@@ -1116,7 +1118,11 @@ export default function OrderEntry() {
         f.displayName?.toLowerCase().includes('lop')
       );
 
+      console.log('🔍 Found LOP feature:', lopFeature);
+
       if (lopFeature?.options) {
+        console.log('🔍 LOP feature options:', lopFeature.options);
+        
         // Find "No Extra Length (STD 13.5")" option (check various possible values)
         const standardLopOption = lopFeature.options.find(option => 
           option.label?.includes('No Extra Length (STD 13.5")') ||
@@ -1126,13 +1132,19 @@ export default function OrderEntry() {
           (option.label?.toLowerCase().includes('no') && option.label?.toLowerCase().includes('13.5'))
         );
 
+        console.log('🔍 Found LOP default option:', standardLopOption);
+
         if (standardLopOption) {
           setFeatures(prev => ({
             ...prev,
             length_of_pull: standardLopOption.value
           }));
           console.log('✅ Set default length of pull to:', standardLopOption.label, 'with value:', standardLopOption.value);
+        } else {
+          console.log('❌ Could not find LOP default option');
         }
+      } else {
+        console.log('❌ LOP feature has no options');
       }
     }
   }, [featureDefs, isEditMode, features.length_of_pull]);

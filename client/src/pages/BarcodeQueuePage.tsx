@@ -326,12 +326,19 @@ export default function BarcodeQueuePage() {
       return { success: true };
     },
     onSuccess: () => {
-      toast.success(`Barcode labels opened in new tab for ${selectedOrders.size} orders`);
+      toast({
+        title: "Barcode labels created",
+        description: `Barcode labels opened in new tab for ${selectedOrders.size} orders`
+      });
       setShowLabelDialog(false);
     },
     onError: (error) => {
       console.error('Label creation error:', error);
-      toast.error(`Failed to create barcode labels: ${error.message}`);
+      toast({
+        title: "Error creating labels",
+        description: `Failed to create barcode labels: ${error.message}`,
+        variant: "destructive"
+      });
     }
   });
 
@@ -347,20 +354,31 @@ export default function BarcodeQueuePage() {
       });
     },
     onSuccess: () => {
-      toast.success(`Progressed ${selectedOrders.size} orders to CNC`);
+      toast({
+        title: "Orders progressed",
+        description: `Progressed ${selectedOrders.size} orders to CNC`
+      });
       setSelectedOrders(new Set());
       setSelectAll(false);
       // Refetch orders to update the display
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error) => {
-      toast.error(`Failed to progress orders: ${error}`);
+      toast({
+        title: "Error progressing orders",
+        description: `Failed to progress orders: ${error}`,
+        variant: "destructive"
+      });
     }
   });
 
   const handleCreateBarcodes = () => {
     if (selectedOrders.size === 0) {
-      toast.error('Please select at least one order');
+      toast({
+        title: "No orders selected",
+        description: "Please select at least one order",
+        variant: "destructive"
+      });
       return;
     }
     setShowLabelDialog(true);
@@ -372,7 +390,11 @@ export default function BarcodeQueuePage() {
 
   const handleProgressToCNC = () => {
     if (selectedOrders.size === 0) {
-      toast.error('Please select at least one order');
+      toast({
+        title: "No orders selected",
+        description: "Please select at least one order",
+        variant: "destructive"
+      });
       return;
     }
     progressToCNC.mutate(Array.from(selectedOrders));
@@ -384,9 +406,16 @@ export default function BarcodeQueuePage() {
     const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
       setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
-      toast.success(`Order ${orderId} selected automatically`);
+      toast({
+        title: "Order selected",
+        description: `Order ${orderId} selected automatically`
+      });
     } else {
-      toast.error(`Order ${orderId} is not in the Barcode department`);
+      toast({
+        title: "Order not found",
+        description: `Order ${orderId} is not in the Barcode department`,
+        variant: "destructive"
+      });
     }
   };
 

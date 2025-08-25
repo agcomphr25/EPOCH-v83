@@ -123,9 +123,6 @@ export default function OrdersList() {
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('orderDate');
-  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
-  const [salesOrderContent, setSalesOrderContent] = useState('');
-  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
     isOpen: boolean;
@@ -342,23 +339,18 @@ export default function OrdersList() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order view in modal
+  // Function to handle sales order view - opens PDF in new tab
   const handleSalesOrderView = async (orderId: string) => {
-    setSalesOrderLoading(true);
-    setSalesOrderModalOpen(true);
-    
     try {
-      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      if (response.ok) {
-        const htmlContent = await response.text();
-        setSalesOrderContent(htmlContent);
-      } else {
-        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
-      }
+      // Open the PDF directly in a new tab
+      const pdfUrl = `/api/shipping-pdf/sales-order/${orderId}`;
+      window.open(pdfUrl, '_blank');
     } catch (error) {
-      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
-    } finally {
-      setSalesOrderLoading(false);
+      showToast({
+        title: "Error",
+        description: "Failed to open sales order PDF",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1337,27 +1329,6 @@ export default function OrdersList() {
         />
       )}
 
-      {/* Sales Order Modal */}
-      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Sales Order</DialogTitle>
-          </DialogHeader>
-          <div className="mt-4">
-            {salesOrderLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <span className="ml-2">Loading sales order...</span>
-              </div>
-            ) : (
-              <div 
-                className="sales-order-content"
-                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
   } catch (error) {

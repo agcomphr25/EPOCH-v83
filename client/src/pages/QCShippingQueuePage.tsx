@@ -348,6 +348,44 @@ export default function QCShippingQueuePage() {
     }
   };
 
+  // Handle bulk QC checklist download for selected orders
+  const handleBulkQCChecklistDownload = () => {
+    if (selectedOrders.size === 0) return;
+    
+    const orderIds = Array.from(selectedOrders);
+    let successCount = 0;
+    let errorCount = 0;
+
+    orderIds.forEach((orderId, index) => {
+      try {
+        // Add small delay between opening tabs to prevent browser blocking
+        setTimeout(() => {
+          window.open(`/api/shipping-pdf/qc-checklist/${orderId}`, '_blank');
+          successCount++;
+        }, index * 100);
+      } catch (error) {
+        console.error(`Error generating QC checklist for ${orderId}:`, error);
+        errorCount++;
+      }
+    });
+
+    // Show toast notification after processing
+    setTimeout(() => {
+      if (errorCount === 0) {
+        toast({
+          title: "QC checklists opened",
+          description: `${successCount} QC checklists opened in new tabs for printing`
+        });
+      } else {
+        toast({
+          title: "Partial success",
+          description: `${successCount} checklists opened, ${errorCount} failed`,
+          variant: "destructive"
+        });
+      }
+    }, (orderIds.length * 100) + 500);
+  };
+
   // Handle sales order download - Updated to remove QC checklist functionality
   const handleSalesOrderDownload = (orderId: string) => {
     window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
@@ -784,6 +822,16 @@ export default function QCShippingQueuePage() {
                   size="sm"
                 >
                   Clear Selection
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleBulkQCChecklistDownload}
+                  disabled={selectedOrders.size === 0}
+                  size="sm"
+                  className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-900/20"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Print QC Checklists ({selectedOrders.size})
                 </Button>
                 <Button
                   onClick={progressToShipping}

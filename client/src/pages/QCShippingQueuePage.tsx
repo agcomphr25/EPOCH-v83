@@ -350,7 +350,7 @@ export default function QCShippingQueuePage() {
 
   // Handle sales order download - Updated to remove QC checklist functionality
   const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
     toast({
       title: "Sales order opened",
       description: `Sales order for ${orderId} opened in new tab for viewing`

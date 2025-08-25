@@ -22,6 +22,9 @@ export default function QCShippingQueuePage() {
   const [showLabelCreator, setShowLabelCreator] = useState(false);
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [salesOrderContent, setSalesOrderContent] = useState('');
+  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -386,13 +389,37 @@ export default function QCShippingQueuePage() {
     }, (orderIds.length * 100) + 500);
   };
 
-  // Handle sales order download - Updated to remove QC checklist functionality
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Handle sales order view in modal
+  const handleSalesOrderView = async (orderId: string) => {
+    setSalesOrderLoading(true);
+    setSalesOrderModalOpen(true);
+    setSalesOrderContent('');
+
+    try {
+      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setSalesOrderContent(url);
+      } else {
+        setSalesOrderContent('');
+        toast({
+          title: "Error loading sales order",
+          description: "Failed to load sales order PDF",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error loading sales order:', error);
+      setSalesOrderContent('');
+      toast({
+        title: "Error loading sales order", 
+        description: "Failed to load sales order PDF",
+        variant: "destructive"
+      });
+    } finally {
+      setSalesOrderLoading(false);
+    }
   };
 
   // UPS Label functionality moved from ShippingManagement.tsx
@@ -554,7 +581,7 @@ export default function QCShippingQueuePage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => handleSalesOrderDownload(order.orderId)}
+            onClick={() => handleSalesOrderView(order.orderId)}
             className="flex-1 text-xs"
           >
             <FileText className="h-3 w-3 mr-1" />
@@ -896,6 +923,42 @@ export default function QCShippingQueuePage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Sales Order Modal */}
+      <Dialog open={salesOrderModalOpen} onOpenChange={(open) => {
+        setSalesOrderModalOpen(open);
+        if (!open && salesOrderContent) {
+          // Clean up blob URL to prevent memory leaks
+          URL.revokeObjectURL(salesOrderContent);
+          setSalesOrderContent('');
+        }
+      }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {salesOrderLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-2">Loading sales order...</span>
+              </div>
+            ) : salesOrderContent ? (
+              <div className="w-full h-[70vh]">
+                <iframe 
+                  src={salesOrderContent}
+                  className="w-full h-full border-0"
+                  title="Sales Order PDF"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-gray-500">Failed to load sales order</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

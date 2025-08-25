@@ -172,7 +172,7 @@ export default function BarcodeQueuePage() {
       categories[categoryKey].push(order);
     });
 
-    // Sort each category by due date (closest first) and overdue status
+    // Sort each category by due date (latest first) and overdue status
     Object.keys(categories).forEach(key => {
       categories[key].sort((a, b) => {
         const aOverdue = isAfter(new Date(), new Date(a.dueDate));
@@ -182,8 +182,8 @@ export default function BarcodeQueuePage() {
         if (aOverdue && !bOverdue) return -1;
         if (!aOverdue && bOverdue) return 1;
 
-        // Then by due date (closest first)
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        // Then by due date (latest first)
+        return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
       });
     });
 

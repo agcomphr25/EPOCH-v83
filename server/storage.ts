@@ -1321,8 +1321,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrders(): Promise<AllOrder[]> {
-    // Get finalized orders from all_orders table
-    const finalizedOrders = await db.select({
+    // Query ALL orders from all_orders table without filters
+    const orders = await db.select({
       id: allOrders.id,
       orderId: allOrders.orderId,
       orderDate: allOrders.orderDate,
@@ -1388,121 +1388,32 @@ export class DatabaseStorage implements IStorage {
       createdAt: allOrders.createdAt,
       updatedAt: allOrders.updatedAt
     }).from(allOrders)
-    .where(
-      and(
-        ne(allOrders.status, 'CANCELLED'),
-        eq(allOrders.isCancelled, false)
-      )
-    );
-
-    // Get active orders from orders table (production tracking)
-    const activeOrders = await db.select({
-      id: orders.id,
-      orderId: orders.orderId,
-      orderDate: orders.date,
-      dueDate: orders.dueDate,
-      customer: orders.customer,
-      product: orders.product,
-      currentDepartment: orders.currentDepartment,
-      status: orders.status,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt
-    }).from(orders)
-    .where(eq(orders.status, 'Active'));
+    .orderBy(desc(allOrders.updatedAt));
 
     // Get all customers to create a lookup map
     const allCustomers = await db.select({
       id: customers.id,
-      name: customers.name
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      company: customers.company,
+      customerType: customers.customerType,
+      notes: customers.notes,
+      isActive: customers.isActive,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+      preferredCommunicationMethod: customers.preferredCommunicationMethod
     }).from(customers);
     const customerMap = new Map(allCustomers.map(c => [c.id.toString(), c.name]));
 
-    // Convert active orders to AllOrder format and combine with finalized orders
-    const convertedActiveOrders = activeOrders.map(order => ({
-      id: order.id,
-      orderId: order.orderId,
-      orderDate: order.orderDate,
-      dueDate: order.dueDate,
-      customerId: '', // Not available in simplified table
-      customerPO: '',
-      fbOrderNumber: '',
-      agrOrderDetails: '',
-      isCustomOrder: false,
-      modelId: order.product || '',
-      handedness: '',
-      shankLength: 0,
-      features: {},
-      featureQuantities: {},
-      discountCode: '',
-      notes: '',
-      customDiscountType: '',
-      customDiscountValue: 0,
-      showCustomDiscount: false,
-      priceOverride: null,
-      shipping: 0,
-      tikkaOption: '',
-      status: order.status,
-      barcode: '',
-      currentDepartment: order.currentDepartment,
-      departmentHistory: [],
-      scrappedQuantity: 0,
-      totalProduced: 0,
-      layupCompletedAt: null,
-      pluggingCompletedAt: null,
-      cncCompletedAt: null,
-      finishCompletedAt: null,
-      gunsmithCompletedAt: null,
-      paintCompletedAt: null,
-      qcCompletedAt: null,
-      shippingCompletedAt: null,
-      scrapDate: null,
-      scrapReason: '',
-      scrapDisposition: '',
-      scrapAuthorization: '',
-      isReplacement: false,
-      replacedOrderId: '',
-      isPaid: false,
-      paymentType: '',
-      paymentAmount: 0,
-      paymentDate: null,
-      paymentTimestamp: null,
-      trackingNumber: '',
-      shippingCarrier: '',
-      shippingMethod: '',
-      shippedDate: null,
-      estimatedDelivery: null,
-      shippingLabelGenerated: false,
-      customerNotified: false,
-      notificationMethod: '',
-      notificationSentAt: null,
-      deliveryConfirmed: false,
-      deliveryConfirmedAt: null,
-      isCancelled: false,
-      cancelledAt: null,
-      cancelReason: '',
-      isVerified: false,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-      customer: order.customer || 'Unknown Customer',
-      product: order.product || 'Unknown Product',
-      isFlattop: false
-    }));
-
-    // Combine both sources, finalized orders first
-    const allOrdersResult = [
-      ...finalizedOrders.map(order => ({
-        ...order,
-        customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
-        product: order.modelId || 'Unknown Product',
-        isFlattop: false
-      })),
-      ...convertedActiveOrders
-    ];
-
-    return allOrdersResult.sort((a, b) => 
-      new Date(b.updatedAt || b.createdAt || 0).getTime() - 
-      new Date(a.updatedAt || a.createdAt || 0).getTime()
-    ) as any;
+    // Enrich orders with customer names and add required frontend fields
+    return orders.map(order => ({
+      ...order,
+      customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
+      // Add product field for frontend compatibility
+      product: order.modelId || 'Unknown Product',
+      isFlattop: false // Add missing field
+    })) as any;
   }
 
   // Helper function to calculate order total from features and pricing

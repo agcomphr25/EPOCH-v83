@@ -592,7 +592,7 @@ export default function BarcodeQueuePage() {
                                     </div>
                                     
                                     {/* Material Type and Action Badges */}
-                                    <div className="flex gap-2 flex-wrap items-center">
+                                    <div className="flex gap-2 flex-wrap">
                                       <Badge variant="outline" className={`text-xs ${
                                         materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' :
                                         materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' :
@@ -613,13 +613,9 @@ export default function BarcodeQueuePage() {
                                          actionLength === 'medium' ? 'Medium' :
                                          actionLength === 'long' ? 'Long' : 'Unknown'} Action
                                       </Badge>
-                                    </div>
-
-                                    {/* Action Buttons Row */}
-                                    <div className="flex gap-2 items-center">
                                       <Link href={`/order-entry?draft=${order.orderId}`}>
-                                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" title="View/Edit Order">
-                                          <Edit className="h-4 w-4" />
+                                        <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order">
+                                          <Edit className="h-3 w-3" />
                                         </Button>
                                       </Link>
                                       <Button 
@@ -630,9 +626,9 @@ export default function BarcodeQueuePage() {
                                           handleSalesOrderView(order.orderId);
                                         }}
                                         title="View Sales Order"
-                                        className="h-8 w-8 p-0"
+                                        className="h-6 w-6 p-0 ml-1"
                                       >
-                                        <Eye className="h-4 w-4" />
+                                        <Eye className="h-3 w-3" />
                                       </Button>
                                       <Button 
                                         variant="outline" 
@@ -642,9 +638,9 @@ export default function BarcodeQueuePage() {
                                           handleKickbackClick(order.orderId);
                                         }}
                                         title="Report Kickback"
-                                        className="h-8 w-8 p-0"
+                                        className="h-6 w-6 p-0 ml-1"
                                       >
-                                        <TrendingDown className="h-4 w-4" />
+                                        <TrendingDown className="h-3 w-3" />
                                       </Button>
                                     </div>
                                     

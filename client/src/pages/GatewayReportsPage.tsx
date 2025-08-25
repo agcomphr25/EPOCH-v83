@@ -156,12 +156,69 @@ const GatewayReportsPage = () => {
     return days[date.getDay()];
   };
 
+  const getWeekKey = (dateString: string) => {
+    const date = new Date(dateString);
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+    return weekStart.toISOString().split('T')[0];
+  };
+
+  const formatWeekRange = (weekStart: string) => {
+    const start = new Date(weekStart);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6); // End of week (Saturday)
+    
+    const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const startFormatted = start.toLocaleDateString('en-US', formatOptions);
+    const endFormatted = end.toLocaleDateString('en-US', formatOptions);
+    
+    return `${startFormatted} - ${endFormatted}`;
+  };
+
+  // Calculate weekly totals
+  const getWeeklyTotals = (reports: GatewayReport[]) => {
+    const weeklyData: { [weekKey: string]: {
+      weekStart: string;
+      buttpadsTotal: number;
+      duratecTotal: number;
+      sandblastingTotal: number;
+      textureTotal: number;
+      reportCount: number;
+    }} = {};
+
+    reports.forEach(report => {
+      const weekKey = getWeekKey(report.reportDate);
+      
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = {
+          weekStart: weekKey,
+          buttpadsTotal: 0,
+          duratecTotal: 0,
+          sandblastingTotal: 0,
+          textureTotal: 0,
+          reportCount: 0
+        };
+      }
+      
+      weeklyData[weekKey].buttpadsTotal += report.buttpadsUnits;
+      weeklyData[weekKey].duratecTotal += report.duratecUnits;
+      weeklyData[weekKey].sandblastingTotal += report.sandblastingUnits;
+      weeklyData[weekKey].textureTotal += report.textureUnits;
+      weeklyData[weekKey].reportCount += 1;
+    });
+
+    // Convert to array and sort by week start date (most recent first)
+    return Object.values(weeklyData).sort((a, b) => 
+      new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()
+    );
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Gateway Report</h1>
-          <p className="text-gray-600">Track daily activity across production areas</p>
+          <p className="text-gray-600">Track weekly production totals across areas</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -169,18 +226,75 @@ const GatewayReportsPage = () => {
         </Button>
       </div>
 
-      <Tabs defaultValue="recent" className="space-y-4">
+      <Tabs defaultValue="weekly" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="recent">Recent Reports</TabsTrigger>
-          <TabsTrigger value="all">All Reports</TabsTrigger>
+          <TabsTrigger value="weekly">Weekly Totals</TabsTrigger>
+          <TabsTrigger value="daily">Daily Reports</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="recent" className="space-y-4">
+        <TabsContent value="weekly" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Gateway Reports</CardTitle>
+              <CardTitle>Weekly Production Totals</CardTitle>
               <CardDescription>
-                Daily units processed by area (last 10 reports)
+                Weekly totals for each production area
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8">Loading reports...</div>
+              ) : reports.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No gateway reports found. Create your first report to get started.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Week</TableHead>
+                      <TableHead>Buttpads Total</TableHead>
+                      <TableHead>Duratec Total</TableHead>
+                      <TableHead>Sandblasting Total</TableHead>
+                      <TableHead>Texture Total</TableHead>
+                      <TableHead>Days Reported</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getWeeklyTotals(reports).slice(0, 10).map((week, index) => (
+                      <TableRow key={week.weekStart}>
+                        <TableCell className="font-medium">
+                          {formatWeekRange(week.weekStart)}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {week.buttpadsTotal}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {week.duratecTotal}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {week.sandblastingTotal}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {week.textureTotal}
+                        </TableCell>
+                        <TableCell className="text-center text-gray-600">
+                          {week.reportCount} {week.reportCount === 1 ? 'day' : 'days'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="daily" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily Gateway Reports</CardTitle>
+              <CardDescription>
+                Individual daily reports with editing capabilities
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -200,7 +314,7 @@ const GatewayReportsPage = () => {
                       <TableHead>Duratec</TableHead>
                       <TableHead>Sandblasting</TableHead>
                       <TableHead>Texture</TableHead>
-                      <TableHead>Total</TableHead>
+                      <TableHead>Daily Total</TableHead>
                       <TableHead>Notes</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -350,79 +464,6 @@ const GatewayReportsPage = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="all" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>All Gateway Reports</CardTitle>
-              <CardDescription>
-                Complete history of daily production activity
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8">Loading reports...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Day</TableHead>
-                      <TableHead>Buttpads</TableHead>
-                      <TableHead>Duratec</TableHead>
-                      <TableHead>Sandblasting</TableHead>
-                      <TableHead>Texture</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reports.map((report: GatewayReport) => (
-                      <TableRow key={report.id}>
-                        <TableCell>{formatDate(report.reportDate)}</TableCell>
-                        <TableCell className="font-medium">
-                          {getDayOfWeek(report.reportDate)}
-                        </TableCell>
-                        <TableCell>{report.buttpadsUnits}</TableCell>
-                        <TableCell>{report.duratecUnits}</TableCell>
-                        <TableCell>{report.sandblastingUnits}</TableCell>
-                        <TableCell>{report.textureUnits}</TableCell>
-                        <TableCell className="font-semibold">
-                          {report.buttpadsUnits + report.duratecUnits + 
-                           report.sandblastingUnits + report.textureUnits}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-gray-600 truncate max-w-32 block">
-                            {report.notes || "-"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEdit(report)}
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDelete(report.id)}
-                              disabled={deleteReportMutation.isPending}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* New Report Form Modal */}

@@ -71,17 +71,21 @@ export default function FinishQCPage() {
   const handleSalesOrderView = async (orderId: string) => {
     setSalesOrderLoading(true);
     setSalesOrderModalOpen(true);
-    
+    setSalesOrderContent('');
+
     try {
       const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
       if (response.ok) {
-        const htmlContent = await response.text();
-        setSalesOrderContent(htmlContent);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setSalesOrderContent(url);
       } else {
-        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+        setSalesOrderContent('');
+        console.error('Failed to load sales order:', response.status);
       }
     } catch (error) {
-      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      console.error('Error loading sales order:', error);
+      setSalesOrderContent('');
     } finally {
       setSalesOrderLoading(false);
     }
@@ -461,22 +465,36 @@ export default function FinishQCPage() {
       )}
 
       {/* Sales Order Modal */}
-      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={salesOrderModalOpen} onOpenChange={(open) => {
+        setSalesOrderModalOpen(open);
+        if (!open && salesOrderContent) {
+          // Clean up blob URL to prevent memory leaks
+          URL.revokeObjectURL(salesOrderContent);
+          setSalesOrderContent('');
+        }
+      }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Sales Order</DialogTitle>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="flex-1 overflow-hidden">
             {salesOrderLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 <span className="ml-2">Loading sales order...</span>
               </div>
+            ) : salesOrderContent ? (
+              <div className="w-full h-[70vh]">
+                <iframe 
+                  src={salesOrderContent}
+                  className="w-full h-full border-0"
+                  title="Sales Order PDF"
+                />
+              </div>
             ) : (
-              <div 
-                className="sales-order-content"
-                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
-              />
+              <div className="flex items-center justify-center py-8">
+                <p className="text-gray-500">Failed to load sales order</p>
+              </div>
             )}
           </div>
         </DialogContent>

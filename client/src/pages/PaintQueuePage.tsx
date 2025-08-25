@@ -92,7 +92,7 @@ export default function PaintQueuePage() {
     // Check if the order exists in the current Paint queue
     const orderExists = paintOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} found and selected`);
     } else {
       // Find the order in all orders to show current department
@@ -245,7 +245,7 @@ export default function PaintQueuePage() {
     // Check if the order exists in the current queue
     const orderExists = paintOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      setSelectedOrders(prev => new Set([...prev, orderId]));
+      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} selected automatically`);
     } else {
       toast.error(`Order ${orderId} is not in the Paint department`);

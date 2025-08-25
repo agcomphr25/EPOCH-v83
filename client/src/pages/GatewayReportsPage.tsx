@@ -74,7 +74,7 @@ const GatewayReportsPage = () => {
     onError: (error: any) => {
       toast({ 
         title: "Error", 
-        description: error.response?.data?.error || "Failed to create report",
+        description: error.message || "Failed to create report",
         variant: "destructive"
       });
     },
@@ -92,7 +92,7 @@ const GatewayReportsPage = () => {
     onError: (error: any) => {
       toast({ 
         title: "Error", 
-        description: error.response?.data?.error || "Failed to update report",
+        description: error.message || "Failed to update report",
         variant: "destructive"
       });
     },
@@ -108,7 +108,7 @@ const GatewayReportsPage = () => {
     onError: (error: any) => {
       toast({ 
         title: "Error", 
-        description: error.response?.data?.error || "Failed to delete report",
+        description: error.message || "Failed to delete report",
         variant: "destructive"
       });
     },

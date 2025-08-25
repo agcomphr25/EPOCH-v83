@@ -1117,13 +1117,13 @@ export default function OrderEntry() {
       );
 
       if (lopFeature?.options) {
-        // Find "No Additional Length (STD 13.5")" option (check various possible values)
+        // Find "No Extra Length (STD 13.5")" option (check various possible values)
         const standardLopOption = lopFeature.options.find(option => 
-          option.label?.includes('No Additional Length (STD 13.5")') ||
-          option.label?.toLowerCase().includes('no additional length') ||
-          option.value?.toLowerCase().includes('no_additional_length') ||
+          option.label?.includes('No Extra Length (STD 13.5")') ||
+          option.label?.toLowerCase().includes('no extra length') ||
+          option.value?.toLowerCase().includes('no_lop_change') ||
           option.label?.toLowerCase().includes('std 13.5') ||
-          option.value?.toLowerCase().includes('std_13_5')
+          (option.label?.toLowerCase().includes('no') && option.label?.toLowerCase().includes('13.5'))
         );
 
         if (standardLopOption) {

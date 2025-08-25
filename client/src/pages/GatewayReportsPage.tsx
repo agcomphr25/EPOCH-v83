@@ -51,13 +51,13 @@ const GatewayReportsPage = () => {
   // Fetch all gateway reports
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ["/api/gateway-reports"],
-    queryFn: () => apiRequest.get("/api/gateway-reports").then(res => res.data),
+    queryFn: () => apiRequest("/api/gateway-reports"),
   });
 
   // Create report mutation
   const createReportMutation = useMutation({
     mutationFn: (data: ReportFormData) => 
-      apiRequest.post("/api/gateway-reports", data),
+      apiRequest("/api/gateway-reports", { method: "POST", body: data as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/gateway-reports"] });
       toast({ title: "Success", description: "Gateway report created successfully" });
@@ -75,7 +75,7 @@ const GatewayReportsPage = () => {
   // Update report mutation
   const updateReportMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<ReportFormData> }) =>
-      apiRequest.put(`/api/gateway-reports/${id}`, data),
+      apiRequest(`/api/gateway-reports/${id}`, { method: "PUT", body: data as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/gateway-reports"] });
       toast({ title: "Success", description: "Gateway report updated successfully" });
@@ -92,7 +92,7 @@ const GatewayReportsPage = () => {
 
   // Delete report mutation
   const deleteReportMutation = useMutation({
-    mutationFn: (id: number) => apiRequest.delete(`/api/gateway-reports/${id}`),
+    mutationFn: (id: number) => apiRequest(`/api/gateway-reports/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/gateway-reports"] });
       toast({ title: "Success", description: "Gateway report deleted successfully" });

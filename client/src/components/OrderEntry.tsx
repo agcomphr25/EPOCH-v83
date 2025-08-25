@@ -280,12 +280,18 @@ export default function OrderEntry() {
 
   // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
+    // If price override is set, use that as the subtotal (APR Price Override behavior)
+    if (priceOverride !== null) {
+      console.log('💰 Price calculation - Using APR Price Override as subtotal:', priceOverride);
+      return priceOverride;
+    }
+
     let total = 0;
 
-    // Add stock model price (use override if set, otherwise use standard price)
+    // Add stock model price (normal calculation when no override)
     const selectedModel = modelOptions.find(model => model.id === modelId);
     if (selectedModel) {
-      const basePrice = priceOverride !== null ? priceOverride : (selectedModel.price || 0);
+      const basePrice = selectedModel.price || 0;
       total += basePrice;
       console.log('💰 Price calculation - Base price:', basePrice);
     }

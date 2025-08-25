@@ -104,7 +104,8 @@ export default function GatewayReportsPage() {
   }, {} as { [key: string]: GatewayReport });
 
   const handleInputChange = (dateStr: string, area: string, value: string) => {
-    const numValue = parseInt(value) || 0;
+    const numValue = value === '' ? 0 : parseInt(value, 10);
+    console.log('Input change:', { dateStr, area, value, numValue });
     setEditingData(prev => ({
       ...prev,
       [dateStr]: {
@@ -124,7 +125,11 @@ export default function GatewayReportsPage() {
 
   const saveDay = async (dateStr: string) => {
     const dayData = editingData[dateStr];
-    if (!dayData) return;
+    console.log('SaveDay called:', { dateStr, dayData, editingData });
+    if (!dayData) {
+      console.log('No dayData, returning early');
+      return;
+    }
 
     const reportData = {
       date: dateStr,
@@ -134,6 +139,7 @@ export default function GatewayReportsPage() {
       texture: dayData.texture !== undefined ? dayData.texture : getValue(dateStr, 'texture'),
     };
 
+    console.log('Saving report data:', reportData);
     await saveReportMutation.mutateAsync(reportData);
     
     // Clear editing data for this day

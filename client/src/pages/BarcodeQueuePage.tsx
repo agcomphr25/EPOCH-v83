@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
-import { toast } from 'react-hot-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useLocation, Link } from 'wouter';
 
 export default function BarcodeQueuePage() {
@@ -22,6 +22,7 @@ export default function BarcodeQueuePage() {
   const [salesOrderLoading, setSalesOrderLoading] = useState(false);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -77,13 +78,15 @@ export default function BarcodeQueuePage() {
     }
   };
 
-  const handleViewSalesOrder = (orderId: string) => {
+  // Function to handle sales order download - opens in new tab
+  const handleSalesOrderDownload = (orderId: string) => {
     window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
     toast({
       title: "Sales order opened",
-      description: `Sales order PDF for ${orderId} opened in new tab`
+      description: `Sales order for ${orderId} opened in new tab for viewing`
     });
   };
+
 
 
   // Get orders in barcode department
@@ -624,16 +627,18 @@ export default function BarcodeQueuePage() {
                                           <Edit className="h-3 w-3" />
                                         </Button>
                                       </Link>
-                                      <Badge
+                                      <Button
                                         variant="outline"
-                                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 ml-1"
+                                        title="View Sales Order"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleSalesOrderView(order.orderId);
+                                          handleSalesOrderDownload(order.orderId);
                                         }}
                                       >
-                                        <Eye className="w-3 h-3" />
-                                      </Badge>
+                                        <FileText className="w-3 h-3" />
+                                      </Button>
                                       <Button 
                                         variant="outline" 
                                         size="sm"

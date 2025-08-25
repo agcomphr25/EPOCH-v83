@@ -513,6 +513,15 @@ export default function QCShippingQueuePage() {
             <CheckCircle className="h-3 w-3 mr-1" />
             QC Checklist
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleSalesOrderDownload(order.orderId)}
+            className="flex-1 text-xs"
+          >
+            <FileText className="h-3 w-3 mr-1" />
+            Sales Order
+          </Button>
         </div>
       </CardContent>
     </Card>

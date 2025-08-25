@@ -58,10 +58,18 @@ export default function ProductionQueuePage() {
 
   // Function to handle sales order download
   const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
     toast({
       title: "Sales order opened",
       description: `Sales order for ${orderId} opened in new tab for viewing`
+    });
+  };
+
+  const handleViewSalesOrder = (orderId: string) => {
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order PDF opened",
+      description: `Sales order PDF for ${orderId} opened in new tab`
     });
   };
 

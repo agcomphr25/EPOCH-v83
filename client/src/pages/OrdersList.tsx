@@ -131,7 +131,7 @@ export default function OrdersList() {
   } | null>(null);
   const { toast: showToast } = useToast();
   const [, setLocation] = useLocation();
-  
+
   // Cancel order state
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
@@ -187,7 +187,7 @@ export default function OrdersList() {
       // Invalidate kickback queries so KickbackTracking component refreshes
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kickbacks/analytics'] });
-      
+
       showToast({ title: 'Success', description: 'Kickback reported successfully' });
       kickbackForm.reset();
       setIsKickbackDialogOpen(false);
@@ -219,10 +219,10 @@ export default function OrdersList() {
     const departmentFlow = [
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
-    
+
     // Handle alternative department names
     const normalizedDepartment = currentDepartment === 'Layup' ? 'Layup/Plugging' : currentDepartment;
-    
+
     const currentIndex = departmentFlow.indexOf(normalizedDepartment);
     if (currentIndex >= 0 && currentIndex < departmentFlow.length - 1) {
       return departmentFlow[currentIndex + 1];
@@ -232,7 +232,7 @@ export default function OrdersList() {
 
   // Local state for immediate UI updates - using reliable dual approach
   const [localOrderUpdates, setLocalOrderUpdates] = React.useState<Record<string, string>>({});
-  
+
   // Track orders being updated to prevent query invalidation interference
   const [updatingOrders, setUpdatingOrders] = React.useState<Set<string>>(new Set());
 
@@ -244,7 +244,7 @@ export default function OrdersList() {
         department: nextDepartment,
         status: 'IN_PROGRESS'
       };
-      
+
       const response = await apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify(requestBody)
@@ -254,7 +254,7 @@ export default function OrdersList() {
     onSuccess: (data, variables) => {
       console.log(`✅ API Success: ${variables.orderId} -> ${variables.nextDepartment}`);
       toast.success('Department updated');
-      
+
       // Cache is already updated from button click - just clean up local state
       setTimeout(() => {
         setLocalOrderUpdates(prev => {
@@ -292,9 +292,9 @@ export default function OrdersList() {
       toast.error('No next department available');
       return;
     }
-    
+
     console.log(`🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`);
-    
+
     // IMMEDIATELY update React Query cache - this prevents any reversion
     queryClient.setQueryData(['/api/orders/with-payment-status', 'v2'], (old: any[]) => {
       if (!old) return old;
@@ -307,10 +307,10 @@ export default function OrdersList() {
       });
       return updated;
     });
-    
+
     // Also update local state for redundancy
     setLocalOrderUpdates(prev => ({ ...prev, [orderId]: nextDepartment }));
-    
+
     // Make the API call in the background
     progressOrderMutation.mutate({ orderId, nextDepartment });
   }, [progressOrderMutation, queryClient]);
@@ -343,28 +343,28 @@ export default function OrdersList() {
   const handleSalesOrderView = async (orderId: string) => {
     try {
       const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate sales order PDF');
       }
 
       // Get the PDF blob
       const blob = await response.blob();
-      
+
       // Create a URL for the blob
       const url = window.URL.createObjectURL(blob);
-      
+
       // Create a link and trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = `Sales-Order-${orderId}.pdf`;
       document.body.appendChild(link);
       link.click();
-      
+
       // Clean up
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       showToast({
         title: "Success",
         description: "Sales order PDF downloaded successfully",
@@ -388,14 +388,14 @@ export default function OrdersList() {
       cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
     }
   };
-  
+
   const handleExportCSV = async () => {
     try {
       const response = await fetch('/api/orders/export/csv');
       if (!response.ok) {
         throw new Error('Failed to export CSV');
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -411,7 +411,7 @@ export default function OrdersList() {
       alert('Failed to export CSV. Please try again.');
     }
   };
-  
+
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders/with-payment-status', 'v2'],
@@ -475,12 +475,12 @@ export default function OrdersList() {
   // Filter and sort orders based on search term, department filter, and sort options
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
-    
+
     let filtered = [...orders];
-    
+
     // Exclude cancelled orders from main list
     filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
-    
+
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
@@ -489,28 +489,28 @@ export default function OrdersList() {
         if (order.orderId && order.orderId.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         // Search by Customer Name
         const customerName = getCustomerName(order.customerId);
         if (customerName && customerName.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         // Search by Customer Phone
         const customerPhone = getCustomerPhone(order.customerId);
         if (customerPhone && customerPhone.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         // Search by FB Order Number
         if (order.fbOrderNumber && order.fbOrderNumber.toLowerCase().includes(term)) {
           return true;
         }
-        
+
         return false;
       });
     }
-    
+
     // Apply department filter
     if (departmentFilter !== 'all') {
       filtered = filtered.filter(order => {
@@ -518,11 +518,11 @@ export default function OrdersList() {
         return dept === departmentFilter;
       });
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-      
+
       switch (sortBy) {
         case 'department':
           aValue = a.currentDepartment || 'Not Set';
@@ -554,12 +554,12 @@ export default function OrdersList() {
           bValue = new Date(b.orderDate);
           break;
       }
-      
+
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     return filtered;
   }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
 
@@ -587,10 +587,10 @@ export default function OrdersList() {
 
   const getActionLengthAbbreviation = (features: any) => {
     if (!features || typeof features !== 'object') return '';
-    
+
     const actionLength = features.action_length;
     if (!actionLength) return '';
-    
+
     switch (actionLength.toLowerCase()) {
       case 'long':
         return 'LA';
@@ -605,9 +605,9 @@ export default function OrdersList() {
 
   const getPaintOption = (features: any) => {
     if (!features || typeof features !== 'object') return 'Standard';
-    
+
     const paintOptions = [];
-    
+
     // Check for paint_options_combined first (newer format)
     if (features.paint_options_combined) {
       const combined = features.paint_options_combined;
@@ -618,10 +618,10 @@ export default function OrdersList() {
           const [category, value] = parts;
           // Convert underscore format to display format with proper casing
           let displayValue = value.replace(/_/g, ' ');
-          
+
           // Handle special cases and proper capitalization
           displayValue = displayValue.replace(/\b\w/g, l => l.toUpperCase());
-          
+
           // Fix common formatting issues
           displayValue = displayValue
             .replace(/Rogue/g, 'Rogue')
@@ -629,12 +629,12 @@ export default function OrdersList() {
             .replace(/Web/g, 'Web')
             .replace(/Desert Night/g, 'Desert Night')
             .replace(/Carbon/g, 'Carbon');
-            
+
           paintOptions.push(displayValue);
         }
       }
     }
-    
+
     // Check for individual paint/coating features
     const paintKeys = [
       'cerakote_color', 
@@ -648,7 +648,7 @@ export default function OrdersList() {
       'anodizing',
       'powder_coating'
     ];
-    
+
     for (const key of paintKeys) {
       if (features[key] && features[key] !== '' && features[key] !== 'none') {
         // Convert underscore format to display format
@@ -656,12 +656,12 @@ export default function OrdersList() {
         paintOptions.push(displayValue);
       }
     }
-    
+
     // If no paint options found, return Standard
     if (paintOptions.length === 0) {
       return 'Standard';
     }
-    
+
     // Combine all paint options into a single line
     return paintOptions.join(' + ');
   };
@@ -738,7 +738,7 @@ export default function OrdersList() {
             </Link>
           </div>
         </div>
-        
+
         {/* Search and Filter Controls */}
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 max-w-md">
@@ -763,7 +763,7 @@ export default function OrdersList() {
               </Button>
             )}
           </div>
-          
+
           {/* Filter and Sort Controls */}
           <div className="flex items-center gap-4 flex-wrap">
             {/* Department Filter */}
@@ -785,7 +785,7 @@ export default function OrdersList() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Sort By */}
             <div className="flex items-center gap-2">
               <Label htmlFor="sort-by" className="text-sm font-medium whitespace-nowrap">
@@ -806,7 +806,7 @@ export default function OrdersList() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Sort Order */}
             <div className="flex items-center gap-2">
               <Label htmlFor="sort-order" className="text-sm font-medium whitespace-nowrap">
@@ -822,7 +822,7 @@ export default function OrdersList() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Clear Filters Button */}
             {(departmentFilter !== 'all' || sortBy !== 'orderDate' || sortOrder !== 'desc') && (
               <Button
@@ -959,7 +959,7 @@ export default function OrdersList() {
                             {getCustomerName(order.customerId) || 'N/A'}
                           </div>
                         </CustomerDetailsTooltip>
-                        
+
                         {/* Communication Buttons - Show on Hover */}
                         <div className="absolute left-0 top-full mt-1 hidden group-hover:flex bg-white border border-gray-200 rounded-md shadow-lg p-1 z-10">
                           <Button
@@ -1038,7 +1038,7 @@ export default function OrdersList() {
                           const nextDept = getNextDepartment(displayDepartment || '');
                           const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';
-                          
+
                           if (!isScrapped && !isComplete && nextDept) {
                             return (
                               <Button
@@ -1055,14 +1055,7 @@ export default function OrdersList() {
                         })()}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setSelectedOrderBarcode({
-                                orderId: order.orderId,
-                                barcode: order.barcode || `P1-${order.orderId}`
-                              })}
-                            >
+                            <Button variant="outline" size="sm">
                               <QrCode className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
@@ -1086,7 +1079,7 @@ export default function OrdersList() {
                             )}
                           </DialogContent>
                         </Dialog>
-                        
+
                         {/* More Actions Dropdown */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -1104,6 +1097,20 @@ export default function OrdersList() {
                                 Cancel Order
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem 
+                              onClick={() => handleViewSalesOrder(order.orderId)}
+                              className="text-blue-600"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              View Sales Order
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleSalesOrderDownload(order.orderId)}
+                              className="text-blue-600"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Download Sales Order
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

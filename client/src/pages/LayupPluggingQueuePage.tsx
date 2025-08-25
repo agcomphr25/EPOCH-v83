@@ -10,7 +10,6 @@ import { format, addDays, startOfWeek, eachDayOfInterval, isToday, isPast } from
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import { identifyLOPOrders, scheduleLOPAdjustments, getLOPStatus } from '@/utils/lopScheduler';
@@ -27,9 +26,9 @@ interface QueueOrderItemProps {
 }
 
 // Queue Order Item Component - simplified version of DraggableOrderItem for display only
-function QueueOrderItem({ 
-  order, 
-  getModelDisplayName, 
+function QueueOrderItem({
+  order,
+  getModelDisplayName,
   processedOrders,
   hasKickbacks,
   getKickbackStatus,
@@ -169,7 +168,7 @@ function QueueOrderItem({
                 'remington_700_long': 'LA',
                 'rem_700': 'SA',
                 'rem_700_short': 'SA',
-                'rem_700_long': 'LA', 
+                'rem_700_long': 'LA',
                 'tikka_t3': 'SA',
                 'tikka_short': 'SA',
                 'tikka_long': 'LA',
@@ -215,7 +214,7 @@ function QueueOrderItem({
           return (
             <div className="text-xs mt-1">
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                lopStatus.status === 'scheduled' 
+                lopStatus.status === 'scheduled'
                   ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                   : lopStatus.status === 'scheduled'
                   ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
@@ -239,13 +238,13 @@ function QueueOrderItem({
               return 'Heavy Fill';
             }
 
-            const heavyFillValue = orderFeatures.heavy_fill || 
-                                   orderFeatures.heavyFill || 
+            const heavyFillValue = orderFeatures.heavy_fill ||
+                                   orderFeatures.heavyFill ||
                                    orderFeatures.heavy_fill_option ||
                                    orderFeatures['heavy-fill'];
 
-            if (heavyFillValue === 'true' || 
-                heavyFillValue === true || 
+            if (heavyFillValue === 'true' ||
+                heavyFillValue === true ||
                 heavyFillValue === 'yes' ||
                 heavyFillValue === 'heavy_fill') {
               return 'Heavy Fill';
@@ -274,7 +273,7 @@ function QueueOrderItem({
               onClick={() => handleSalesOrderDownload(order.orderId)}
             >
               <FileText className="w-3 h-3 mr-1" />
-              Sales Order
+              View Sales Order
             </Badge>
           )}
           {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
@@ -345,7 +344,7 @@ export default function LayupPluggingQueuePage() {
     });
   };
 
-  // Calculate week info first  
+  // Calculate week info first
   const weekInfo = useMemo(() => {
     const today = new Date();
     const baseStart = startOfWeek(today, { weekStartsOn: 1 });
@@ -404,7 +403,6 @@ export default function LayupPluggingQueuePage() {
           moldId: scheduleEntry.moldId,
           employeeAssignments: scheduleEntry.employeeAssignments || [],
           currentDepartment: 'Scheduled (Missing from Queue)',
-          customer: 'Unknown Customer',
           product: `Scheduled Order: ${scheduleEntry.orderId}`,
           status: 'scheduled',
           priorityScore: 1,
@@ -506,8 +504,8 @@ export default function LayupPluggingQueuePage() {
 
           if (matchingOrder) {
             // Use the full processed order data with exact schedule date
-            const mergedOrder = { 
-              ...matchingOrder, 
+            const mergedOrder = {
+              ...matchingOrder,
               scheduledDate: scheduleItem.scheduledDate,
               source: matchingOrder.source || 'main_orders'
             };
@@ -523,8 +521,8 @@ export default function LayupPluggingQueuePage() {
             // Fallback to original available orders
             const fallbackOrder = availableOrders.find((o: any) => o.orderId === scheduleItem.orderId);
             if (fallbackOrder) {
-              return { 
-                ...fallbackOrder, 
+              return {
+                ...fallbackOrder,
                 scheduledDate: scheduleItem.scheduledDate,
                 source: fallbackOrder.source || 'main_orders'
               };
@@ -675,8 +673,8 @@ export default function LayupPluggingQueuePage() {
       return 0;
     }
     try {
-      return allOrders.filter((order: any) => 
-        order?.currentDepartment === 'Barcode' || 
+      return allOrders.filter((order: any) =>
+        order?.currentDepartment === 'Barcode' ||
         (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
       ).length;
     } catch (error) {
@@ -752,24 +750,6 @@ export default function LayupPluggingQueuePage() {
     }
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Layup/Plugging queue
-    const orderExists = currentWeekOrders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      setSelectedOrders(prev => [...prev, orderId]);
-      toast.success(`Order ${orderId} found and selected`);
-    } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Layup/Plugging`);
-      } else {
-        toast.error(`Order ${orderId} not found`);
-      }
-    }
-  };
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
@@ -780,9 +760,6 @@ export default function LayupPluggingQueuePage() {
       {/* Barcode Scanner at top */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
-
       {/* Summary Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Current View Summary */}
@@ -790,7 +767,7 @@ export default function LayupPluggingQueuePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              {currentWeekOffset === 0 ? 'Current Week Schedule' : 
+              {currentWeekOffset === 0 ? 'Current Week Schedule' :
                currentWeekOffset === 1 ? 'Next Week Schedule' :
                `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
             </CardTitle>
@@ -973,8 +950,8 @@ export default function LayupPluggingQueuePage() {
 
                 return (
                   <div key={dateStr} className={`border rounded-lg p-4 ${
-                    isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200' : 
-                    isPastDay ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200' : 
+                    isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200' :
+                    isPastDay ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200' :
                     'bg-white dark:bg-gray-900 border-gray-200'
                   }`}>
                     <div className="flex items-center justify-between mb-3">

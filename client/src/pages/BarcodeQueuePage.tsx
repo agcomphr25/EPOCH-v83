@@ -12,7 +12,6 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation, Link } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -65,21 +64,27 @@ export default function BarcodeQueuePage() {
   const handleSalesOrderView = async (orderId: string) => {
     setSalesOrderLoading(true);
     setSalesOrderModalOpen(true);
-    
+
     try {
+      // This would fetch the sales order content or render it
       const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      if (response.ok) {
-        const htmlContent = await response.text();
-        setSalesOrderContent(htmlContent);
-      } else {
-        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
-      }
+      const content = await response.text();
+      setSalesOrderContent(content);
     } catch (error) {
-      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
+      setSalesOrderContent('<p>Error loading sales order</p>');
     } finally {
       setSalesOrderLoading(false);
     }
   };
+
+  const handleViewSalesOrder = (orderId: string) => {
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+    toast({
+      title: "Sales order opened",
+      description: `Sales order PDF for ${orderId} opened in new tab`
+    });
+  };
+
 
   // Get orders in barcode department
   const barcodeOrders = useMemo(() => {
@@ -117,12 +122,12 @@ export default function BarcodeQueuePage() {
   // Categorize orders by stock model only, sorted by due date
   const categorizedOrders = useMemo(() => {
     const categories: Record<string, any[]> = {};
-    
+
     barcodeOrders.forEach((order: any) => {
       const modelId = order.modelId;
       const stockModel = (stockModels as any[]).find((m: any) => m.id === modelId);
       const categoryKey = stockModel?.displayName || stockModel?.name || modelId;
-      
+
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];
       }
@@ -134,11 +139,11 @@ export default function BarcodeQueuePage() {
       categories[key].sort((a, b) => {
         const aOverdue = isAfter(new Date(), new Date(a.dueDate));
         const bOverdue = isAfter(new Date(), new Date(b.dueDate));
-        
+
         // Overdue orders first
         if (aOverdue && !bOverdue) return -1;
         if (!aOverdue && bOverdue) return 1;
-        
+
         // Then by due date (closest first)
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
@@ -176,16 +181,16 @@ export default function BarcodeQueuePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderIds })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to create labels');
       }
-      
+
       // Open PDF in new tab/popup for viewing and printing
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const newWindow = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
-      
+
       if (!newWindow) {
         // Fallback if popup blocked - create download link
         const link = document.createElement('a');
@@ -195,12 +200,12 @@ export default function BarcodeQueuePage() {
         link.click();
         document.body.removeChild(link);
       }
-      
+
       // Clean up URL after a delay
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
       }, 10000);
-      
+
       return { success: true };
     },
     onSuccess: () => {
@@ -268,24 +273,6 @@ export default function BarcodeQueuePage() {
     }
   };
 
-  // Handle order found via Facebook number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current Barcode queue
-    const orderExists = barcodeOrders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      setSelectedOrders(prev => new Set([...Array.from(prev), orderId]));
-      toast.success(`Order ${orderId} found and selected`);
-    } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not Barcode`);
-      } else {
-        toast.error(`Order ${orderId} not found`);
-      }
-    }
-  };
-
   return (
     <div className="container mx-auto px-6 pb-6 space-y-6" style={{ paddingTop: '2px' }}>
       {/* Header with Actions */}
@@ -294,7 +281,7 @@ export default function BarcodeQueuePage() {
           <Scan className="h-6 w-6" />
           <h1 className="text-3xl font-bold">Barcode Department Manager</h1>
         </div>
-        
+
         {/* Multi-Select Actions */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -307,7 +294,7 @@ export default function BarcodeQueuePage() {
               Select All ({selectedOrders.size}/{barcodeOrders.length})
             </label>
           </div>
-          
+
           {selectedOrders.size > 0 && (
             <div className="flex items-center gap-2">
               <Button
@@ -334,9 +321,6 @@ export default function BarcodeQueuePage() {
 
       {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
-
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -392,7 +376,7 @@ export default function BarcodeQueuePage() {
               .replace(/^M1A\s+/i, '')
               .replace(/^APR\s+/i, '')
               .replace(/Tikka\s+/i, '');
-            
+
             return (
               <Card key={categoryKey} className="overflow-hidden">
                 <CardHeader className="pb-4 bg-slate-50 dark:bg-slate-900/20 border-b-slate-200">
@@ -406,7 +390,7 @@ export default function BarcodeQueuePage() {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                
+
                 <CardContent className="p-6">
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {orders.map((order: any) => {
@@ -419,7 +403,7 @@ export default function BarcodeQueuePage() {
                                          order.modelId?.includes('tikka') ? 'Tikka' : 
                                          order.modelId?.startsWith('m1a_') ? 'M1A' :
                                          order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
-                      
+
                       return (
                         <Card 
                           key={order.orderId} 
@@ -439,7 +423,7 @@ export default function BarcodeQueuePage() {
                                 onChange={() => toggleOrderSelection(order.orderId)}
                                 className="mt-1"
                               />
-                              
+
                               <div className="flex-1 space-y-2">
                                 <div className="flex items-center justify-between">
                                   <span className="font-semibold text-lg">
@@ -451,7 +435,7 @@ export default function BarcodeQueuePage() {
                                     </Badge>
                                   )}
                                 </div>
-                                
+
                                 <div className="space-y-2 text-sm">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3 w-3 text-gray-500" />
@@ -459,7 +443,7 @@ export default function BarcodeQueuePage() {
                                       Due: {format(new Date(order.dueDate), 'M/d/yy')}
                                     </span>
                                   </div>
-                                  
+
                                   {/* Material Type and Action Badges */}
                                   <div className="flex gap-2 flex-wrap">
                                     <Badge variant="outline" className={`text-xs ${
@@ -483,13 +467,13 @@ export default function BarcodeQueuePage() {
                                        actionLength === 'long' ? 'Long' : 'Unknown'} Action
                                     </Badge>
                                   </div>
-                                  
+
                                   {order.customerPO && (
                                     <div className="text-xs text-gray-600">
                                       PO: {order.customerPO}
                                     </div>
                                   )}
-                                  
+
                                   {order.fbOrderNumber && (
                                     <div className="text-xs text-gray-600">
                                       FB: {order.fbOrderNumber}
@@ -519,7 +503,7 @@ export default function BarcodeQueuePage() {
               Create Barcode Labels - {selectedOrders.size} Orders Selected
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-6">
             {/* Selected Orders Summary */}
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
@@ -528,7 +512,7 @@ export default function BarcodeQueuePage() {
                 {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
                   const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                   if (categoryOrders.length === 0) return null;
-                  
+
                   // Remove material prefixes from display name
                   const modelName = categoryKey
                     .replace(/^CF\s+/i, '')
@@ -536,7 +520,7 @@ export default function BarcodeQueuePage() {
                     .replace(/^M1A\s+/i, '')
                     .replace(/^APR\s+/i, '')
                     .replace(/Tikka\s+/i, '');
-                  
+
                   return (
                     <div key={categoryKey} className="flex items-center justify-between">
                       <span className="font-medium">{modelName}</span>
@@ -553,7 +537,7 @@ export default function BarcodeQueuePage() {
               {Object.entries(categorizedOrders).map(([categoryKey, orders]) => {
                 const categoryOrders = orders.filter(order => selectedOrders.has(order.orderId));
                 if (categoryOrders.length === 0) return null;
-                
+
                 // Remove material prefixes from display name
                 const modelName = categoryKey
                   .replace(/^CF\s+/i, '')
@@ -561,7 +545,7 @@ export default function BarcodeQueuePage() {
                   .replace(/^M1A\s+/i, '')
                   .replace(/^APR\s+/i, '')
                   .replace(/Tikka\s+/i, '');
-                
+
                 return (
                   <Card key={categoryKey} className="overflow-hidden">
                     <CardHeader className="pb-3 bg-slate-50 dark:bg-slate-900/20">
@@ -581,7 +565,7 @@ export default function BarcodeQueuePage() {
                                              order.modelId?.includes('tikka') ? 'Tikka' : 
                                              order.modelId?.startsWith('m1a_') ? 'M1A' :
                                              order.modelId?.startsWith('apr_') ? 'APR' : 'Standard';
-                          
+
                           return (
                             <Card 
                               key={order.orderId} 
@@ -604,7 +588,7 @@ export default function BarcodeQueuePage() {
                                       </Badge>
                                     )}
                                   </div>
-                                  
+
                                   <div className="space-y-2 text-sm">
                                     <div className="flex items-center gap-2">
                                       <Calendar className="h-3 w-3 text-gray-500" />
@@ -612,7 +596,7 @@ export default function BarcodeQueuePage() {
                                         Due: {format(new Date(order.dueDate), 'M/d/yy')}
                                       </span>
                                     </div>
-                                    
+
                                     {/* Material Type and Action Badges */}
                                     <div className="flex gap-2 flex-wrap">
                                       <Badge variant="outline" className={`text-xs ${
@@ -663,20 +647,20 @@ export default function BarcodeQueuePage() {
                                         <TrendingDown className="h-3 w-3" />
                                       </Button>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-2">
                                       <Printer className="h-3 w-3 text-gray-500" />
                                       <span className="text-xs text-gray-600">
                                         Click to print individual label
                                       </span>
                                     </div>
-                                    
+
                                     {order.customerPO && (
                                       <div className="text-xs text-gray-600">
                                         PO: {order.customerPO}
                                       </div>
                                     )}
-                                    
+
                                     {order.fbOrderNumber && (
                                       <div className="text-xs text-gray-600">
                                         FB: {order.fbOrderNumber}
@@ -704,7 +688,7 @@ export default function BarcodeQueuePage() {
                 <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
-              
+
               <div className="flex gap-2">
                 <Button
                   onClick={() => handlePrintLabels(Array.from(selectedOrders))}

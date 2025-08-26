@@ -76,12 +76,6 @@ export default function Navigation() {
       description: 'View all created orders'
     },
     {
-      path: '/orders-management',
-      label: 'Orders Management',
-      icon: ClipboardList,
-      description: 'Comprehensive orders management with filtering and CSV export'
-    },
-    {
       path: '/draft-orders',
       label: 'Draft Orders',
       icon: FilePenLine,
@@ -154,6 +148,12 @@ export default function Navigation() {
   ];
 
   const formsReportsItems = [
+    {
+      path: '/orders-management',
+      label: 'Orders Management',
+      icon: ClipboardList,
+      description: 'Comprehensive orders management with filtering and CSV export'
+    },
     {
       path: '/enhanced-forms',
       label: 'Enhanced Forms',

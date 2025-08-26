@@ -345,7 +345,7 @@ export default function ShippingLabelPage() {
               {/* Shipping Address */}
               <div className="mb-6">
                 <h4 className="font-medium mb-2">Ship To Address</h4>
-                {addressLoading ? (
+                {orderLoading ? (
                   <div className="p-3 bg-blue-50 rounded-md text-sm">
                     Loading address...
                   </div>

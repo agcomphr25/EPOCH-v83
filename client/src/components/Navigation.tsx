@@ -444,7 +444,7 @@ export default function Navigation() {
     },
     {
       path: '/shipping-management',
-      label: 'Shipping Management',
+      label: 'Fulfilled Orders',
       icon: Truck,
       description: 'Manage tracking numbers and customer notifications'
     }

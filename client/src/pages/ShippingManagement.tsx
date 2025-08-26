@@ -165,7 +165,7 @@ export default function ShippingManagement() {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Shipping Management</h1>
+        <h1 className="text-3xl font-bold">Fulfilled Orders</h1>
         <div className="flex items-center gap-2">
           <Truck className="h-6 w-6 text-blue-600" />
           <span className="text-sm text-gray-600">

@@ -136,6 +136,9 @@ export default function OrdersManagementPage() {
   const filteredAndSortedOrders = useMemo(() => {
     let filtered = [...orders];
 
+    // Exclude fulfilled orders
+    filtered = filtered.filter(order => order.status !== 'FULFILLED');
+
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();

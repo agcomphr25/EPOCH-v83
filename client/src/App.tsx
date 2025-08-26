@@ -41,6 +41,7 @@ import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import P2PurchaseOrders from "./pages/P2PurchaseOrders";
+import P1POWeeklyQueue from "./pages/P1POWeeklyQueue";
 import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
@@ -176,6 +177,7 @@ function App() {
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/p1-purchase-orders" component={PurchaseOrders} />
+                  <Route path="/p1po-weekly-queue" component={P1POWeeklyQueue} />
                   <Route path="/p2-purchase-orders" component={P2PurchaseOrders} />
 
                   {/* Production and BOM Routes */}

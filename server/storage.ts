@@ -88,6 +88,9 @@ import {
   type OrderAttachment, type InsertOrderAttachment,
   // Gateway reports types
   type GatewayReport, type InsertGatewayReport,
+  // P1PO weekly schedule types
+  p1poWeeklySchedules,
+  type P1POWeeklySchedule, type InsertP1POWeeklySchedule,
 
 
 } from "./schema";
@@ -606,6 +609,15 @@ export interface IStorage {
   createGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
   updateGatewayReport(id: number, data: Partial<InsertGatewayReport>): Promise<GatewayReport>;
   deleteGatewayReport(id: number): Promise<void>;
+
+  // P1PO Weekly Schedule Management
+  getP1POWeeklySchedules(poId: number): Promise<P1POWeeklySchedule[]>;
+  createP1POWeeklySchedule(data: InsertP1POWeeklySchedule): Promise<P1POWeeklySchedule>;
+  updateP1POWeeklySchedule(id: number, data: Partial<InsertP1POWeeklySchedule>): Promise<P1POWeeklySchedule>;
+  deleteP1POWeeklySchedule(id: number): Promise<void>;
+  toggleP1POWeeklyScheduleActive(id: number, isActive: boolean): Promise<P1POWeeklySchedule>;
+  calculateP1POWeeklySchedule(poId: number): Promise<P1POWeeklySchedule[]>;
+  getActiveP1POWeeklySchedules(): Promise<P1POWeeklySchedule[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5915,6 +5927,180 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(gatewayReports)
       .where(eq(gatewayReports.id, id));
+  }
+
+  // P1PO Weekly Schedule Management Implementation
+  async getP1POWeeklySchedules(poId: number): Promise<P1POWeeklySchedule[]> {
+    return await db
+      .select()
+      .from(p1poWeeklySchedules)
+      .where(eq(p1poWeeklySchedules.poId, poId))
+      .orderBy(p1poWeeklySchedules.weekStartDate);
+  }
+
+  async createP1POWeeklySchedule(data: InsertP1POWeeklySchedule): Promise<P1POWeeklySchedule> {
+    const [schedule] = await db
+      .insert(p1poWeeklySchedules)
+      .values(data)
+      .returning();
+    return schedule;
+  }
+
+  async updateP1POWeeklySchedule(id: number, data: Partial<InsertP1POWeeklySchedule>): Promise<P1POWeeklySchedule> {
+    const [schedule] = await db
+      .update(p1poWeeklySchedules)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p1poWeeklySchedules.id, id))
+      .returning();
+    
+    if (!schedule) {
+      throw new Error(`P1PO weekly schedule with id ${id} not found`);
+    }
+    
+    return schedule;
+  }
+
+  async deleteP1POWeeklySchedule(id: number): Promise<void> {
+    await db
+      .delete(p1poWeeklySchedules)
+      .where(eq(p1poWeeklySchedules.id, id));
+  }
+
+  async toggleP1POWeeklyScheduleActive(id: number, isActive: boolean): Promise<P1POWeeklySchedule> {
+    const [schedule] = await db
+      .update(p1poWeeklySchedules)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(p1poWeeklySchedules.id, id))
+      .returning();
+    
+    if (!schedule) {
+      throw new Error(`P1PO weekly schedule with id ${id} not found`);
+    }
+    
+    return schedule;
+  }
+
+  async calculateP1POWeeklySchedule(poId: number): Promise<P1POWeeklySchedule[]> {
+    try {
+      // Get the purchase order details
+      const [po] = await db
+        .select()
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.id, poId));
+
+      if (!po) {
+        throw new Error(`Purchase order with ID ${poId} not found`);
+      }
+
+      // Get all items for this PO
+      const poItems = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.poId, poId));
+
+      if (poItems.length === 0) {
+        throw new Error(`No items found for purchase order ${po.poNumber}`);
+      }
+
+      // Clear existing schedules for this PO
+      await db
+        .delete(p1poWeeklySchedules)
+        .where(eq(p1poWeeklySchedules.poId, poId));
+
+      // Calculate weekly schedules based on items and capacity
+      const startDate = new Date();
+      const weeklyCapacity = 40; // hours per week (configurable)
+      const schedules: P1POWeeklySchedule[] = [];
+      
+      let currentWeekStart = new Date(startDate);
+      currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1); // Monday
+      
+      let remainingItems = [...poItems];
+      let weekNumber = 0;
+
+      while (remainingItems.length > 0 && weekNumber < 24) { // Max 24 weeks
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+        
+        let weeklyHours = 0;
+        const weekItems = [];
+        
+        // Fill the week with items based on capacity
+        for (let i = remainingItems.length - 1; i >= 0; i--) {
+          const item = remainingItems[i];
+          const itemHours = this.estimateItemHours(item);
+          
+          if (weeklyHours + itemHours <= weeklyCapacity) {
+            weekItems.push({
+              orderId: `${po.poNumber}-${item.id}`,
+              itemType: item.itemType,
+              stockModelId: item.itemId,
+              quantity: item.quantity,
+              specifications: item.specifications,
+              estimatedHours: itemHours
+            });
+            weeklyHours += itemHours;
+            remainingItems.splice(i, 1);
+          }
+        }
+        
+        if (weekItems.length > 0) {
+          const scheduleData = {
+            poId: poId,
+            poNumber: po.poNumber,
+            customerName: po.customerName,
+            weekStartDate: new Date(currentWeekStart),
+            weekEndDate: new Date(weekEnd),
+            items: weekItems,
+            totalHours: weeklyHours,
+            totalItems: weekItems.length,
+            isActive: true,
+            isScheduled: false
+          };
+
+          const schedule = await this.createP1POWeeklySchedule(scheduleData);
+          schedules.push(schedule);
+        }
+        
+        // Move to next week
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        weekNumber++;
+      }
+      
+      console.log(`📅 Generated ${schedules.length} weekly schedules for PO ${po.poNumber}`);
+      return schedules;
+      
+    } catch (error) {
+      console.error('Calculate P1PO weekly schedule error:', error);
+      throw error;
+    }
+  }
+
+  async getActiveP1POWeeklySchedules(): Promise<P1POWeeklySchedule[]> {
+    return await db
+      .select()
+      .from(p1poWeeklySchedules)
+      .where(eq(p1poWeeklySchedules.isActive, true))
+      .orderBy(p1poWeeklySchedules.weekStartDate);
+  }
+
+  // Helper method to estimate production hours for an item
+  private estimateItemHours(item: any): number {
+    // Basic estimation logic - can be made more sophisticated
+    const baseHours = 8; // Base hours per item
+    const quantityMultiplier = Math.max(1, item.quantity * 0.8); // Bulk efficiency
+    
+    // Different item types may have different time requirements
+    switch (item.itemType) {
+      case 'stock_model':
+        return baseHours * quantityMultiplier;
+      case 'custom_model':
+        return baseHours * 1.5 * quantityMultiplier; // Custom takes longer
+      case 'feature_item':
+        return baseHours * 0.5 * quantityMultiplier; // Features are quicker
+      default:
+        return baseHours * quantityMultiplier;
+    }
   }
 
 

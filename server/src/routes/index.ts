@@ -27,6 +27,7 @@ import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
 import gatewayReportsRoutes from './gatewayReports';
+import p1poWeeklySchedulesRoutes from './p1poWeeklySchedules';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -105,6 +106,9 @@ export function registerRoutes(app: Express): Server {
   
   // Gateway reports routes  
   app.use('/api/gateway-reports', gatewayReportsRoutes);
+  
+  // P1PO Weekly Schedule management routes
+  app.use('/api/p1po-weekly-schedules', p1poWeeklySchedulesRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

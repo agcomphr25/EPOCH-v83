@@ -1049,7 +1049,13 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 // CSV Export endpoint for orders
 router.get('/export/csv', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getAllOrdersWithPaymentStatus();
+    const allOrders = await storage.getAllOrdersWithPaymentStatus();
+    
+    // Filter out fulfilled and cancelled orders
+    const orders = allOrders.filter(order => 
+      order.status !== 'FULFILLED' && 
+      order.status !== 'CANCELLED'
+    );
     
     // CSV headers
     const csvHeaders = [

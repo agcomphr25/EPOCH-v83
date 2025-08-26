@@ -863,4 +863,51 @@ function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: strin
   };
 }
 
+// Add tracking number to an order
+router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { trackingNumber, shippingCarrier } = req.body;
+    
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'Tracking number is required' });
+    }
+    
+    // Try to update finalized order first
+    try {
+      const result = await db.update(allOrders)
+        .set({
+          trackingNumber: trackingNumber.trim(),
+          shippingCarrier: shippingCarrier || 'UPS',
+          updatedAt: new Date()
+        })
+        .where(eq(allOrders.orderId, orderId));
+      
+      console.log(`Updated finalized order ${orderId} with tracking number ${trackingNumber}`);
+    } catch (finalizedError) {
+      // If finalized update fails, try draft orders table
+      await db.update(orderDrafts)
+        .set({
+          trackingNumber: trackingNumber.trim(),
+          shippingCarrier: shippingCarrier || 'UPS',
+          updatedAt: new Date()
+        })
+        .where(eq(orderDrafts.orderId, orderId));
+      
+      console.log(`Updated draft order ${orderId} with tracking number ${trackingNumber}`);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Tracking number added successfully',
+      trackingNumber: trackingNumber.trim(),
+      shippingCarrier: shippingCarrier || 'UPS'
+    });
+    
+  } catch (error) {
+    console.error('Error adding tracking number:', error);
+    res.status(500).json({ error: 'Failed to add tracking number' });
+  }
+});
+
 export default router;

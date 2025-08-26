@@ -96,6 +96,27 @@ export default function ShippingManagement() {
     },
   });
 
+  // Clear cache mutation
+  const clearCacheMutation = useMutation({
+    mutationFn: () => 
+      apiRequest('/api/shipping-pdf/clear-cache', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Cache Cleared',
+        description: 'UPS token cache has been cleared successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to clear cache',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const filteredOrders = orders?.filter((order: OrderWithTracking) => {
     const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -219,11 +240,27 @@ export default function ShippingManagement() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Fulfilled Orders</h1>
-        <div className="flex items-center gap-2">
-          <Truck className="h-6 w-6 text-blue-600" />
-          <span className="text-sm text-gray-600">
-            {filteredOrders?.length || 0} orders
-          </span>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => clearCacheMutation.mutate()}
+            disabled={clearCacheMutation.isPending}
+            className="flex items-center gap-2"
+          >
+            {clearCacheMutation.isPending ? (
+              <Clock className="h-4 w-4 animate-spin" />
+            ) : (
+              <Truck className="h-4 w-4" />
+            )}
+            Clear Cache
+          </Button>
+          <div className="flex items-center gap-2">
+            <Truck className="h-6 w-6 text-blue-600" />
+            <span className="text-sm text-gray-600">
+              {filteredOrders?.length || 0} orders
+            </span>
+          </div>
         </div>
       </div>
 

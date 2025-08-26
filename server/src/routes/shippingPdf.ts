@@ -28,6 +28,15 @@ let cachedToken = {
   expiresAt: 0
 };
 
+// Function to clear cache
+function clearUPSTokenCache() {
+  cachedToken = {
+    token: '',
+    expiresAt: 0
+  };
+  console.log('UPS token cache cleared');
+}
+
 // UPS API Helper Functions with caching
 async function getUPSAccessToken() {
   // Return cached token if still valid (with 5 minute buffer)
@@ -3712,6 +3721,22 @@ router.get('/track-ups/:trackingNumber', async (req: Request, res: Response) => 
       details: error.message,
       // Provide fallback UPS tracking URL
       fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`
+    });
+  }
+});
+
+// Clear UPS token cache endpoint
+router.post('/clear-cache', (req: Request, res: Response) => {
+  try {
+    clearUPSTokenCache();
+    res.json({ 
+      success: true, 
+      message: 'UPS token cache cleared successfully' 
+    });
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    res.status(500).json({ 
+      error: 'Failed to clear cache' 
     });
   }
 });

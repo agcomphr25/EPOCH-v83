@@ -391,8 +391,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
   try {
     const { orderId, shipTo, packageDetails, billingOption, receiverAccount } = req.body;
     
-    console.log('Creating UPS label with billing option:', billingOption);
-    console.log('Request body received:', JSON.stringify(req.body, null, 2));
+    console.log('⚡ Creating UPS label for:', orderId, 'billing:', billingOption);
     
     // Build shipment details from request body
     const shipmentDetails = {
@@ -434,10 +433,8 @@ router.post('/create-label', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('UPS OAuth Credentials check:');
-    console.log('- Client ID:', upsClientId);
-    console.log('- Shipper Number:', upsShipperNumber);
-    console.log('- Client Secret:', upsClientSecret ? '[PROTECTED]' : 'MISSING');
+    // Quick credential validation (optimized logging)
+    console.log('⚡ UPS credentials:', upsClientId ? 'OK' : 'MISSING');
 
     // Get order details for reference
     let order;
@@ -450,12 +447,12 @@ router.post('/create-label', async (req: Request, res: Response) => {
       console.log('Could not fetch order details:', error);
     }
 
-    // Step 1: Get OAuth Token from UPS (2024+ API requirement)
-    console.log('Getting UPS OAuth token...');
+    // Step 1: Get OAuth Token from UPS (2024+ API requirement) - FAST CACHED VERSION
+    console.log('⚡ Getting cached UPS OAuth token...');
     let accessToken;
     try {
       accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
-      console.log('UPS OAuth token acquired successfully');
+      console.log('⚡ UPS OAuth token ready');
     } catch (tokenError: any) {
       console.error('Failed to get UPS OAuth token:', tokenError.message);
       return res.status(500).json({ 

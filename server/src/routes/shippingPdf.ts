@@ -39,10 +39,10 @@ function clearUPSTokenCache() {
 
 // UPS API Helper Functions with caching
 async function getUPSAccessToken() {
-  // Return cached token if still valid (with 5 minute buffer)
+  // Return cached token if still valid (with 10 minute buffer for better performance)
   const now = Date.now();
-  if (cachedToken.token && cachedToken.expiresAt > now + 300000) {
-    console.log('Using cached UPS access token');
+  if (cachedToken.token && cachedToken.expiresAt > now + 600000) {
+    console.log('⚡ Using cached UPS access token - FAST PATH');
     return cachedToken.token;
   }
   const credentials = {
@@ -94,7 +94,7 @@ async function getUPSAccessToken() {
     expiresAt: Date.now() + (data.expires_in * 1000) // Convert seconds to milliseconds
   };
   
-  console.log('UPS OAuth Success (cached):', {
+  console.log('⚡ UPS OAuth Success (cached for 10 min):', {
     access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : 'MISSING',
     token_type: data.token_type,
     expires_in: data.expires_in

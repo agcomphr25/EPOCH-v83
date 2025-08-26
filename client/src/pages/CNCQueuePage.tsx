@@ -371,16 +371,29 @@ export default function CNCQueuePage() {
 
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
+    console.log('🔍 CNC handleOrderScanned called with:', orderId);
+    
     // Check if the order exists in the current CNC queue
     const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
+    console.log('🔍 Order exists in CNC queue:', orderExists);
+    
     if (orderExists) {
       const order = cncOrders.find((order: any) => order.orderId === orderId);
       if (order) {
+        console.log('🔍 Found order, selecting:', order.orderId, order.departmentType);
         toggleOrderSelection(order.orderId, order.departmentType);
-        toast.success(`Order ${orderId} selected automatically`);
+        toast({
+          title: "Order Scanned",
+          description: `Order ${orderId} selected automatically in CNC department`,
+        });
       }
     } else {
-      toast.error(`Order ${orderId} is not in the CNC department`);
+      console.log('🔍 Order not found in CNC department');
+      toast({
+        title: "Order Not Found",
+        description: `Order ${orderId} is not in the CNC department`,
+        variant: "destructive"
+      });
     }
   };
 
@@ -415,7 +428,9 @@ export default function CNCQueuePage() {
       </div>
 
       {/* Barcode Scanner at top */}
-      <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      <div className="mb-4">
+        <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      </div>
 
       {/* FishBowl Number Search */}
       <FBNumberSearch onOrderFound={handleOrderFound} />

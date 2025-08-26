@@ -363,7 +363,7 @@ export default function ShippingLabelPage() {
                   <div className="text-red-500 text-sm">
                     ⚠️ No shipping address found
                     <br />
-                    <small>Customer ID: {customerId || 'None'}</small>
+                    <small>Customer ID: {(orderDetails as any)?.customerId || 'None'}</small>
                   </div>
                 )}
               </div>

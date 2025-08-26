@@ -2979,7 +2979,16 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
           // If we have the base64 label image, add it to our PDF
           if (labelImage) {
             try {
+              // Validate the base64 data before attempting to parse as PDF
               const labelBytes = Buffer.from(labelImage, 'base64');
+              
+              // Check if it's actually a PDF by looking for PDF header
+              const pdfHeader = labelBytes.toString('ascii', 0, 4);
+              if (pdfHeader !== '%PDF') {
+                console.log(`Label data for ${order.orderId} is not a PDF format, using fallback`);
+                throw new Error('Label data is not PDF format');
+              }
+              
               const labelPdf = await PDFDocument.load(labelBytes);
               const [labelPage] = await bulkPdfDoc.copyPages(labelPdf, [0]);
               bulkPdfDoc.addPage(labelPage);
@@ -3041,7 +3050,7 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
 
     // Set response headers for PDF inline display (opens in new tab for printing)
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="UPS-Bulk-Labels-${new Date().split('T')[0]}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="UPS-Bulk-Labels-${new Date().toISOString().split('T')[0]}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
 
     // Send PDF

@@ -35,31 +35,16 @@ export default function ShippingLabelPage() {
     }
   });
 
-  // Get order details
+  // Get order details with customer data in single request for better performance
   const { data: orderDetails, isLoading: orderLoading } = useQuery({
-    queryKey: [`/api/orders/${orderId}`],
-    enabled: !!orderId
+    queryKey: [`/api/shipping/order/${orderId}`],
+    enabled: !!orderId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to reduce API calls
   });
 
-  // Get customer data
-  const { data: customers = [], isLoading: customersLoading } = useQuery({
-    queryKey: ['/api/customers']
-  });
-
-  // Get customer addresses
-  const customerId = (orderDetails as any)?.customerId;
-  const { data: customerAddresses = [], isLoading: addressLoading } = useQuery({
-    queryKey: [`/api/customers/${customerId}/addresses`],
-    enabled: !!customerId
-  });
-
-  // Try different ways to match customer ID (handles string/number mismatches)
-  const customerInfo = (customers as any[]).find((c: any) => 
-    c.id === customerId || 
-    c.id === String(customerId) || 
-    String(c.id) === String(customerId)
-  );
-  const customerAddress = (customerAddresses as any[])?.[0];
+  // Customer info now comes directly from the order details API
+  const customerInfo = (orderDetails as any)?.customer;
+  const customerAddress = (orderDetails as any)?.addresses?.[0];
   
 
 
@@ -82,6 +67,12 @@ export default function ShippingLabelPage() {
 
   const generateShippingLabel = async () => {
     if (!orderId) return;
+    
+    // Show loading state immediately
+    toast({
+      title: "Creating Label",
+      description: "Generating UPS shipping label...",
+    });
     
     try {
       const response = await fetch('/api/shipping/create-label', {

@@ -22,8 +22,20 @@ function getCountryCode(country?: string): string {
   return country.length === 2 ? country : "US";
 }
 
-// UPS API Helper Functions
+// Token caching to reduce API calls
+let cachedToken = {
+  token: '',
+  expiresAt: 0
+};
+
+// UPS API Helper Functions with caching
 async function getUPSAccessToken() {
+  // Return cached token if still valid (with 5 minute buffer)
+  const now = Date.now();
+  if (cachedToken.token && cachedToken.expiresAt > now + 300000) {
+    console.log('Using cached UPS access token');
+    return cachedToken.token;
+  }
   const credentials = {
     clientId: process.env.UPS_CLIENT_ID,
     clientSecret: process.env.UPS_CLIENT_SECRET
@@ -66,7 +78,14 @@ async function getUPSAccessToken() {
   }
 
   const data = await response.json() as any;
-  console.log('UPS OAuth Success:', {
+  
+  // Cache the token with expiration
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in * 1000) // Convert seconds to milliseconds
+  };
+  
+  console.log('UPS OAuth Success (cached):', {
     access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : 'MISSING',
     token_type: data.token_type,
     expires_in: data.expires_in

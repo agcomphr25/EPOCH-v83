@@ -109,12 +109,12 @@ export default function QCShippingQueuePage() {
       (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
       (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     );
-
+    
     // Separate orders with stock models from orders without stock models
     const regularOrders = filteredOrders.filter((order: any) => 
       order.modelId && order.modelId.trim() !== '' && order.modelId.toLowerCase() !== 'none'
     );
-
+    
     // Sort orders by due date
     return regularOrders.sort((a: any, b: any) => {
       const dateA = new Date(a.dueDate);
@@ -133,7 +133,7 @@ export default function QCShippingQueuePage() {
        (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')) &&
       (!order.modelId || order.modelId.trim() === '' || order.modelId.toLowerCase() === 'none')
     );
-
+    
     // Sort by due date
     return filteredOrders.sort((a: any, b: any) => {
       const dateA = new Date(a.dueDate);
@@ -157,7 +157,7 @@ export default function QCShippingQueuePage() {
     qcShippingOrders.forEach(order => {
       const dueDate = new Date(order.dueDate);
       const daysDiff = differenceInDays(dueDate, today);
-
+      
       if (daysDiff < 0) {
         categories.overdue.push(order);
       } else if (daysDiff === 0) {
@@ -211,7 +211,7 @@ export default function QCShippingQueuePage() {
     const featureList = features as any[];
     const feature = featureList.find((f: any) => f.id === featureId);
     if (!feature) return optionValue;
-
+    
     const option = feature.options?.find((opt: any) => opt.value === optionValue);
     return option?.label || optionValue;
   };
@@ -226,12 +226,12 @@ export default function QCShippingQueuePage() {
   // Helper function to check for paid other options (shirt, hat, touch-up paint)
   const getPaidOtherOptions = (order: any) => {
     const paidOptions: string[] = [];
-
+    
     // ONLY check the other_options array - this is where these items should be explicitly listed
     if (order.features?.other_options && Array.isArray(order.features.other_options)) {
       order.features.other_options.forEach((option: string) => {
         const optionLower = option.toLowerCase();
-
+        
         // Very specific matching to avoid false positives
         if (optionLower === 'shirt' || optionLower.includes('t-shirt') || optionLower.includes('tshirt')) {
           paidOptions.push('Shirt');
@@ -252,10 +252,10 @@ export default function QCShippingQueuePage() {
   // Helper function to format order features for tooltip
   const formatOrderFeatures = (order: any) => {
     if (!order.features) return 'No customizations';
-
+    
     const featureEntries = Object.entries(order.features);
     if (featureEntries.length === 0) return 'No customizations';
-
+    
     return featureEntries.map(([key, value]) => {
       const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       if (Array.isArray(value)) {
@@ -354,7 +354,7 @@ export default function QCShippingQueuePage() {
   // Handle bulk QC checklist download for selected orders
   const handleBulkQCChecklistDownload = () => {
     if (selectedOrders.size === 0) return;
-
+    
     const orderIds = Array.from(selectedOrders);
     let successCount = 0;
     let errorCount = 0;
@@ -519,7 +519,7 @@ export default function QCShippingQueuePage() {
             Due: {format(new Date(order.dueDate), 'MMM dd, yyyy')}
           </p>
         )}
-
+        
         {/* QC Checkboxes for specific items */}
         <div className="space-y-1 mt-2 mb-2">
           {/* Bottom Metal Checkbox */}
@@ -534,7 +534,7 @@ export default function QCShippingQueuePage() {
               </label>
             </div>
           )}
-
+          
           {/* Paid Other Options Checkboxes */}
           {getPaidOtherOptions(order).map((option, index) => (
             <div key={index} className="flex items-center space-x-2">

@@ -2414,34 +2414,6 @@ export type DocumentCollection = typeof documentCollections.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
-// P1PO Weekly Schedule Management
-export const p1poWeeklySchedules = pgTable('p1po_weekly_schedules', {
-  id: serial('id').primaryKey(),
-  poId: integer('po_id').references(() => purchaseOrders.id, { onDelete: 'cascade' }).notNull(),
-  poNumber: text('po_number').notNull(), // Denormalized for performance
-  customerName: text('customer_name').notNull(), // Denormalized for performance
-  weekStartDate: timestamp('week_start_date').notNull(),
-  weekEndDate: timestamp('week_end_date').notNull(),
-  items: jsonb('items').default('[]'), // Array of items scheduled for this week
-  totalHours: real('total_hours').default(0),
-  totalItems: integer('total_items').default(0),
-  isActive: boolean('is_active').default(true), // Whether this week is active for layup scheduler
-  isScheduled: boolean('is_scheduled').default(false), // Whether this week has been scheduled in layup
-  scheduledDate: timestamp('scheduled_date'), // When this week was scheduled
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
-});
-
-// Insert schema for P1PO weekly schedules
-export const insertP1POWeeklyScheduleSchema = createInsertSchema(p1poWeeklySchedules).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true
-});
-
-export type InsertP1POWeeklySchedule = z.infer<typeof insertP1POWeeklyScheduleSchema>;
-export type P1POWeeklySchedule = typeof p1poWeeklySchedules.$inferSelect;
-
 // New validation schema for Customer Communications
 export const insertCustomerCommunicationSchema = createInsertSchema(customerCommunications).omit({
   id: true,

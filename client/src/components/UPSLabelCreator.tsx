@@ -66,13 +66,13 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
   const [shipFromAddress, setShipFromAddress] = useState<Address>({
     name: 'AG Composites',
     company: 'AG Composites',
-    contact: 'Shipping Department',
-    street: '123 Manufacturing St',
-    city: 'Houston',
-    state: 'TX',
-    zipCode: '77001',
+    contact: 'Shipping',
+    street: '230 Hamer Rd.',
+    city: 'Owens Crossroads',
+    state: 'AL',
+    zipCode: '35763',
     country: 'US',
-    phone: '555-123-4567',
+    phone: '256-723-8381',
     email: 'shipping@agcomposites.com',
   });
   

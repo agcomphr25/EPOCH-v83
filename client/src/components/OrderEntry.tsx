@@ -83,6 +83,7 @@ export default function OrderEntry() {
   // Track if we're editing an existing order (needs to be early for useEffect dependencies)
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -156,7 +157,7 @@ export default function OrderEntry() {
 
   // Update base due date when stock model changes (only for new orders, not when editing existing ones)
   useEffect(() => {
-    if (modelId && modelOptions.length > 0 && !isEditMode && !isManualDueDate) {
+    if (modelId && modelOptions.length > 0 && !isEditMode && !isManualDueDate && editingOrderId === null && !isLoadingOrder) {
       const newBaseDueDate = calculateBaseDueDate();
       setBaseDueDate(newBaseDueDate);
       
@@ -170,12 +171,12 @@ export default function OrderEntry() {
         setDueDate(newBaseDueDate);
       }
     }
-  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options, isEditMode, isManualDueDate]);
+  }, [modelId, modelOptions, calculateBaseDueDate, features.other_options, isEditMode, isManualDueDate, isLoadingOrder]);
 
   // Auto-adjust due date based on rush fee selections (only for new orders, not when editing existing ones)
   useEffect(() => {
     // Skip auto-adjustment for existing orders being edited or manually set due dates
-    if (isEditMode || isManualDueDate) return;
+    if (isEditMode || isManualDueDate || editingOrderId !== null || isLoadingOrder) return;
     
     const otherOptions = features.other_options || [];
     
@@ -229,7 +230,7 @@ export default function OrderEntry() {
         });
       }
     }
-  }, [features.other_options, baseDueDate, toast, modelId, isEditMode, isManualDueDate]); // Include modelId to recalculate when model changes
+  }, [features.other_options, baseDueDate, toast, modelId, isEditMode, isManualDueDate, isLoadingOrder]); // Include modelId to recalculate when model changes
 
   // Update base due date when user manually changes due date (and no rush fees are selected)
   useEffect(() => {
@@ -699,6 +700,7 @@ export default function OrderEntry() {
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
       console.log('Loading existing order:', orderIdToEdit);
+      setIsLoadingOrder(true);
       
       // First try to load as draft order
       let order = null;
@@ -951,6 +953,8 @@ export default function OrderEntry() {
         variant: "destructive",
       });
       generateOrderId(); // Fallback to new order
+    } finally {
+      setIsLoadingOrder(false);
     }
   };
 

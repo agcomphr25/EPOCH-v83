@@ -406,15 +406,15 @@ router.post('/create-label', async (req: Request, res: Response) => {
         phone: shipTo.phone || '',
       },
       shipFromAddress: {
-        name: 'AG Composites',
-        company: 'AG Composites',
-        contact: 'Shipping Department',
-        street: '16628 US Hwy 290 E',
-        city: 'Elgin',
-        state: 'TX',
-        zipCode: '78621',
+        name: process.env.SHIP_FROM_NAME || 'AG Composites',
+        company: process.env.SHIP_FROM_NAME || 'AG Composites',
+        contact: process.env.SHIP_FROM_ATTENTION || 'Shipping',
+        street: process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.',
+        city: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+        state: process.env.SHIP_FROM_STATE || 'AL',
+        zipCode: process.env.SHIP_FROM_POSTAL || '35763',
         country: 'US',
-        phone: '5127467639',
+        phone: process.env.SHIP_FROM_PHONE || '256-723-8381',
       },
       packageWeight: packageDetails.weight,
       packageDimensions: packageDetails.dimensions,
@@ -789,18 +789,18 @@ function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: strin
       "Shipment": {
         "Description": `Order ${shipmentDetails.orderId} - Manufacturing Product`,
         "Shipper": {
-          "Name": "AG Composites",
-          "AttentionName": "Shipping Department",
-          "CompanyDisplayableName": "AG Composites",
+          "Name": process.env.SHIP_FROM_NAME || "AG Composites",
+          "AttentionName": process.env.SHIP_FROM_ATTENTION || "Shipping",
+          "CompanyDisplayableName": process.env.SHIP_FROM_NAME || "AG Composites",
           "Phone": {
-            "Number": "5127467639"
+            "Number": process.env.SHIP_FROM_PHONE || "256-723-8381"
           },
           "ShipperNumber": shipperNumber,
           "Address": {
-            "AddressLine": ["16628 US Hwy 290 E"],
-            "City": "Elgin",
-            "StateProvinceCode": "TX",
-            "PostalCode": "78621",
+            "AddressLine": [process.env.SHIP_FROM_ADDRESS1 || "230 Hamer Rd."],
+            "City": process.env.SHIP_FROM_CITY || "Owens Crossroads",
+            "StateProvinceCode": process.env.SHIP_FROM_STATE || "AL",
+            "PostalCode": process.env.SHIP_FROM_POSTAL || "35763",
             "CountryCode": "US"
           }
         },

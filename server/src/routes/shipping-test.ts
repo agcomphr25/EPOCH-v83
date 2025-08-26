@@ -29,18 +29,18 @@ router.post('/test-ups', async (req: Request, res: Response) => {
         Shipment: {
           Description: 'Test Package',
           Shipper: {
-            Name: 'AG Composites',
-            AttentionName: 'Shipping Department', 
-            CompanyDisplayableName: 'AG Composites',
+            Name: process.env.SHIP_FROM_NAME || 'AG Composites',
+            AttentionName: process.env.SHIP_FROM_ATTENTION || 'Shipping', 
+            CompanyDisplayableName: process.env.SHIP_FROM_NAME || 'AG Composites',
             Phone: {
-              Number: '5127467639',
+              Number: process.env.SHIP_FROM_PHONE || '256-723-8381',
             },
             ShipperNumber: process.env.UPS_SHIPPER_NUMBER,
             Address: {
-              AddressLine: ['16628 US Hwy 290 E'],
-              City: 'Elgin',
-              StateProvinceCode: 'TX',
-              PostalCode: '78621',
+              AddressLine: [process.env.SHIP_FROM_ADDRESS1 || '230 Hamer Rd.'],
+              City: process.env.SHIP_FROM_CITY || 'Owens Crossroads',
+              StateProvinceCode: process.env.SHIP_FROM_STATE || 'AL',
+              PostalCode: process.env.SHIP_FROM_POSTAL || '35763',
               CountryCode: 'US',
             },
           },

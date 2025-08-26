@@ -1784,7 +1784,7 @@ export class DatabaseStorage implements IStorage {
             isNull(allOrders.scrapDate)
           )
         )
-        .orderBy(desc(allOrders.updatedAt));
+        .orderBy(desc(allOrders.dueDate));
 
       console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
 

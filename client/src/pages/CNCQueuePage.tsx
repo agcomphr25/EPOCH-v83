@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,19 @@ export default function CNCQueuePage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Prevent unwanted navigation when barcode scanning
+  React.useEffect(() => {
+    const preventNavigation = (e: PopStateEvent) => {
+      // Only prevent if we're currently on the CNC page
+      if (window.location.pathname.includes('/department-queue/cnc')) {
+        window.history.pushState(null, '', '/department-queue/cnc');
+      }
+    };
+
+    window.addEventListener('popstate', preventNavigation);
+    return () => window.removeEventListener('popstate', preventNavigation);
+  }, []);
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -370,17 +383,16 @@ export default function CNCQueuePage() {
   };
 
   // Auto-select order when scanned
-  const handleOrderScanned = (orderId: string) => {
-    console.log('🔍 CNC handleOrderScanned called with:', orderId);
+  const handleOrderScanned = useCallback((orderId: string) => {
+    // Prevent any navigation by maintaining current URL
+    window.history.pushState(null, '', window.location.href);
     
     // Check if the order exists in the current CNC queue
     const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
-    console.log('🔍 Order exists in CNC queue:', orderExists);
     
     if (orderExists) {
       const order = cncOrders.find((order: any) => order.orderId === orderId);
       if (order) {
-        console.log('🔍 Found order, selecting:', order.orderId, order.departmentType);
         toggleOrderSelection(order.orderId, order.departmentType);
         toast({
           title: "Order Scanned",
@@ -388,14 +400,13 @@ export default function CNCQueuePage() {
         });
       }
     } else {
-      console.log('🔍 Order not found in CNC department');
       toast({
         title: "Order Not Found",
         description: `Order ${orderId} is not in the CNC department`,
         variant: "destructive"
       });
     }
-  };
+  }, [cncOrders, toggleOrderSelection, toast]);
 
   // Handle order found via FishBowl number search
   const handleOrderFound = (orderId: string) => {
@@ -427,8 +438,8 @@ export default function CNCQueuePage() {
         <h1 className="text-3xl font-bold">CNC Department Manager</h1>
       </div>
 
-      {/* Barcode Scanner at top */}
-      <div className="mb-4">
+      {/* Barcode Scanner at top - With navigation prevention */}
+      <div className="mb-4" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
         <BarcodeScanner onOrderScanned={handleOrderScanned} />
       </div>
 

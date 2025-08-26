@@ -254,7 +254,7 @@ export default function ShippingLabelPage() {
                 <div>
                   <p><span className="font-medium">Customer:</span> {
                     orderLoading ? 'Loading...' : 
-                    customerInfo?.name || `Unknown Customer (ID: ${customerId})`
+                    customerInfo?.name || `Unknown Customer (ID: ${(orderDetails as any)?.customerId || 'None'})`
                   }</p>
                   <p><span className="font-medium">Order Date:</span> {(orderDetails as any)?.orderDate ? format(new Date((orderDetails as any).orderDate), 'MMM dd, yyyy') : 'N/A'}</p>
                   {(orderDetails as any)?.dueDate && (
@@ -264,7 +264,7 @@ export default function ShippingLabelPage() {
                 <div>
                   <p><span className="font-medium">Department:</span> {(orderDetails as any)?.currentDept || 'N/A'}</p>
                   <p><span className="font-medium">Total:</span> ${(orderDetails as any)?.totalAmount || '0.00'}</p>
-                  <p><span className="font-medium">Customer ID:</span> {customerId || 'Not found'}</p>
+                  <p><span className="font-medium">Customer ID:</span> {(orderDetails as any)?.customerId || 'Not found'}</p>
                 </div>
               </div>
             </CardContent>

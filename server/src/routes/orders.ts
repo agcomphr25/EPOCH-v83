@@ -1046,4 +1046,90 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// CSV Export endpoint for orders
+router.get('/export/csv', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllOrdersWithPaymentStatus();
+    
+    // CSV headers
+    const csvHeaders = [
+      'Order ID',
+      'Order Date', 
+      'Due Date',
+      'Customer ID',
+      'Customer Name',
+      'Product/Model',
+      'Current Department',
+      'Status',
+      'Payment Status',
+      'Payment Total',
+      'FB Order Number',
+      'Handedness',
+      'Created At',
+      'Updated At'
+    ].join(',');
+
+    // Convert orders to CSV rows
+    const csvRows = orders.map(order => {
+      // Helper function to safely format dates
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        try {
+          return new Date(date).toLocaleDateString('en-US');
+        } catch {
+          return '';
+        }
+      };
+
+      // Helper function to safely escape CSV values
+      const escapeCSV = (value: any) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      // Get payment status
+      const getPaymentStatus = (order: any) => {
+        if (order.isFullyPaid) return 'Fully Paid';
+        if (order.isPaid) return 'Partially Paid';
+        return 'Unpaid';
+      };
+
+      return [
+        escapeCSV(order.orderId),
+        escapeCSV(formatDate(order.orderDate)),
+        escapeCSV(formatDate(order.dueDate)),
+        escapeCSV(order.customerId),
+        escapeCSV(order.customer || 'N/A'),
+        escapeCSV(order.product || order.modelId || 'N/A'),
+        escapeCSV(order.currentDepartment),
+        escapeCSV(order.status),
+        escapeCSV(getPaymentStatus(order)),
+        escapeCSV(order.paymentTotal || '0'),
+        escapeCSV(order.fbOrderNumber || ''),
+        escapeCSV(order.handedness || ''),
+        escapeCSV(formatDate(order.createdAt)),
+        escapeCSV(formatDate(order.updatedAt))
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [csvHeaders, ...csvRows].join('\n');
+
+    // Set headers for file download
+    const timestamp = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="orders_export_${timestamp}.csv"`);
+    
+    res.send(csvContent);
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export orders to CSV' });
+  }
+});
+
 export default router;

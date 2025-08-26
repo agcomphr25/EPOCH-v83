@@ -9,6 +9,7 @@ import OfflineIndicator from "./components/OfflineIndicator";
 import NotFound from "./pages/not-found";
 import Dashboard from "./pages/Dashboard";
 import OrderManagement from "./pages/OrderManagement";
+import OrdersManagementPage from "./pages/OrdersManagementPage";
 import DiscountManagement from "./pages/DiscountManagement";
 import OrderEntry from "./pages/OrderEntry";
 import OrderEntryTest from "./components/OrderEntryTest";
@@ -157,6 +158,7 @@ function App() {
                   <Switch>
                   <Route path="/" component={Dashboard} />
                   <Route path="/order-management" component={OrderManagement} />
+                  <Route path="/orders-management" component={OrdersManagementPage} />
                   <Route path="/order-entry" component={OrderEntry} />
                   <Route path="/test-order-entry" component={OrderEntryTest} />
                   <Route path="/orders" component={OrdersList} />

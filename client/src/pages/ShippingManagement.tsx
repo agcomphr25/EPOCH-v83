@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, FileText, DollarSign, ExternalLink, Plus } from 'lucide-react';
+import { Truck, Package, Search, Filter, Send, CheckCircle, Clock, Download, FileText, DollarSign, ExternalLink, Plus, Edit3 } from 'lucide-react';
 // Removed ShippingTracker import since we're using the simpler Track Order button approach
 // Removed UPSLabelCreator import since we're now using Track Order instead of Create Label
 import { useToast } from '@/hooks/use-toast';
@@ -37,9 +37,13 @@ export default function ShippingManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddTrackingDialog, setShowAddTrackingDialog] = useState(false);
+  const [showEditTrackingDialog, setShowEditTrackingDialog] = useState(false);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<OrderWithTracking | null>(null);
+  const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<OrderWithTracking | null>(null);
   const [newTrackingNumber, setNewTrackingNumber] = useState('');
+  const [editTrackingNumber, setEditTrackingNumber] = useState('');
   const [shippingCarrier, setShippingCarrier] = useState('UPS');
+  const [editShippingCarrier, setEditShippingCarrier] = useState('UPS');
   // Removed unused label creator state variables since we're now using Track Order instead of Create Label
 
   // Get shipping-ready orders
@@ -75,7 +79,8 @@ export default function ShippingManagement() {
     mutationFn: ({ orderId, trackingNumber, carrier }: { orderId: string, trackingNumber: string, carrier: string }) => 
       apiRequest(`/api/shipping/add-tracking/${orderId}`, {
         method: 'POST',
-        body: { trackingNumber, shippingCarrier: carrier },
+        body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
+        headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
@@ -91,6 +96,33 @@ export default function ShippingManagement() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to add tracking number',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Edit tracking number mutation
+  const editTrackingMutation = useMutation({
+    mutationFn: ({ orderId, trackingNumber, carrier }: { orderId: string, trackingNumber: string, carrier: string }) => 
+      apiRequest(`/api/shipping-pdf/update-tracking/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ trackingNumber, shippingCarrier: carrier }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-for-shipping'] });
+      setShowEditTrackingDialog(false);
+      setEditTrackingNumber('');
+      setSelectedOrderForEdit(null);
+      toast({
+        title: 'Tracking Number Updated',
+        description: 'Tracking number has been successfully updated',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update tracking number',
         variant: 'destructive',
       });
     },
@@ -117,7 +149,7 @@ export default function ShippingManagement() {
     },
   });
 
-  const filteredOrders = orders?.filter((order: OrderWithTracking) => {
+  const filteredOrders = (orders as OrderWithTracking[] | undefined)?.filter((order: OrderWithTracking) => {
     const matchesSearch = order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -233,6 +265,30 @@ export default function ShippingManagement() {
       orderId: selectedOrderForTracking.orderId,
       trackingNumber: newTrackingNumber.trim(),
       carrier: shippingCarrier,
+    });
+  };
+
+  const handleEditTracking = (order: OrderWithTracking) => {
+    setSelectedOrderForEdit(order);
+    setEditTrackingNumber(order.trackingNumber || '');
+    setEditShippingCarrier(order.shippingCarrier || 'UPS');
+    setShowEditTrackingDialog(true);
+  };
+
+  const handleSaveEditTracking = () => {
+    if (!selectedOrderForEdit || !editTrackingNumber.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a valid tracking number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    editTrackingMutation.mutate({
+      orderId: selectedOrderForEdit.orderId,
+      trackingNumber: editTrackingNumber.trim(),
+      carrier: editShippingCarrier,
     });
   };
 
@@ -354,9 +410,20 @@ export default function ShippingManagement() {
                     <TableCell>{order.product}</TableCell>
                     <TableCell>
                       {order.trackingNumber ? (
-                        <Badge variant="outline" className="font-mono">
-                          {order.trackingNumber}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono">
+                            {order.trackingNumber}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditTracking(order)}
+                            className="h-6 w-6 p-0 hover:bg-gray-100"
+                            title="Edit tracking number"
+                          >
+                            <Edit3 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       ) : (
                         <span className="text-gray-400">Not assigned</span>
                       )}
@@ -487,6 +554,75 @@ export default function ShippingManagement() {
                   <Package className="h-3 w-3" />
                 )}
                 Add Tracking Number
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Tracking Number Dialog */}
+      <Dialog open={showEditTrackingDialog} onOpenChange={setShowEditTrackingDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Tracking Number</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <Label htmlFor="edit-order-id">Order ID</Label>
+              <Input
+                id="edit-order-id"
+                value={selectedOrderForEdit?.orderId || ''}
+                disabled
+                className="font-mono"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-carrier">Shipping Carrier</Label>
+              <Select value={editShippingCarrier} onValueChange={setEditShippingCarrier}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UPS">UPS</SelectItem>
+                  <SelectItem value="FedEx">FedEx</SelectItem>
+                  <SelectItem value="USPS">USPS</SelectItem>
+                  <SelectItem value="DHL">DHL</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-tracking-number">Tracking Number</Label>
+              <Input
+                id="edit-tracking-number"
+                value={editTrackingNumber}
+                onChange={(e) => setEditTrackingNumber(e.target.value)}
+                placeholder="Enter tracking number..."
+                className="font-mono"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEditTrackingDialog(false);
+                  setEditTrackingNumber('');
+                  setSelectedOrderForEdit(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEditTracking}
+                disabled={editTrackingMutation.isPending || !editTrackingNumber.trim()}
+                className="flex items-center gap-1"
+              >
+                {editTrackingMutation.isPending ? (
+                  <Clock className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Edit3 className="h-3 w-3" />
+                )}
+                Update Tracking Number
               </Button>
             </div>
           </div>

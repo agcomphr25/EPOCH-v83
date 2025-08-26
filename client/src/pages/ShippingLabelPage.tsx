@@ -253,7 +253,7 @@ export default function ShippingLabelPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p><span className="font-medium">Customer:</span> {
-                    customersLoading ? 'Loading...' : 
+                    orderLoading ? 'Loading...' : 
                     customerInfo?.name || `Unknown Customer (ID: ${customerId})`
                   }</p>
                   <p><span className="font-medium">Order Date:</span> {(orderDetails as any)?.orderDate ? format(new Date((orderDetails as any).orderDate), 'MMM dd, yyyy') : 'N/A'}</p>

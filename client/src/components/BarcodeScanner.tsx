@@ -350,6 +350,23 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
 
       {orderSummary && (
         <div className="space-y-6">
+          {/* Action Length - Prominently displayed at top */}
+          {(orderSummary.features?.action_length || orderSummary.specifications?.action_length) && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-blue-700 mb-1">Action Length</div>
+                    <Badge variant="default" className="text-lg px-4 py-2 bg-blue-600">
+                      {(orderSummary.features?.action_length || orderSummary.specifications?.action_length)
+                        ?.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Order Header */}
           <Card>
             <CardHeader>
@@ -464,7 +481,9 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                     <div>
                       <h4 className="font-medium mb-3">Selected Features:</h4>
                       <div className="grid grid-cols-1 gap-2">
-                        {Object.entries(orderSummary.features).map(([key, value], index) => {
+                        {Object.entries(orderSummary.features)
+                          .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
+                          .map(([key, value], index) => {
                           // Format the display name for the key
                           const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                           // Format the display value
@@ -490,7 +509,9 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                     <div>
                       <h4 className="font-medium mb-3">Specifications:</h4>
                       <div className="grid grid-cols-1 gap-2">
-                        {Object.entries(orderSummary.specifications).map(([key, value], index) => {
+                        {Object.entries(orderSummary.specifications)
+                          .filter(([key]) => key !== 'action_length') // Exclude action_length since it's shown prominently at top
+                          .map(([key, value], index) => {
                           // Format the display name for the key
                           const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                           // Format the display value

@@ -425,10 +425,10 @@ export default function CNCQueuePage() {
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
             <OrderSearchBox 
-              orders={[...gunsimthOrders, ...finishOrders]}
+              orders={[...gunsimthQueue, ...finishQueue]}
               placeholder="Search orders by Order ID or FishBowl Number..."
               onOrderSelect={(order) => {
-                const allOrders = [...gunsimthOrders, ...finishOrders];
+                const allOrders = [...gunsimthQueue, ...finishQueue];
                 const orderExists = allOrders.some((o: any) => o.orderId === order.orderId);
                 if (orderExists) {
                   setHighlightedOrderId(order.orderId);

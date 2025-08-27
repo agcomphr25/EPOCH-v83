@@ -156,9 +156,19 @@ export default function CustomerSatisfactionSurvey({
 
   // Handle survey submission
   const handleSubmit = () => {
-    if (!selectedSurvey || !selectedCustomerId) {
+    // Validate we have the required data
+    if (!selectedSurvey?.id) {
       toast({
         title: "Error",
+        description: "No survey selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedCustomerId) {
+      toast({
+        title: "Error", 
         description: "Please select a customer before submitting",
         variant: "destructive",
       });
@@ -190,7 +200,7 @@ export default function CustomerSatisfactionSurvey({
     const responseData = {
       surveyId: selectedSurvey.id,
       customerId: selectedCustomerId,
-      orderId,
+      orderId: orderNumber || orderId || null,
       responses,
       overallSatisfaction: productQuality, // Use product quality as overall satisfaction
       npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
@@ -199,6 +209,7 @@ export default function CustomerSatisfactionSurvey({
       submittedAt: new Date().toISOString(),
     };
 
+    console.log('Submitting response data:', responseData); // Debug log
     submitResponse.mutate(responseData);
   };
 

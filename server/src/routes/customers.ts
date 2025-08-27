@@ -290,7 +290,7 @@ router.delete('/customers/:id', authenticateToken, async (req: Request, res: Res
   try {
     const customerId = parseInt(req.params.id);
     await storage.deleteP2Customer(customerId);
-    res.status(204).end();
+    res.json({ success: true, message: "Customer deleted successfully" });
   } catch (error) {
     console.error('Delete P2 customer error:', error);
     res.status(500).json({ error: "Failed to delete P2 customer" });

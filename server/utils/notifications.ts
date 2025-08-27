@@ -76,7 +76,7 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
         estimatedDelivery: data.estimatedDelivery
-      });
+      }, customer?.id.toString());
       results.methods.push('email');
     } catch (error) {
       results.errors.push(`Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -92,7 +92,7 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
         estimatedDelivery: data.estimatedDelivery
-      });
+      }, customer?.id.toString());
       results.methods.push('sms');
     } catch (error) {
       results.errors.push(`SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -122,7 +122,7 @@ async function sendEmailNotification(data: {
   trackingNumber: string;
   carrier: string;
   estimatedDelivery?: Date;
-}) {
+}, customerId?: string) {
   // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
   const deliveryText = data.estimatedDelivery 
@@ -168,7 +168,7 @@ Phone: 256-723-8381
         to: data.email,
         subject: subject,
         message: message,
-        customerId: customer?.id.toString() || '0', // Use actual customer ID or fallback
+        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
         orderId: data.orderId
       })
     });
@@ -193,7 +193,7 @@ async function sendSMSNotification(data: {
   trackingNumber: string;
   carrier: string;
   estimatedDelivery?: Date;
-}) {
+}, customerId?: string) {
   const message = `AG Composites: Your order ${data.orderId} has shipped! Track with ${data.trackingNumber} on ${data.carrier}. ${data.estimatedDelivery ? `Est. delivery: ${data.estimatedDelivery.toLocaleDateString()}` : ''}`;
 
   console.log('Sending SMS shipping notification:', {
@@ -212,7 +212,7 @@ async function sendSMSNotification(data: {
       body: JSON.stringify({
         to: data.phone,
         message: message,
-        customerId: customer?.id.toString() || '0', // Use actual customer ID or fallback
+        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
         orderId: data.orderId
       })
     });

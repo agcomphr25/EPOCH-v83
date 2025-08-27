@@ -2473,18 +2473,29 @@ export function registerRoutes(app: Express): Server {
           const features = order.features || {};
           const specialLabels = [];
           
-          // NSNH - No Swivel Studs No Holes
-          if (features.swivel_studs === 'no_swivel_no_holes' || 
+          // NSNH - No Swivel Studs No Holes (check multiple possible values)
+          if (features.swivel_studs === 'no_swivel_studs' || 
+              features.swivel_studs === 'no_swivel_no_holes' ||
+              (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
               (features.swivel_studs && features.swivel_studs.includes('no_holes'))) {
             specialLabels.push('NSNH');
           }
           
-          // Texture - if texture is selected (not "no texture")
+          // Texture - specific display based on texture type
           if (features.texture_options && 
               features.texture_options !== 'no_texture' && 
               features.texture_options !== 'none' &&
               !features.texture_options.includes('no_')) {
-            specialLabels.push('TEXTURE');
+            // Show specific texture type
+            if (features.texture_options.includes('grip_only')) {
+              specialLabels.push('GRIP');
+            } else if (features.texture_options.includes('forend_only')) {
+              specialLabels.push('FOREND');
+            } else if (features.texture_options.includes('grip_and_forend')) {
+              specialLabels.push('GRIP & FOREND');
+            } else {
+              specialLabels.push('TEXTURE');
+            }
           }
           
           // Carbon Camo Ready

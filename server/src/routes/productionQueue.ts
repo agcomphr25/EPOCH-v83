@@ -12,22 +12,22 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
-        o.modelId as modelId,
-        o.modelId as stockModelId,
+        o.model_id as modelId,
+        o.model_id as stockModelId,
         o.due_date as dueDate,
-        o.date as orderDate,
+        o.order_date as orderDate,
         o.current_department as currentDepartment,
         o.status,
         o.features,
         o.created_at as createdAt,
         CASE 
-          WHEN o.modelId IS NULL OR o.modelId = '' OR o.modelId = 'None' THEN false
+          WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' THEN false
           ELSE true
         END as hasValidStock
       FROM all_orders o
       WHERE o.status = 'FINALIZED' 
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
-        AND (o.modelId IS NOT NULL AND o.modelId != '' AND o.modelId != 'None')
+        AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None')
       ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
@@ -185,20 +185,20 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       SELECT 
         o.order_id as orderId,
         o.fb_order_number as fbOrderNumber,
-        o.modelId as modelId,
-        o.modelId as stockModelId,
+        o.model_id as modelId,
+        o.model_id as stockModelId,
         o.due_date as dueDate,
-        o.date as orderDate,
+        o.order_date as orderDate,
         o.current_department as currentDepartment,
         o.status,
-        o.customerId as customerId,
+        o.customer_id as customerId,
         o.features,
         NULL as priorityScore,
         NULL as queuePosition,
         o.created_at as createdAt,
-        c.customer_name as customerName
+        c.name as customerName
       FROM all_orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status = 'FINALIZED'
       ORDER BY 

@@ -29,10 +29,10 @@ import {
   UserPlus,
   UserX,
   AlertCircle,
-
   RefreshCw,
   CheckCircle,
-  FileText
+  FileText,
+  BarChart3
 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -1312,6 +1312,14 @@ export default function CustomerManagement() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Customer Management</h1>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.href = '/customer-satisfaction'}
+            className="flex items-center gap-2"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Customer Satisfaction
+          </Button>
           <Button 
             variant="outline" 
             onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers'] })}

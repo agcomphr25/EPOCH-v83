@@ -27,6 +27,7 @@ import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
 import gatewayReportsRoutes from './gatewayReports';
+import customerSatisfactionRoutes from './customerSatisfaction';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -105,6 +106,9 @@ export function registerRoutes(app: Express): Server {
   
   // Gateway reports routes  
   app.use('/api/gateway-reports', gatewayReportsRoutes);
+  
+  // Customer satisfaction survey routes
+  app.use('/api/customer-satisfaction', customerSatisfactionRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

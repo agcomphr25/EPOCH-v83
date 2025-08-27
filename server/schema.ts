@@ -2466,3 +2466,94 @@ export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit
 // Types for Gateway Reports
 export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
 export type GatewayReport = typeof gatewayReports.$inferSelect;
+
+// Customer Satisfaction Survey tables
+export const customerSatisfactionSurveys = pgTable("customer_satisfaction_surveys", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  // Survey questions stored as JSON
+  questions: jsonb("questions").notNull().default('[]'),
+  // Survey configuration settings
+  settings: jsonb("settings").default('{}'),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const customerSatisfactionResponses = pgTable("customer_satisfaction_responses", {
+  id: serial("id").primaryKey(),
+  surveyId: integer("survey_id").references(() => customerSatisfactionSurveys.id).notNull(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  orderId: text("order_id"), // Optional - link to specific order
+  // Survey responses stored as JSON
+  responses: jsonb("responses").notNull().default('{}'),
+  // Calculated scores
+  overallSatisfaction: integer("overall_satisfaction"), // 1-5 scale
+  npsScore: integer("nps_score"), // 0-10 scale for Net Promoter Score
+  // Additional metadata
+  responseTimeSeconds: integer("response_time_seconds"), // Time to complete survey
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  // Status tracking
+  isComplete: boolean("is_complete").default(false),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for Customer Satisfaction
+export const insertCustomerSatisfactionSurveySchema = createInsertSchema(customerSatisfactionSurveys).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().min(1, "Survey title is required"),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+  questions: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['rating', 'multiple_choice', 'text', 'textarea', 'yes_no', 'nps']),
+    question: z.string().min(1, "Question text is required"),
+    required: z.boolean().default(false),
+    options: z.array(z.string()).optional(), // For multiple choice questions
+    scale: z.object({
+      min: z.number(),
+      max: z.number(),
+      minLabel: z.string().optional(),
+      maxLabel: z.string().optional(),
+    }).optional(), // For rating questions
+  })).default([]),
+  settings: z.object({
+    allowAnonymous: z.boolean().default(false),
+    sendEmailReminders: z.boolean().default(true),
+    showProgressBar: z.boolean().default(true),
+    autoSave: z.boolean().default(true),
+  }).default({}),
+  createdBy: z.number().optional().nullable(),
+});
+
+export const insertCustomerSatisfactionResponseSchema = createInsertSchema(customerSatisfactionResponses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  surveyId: z.number().min(1, "Survey ID is required"),
+  customerId: z.number().min(1, "Customer ID is required"),
+  orderId: z.string().optional().nullable(),
+  responses: z.record(z.any()).default({}), // Question ID to response mapping
+  overallSatisfaction: z.number().min(1).max(5).optional().nullable(),
+  npsScore: z.number().min(0).max(10).optional().nullable(),
+  responseTimeSeconds: z.number().optional().nullable(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
+  isComplete: z.boolean().default(false),
+  submittedAt: z.string().optional().nullable(), // ISO date string
+});
+
+// Types for Customer Satisfaction
+export type InsertCustomerSatisfactionSurvey = z.infer<typeof insertCustomerSatisfactionSurveySchema>;
+export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inferSelect;
+export type InsertCustomerSatisfactionResponse = z.infer<typeof insertCustomerSatisfactionResponseSchema>;
+export type CustomerSatisfactionResponse = typeof customerSatisfactionResponses.$inferSelect;

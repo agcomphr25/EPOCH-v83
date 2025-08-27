@@ -90,6 +90,7 @@ import PaymentManagement from "./pages/PaymentManagement";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import GatewayReportsPage from "./pages/GatewayReportsPage";
+import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -174,6 +175,7 @@ function App() {
                   {/* Customer Management Routes */}
                   <Route path="/customer-management" component={CustomerManagement} />
                   <Route path="/customers" component={CustomerManagement} />
+                  <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
 
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />

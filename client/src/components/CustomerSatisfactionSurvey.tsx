@@ -81,6 +81,7 @@ export default function CustomerSatisfactionSurvey({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || existingResponse?.customerId || null);
   const [orderNumber, setOrderNumber] = useState<string>(existingResponse?.orderId || '');
   const [orderDate, setOrderDate] = useState<string>('');
+  const [csrName, setCsrName] = useState<string>(existingResponse?.csrName || '');
 
   // Fetch active surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -205,6 +206,7 @@ export default function CustomerSatisfactionSurvey({
       overallSatisfaction: productQuality, // Use product quality as overall satisfaction
       npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
       responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
+      csrName: csrName || null, // Customer Service Representative name
       isComplete: true,
       submittedAt: new Date().toISOString(),
     };
@@ -440,7 +442,7 @@ export default function CustomerSatisfactionSurvey({
           </div>
 
           {/* Order Details */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="orderNumber">Order #</Label>
               <Input
@@ -458,6 +460,16 @@ export default function CustomerSatisfactionSurvey({
                 type="date"
                 value={orderDate}
                 onChange={(e) => setOrderDate(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="csrName">CSR</Label>
+              <Input
+                id="csrName"
+                value={csrName}
+                onChange={(e) => setCsrName(e.target.value)}
+                placeholder="Customer Service Rep"
                 className="w-full"
               />
             </div>

@@ -2496,6 +2496,7 @@ export const customerSatisfactionResponses = pgTable("customer_satisfaction_resp
   responseTimeSeconds: integer("response_time_seconds"), // Time to complete survey
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  csrName: text("csr_name"), // Customer Service Representative name
   // Status tracking
   isComplete: boolean("is_complete").default(false),
   submittedAt: timestamp("submitted_at"),
@@ -2548,6 +2549,7 @@ export const insertCustomerSatisfactionResponseSchema = createInsertSchema(custo
   responseTimeSeconds: z.number().optional().nullable(),
   ipAddress: z.string().optional().nullable(),
   userAgent: z.string().optional().nullable(),
+  csrName: z.string().optional().nullable(), // Customer Service Representative name
   isComplete: z.boolean().default(false),
   submittedAt: z.string().optional().nullable(), // ISO date string
 });

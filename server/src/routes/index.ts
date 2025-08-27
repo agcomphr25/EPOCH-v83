@@ -2473,6 +2473,7 @@ export function registerRoutes(app: Express): Server {
           const features = order.features || {};
           const specialLabels = [];
           
+          
           // NSNH - No Swivel Studs No Holes (check multiple possible values)
           if (features.swivel_studs === 'no_swivel_studs' || 
               features.swivel_studs === 'no_swivel_no_holes' ||
@@ -2503,6 +2504,7 @@ export function registerRoutes(app: Express): Server {
               (features.paint_options && features.paint_options.includes('carbon_camo'))) {
             specialLabels.push('CARBON CAMO READY');
           }
+          
           
           // Check if paint option should make barcode blue
           const paintOption = features.paint_options || '';
@@ -2571,6 +2573,7 @@ export function registerRoutes(app: Express): Server {
           if (specialLabels.length > 0) {
             labelText += ` - ${specialLabels.join(' - ')}`;
           }
+          
           
           page.drawText(labelText, {
             x: x + 8,

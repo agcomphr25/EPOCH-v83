@@ -82,6 +82,8 @@ export default function CustomerSatisfaction() {
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [isCreateSurveyOpen, setIsCreateSurveyOpen] = useState(false);
   const [isTakeSurveyOpen, setIsTakeSurveyOpen] = useState(false);
+  const [isEditResponseOpen, setIsEditResponseOpen] = useState(false);
+  const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(null);
 
   // Fetch surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -170,6 +172,29 @@ export default function CustomerSatisfaction() {
         description: "Survey status has been updated.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/surveys'] });
+    },
+  });
+
+  // Delete response mutation
+  const deleteResponse = useMutation({
+    mutationFn: (responseId: number) =>
+      apiRequest(`/api/customer-satisfaction/responses/${responseId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      toast({
+        title: "Response Deleted",
+        description: "Survey response has been deleted successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Deletion Failed",
+        description: error.message || "Failed to delete response",
+        variant: "destructive",
+      });
     },
   });
 
@@ -476,6 +501,9 @@ export default function CustomerSatisfaction() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -512,6 +540,33 @@ export default function CustomerSatisfaction() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {response.submittedAt ? formatDate(response.submittedAt) : formatDate(response.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingResponse(response);
+                              setIsEditResponseOpen(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm('Are you sure you want to delete this response? This action cannot be undone.')) {
+                                deleteResponse.mutate(response.id);
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -732,6 +787,45 @@ export default function CustomerSatisfaction() {
               />
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Response Modal */}
+      <Dialog open={isEditResponseOpen} onOpenChange={setIsEditResponseOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Survey Response</DialogTitle>
+          </DialogHeader>
+          
+          {editingResponse && (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded">
+                <strong>Customer:</strong> {editingResponse.customerName}
+                {editingResponse.customerEmail && ` (${editingResponse.customerEmail})`}
+                <br />
+                <strong>Survey:</strong> {editingResponse.surveyTitle}
+                <br />
+                <strong>Status:</strong> {editingResponse.isComplete ? 'Complete' : 'Draft'}
+              </div>
+              
+              <CustomerSatisfactionSurvey
+                surveyId={editingResponse.surveyId}
+                customerId={editingResponse.customerId}
+                orderId={editingResponse.orderId}
+                existingResponse={editingResponse}
+                onComplete={() => {
+                  setIsEditResponseOpen(false);
+                  setEditingResponse(null);
+                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/responses'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/customer-satisfaction/analytics'] });
+                  toast({
+                    title: "Response Updated",
+                    description: "Survey response has been updated successfully.",
+                  });
+                }}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

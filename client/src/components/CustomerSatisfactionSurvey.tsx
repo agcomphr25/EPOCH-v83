@@ -61,6 +61,7 @@ interface CustomerSatisfactionSurveyProps {
   surveyId?: number;
   customerId?: number;
   orderId?: string;
+  existingResponse?: any;
   onComplete?: (responseId: number) => void;
 }
 
@@ -68,16 +69,17 @@ export default function CustomerSatisfactionSurvey({
   surveyId,
   customerId,
   orderId,
+  existingResponse,
   onComplete
 }: CustomerSatisfactionSurveyProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [responses, setResponses] = useState<Record<string, any>>({});
+  const [responses, setResponses] = useState<Record<string, any>>(existingResponse?.responses || {});
   const [startTime, setStartTime] = useState<Date>(new Date());
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || null);
-  const [orderNumber, setOrderNumber] = useState<string>('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || existingResponse?.customerId || null);
+  const [orderNumber, setOrderNumber] = useState<string>(existingResponse?.orderId || '');
   const [orderDate, setOrderDate] = useState<string>('');
 
   // Fetch active surveys
@@ -100,18 +102,29 @@ export default function CustomerSatisfactionSurvey({
   // Submit survey response mutation
   const submitResponse = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/customer-satisfaction/responses', {
-        method: 'POST',
+      const isUpdating = existingResponse?.id;
+      const url = isUpdating 
+        ? `/api/customer-satisfaction/responses/${existingResponse.id}`
+        : '/api/customer-satisfaction/responses';
+      const method = isUpdating ? 'PUT' : 'POST';
+      
+      return apiRequest(url, {
+        method,
         body: JSON.stringify(data),
       });
     },
     onSuccess: (response) => {
+      const isUpdating = existingResponse?.id;
       toast({
-        title: "Survey Submitted",
-        description: "Thank you for your feedback!",
+        title: isUpdating ? "Survey Updated" : "Survey Submitted",
+        description: isUpdating ? "Response has been updated successfully!" : "Thank you for your feedback!",
       });
-      setResponses({});
-      setStartTime(new Date());
+      
+      if (!isUpdating) {
+        setResponses({});
+        setStartTime(new Date());
+      }
+      
       if (onComplete) {
         onComplete(response.id);
       }
@@ -525,7 +538,7 @@ export default function CustomerSatisfactionSurvey({
               ) : (
                 <>
                   <CheckCircle className="h-4 w-4" />
-                  <span>Submit Survey</span>
+                  <span>{existingResponse?.id ? 'Update Response' : 'Submit Survey'}</span>
                 </>
               )}
             </Button>

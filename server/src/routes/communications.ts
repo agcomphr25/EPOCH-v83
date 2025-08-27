@@ -42,7 +42,7 @@ router.post('/email', async (req, res) => {
     
     const msg = {
       to: data.to,
-      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@yourcompany.com',
+      from: 'stacisales@agcomposites.com',
       subject: data.subject,
       text: data.message,
       html: data.message.replace(/\n/g, '<br>')

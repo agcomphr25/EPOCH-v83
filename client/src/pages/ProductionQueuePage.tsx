@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
+import OrderSummaryModal from '@/components/OrderSummaryModal';
 
 export default function ProductionQueuePage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -471,14 +472,15 @@ export default function ProductionQueuePage() {
                               Due: {new Date(order.dueDate).toLocaleDateString()}
                             </Badge>
                           )}
-                          <Badge
-                            variant="outline"
-                            className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                            onClick={() => handleSalesOrderDownload(order.orderId)}
-                          >
-                            <FileText className="w-3 h-3 mr-1" />
-                            Sales Order
-                          </Badge>
+                          <OrderSummaryModal orderId={order.orderId}>
+                            <Badge
+                              variant="outline"
+                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Sales Order
+                            </Badge>
+                          </OrderSummaryModal>
                           {hasKickbacks(order.orderId) && (
                             <Badge
                               variant="destructive"

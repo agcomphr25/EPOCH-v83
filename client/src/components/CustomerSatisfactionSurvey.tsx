@@ -74,10 +74,9 @@ export default function CustomerSatisfactionSurvey({
   const queryClient = useQueryClient();
   
   const [responses, setResponses] = useState<Record<string, any>>({});
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [startTime, setStartTime] = useState<Date>(new Date());
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [showSingleQuestion, setShowSingleQuestion] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || null);
 
   // Fetch active surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -110,7 +109,6 @@ export default function CustomerSatisfactionSurvey({
         description: "Thank you for your feedback!",
       });
       setResponses({});
-      setCurrentQuestionIndex(0);
       setStartTime(new Date());
       if (onComplete) {
         onComplete(response.id);
@@ -122,16 +120,6 @@ export default function CustomerSatisfactionSurvey({
         title: "Submission Failed",
         description: error.message || "Failed to submit survey response",
         variant: "destructive",
-      });
-    },
-  });
-
-  // Auto-save draft response
-  const autoSave = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest('/api/customer-satisfaction/responses', {
-        method: 'POST',
-        body: JSON.stringify({ ...data, isComplete: false }),
       });
     },
   });
@@ -149,57 +137,11 @@ export default function CustomerSatisfactionSurvey({
         return newErrors;
       });
     }
-
-    // Auto-save if enabled
-    if (selectedSurvey?.settings.autoSave && customerId) {
-      autoSave.mutate({
-        surveyId: selectedSurvey.id,
-        customerId,
-        orderId,
-        responses: newResponses,
-        responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
-      });
-    }
   };
-
-  // Validate current question
-  const validateQuestion = (question: SurveyQuestion): boolean => {
-    if (!question.required) return true;
-    
-    const response = responses[question.id];
-    if (response === undefined || response === null || response === '') {
-      setValidationErrors(prev => ({
-        ...prev,
-        [question.id]: 'This question is required'
-      }));
-      return false;
-    }
-    return true;
-  };
-
-  // Handle next question
-  const handleNext = () => {
-    if (!selectedSurvey) return;
-    
-    const currentQuestion = selectedSurvey.questions[currentQuestionIndex];
-    if (validateQuestion(currentQuestion)) {
-      setCurrentQuestionIndex(prev => Math.min(prev + 1, selectedSurvey.questions.length - 1));
-    }
-  };
-
-  // Handle previous question
-  const handlePrevious = () => {
-    setCurrentQuestionIndex(prev => Math.max(prev - 1, 0));
-  };
-
-  // Calculate progress
-  const progress = selectedSurvey 
-    ? ((currentQuestionIndex + 1) / selectedSurvey.questions.length) * 100 
-    : 0;
 
   // Handle survey submission
   const handleSubmit = () => {
-    if (!selectedSurvey || !customerId) {
+    if (!selectedSurvey || !selectedCustomerId) {
       toast({
         title: "Error",
         description: "Please select a customer before submitting",
@@ -226,17 +168,17 @@ export default function CustomerSatisfactionSurvey({
       return;
     }
 
-    // Calculate scores
-    const overallSatisfaction = responses['overall-satisfaction'] || null;
-    const npsScore = responses['nps'] || null;
+    // Calculate scores - get highest rating for overall satisfaction
+    const productQuality = responses['product-quality'] || null;
+    const recommendationLikelihood = responses['recommendation-likelihood'] || null;
 
     const responseData = {
       surveyId: selectedSurvey.id,
-      customerId,
+      customerId: selectedCustomerId,
       orderId,
       responses,
-      overallSatisfaction,
-      npsScore,
+      overallSatisfaction: productQuality, // Use product quality as overall satisfaction
+      npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
       responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
       isComplete: true,
       submittedAt: new Date().toISOString(),
@@ -436,9 +378,6 @@ export default function CustomerSatisfactionSurvey({
     );
   }
 
-  const currentQuestion = selectedSurvey.questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === selectedSurvey.questions.length - 1;
-  const isFirstQuestion = currentQuestionIndex === 0;
 
   return (
     <div className="space-y-6">
@@ -455,109 +394,109 @@ export default function CustomerSatisfactionSurvey({
         
         <CardContent className="space-y-6">
           {/* Customer Selection */}
-          {!customerId && (
-            <div className="space-y-2">
-              <Label htmlFor="customer">Select Customer *</Label>
-              <Select onValueChange={(value) => {
-                // This would need to be handled by parent component
-                console.log('Customer selected:', value);
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((customer: Customer) => (
-                    <SelectItem key={customer.id} value={customer.id.toString()}>
-                      {customer.name} {customer.email && `(${customer.email})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="customer">Select Customer *</Label>
+            <Select 
+              value={selectedCustomerId?.toString() || ""} 
+              onValueChange={(value) => setSelectedCustomerId(parseInt(value))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Search and select a customer" />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.map((customer: Customer) => (
+                  <SelectItem key={customer.id} value={customer.id.toString()}>
+                    {customer.name} {customer.email && `(${customer.email})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          {/* Progress Bar */}
-          {selectedSurvey.settings.showProgressBar && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Progress</span>
-                <span>{currentQuestionIndex + 1} of {selectedSurvey.questions.length}</span>
+          {/* All Questions */}
+          <div className="space-y-6">
+            {selectedSurvey.questions.map((question: SurveyQuestion, index: number) => (
+              <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">
+                    {index + 1}. {question.question}
+                    {question.required && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  
+                  {validationErrors[question.id] && (
+                    <div className="flex items-center space-x-2 text-red-600">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-sm">{validationErrors[question.id]}</span>
+                    </div>
+                  )}
+
+                  {question.type === 'rating' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>{question.scale?.minLabel}</span>
+                        <span>{question.scale?.maxLabel}</span>
+                      </div>
+                      <div className="flex justify-center space-x-1">
+                        {Array.from({ length: (question.scale?.max || 5) - (question.scale?.min || 1) + 1 }, (_, i) => {
+                          const rating = (question.scale?.min || 1) + i;
+                          return (
+                            <button
+                              key={rating}
+                              type="button"
+                              onClick={() => handleResponseChange(question.id, rating)}
+                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                responses[question.id] === rating
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              {rating}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {responses[question.id] && (
+                        <div className="text-center text-sm text-gray-600">
+                          Selected: {responses[question.id]} / {question.scale?.max || 5}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {question.type === 'textarea' && (
+                    <Textarea
+                      value={responses[question.id] || ''}
+                      onChange={(e) => handleResponseChange(question.id, e.target.value)}
+                      placeholder="Enter your comments..."
+                      rows={3}
+                      className={validationErrors[question.id] ? "border-red-500" : ""}
+                    />
+                  )}
+                </div>
               </div>
-              <Progress value={progress} className="h-2" />
-            </div>
-          )}
+            ))}
+          </div>
 
-          {/* Question */}
-          {currentQuestion && (
-            <div className="bg-gray-50 p-6 rounded-lg">
-              {renderQuestion(currentQuestion)}
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex justify-between items-center">
+          {/* Submit Button */}
+          <div className="flex justify-end pt-4">
             <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={isFirstQuestion}
+              onClick={handleSubmit}
+              disabled={submitResponse.isPending || !selectedCustomerId}
+              size="lg"
               className="flex items-center space-x-2"
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Previous</span>
-            </Button>
-
-            <div className="flex space-x-2">
-              {selectedSurvey.settings.autoSave && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (customerId) {
-                      autoSave.mutate({
-                        surveyId: selectedSurvey.id,
-                        customerId,
-                        orderId,
-                        responses,
-                        responseTimeSeconds: Math.floor((new Date().getTime() - startTime.getTime()) / 1000),
-                        isComplete: false,
-                      });
-                    }
-                  }}
-                  disabled={autoSave.isPending || !customerId}
-                  className="flex items-center space-x-2"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Save Draft</span>
-                </Button>
-              )}
-
-              {isLastQuestion ? (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitResponse.isPending}
-                  className="flex items-center space-x-2"
-                >
-                  {submitResponse.isPending ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Submitting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      <span>Submit Survey</span>
-                    </>
-                  )}
-                </Button>
+              {submitResponse.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Submitting...</span>
+                </>
               ) : (
-                <Button
-                  onClick={handleNext}
-                  className="flex items-center space-x-2"
-                >
-                  <span>Next</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Submit Survey</span>
+                </>
               )}
-            </div>
+            </Button>
           </div>
         </CardContent>
       </Card>

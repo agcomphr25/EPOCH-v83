@@ -263,7 +263,7 @@ export default function CustomerSatisfaction() {
             >
               <Send className="h-5 w-5" />
               <div className="text-left">
-                <div className="font-medium">Take Survey</div>
+                <div className="font-medium">Complete Survey</div>
                 <div className="text-sm opacity-60">Fill out as customer</div>
               </div>
             </Button>

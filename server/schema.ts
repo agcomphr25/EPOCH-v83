@@ -38,7 +38,6 @@ export const allOrders = pgTable("all_orders", {
   shankLength: text("shank_length"),
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
-  miscItems: jsonb("misc_items").default('[]'), // Miscellaneous items array
   discountCode: text("discount_code"),
   notes: text("notes"), // Order notes/special instructions
   customDiscountType: text("custom_discount_type").default("percent"),
@@ -173,7 +172,6 @@ export const cancelledOrders = pgTable("cancelled_orders", {
   shankLength: text("shank_length"),
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
-  miscItems: jsonb("misc_items").default('[]'), // Miscellaneous items array
   discountCode: text("discount_code"),
   notes: text("notes"), // Order notes/special instructions
   customDiscountType: text("custom_discount_type").default("percent"),
@@ -327,7 +325,6 @@ export const orderDrafts = pgTable("order_drafts", {
   shankLength: text("shank_length"),
   features: jsonb("features"),
   featureQuantities: jsonb("feature_quantities"),
-  miscItems: jsonb("misc_items").default('[]'), // Miscellaneous items array
   discountCode: text("discount_code"),
   notes: text("notes"), // Order notes/special instructions
   customDiscountType: text("custom_discount_type").default("percent"),
@@ -896,13 +893,6 @@ export const insertOrderDraftSchema = createInsertSchema(orderDrafts).omit({
   handedness: z.string().optional().nullable(),
   features: z.record(z.any()).optional().nullable(),
   featureQuantities: z.record(z.any()).optional().nullable(),
-  miscItems: z.array(z.object({
-    id: z.string(),
-    description: z.string(),
-    quantity: z.number(),
-    unitPrice: z.number(),
-    total: z.number()
-  })).default([]),
   discountCode: z.string().optional().nullable(),
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),
@@ -934,13 +924,6 @@ export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
   handedness: z.string().optional().nullable(),
   features: z.record(z.any()).optional().nullable(),
   featureQuantities: z.record(z.any()).optional().nullable(),
-  miscItems: z.array(z.object({
-    id: z.string(),
-    description: z.string(),
-    quantity: z.number(),
-    unitPrice: z.number(),
-    total: z.number()
-  })).default([]),
   discountCode: z.string().optional().nullable(),
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),

@@ -206,7 +206,7 @@ export default function CustomerSatisfaction() {
                 <CheckCircle className="h-5 w-5 text-green-600" />
                 <div>
                   <p className="text-sm text-gray-600">Completion Rate</p>
-                  <p className="text-2xl font-bold">{analytics.completionRate.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold">{analytics.completionRate?.toFixed(1) || '0'}%</p>
                 </div>
               </div>
             </CardContent>
@@ -218,7 +218,7 @@ export default function CustomerSatisfaction() {
                 <Star className="h-5 w-5 text-yellow-600" />
                 <div>
                   <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction.toFixed(1)}/5</p>
+                  <p className="text-2xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}/5</p>
                 </div>
               </div>
             </CardContent>
@@ -230,7 +230,7 @@ export default function CustomerSatisfaction() {
                 <TrendingUp className="h-5 w-5 text-purple-600" />
                 <div>
                   <p className="text-sm text-gray-600">NPS Score</p>
-                  <p className="text-2xl font-bold">{analytics.netPromoterScore.toFixed(0)}</p>
+                  <p className="text-2xl font-bold">{analytics.netPromoterScore?.toFixed(0) || '0'}</p>
                 </div>
               </div>
             </CardContent>
@@ -553,7 +553,7 @@ export default function CustomerSatisfaction() {
                   <Star className="h-8 w-8 text-yellow-600" />
                   <div>
                     <p className="text-sm text-gray-600">Avg Satisfaction</p>
-                    <p className="text-3xl font-bold">{analytics.averageOverallSatisfaction.toFixed(1)}</p>
+                    <p className="text-3xl font-bold">{analytics.averageOverallSatisfaction?.toFixed(1) || '0'}</p>
                     <p className="text-sm text-gray-600">out of 5.0</p>
                   </div>
                 </div>
@@ -566,7 +566,7 @@ export default function CustomerSatisfaction() {
                   <TrendingUp className="h-8 w-8 text-purple-600" />
                   <div>
                     <p className="text-sm text-gray-600">Net Promoter Score</p>
-                    <p className="text-3xl font-bold">{analytics.netPromoterScore.toFixed(0)}</p>
+                    <p className="text-3xl font-bold">{analytics.netPromoterScore?.toFixed(0) || '0'}</p>
                     <p className="text-sm text-gray-600">
                       {analytics.npsBreakdown.promoters} promoters
                     </p>
@@ -581,7 +581,7 @@ export default function CustomerSatisfaction() {
                   <Calendar className="h-8 w-8 text-green-600" />
                   <div>
                     <p className="text-sm text-gray-600">Avg Response Time</p>
-                    <p className="text-3xl font-bold">{analytics.averageResponseTimeMinutes.toFixed(0)}</p>
+                    <p className="text-3xl font-bold">{analytics.averageResponseTimeMinutes?.toFixed(0) || '0'}</p>
                     <p className="text-sm text-gray-600">minutes</p>
                   </div>
                 </div>
@@ -619,7 +619,7 @@ export default function CustomerSatisfaction() {
                 
                 <div className="text-center">
                   <div className="text-4xl font-bold text-purple-600">
-                    {analytics.netPromoterScore.toFixed(0)}
+                    {analytics.netPromoterScore?.toFixed(0) || '0'}
                   </div>
                   <div className="text-sm text-gray-600">Overall NPS Score</div>
                 </div>

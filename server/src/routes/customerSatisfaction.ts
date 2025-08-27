@@ -387,92 +387,104 @@ router.get('/analytics', async (req, res) => {
 router.post('/surveys/create-default', async (req, res) => {
   try {
     const defaultSurvey = {
-      title: "Customer Satisfaction Survey",
-      description: "Help us improve our products and services by sharing your feedback.",
+      title: "Customer Satisfaction Evaluation Form",
+      description: "On a scale from 1 to 10, One is the lowest level (very dissatisfied), while ten is the highest level (very satisfied), how would you rate the following:",
       isActive: true,
       questions: [
         {
-          id: "overall-satisfaction",
+          id: "product-quality",
           type: "rating",
-          question: "How satisfied are you with your overall experience?",
+          question: "How would you rate the overall quality of our products?",
           required: true,
           scale: {
             min: 1,
-            max: 5,
+            max: 10,
             minLabel: "Very Dissatisfied",
             maxLabel: "Very Satisfied"
           }
         },
         {
-          id: "product-quality",
+          id: "product-quality-comments",
+          type: "textarea",
+          question: "Comments on product quality:",
+          required: false
+        },
+        {
+          id: "delivery-timeframe",
           type: "rating",
-          question: "How would you rate the quality of our product?",
+          question: "How would you rate the delivery timeframe for our products?",
           required: true,
           scale: {
             min: 1,
-            max: 5,
-            minLabel: "Poor",
-            maxLabel: "Excellent"
+            max: 10,
+            minLabel: "Very Dissatisfied",
+            maxLabel: "Very Satisfied"
           }
+        },
+        {
+          id: "delivery-timeframe-comments",
+          type: "textarea",
+          question: "Comments on delivery timeframe:",
+          required: false
         },
         {
           id: "customer-service",
           type: "rating",
-          question: "How satisfied are you with our customer service?",
+          question: "How would you rate our customer service?",
           required: true,
           scale: {
             min: 1,
-            max: 5,
+            max: 10,
             minLabel: "Very Dissatisfied",
             maxLabel: "Very Satisfied"
           }
         },
         {
-          id: "delivery-timeliness",
-          type: "rating",
-          question: "How satisfied are you with the delivery time?",
-          required: true,
-          scale: {
-            min: 1,
-            max: 5,
-            minLabel: "Very Slow",
-            maxLabel: "Very Fast"
-          }
-        },
-        {
-          id: "value-for-money",
-          type: "rating",
-          question: "How would you rate the value for money?",
-          required: true,
-          scale: {
-            min: 1,
-            max: 5,
-            minLabel: "Poor Value",
-            maxLabel: "Excellent Value"
-          }
-        },
-        {
-          id: "nps",
-          type: "nps",
-          question: "How likely are you to recommend us to a friend or colleague?",
-          required: true,
-          scale: {
-            min: 0,
-            max: 10,
-            minLabel: "Not at all likely",
-            maxLabel: "Extremely likely"
-          }
-        },
-        {
-          id: "improvements",
+          id: "customer-service-comments",
           type: "textarea",
-          question: "What could we do to improve your experience?",
+          question: "Comments on customer service:",
           required: false
         },
         {
-          id: "additional-comments",
+          id: "fit-function",
+          type: "rating",
+          question: "How satisfied are you with the overall fit and function of our products?",
+          required: true,
+          scale: {
+            min: 1,
+            max: 10,
+            minLabel: "Very Dissatisfied",
+            maxLabel: "Very Satisfied"
+          }
+        },
+        {
+          id: "fit-function-comments",
           type: "textarea",
-          question: "Any additional comments or feedback?",
+          question: "Comments on fit and function:",
+          required: false
+        },
+        {
+          id: "recommendation-likelihood",
+          type: "rating",
+          question: "How likely are you to recommend our company and products to others? (1 is Highly Unlikely, 10 is Very Likely)",
+          required: true,
+          scale: {
+            min: 1,
+            max: 10,
+            minLabel: "Highly Unlikely",
+            maxLabel: "Very Likely"
+          }
+        },
+        {
+          id: "recommendation-comments",
+          type: "textarea",
+          question: "Comments on recommendation likelihood:",
+          required: false
+        },
+        {
+          id: "other-products",
+          type: "textarea",
+          question: "What is one other inlet or product you would be interested in seeing us offer?",
           required: false
         }
       ],

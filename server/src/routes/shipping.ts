@@ -31,8 +31,8 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(parseInt(order.customerId));
-        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
+        customer = await storage.getCustomer(order.customerId);
+        addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
@@ -526,6 +526,45 @@ router.post('/create-label', async (req: Request, res: Response) => {
             await storage.updateFinalizedOrder(orderId, updateData);
           } catch (error) {
             await storage.updateOrderDraft(orderId, updateData);
+          }
+
+          // Send automated customer shipping notification
+          try {
+            console.log(`🚚 Attempting to send shipping notification for order ${orderId} with tracking ${trackingNumber}`);
+            
+            // Get customer information for the order
+            let customer = null;
+            if (order.customerId) {
+              try {
+                customer = await storage.getCustomerById(order.customerId);
+              } catch (customerError) {
+                console.log('Could not fetch customer details for notification:', customerError);
+              }
+            }
+
+            if (customer && customer.phone) {
+              // Send SMS notification automatically when label is created
+              const { sendCustomerNotification } = await import('../../utils/notifications');
+              const notificationResult = await sendCustomerNotification({
+                orderId,
+                trackingNumber,
+                carrier: 'UPS',
+                customerPhone: customer.phone,
+                customerEmail: customer.email || undefined,
+                preferredMethods: ['sms'] // Force SMS for shipping notifications
+              });
+
+              if (notificationResult.success) {
+                console.log(`✅ Automated shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`);
+              } else {
+                console.log(`⚠️ Shipping notification failed for order ${orderId}:`, notificationResult.errors);
+              }
+            } else {
+              console.log(`📱 No customer phone number available for automated shipping notification (Order: ${orderId})`);
+            }
+          } catch (notificationError) {
+            console.error('Failed to send automated shipping notification:', notificationError);
+            // Don't fail the label creation if notification fails
           }
         } catch (updateError) {
           console.error('Failed to update order with tracking info:', updateError);

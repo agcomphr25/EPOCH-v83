@@ -53,9 +53,8 @@ router.post('/email', async (req, res) => {
     // Store in database using existing schema columns
     const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
-      orderId: data.orderId || '',
-      messageType: 'email-outbound',
-      type: 'general',
+      orderId: data.orderId || null,
+      type: 'shipping-notification',
       method: 'email',
       recipient: data.to,
       subject: data.subject,
@@ -115,9 +114,8 @@ router.post('/sms', async (req, res) => {
     // Store in database using existing schema columns
     const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
-      orderId: data.orderId || '',
-      messageType: 'sms-outbound',
-      type: 'general', 
+      orderId: data.orderId || null,
+      type: 'shipping-notification',
       method: 'sms',
       recipient: data.to,
       message: data.message,
@@ -213,13 +211,16 @@ router.post('/sms/webhook', async (req, res) => {
       // Store inbound message in database using existing schema
       const [communicationLog] = await db.insert(communicationLogs).values({
         customerId: customer[0].id.toString(),
-        orderId: '',
-        messageType: 'sms-inbound',
+        orderId: null,
         type: 'customer-inquiry',
         method: 'sms',
         recipient: To,
+        sender: From,
         message: Body,
-        status: 'received'
+        status: 'received',
+        direction: 'inbound',
+        externalId: MessageSid,
+        receivedAt: new Date()
       }).returning();
 
       // Webhook processed successfully
@@ -321,7 +322,7 @@ router.get('/inbox', async (req, res) => {
       customerPhone: row.customers?.phone,
       type: row.communication_logs.type,
       method: row.communication_logs.method,
-      messageType: row.communication_logs.messageType,
+      direction: row.communication_logs.direction,
       recipient: row.communication_logs.recipient,
       subject: row.communication_logs.subject,
       message: row.communication_logs.message,

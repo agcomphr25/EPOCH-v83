@@ -50,26 +50,19 @@ router.post('/email', async (req, res) => {
     
     const emailResult = await sgMail.send(msg);
     
-    // Store in database
+    // Store in database using existing schema columns
     const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
+      orderId: data.orderId || '',
+      messageType: 'email-outbound',
       type: 'general',
       method: 'email',
-      direction: 'outbound',
       recipient: data.to,
       subject: data.subject,
       message: data.message,
       status: 'sent',
-      externalId: emailResult[0].headers['x-message-id'],
       sentAt: new Date()
     }).returning();
-
-    // Create customer communication record
-    await db.insert(customerCommunications).values({
-      customerId: data.customerId,
-      communicationLogId: communicationLog.id,
-      priority: 'normal'
-    });
     
     console.log(`Email sent to ${data.to} for customer ${data.customerId}${data.orderId ? ` (Order: ${data.orderId})` : ''}`);
     
@@ -119,25 +112,20 @@ router.post('/sms', async (req, res) => {
       to: data.to
     });
 
-    // Store in database
+    // Store in database using existing schema columns
     const [communicationLog] = await db.insert(communicationLogs).values({
       customerId: data.customerId,
-      type: 'general',
+      orderId: data.orderId || '',
+      messageType: 'sms-outbound',
+      type: 'general', 
       method: 'sms',
-      direction: 'outbound',
       recipient: data.to,
       message: data.message,
       status: message.status === 'queued' || message.status === 'sent' ? 'sent' : 'failed',
-      externalId: message.sid,
       sentAt: new Date()
     }).returning();
 
-    // Create customer communication record
-    await db.insert(customerCommunications).values({
-      customerId: data.customerId,
-      communicationLogId: communicationLog.id,
-      priority: 'normal'
-    });
+    // Communication logged successfully
     
     console.log(`SMS Details:`, {
       messageId: message.sid,

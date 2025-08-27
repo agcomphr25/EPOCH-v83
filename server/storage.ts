@@ -1760,7 +1760,8 @@ export class DatabaseStorage implements IStorage {
           cancelledAt: allOrders.cancelledAt,
           cancelReason: allOrders.cancelReason,
           createdAt: allOrders.createdAt,
-          updatedAt: allOrders.updatedAt
+          updatedAt: allOrders.updatedAt,
+          assignedTechnician: allOrders.assignedTechnician
         })
         .from(allOrders)
         .leftJoin(customers, sql`${allOrders.customerId} = CAST(${customers.id} AS TEXT)`)

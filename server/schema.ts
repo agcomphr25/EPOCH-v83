@@ -109,6 +109,8 @@ export const allOrders = pgTable("all_orders", {
   specialShippingInternational: boolean("special_shipping_international").default(false),
   specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
   specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
+  // Technician Assignment
+  assignedTechnician: text("assigned_technician"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

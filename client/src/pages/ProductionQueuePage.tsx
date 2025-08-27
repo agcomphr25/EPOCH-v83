@@ -382,121 +382,131 @@ export default function ProductionQueuePage() {
       )}
 
       {/* Ready Orders Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-green-600" />
-              <CardTitle className="text-green-800">Ready for Layup</CardTitle>
-              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-                {filteredRegularOrders.length} orders
-              </Badge>
-            </div>
-            {selectedOrders.length > 0 && (
-              <Button
-                onClick={handleProgressSelected}
-                disabled={progressOrdersMutation.isPending}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <ArrowRight className="w-4 h-4 mr-2" />
-                Push {selectedOrders.length} to Layup
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {filteredRegularOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {filteredAttentionOrders.length > 0 
-                ? "All orders need attention before they can proceed"
-                : "No orders found in Production Queue"
-              }
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center text-sm text-green-700 bg-green-100 p-3 rounded">
-                <input
-                  type="checkbox"
-                  checked={selectedOrders.length === filteredRegularOrders.length && filteredRegularOrders.length > 0}
-                  onChange={handleSelectAll}
-                  className="rounded mr-2"
-                />
-                <span className="font-medium">Select All ({filteredRegularOrders.length})</span>
+      <Accordion type="single" collapsible className="w-full" defaultValue="ready-orders">
+        <AccordionItem value="ready-orders" className="border border-green-200 bg-green-50 rounded-lg">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="flex justify-between items-center w-full mr-4">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-green-600" />
+                <span className="text-lg font-semibold text-green-800">Ready for Layup</span>
+                <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                  {filteredRegularOrders.length} orders
+                </Badge>
               </div>
-              {filteredRegularOrders.map((order: any) => (
-                <div key={order.orderId} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedOrders.includes(order.orderId)}
-                        onChange={() => handleSelectOrder(order.orderId)}
-                        className="rounded"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {order.orderId}
-                          {order.fbOrderNumber && (
-                            <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                              FB: {order.fbOrderNumber}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
-                        className="text-xs"
-                      >
-                        <Edit className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Badge variant="outline" className="text-xs">
-                        {order.modelId || 'No Model'}
-                      </Badge>
-                      {order.dueDate && (
-                        <Badge variant="secondary" className="text-xs">
-                          Due: {new Date(order.dueDate).toLocaleDateString()}
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                        onClick={() => handleSalesOrderDownload(order.orderId)}
-                      >
-                        <FileText className="w-3 h-3 mr-1" />
-                        Sales Order
-                      </Badge>
-                      {hasKickbacks(order.orderId) && (
-                        <Badge
-                          variant="destructive"
-                          className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                            getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
-                            getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
-                            getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                            'bg-gray-600 hover:bg-gray-700'
-                          }`}
-                          onClick={() => handleKickbackClick(order.orderId)}
-                        >
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          Kickback
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-600">
-                    Priority: {order.priorityScore || 'Not set'} | Features: {order.features ? 'Present' : 'Missing'}
+              {selectedOrders.length > 0 && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProgressSelected();
+                  }}
+                  disabled={progressOrdersMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                  size="sm"
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Push {selectedOrders.length} to Layup
+                </Button>
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-4">
+            {filteredRegularOrders.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {filteredAttentionOrders.length > 0 
+                  ? "All orders need attention before they can proceed"
+                  : "No orders found in Production Queue"
+                }
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between text-sm text-green-700 bg-green-100 p-3 rounded gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.length === filteredRegularOrders.length && filteredRegularOrders.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded"
+                    />
+                    <span className="font-medium">Select All ({filteredRegularOrders.length})</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="grid gap-3">
+                  {filteredRegularOrders.map((order: any) => (
+                    <div key={order.orderId} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrders.includes(order.orderId)}
+                            onChange={() => handleSelectOrder(order.orderId)}
+                            className="rounded flex-shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-gray-900">
+                              {order.orderId}
+                              {order.fbOrderNumber && (
+                                <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                  FB: {order.fbOrderNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 truncate">{order.customerName || 'Unknown Customer'}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
+                            className="text-xs"
+                          >
+                            <Edit className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Badge variant="outline" className="text-xs">
+                            {order.modelId || 'No Model'}
+                          </Badge>
+                          {order.dueDate && (
+                            <Badge variant="secondary" className="text-xs">
+                              Due: {new Date(order.dueDate).toLocaleDateString()}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                            onClick={() => handleSalesOrderDownload(order.orderId)}
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            Sales Order
+                          </Badge>
+                          {hasKickbacks(order.orderId) && (
+                            <Badge
+                              variant="destructive"
+                              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                                getKickbackStatus(order.orderId) === 'CRITICAL' ? 'bg-red-600 hover:bg-red-700' :
+                                getKickbackStatus(order.orderId) === 'HIGH' ? 'bg-orange-600 hover:bg-orange-700' :
+                                getKickbackStatus(order.orderId) === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                'bg-gray-600 hover:bg-gray-700'
+                              }`}
+                              onClick={() => handleKickbackClick(order.orderId)}
+                            >
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Kickback
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600 break-words">
+                        Priority: {order.priorityScore || 'Not set'} | Features: {order.features ? 'Present' : 'Missing'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       {/* Floating Move to Edit Button */}
       {selectedAttentionOrders.length > 0 && (

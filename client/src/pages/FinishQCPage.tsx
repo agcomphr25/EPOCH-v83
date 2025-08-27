@@ -94,8 +94,8 @@ export default function FinishQCPage() {
   // Group orders by technician and sort (memoized to prevent re-renders)
   const ordersByTechnician = useMemo(() => {
     const grouped = orders.reduce((acc: Record<string, any[]>, order: any) => {
-      // Assign all orders to Tomas by default
-      const technician = 'Tomas';
+      // Use the assigned technician from the database, or default to 'Unassigned' if empty
+      const technician = order.assignedTechnician || 'Unassigned';
       if (!acc[technician]) {
         acc[technician] = [];
       }

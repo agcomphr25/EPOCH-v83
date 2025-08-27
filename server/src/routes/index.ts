@@ -2513,7 +2513,8 @@ export function registerRoutes(app: Express): Server {
                                paintOption.includes('standard') ||
                                paintOption === 'terrain' ||
                                paintOption === 'premium' ||
-                               paintOption === 'standard';
+                               paintOption === 'standard' ||
+                               order.orderId.startsWith('FG');
           
           // Set barcode color - blue for specific paint options, black otherwise
           const barcodeColor = shouldBeBlue ? rgb(0, 0, 1) : rgb(0, 0, 0);

@@ -249,6 +249,32 @@ export default function FinishQueuePage() {
     }
   });
 
+  // Progress mutation for moving orders to next department
+  const progressMutation = useMutation({
+    mutationFn: async ({ orderIds, technician }: { orderIds: string[], technician: string }) => {
+      const response = await apiRequest('/api/orders/update-department', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderIds: orderIds,
+          department: 'Finish QC',
+          status: 'Active',
+          assignedTechnician: technician
+        })
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
+      toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
+      setSelectedOrders(new Set());
+      setSelectAll(false);
+    },
+    onError: () => {
+      toast.error("Failed to progress orders");
+    }
+  });
+
   const handleMoveToFinishQC = () => {
     if (selectedOrders.size === 0) {
       toast.error('Please select orders to move');
@@ -271,6 +297,19 @@ export default function FinishQueuePage() {
     }
     moveToPaintMutation.mutate({ 
       orderIds: Array.from(selectedOrders)
+    });
+  };
+
+  // Handle progress orders function
+  const handleProgressOrders = () => {
+    if (selectedOrders.size === 0) {
+      toast.error('Please select orders to progress');
+      return;
+    }
+    
+    progressMutation.mutate({
+      orderIds: Array.from(selectedOrders),
+      technician: selectedTechnician || ''
     });
   };
 

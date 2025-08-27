@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ArrowRight, Search, Package, User, Calendar, FileText, AlertTriangle, Edit, Eye, ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/queryClient';
@@ -282,94 +283,102 @@ export default function ProductionQueuePage() {
 
       {/* Orders Needing Attention Section */}
       {filteredAttentionOrders.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-orange-600" />
-                <CardTitle className="text-orange-800">Orders Needing Attention</CardTitle>
-                <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
-                  {filteredAttentionOrders.length} orders
-                </Badge>
-              </div>
-              {selectedAttentionOrders.length > 0 && (
-                <Button
-                  onClick={handleMoveToEdit}
-                  disabled={moveToEditMutation.isPending}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Move {selectedAttentionOrders.length} to Edit
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm text-orange-700 bg-orange-100 p-3 rounded">
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="attention-orders" className="border border-orange-200 bg-orange-50 rounded-lg">
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <div className="flex justify-between items-center w-full mr-4">
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedAttentionOrders.length === filteredAttentionOrders.length && filteredAttentionOrders.length > 0}
-                    onChange={handleSelectAllAttention}
-                    className="rounded"
-                  />
-                  <span className="font-medium">Select All ({filteredAttentionOrders.length})</span>
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  <span className="text-lg font-semibold text-orange-800">Orders Needing Attention</span>
+                  <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                    {filteredAttentionOrders.length} orders
+                  </Badge>
                 </div>
-                <span>These orders need information before they can be scheduled</span>
+                {selectedAttentionOrders.length > 0 && (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveToEdit();
+                    }}
+                    disabled={moveToEditMutation.isPending}
+                    className="bg-orange-600 hover:bg-orange-700"
+                    size="sm"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Move {selectedAttentionOrders.length} to Edit
+                  </Button>
+                )}
               </div>
-              {filteredAttentionOrders.map((order: any) => {
-                const issues = needsAttention(order);
-                return (
-                  <div key={order.orderId} className="bg-white border border-orange-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedAttentionOrders.includes(order.orderId)}
-                          onChange={() => handleSelectAttentionOrder(order.orderId)}
-                          className="rounded"
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {order.orderId}
-                            {order.fbOrderNumber && (
-                              <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                                FB: {order.fbOrderNumber}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">{order.customerName || 'Unknown Customer'}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
-                          className="text-xs"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Edit
-                        </Button>
-                        <div className="flex flex-col items-end gap-1">
-                          {issues.map((issue, index) => (
-                            <Badge key={index} variant="destructive" className="text-xs">
-                              {issue}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      Model: {order.modelId || 'Not set'} | Features: {order.features ? 'Present' : 'Missing'}
-                    </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-6 pb-4">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between text-sm text-orange-700 bg-orange-100 p-3 rounded gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedAttentionOrders.length === filteredAttentionOrders.length && filteredAttentionOrders.length > 0}
+                      onChange={handleSelectAllAttention}
+                      className="rounded"
+                    />
+                    <span className="font-medium">Select All ({filteredAttentionOrders.length})</span>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  <span className="text-center sm:text-left">These orders need information before they can be scheduled</span>
+                </div>
+                <div className="grid gap-3">
+                  {filteredAttentionOrders.map((order: any) => {
+                    const issues = needsAttention(order);
+                    return (
+                      <div key={order.orderId} className="bg-white border border-orange-200 rounded-lg p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedAttentionOrders.includes(order.orderId)}
+                              onChange={() => handleSelectAttentionOrder(order.orderId)}
+                              className="rounded flex-shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-gray-900">
+                                {order.orderId}
+                                {order.fbOrderNumber && (
+                                  <span className="ml-2 text-sm font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                    FB: {order.fbOrderNumber}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600 truncate">{order.customerName || 'Unknown Customer'}</div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(`/order-entry?edit=${order.orderId}`, '_blank')}
+                              className="text-xs w-full sm:w-auto"
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              Edit
+                            </Button>
+                            <div className="flex flex-wrap gap-1 justify-start">
+                              {issues.map((issue, index) => (
+                                <Badge key={index} variant="destructive" className="text-xs">
+                                  {issue}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-sm text-gray-600 break-words">
+                          Model: {order.modelId || 'Not set'} | Features: {order.features ? 'Present' : 'Missing'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
 
       {/* Ready Orders Section */}

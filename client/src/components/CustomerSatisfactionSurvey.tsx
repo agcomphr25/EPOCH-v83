@@ -77,6 +77,8 @@ export default function CustomerSatisfactionSurvey({
   const [startTime, setStartTime] = useState<Date>(new Date());
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(customerId || null);
+  const [orderNumber, setOrderNumber] = useState<string>('');
+  const [orderDate, setOrderDate] = useState<string>('');
 
   // Fetch active surveys
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
@@ -413,15 +415,44 @@ export default function CustomerSatisfactionSurvey({
             </Select>
           </div>
 
+          {/* Order Details */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="orderNumber">Order #</Label>
+              <Input
+                id="orderNumber"
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                placeholder="Enter order number"
+                className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="orderDate">Date</Label>
+              <Input
+                id="orderDate"
+                type="date"
+                value={orderDate}
+                onChange={(e) => setOrderDate(e.target.value)}
+                className="w-full"
+              />
+            </div>
+          </div>
+
           {/* All Questions */}
           <div className="space-y-6">
-            {selectedSurvey.questions.map((question: SurveyQuestion, index: number) => (
-              <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">
-                    {index + 1}. {question.question}
-                    {question.required && <span className="text-red-500 ml-1">*</span>}
-                  </Label>
+            {selectedSurvey.questions.map((question: SurveyQuestion, index: number) => {
+              // Only number rating questions, not comment questions
+              const isCommentQuestion = question.type === 'textarea' || question.question.toLowerCase().includes('comment');
+              const questionNumber = isCommentQuestion ? null : selectedSurvey.questions.filter((q: SurveyQuestion, i: number) => i <= index && q.type === 'rating' && !q.question.toLowerCase().includes('comment')).length;
+              
+              return (
+                <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">
+                      {isCommentQuestion ? '' : `${questionNumber}. `}{question.question}
+                      {question.required && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
                   
                   {validationErrors[question.id] && (
                     <div className="flex items-center space-x-2 text-red-600">
@@ -472,9 +503,10 @@ export default function CustomerSatisfactionSurvey({
                       className={validationErrors[question.id] ? "border-red-500" : ""}
                     />
                   )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Submit Button */}

@@ -1773,7 +1773,7 @@ export class DatabaseStorage implements IStorage {
             isNull(allOrders.scrapDate)
           )
         )
-        .orderBy(desc(allOrders.updatedAt));
+        .orderBy(asc(allOrders.dueDate), asc(allOrders.createdAt));
 
       console.log(`📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`);
 

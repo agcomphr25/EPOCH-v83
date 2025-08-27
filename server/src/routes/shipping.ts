@@ -476,13 +476,20 @@ router.post('/create-label', async (req: Request, res: Response) => {
     let response;
     try {
       console.log(`Attempting UPS OAuth API call to: ${upsEndpoint}`);
+      
+      // Check if we're in deployment environment and add extra logging
+      const isDeployment = process.env.REPLIT_DEPLOYMENT === '1';
+      if (isDeployment) {
+        console.log('🚀 Running in deployment environment - using extended timeouts');
+      }
+      
       response = await axios.post(upsEndpoint, payload, {
         headers: { 
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: 30000, // 30 second timeout
+        timeout: isDeployment ? 90000 : 60000, // 90 seconds in deployment, 60 seconds in development
       });
       console.log('UPS OAuth API call successful');
     } catch (error: any) {
@@ -759,7 +766,7 @@ async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
         },
-        timeout: 15000
+        timeout: process.env.REPLIT_DEPLOYMENT === '1' ? 45000 : 30000 // Extra timeout for deployment environment
       }
     );
     

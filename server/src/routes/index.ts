@@ -2446,9 +2446,8 @@ export function registerRoutes(app: Express): Server {
             }
           };
           
-          // Draw the barcode (positioned to fit within Avery label)
-          drawCode39Barcode(barcodeText, x + 8, y + 32);
-          console.log(`✅ Generated Code 39 barcode for ${barcodeText}`);
+          // Skip the original barcode drawing - will be drawn with proper color below
+          console.log(`✅ Preparing Code 39 barcode for ${barcodeText}`);
           
           // Add order information at top
           page.drawText(`${order.orderId}`, {
@@ -2469,7 +2468,100 @@ export function registerRoutes(app: Express): Server {
           // Add model and action length (using display names)
           const actionLength = order.features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get(order.modelId) || order.modelId || 'Unknown';
-          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
+          
+          // Check for special features to add to label
+          const features = order.features || {};
+          const specialLabels = [];
+          
+          // NSNH - No Swivel Studs No Holes
+          if (features.swivel_studs === 'no_swivel_no_holes' || 
+              (features.swivel_studs && features.swivel_studs.includes('no_holes'))) {
+            specialLabels.push('NSNH');
+          }
+          
+          // Texture - if texture is selected (not "no texture")
+          if (features.texture_options && 
+              features.texture_options !== 'no_texture' && 
+              features.texture_options !== 'none' &&
+              !features.texture_options.includes('no_')) {
+            specialLabels.push('TEXTURE');
+          }
+          
+          // Carbon Camo Ready
+          if (features.paint_options === 'carbon_camo_ready' ||
+              (features.paint_options && features.paint_options.includes('carbon_camo'))) {
+            specialLabels.push('CARBON CAMO READY');
+          }
+          
+          // Check if paint option should make barcode blue
+          const paintOption = features.paint_options || '';
+          const shouldBeBlue = paintOption.includes('terrain') || 
+                               paintOption.includes('premium') || 
+                               paintOption.includes('standard') ||
+                               paintOption === 'terrain' ||
+                               paintOption === 'premium' ||
+                               paintOption === 'standard';
+          
+          // Set barcode color - blue for specific paint options, black otherwise
+          const barcodeColor = shouldBeBlue ? rgb(0, 0, 1) : rgb(0, 0, 0);
+          
+          // Redraw barcode with appropriate color
+          const redrawCode39Barcode = (text: string, startX: number, startY: number, color: any) => {
+            const thinWidth = 1.0;
+            const thickWidth = 3.0;
+            const barHeight = 15;
+            const interCharGap = 1.0;
+            let currentX = startX;
+            
+            const fullText = `*${text.toUpperCase()}*`;
+            
+            let estimatedWidth = 0;
+            for (let char of fullText) {
+              if (code39Table[char]) {
+                estimatedWidth += (thinWidth * 6 + thickWidth * 3) + interCharGap;
+              }
+            }
+            
+            const maxWidth = 150;
+            const scale = estimatedWidth > maxWidth ? maxWidth / estimatedWidth : 1;
+            const scaledThin = thinWidth * scale;
+            const scaledThick = thickWidth * scale;
+            const scaledGap = interCharGap * scale;
+            
+            for (let char of fullText) {
+              const pattern = code39Table[char];
+              if (pattern) {
+                for (let i = 0; i < pattern.length; i++) {
+                  const isWide = pattern[i] === '1';
+                  const width = isWide ? scaledThick : scaledThin;
+                  const isBar = i % 2 === 0;
+                  
+                  if (isBar) {
+                    page.drawRectangle({
+                      x: currentX,
+                      y: startY,
+                      width: width,
+                      height: barHeight,
+                      color: color,
+                    });
+                  }
+                  currentX += width;
+                }
+                currentX += scaledGap;
+              }
+            }
+          };
+          
+          // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
+          redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
+          
+          // Build label text line
+          let labelText = `${modelDisplayName} - ${actionLength.toUpperCase()}`;
+          if (specialLabels.length > 0) {
+            labelText += ` - ${specialLabels.join(' - ')}`;
+          }
+          
+          page.drawText(labelText, {
             x: x + 8,
             y: y + 12,
             size: 6,

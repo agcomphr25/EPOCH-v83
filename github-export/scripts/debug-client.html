@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Client</title>
+    <script>
+        console.log("Starting debug...");
+        
+        // Test if we can access the server
+        fetch('/api/csv-data')
+            .then(response => response.json())
+            .then(data => {
+                console.log("API test successful:", data);
+            })
+            .catch(error => {
+                console.error("API test failed:", error);
+            });
+            
+        // Test main.tsx loading
+        fetch('/src/main.tsx')
+            .then(response => response.text())
+            .then(data => {
+                console.log("main.tsx loads:", data.substring(0, 200) + "...");
+            })
+            .catch(error => {
+                console.error("main.tsx loading failed:", error);
+            });
+    </script>
+</head>
+<body>
+    <h1>Debug Client</h1>
+    <p>Check console for debug info</p>
+</body>
+</html>

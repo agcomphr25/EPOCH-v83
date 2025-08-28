@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple React Test</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        // Test if the div exists
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            rootElement.innerHTML = `
+                <div style="padding: 20px; background-color: #f0f0f0; border: 2px solid #333;">
+                    <h1 style="color: #333;">EPOCH v8 - Manufacturing ERP</h1>
+                    <h2 style="color: #666;">Direct DOM Manipulation Test</h2>
+                    <p>This proves the root element and basic rendering works.</p>
+                    <div style="margin-top: 20px;">
+                        <h3>Test Results:</h3>
+                        <ul>
+                            <li>✓ Root element found</li>
+                            <li>✓ DOM manipulation working</li>
+                            <li>✓ Basic HTML rendering</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            console.log("Direct DOM test successful");
+        } else {
+            console.error("Root element not found");
+        }
+    </script>
+</body>
+</html>

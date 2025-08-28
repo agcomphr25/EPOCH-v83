@@ -298,6 +298,14 @@ export default function FinishQCPage() {
           <Button
             onClick={handleMoveToPaint}
             disabled={selectedOrders.size === 0 || moveToPaintMutation.isPending}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            Good ({selectedOrders.size})
+          </Button>
+          
+          <Button
+            onClick={handleMoveToPaint}
+            disabled={selectedOrders.size === 0 || moveToPaintMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
             Move to Paint ({selectedOrders.size})

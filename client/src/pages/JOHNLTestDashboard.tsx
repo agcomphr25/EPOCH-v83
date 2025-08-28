@@ -70,32 +70,6 @@ export default function JOHNLTestDashboard() {
         </Card>
       </div>
 
-      {/* Footer Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">🔧</div>
-            <div className="text-sm font-medium">CNC Operations</div>
-            <div className="text-xs text-gray-500">Active department focus</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">📋</div>
-            <div className="text-sm font-medium">Order Management</div>
-            <div className="text-xs text-gray-500">Full system access</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">👥</div>
-            <div className="text-sm font-medium">Employee Portal</div>
-            <div className="text-xs text-gray-500">Full functionality</div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

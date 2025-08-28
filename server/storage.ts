@@ -1658,6 +1658,14 @@ export class DatabaseStorage implements IStorage {
         specialShippingInternational: allOrders.specialShippingInternational,
         specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
         specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
         // Customer name
         customerName: customers.name,
       })

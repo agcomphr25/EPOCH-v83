@@ -401,7 +401,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
         street: shipTo.street,
         city: shipTo.city,
         state: shipTo.state,
-        zipCode: shipTo.zip,
+        zipCode: shipTo.zip || shipTo.zipCode, // Support both field names
         country: shipTo.country || 'US',
         phone: shipTo.phone || '',
       },

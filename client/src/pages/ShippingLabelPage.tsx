@@ -51,6 +51,13 @@ export default function ShippingLabelPage() {
   // Pre-populate address when customer data loads
   useEffect(() => {
     if (customerAddress && customerInfo) {
+      console.log('🏠 Auto-populating address:', {
+        customerInfo: customerInfo.name,
+        address: customerAddress,
+        zipCode: customerAddress.zipCode,
+        zip: customerAddress.zip
+      });
+      
       setShippingDetails(prev => ({
         ...prev,
         address: {
@@ -58,7 +65,7 @@ export default function ShippingLabelPage() {
           street: customerAddress.street || '',
           city: customerAddress.city || '',
           state: customerAddress.state || '',
-          zip: customerAddress.zipCode || '',
+          zip: customerAddress.zipCode || customerAddress.zip || '',
           country: customerAddress.country === 'United States' ? 'US' : customerAddress.country || 'US'
         }
       }));

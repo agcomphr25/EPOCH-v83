@@ -42,13 +42,15 @@ export default function JOHNLTestDashboard() {
           </Card>
         </Link>
 
-        <Card className="border-2 border-dashed border-gray-200 opacity-60">
-          <CardContent className="p-4 text-center">
-            <Users className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-gray-500">Employee Portal</h3>
-            <p className="text-xs text-gray-400 mt-1">Coming soon</p>
-          </CardContent>
-        </Card>
+        <Link href="/employee-portal">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <Users className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Employee Portal</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Employee management</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Production Pipeline Overview */}
@@ -88,9 +90,9 @@ export default function JOHNLTestDashboard() {
 
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-400">⏳</div>
+            <div className="text-2xl font-bold text-purple-600">👥</div>
             <div className="text-sm font-medium">Employee Portal</div>
-            <div className="text-xs text-gray-500">Under development</div>
+            <div className="text-xs text-gray-500">Full functionality</div>
           </CardContent>
         </Card>
       </div>

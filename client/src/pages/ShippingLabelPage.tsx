@@ -45,12 +45,25 @@ export default function ShippingLabelPage() {
   // Customer info now comes directly from the order details API
   const customerInfo = (orderDetails as any)?.customer;
   const customerAddress = (orderDetails as any)?.addresses?.[0];
+  const shippingAddress = (orderDetails as any)?.shippingAddress;
   
 
-
-  // Pre-populate address when customer data loads
+  // Pre-populate address when order data loads - prioritize order-specific shipping address
   useEffect(() => {
-    if (customerAddress && customerInfo) {
+    if (shippingAddress) {
+      setShippingDetails(prev => ({
+        ...prev,
+        address: {
+          name: shippingAddress.name || '',
+          street: shippingAddress.street || '',
+          city: shippingAddress.city || '',
+          state: shippingAddress.state || '',
+          zip: shippingAddress.zipCode || '',
+          country: shippingAddress.country === 'United States' ? 'US' : shippingAddress.country || 'US'
+        }
+      }));
+    } else if (customerAddress && customerInfo) {
+      // Fallback to customer address if no shipping address
       setShippingDetails(prev => ({
         ...prev,
         address: {
@@ -63,7 +76,7 @@ export default function ShippingLabelPage() {
         }
       }));
     }
-  }, [customerAddress, customerInfo]);
+  }, [shippingAddress, customerAddress, customerInfo]);
 
   const generateShippingLabel = async () => {
     if (!orderId) return;
@@ -421,7 +434,20 @@ export default function ShippingLabelPage() {
               
               {/* Shipping Address */}
               <div className="mb-6">
-                <h4 className="font-medium mb-2">Ship To Address</h4>
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-medium">Ship To Address</h4>
+                  {shippingAddress && (
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      shippingAddress.source === 'order_specific' ? 'bg-green-100 text-green-800' :
+                      shippingAddress.source === 'alternate_customer' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {shippingAddress.source === 'order_specific' ? '📦 Order-Specific Address' :
+                       shippingAddress.source === 'alternate_customer' ? '🔄 Alternate Customer' :
+                       '👤 Customer Default'}
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-medium mb-1">Customer Name</label>

@@ -28,20 +28,78 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     // Get customer data if customerId exists
     let customer: any = null;
     let addresses: any[] = [];
+    let shippingAddress: any = null;
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(order.customerId);
-        addresses = await storage.getCustomerAddresses(order.customerId);
+        customer = await storage.getCustomer(parseInt(order.customerId));
+        addresses = await storage.getCustomerAddresses(parseInt(order.customerId));
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
       }
     }
     
+    // Priority 1: Check for order-specific alternate shipping address
+    if (order.hasAltShipTo && order.altShipToAddress) {
+      const altAddr = order.altShipToAddress as any;
+      shippingAddress = {
+        source: 'order_specific',
+        name: order.altShipToName || customer?.name || '',
+        company: order.altShipToCompany || '',
+        email: order.altShipToEmail || customer?.email || '',
+        phone: order.altShipToPhone || customer?.phone || '',
+        street: altAddr?.street || '',
+        city: altAddr?.city || '',
+        state: altAddr?.state || '',
+        zipCode: altAddr?.zip || altAddr?.zipCode || '',
+        country: altAddr?.country || 'United States'
+      };
+    }
+    // Priority 2: Check if using existing customer as alternate shipping
+    else if (order.hasAltShipTo && order.altShipToCustomerId && addresses.length > 0) {
+      try {
+        const altCustomerId = parseInt(order.altShipToCustomerId);
+        const altCustomer = await storage.getCustomer(altCustomerId);
+        const altAddresses = await storage.getCustomerAddresses(altCustomerId);
+        if (altCustomer && altAddresses.length > 0) {
+          shippingAddress = {
+            source: 'alternate_customer',
+            name: altCustomer.name || '',
+            company: altCustomer.company || '',
+            email: altCustomer.email || '',
+            phone: altCustomer.phone || '',
+            street: altAddresses[0].street || '',
+            city: altAddresses[0].city || '',
+            state: altAddresses[0].state || '',
+            zipCode: altAddresses[0].zipCode || '',
+            country: altAddresses[0].country || 'United States'
+          };
+        }
+      } catch (customerIdError) {
+        console.warn('Error parsing alternate customer ID:', customerIdError);
+      }
+    }
+    // Priority 3: Use customer default address as fallback
+    else if (addresses.length > 0) {
+      shippingAddress = {
+        source: 'customer_default',
+        name: customer?.name || '',
+        company: customer?.company || '',
+        email: customer?.email || '',
+        phone: customer?.phone || '',
+        street: addresses[0].street || '',
+        city: addresses[0].city || '',
+        state: addresses[0].state || '',
+        zipCode: addresses[0].zipCode || '',
+        country: addresses[0].country || 'United States'
+      };
+    }
+    
     res.json({
       ...order,
       customer,
-      addresses
+      addresses,
+      shippingAddress
     });
   } catch (error) {
     console.error('Error getting order:', error);

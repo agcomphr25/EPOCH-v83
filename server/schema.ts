@@ -2286,7 +2286,7 @@ export const insertKickbackSchema = createInsertSchema(kickbacks).omit({
   updatedAt: true,
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
-  kickbackDept: z.enum(['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping']),
+  kickbackDept: z.enum(['CNC', 'Finish', 'Gunsmith', 'Paint']),
   reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER']),
   reasonText: z.string().optional().nullable(),
   kickbackDate: z.coerce.date(),

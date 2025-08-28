@@ -23,7 +23,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
-  kickbackDept: z.enum(['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping'], {
+  kickbackDept: z.enum(['CNC', 'Finish', 'Gunsmith', 'Paint'], {
     required_error: "Please select a department"
   }),
   reasonCode: z.enum(['MATERIAL_DEFECT', 'OPERATOR_ERROR', 'MACHINE_FAILURE', 'DESIGN_ISSUE', 'QUALITY_ISSUE', 'PROCESS_ISSUE', 'SUPPLIER_ISSUE', 'OTHER'], {

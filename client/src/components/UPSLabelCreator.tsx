@@ -179,10 +179,42 @@ export default function UPSLabelCreator({ orderId, isOpen, onClose, onSuccess }:
 
   // Create label mutation
   const createLabelMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/shipping/create-label', {
-      method: 'POST',
-      body: data,
-    }),
+    mutationFn: async (data: any) => {
+      // Show extended loading message for deployment environments
+      toast({
+        title: 'Creating Label',
+        description: 'Generating UPS shipping label... This may take up to 2 minutes in deployment.',
+      });
+      
+      // Create abort controller for extended timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      
+      try {
+        const response = await fetch('/api/shipping/create-label', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create shipping label');
+        }
+        
+        return await response.json();
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+          throw new Error('Label creation timed out. This can happen in slow network conditions. Please try again.');
+        }
+        throw error;
+      }
+    },
     onSuccess: (data) => {
       toast({
         title: 'Label Created',

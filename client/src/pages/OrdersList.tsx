@@ -717,25 +717,8 @@ export default function OrdersList() {
               All Orders
             </h1>
             <p className="text-gray-600 mt-1">
-              View and manage all created orders - with CSV export
+              View and manage all created orders
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={handleExportCSV}
-              variant="outline" 
-              className="flex items-center gap-2"
-              data-testid="export-csv-button"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
-            <Link href="/order-entry">
-              <Button className="flex items-center gap-2" data-testid="create-order-button">
-                <FileText className="h-4 w-4" />
-                Create New Order
-              </Button>
-            </Link>
           </div>
         </div>
 

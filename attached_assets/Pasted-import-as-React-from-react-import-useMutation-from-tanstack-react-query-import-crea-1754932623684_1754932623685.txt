@@ -1,0 +1,87 @@
+import * as React from "react";
+import { useMutation } from "@tanstack/react-query";
+import { createUpsLabels } from "@/lib/api/shipping";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/components/ui/use-toast";
+
+type OrderRow = {
+  id: number;
+  customer_name: string;
+  ship_city: string;
+  ship_state: string;
+  status: string;       // "Ready for Shipping" filter upstream
+  weight_lbs?: number;
+};
+
+export function ShippingScreen(props: { rows: OrderRow[] }) {
+  const { toast } = useToast();
+  const [selected, setSelected] = React.useState<number[]>([]);
+  const [serviceCode, setServiceCode] = React.useState<string>("03"); // Ground
+
+  const batchMut = useMutation({
+    mutationFn: () => createUpsLabels({ orderIds: selected, serviceCode }),
+    onSuccess: (data) => {
+      toast({ title: "Labels created", description: `Generated ${data.labels.length} label(s).` });
+      if (data.invoiceUrl) window.open(data.invoiceUrl, "_blank");
+      // Optionally open each label:
+      data.labels.forEach(l => window.open(l.labelUrl, "_blank"));
+      setSelected([]);
+    },
+    onError: (e: any) => {
+      toast({ title: "UPS Error", description: String(e?.message ?? e), variant: "destructive" });
+    },
+  });
+
+  const toggle = (id: number) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          className="border rounded px-2 py-2"
+          value={serviceCode}
+          onChange={(e) => setServiceCode(e.target.value)}
+        >
+          <option value="03">UPS Ground</option>
+          <option value="02">UPS 2nd Day Air</option>
+          <option value="01">UPS Next Day Air</option>
+        </select>
+        <Button
+          disabled={selected.length === 0 || batchMut.isPending}
+          onClick={() => batchMut.mutate()}
+        >
+          {batchMut.isPending ? "Processing…" : `Create UPS Labels + Packing Slip (${selected.length})`}
+        </Button>
+      </div>
+
+      <div className="border rounded">
+        <table className="w-full text-sm">
+          <thead className="bg-muted">
+            <tr>
+              <th className="text-left p-2">Select</th>
+              <th className="text-left p-2">Order #</th>
+              <th className="text-left p-2">Customer</th>
+              <th className="text-left p-2">Ship To</th>
+              <th className="text-left p-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.rows.map((r) => (
+              <tr key={r.id} className="border-t">
+                <td className="p-2">
+                  <Checkbox checked={selected.includes(r.id)} onCheckedChange={() => toggle(r.id)} />
+                </td>
+                <td className="p-2">{r.id}</td>
+                <td className="p-2">{r.customer_name}</td>
+                <td className="p-2">{r.ship_city}, {r.ship_state}</td>
+                <td className="p-2">{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

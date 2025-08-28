@@ -1,0 +1,380 @@
+Here’s a full scaffold for Module 8: API Integrations & Communications in a React + Tailwind + plain-JS setup. 🔨🤖🔧
+
+1. src/utils/addressUtils.js
+js
+Copy
+Edit
+// src/utils/addressUtils.js
+import axios from 'axios';
+
+/**
+ * Fetch autocomplete suggestions for an address query.
+ * @param {string} query
+ * @returns {Promise<string[]>} Array of suggestion strings
+ */
+export async function autocompleteAddress(query) {
+  try {
+    const response = await axios.get(`/api/address/autocomplete`, {
+      params: { query },
+    });
+    // API returns an array of suggestion strings
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching address autocomplete:', error);
+    // rethrow so callers can handle display of errors
+    throw new Error('Failed to fetch address suggestions');
+  }
+}
+
+/**
+ * Validate a full address object server-side.
+ * @param {object} address
+ * @returns {Promise<object>} Validated address object
+ */
+export async function validateAddress(address) {
+  try {
+    const response = await axios.post(`/api/address/validate`, { address });
+    // API returns the validated (possibly normalized) address
+    return response.data;
+  } catch (error) {
+    console.error('Error validating address:', error);
+    // Extract server message if present
+    const msg = error.response?.data?.message || 'Address validation failed';
+    throw new Error(msg);
+  }
+}
+2. src/components/AddressInput.jsx
+jsx
+Copy
+Edit
+// src/components/AddressInput.jsx
+import { Fragment, useState, useEffect } from 'react';
+import { Combobox, Transition } from '@headlessui/react';
+import { debounce } from 'lodash';
+import { autocompleteAddress, validateAddress } from '../utils/addressUtils';
+import { toast } from 'react-hot-toast';
+
+export default function AddressInput({ label, value, onChange }) {
+  const [query, setQuery] = useState(value.street || '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Debounced fetch
+  const fetchSuggestions = debounce(async (q) => {
+    if (!q) return setSuggestions([]);
+    setIsLoading(true);
+    try {
+      const results = await autocompleteAddress(q);
+      setSuggestions(results);
+    } catch (e) {
+      console.error(e);
+      toast.error(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, 300);
+
+  useEffect(() => {
+    fetchSuggestions(query);
+  }, [query]);
+
+  const handleSelect = async (street) => {
+    setQuery(street);
+    setSuggestions([]);
+    try {
+      const validated = await validateAddress({ ...value, street });
+      onChange(validated);
+      setError('');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <div className="w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
+      <Combobox value={query} onChange={handleSelect}>
+        <div className="relative">
+          <Combobox.Input
+            className="w-full border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            displayValue={(street) => street}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Start typing address..."
+          />
+          <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
+            {isLoading ? '⏳' : '🔍'}
+          </Combobox.Button>
+          <Transition
+            as={Fragment}
+            leave="transition ease-in duration-100"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <Combobox.Options className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-auto">
+              {suggestions.length === 0 && query && !isLoading ? (
+                <div className="p-2 text-gray-500">No suggestions found.</div>
+              ) : (
+                suggestions.map((s, idx) => (
+                  <Combobox.Option
+                    key={idx}
+                    value={s}
+                    className={({ active }) =>
+                      `cursor-pointer select-none p-2 ${
+                        active ? 'bg-blue-100' : ''
+                      }`
+                    }
+                  >
+                    {s}
+                  </Combobox.Option>
+                ))
+              )}
+            </Combobox.Options>
+          </Transition>
+        </div>
+      </Combobox>
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}
+3. src/utils/pdfUtils.js
+js
+Copy
+Edit
+// src/utils/pdfUtils.js
+import axios from 'axios';
+
+/**
+ * Fetch a PDF blob from a given endpoint.
+ * @param {string} endpoint - e.g. '/api/pdfs/order-confirmation'
+ * @param {string} orderId
+ * @returns {Promise<Blob>}
+ */
+export async function fetchPdf(endpoint, orderId) {
+  const response = await axios.get(endpoint, {
+    params: { orderId },
+    responseType: 'blob', // ensure we get binary data
+  });
+  return response.data;
+}
+
+/**
+ * Trigger browser download of a Blob as filename.
+ * @param {Blob} blob
+ * @param {string} filename
+ */
+export function downloadPdf(blob, filename) {
+  // Create a temporary object URL for the blob
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  // Clean up
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+4. src/components/PdfViewer.jsx
+jsx
+Copy
+Edit
+// src/components/PdfViewer.jsx
+import { useState, useEffect } from 'react';
+import { fetchPdf, downloadPdf } from '../utils/pdfUtils';
+import { toast } from 'react-hot-toast';
+
+export default function PdfViewer({ endpoint, orderId, filename }) {
+  const [pdfBlob, setPdfBlob] = useState(null);
+  const [objectUrl, setObjectUrl] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const blob = await fetchPdf(endpoint, orderId);
+        setPdfBlob(blob);
+        setObjectUrl(URL.createObjectURL(blob));
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to load PDF');
+      }
+    })();
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [endpoint, orderId]);
+
+  if (!pdfBlob) {
+    return <p>Loading PDF…</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <iframe
+        src={objectUrl}
+        title="PDF Preview"
+        className="w-full h-[80vh] border rounded"
+      />
+      <button
+        onClick={() => downloadPdf(pdfBlob, filename)}
+        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        Download PDF
+      </button>
+    </div>
+  );
+}
+5. src/utils/communicationUtils.js
+js
+Copy
+Edit
+// src/utils/communicationUtils.js
+import axios from 'axios';
+
+/**
+ * Send order confirmation via email or SMS.
+ * @param {string} orderId
+ * @param {'email'|'sms'} via
+ */
+export async function sendOrderConfirmation(orderId, via) {
+  await axios.post('/api/communications/order-confirmation', {
+    orderId,
+    via,
+  });
+}
+
+/**
+ * Send shipping notification via email or SMS.
+ * @param {string} orderId
+ * @param {'email'|'sms'} via
+ */
+export async function sendShippingNotification(orderId, via) {
+  await axios.post('/api/communications/shipping-notification', {
+    orderId,
+    via,
+  });
+}
+6. src/components/CommunicationPanel.jsx
+jsx
+Copy
+Edit
+// src/components/CommunicationPanel.jsx
+import { useState } from 'react';
+import {
+  sendOrderConfirmation,
+  sendShippingNotification,
+} from '../utils/communicationUtils';
+import { toast } from 'react-hot-toast';
+
+export default function CommunicationPanel({ orderId, customerPreferences }) {
+  const [via, setVia] = useState(customerPreferences.preferredMethod);
+
+  const handleSend = async (type) => {
+    try {
+      if (type === 'confirmation') {
+        await sendOrderConfirmation(orderId, via);
+      } else {
+        await sendShippingNotification(orderId, via);
+      }
+      toast.success(
+        `${type === 'confirmation' ? 'Confirmation' : 'Shipping note'} sent via ${
+          via.toUpperCase()
+        }`
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to send message');
+    }
+  };
+
+  return (
+    <div className="p-4 border rounded space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Send via
+        </label>
+        <select
+          value={via}
+          onChange={(e) => setVia(e.target.value)}
+          className="w-full border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="email">Email ({customerPreferences.email})</option>
+          <option value="sms">SMS ({customerPreferences.phone})</option>
+        </select>
+      </div>
+      <div className="flex space-x-2">
+        <button
+          onClick={() => handleSend('confirmation')}
+          className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Send Confirmation
+        </button>
+        <button
+          onClick={() => handleSend('shipping')}
+          className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+        >
+          Send Shipping Notice
+        </button>
+      </div>
+    </div>
+  );
+}
+7. Usage Snippets
+Address entry in Order Entry form
+jsx
+Copy
+Edit
+import AddressInput from '../components/AddressInput';
+
+// … inside your form/component
+<AddressInput
+  label="Shipping Address"
+  value={shippingAddress}
+  onChange={setShippingAddress}
+/>
+PDF preview/download
+jsx
+Copy
+Edit
+import PdfViewer from '../components/PdfViewer';
+
+// Confirmation preview
+<PdfViewer
+  endpoint="/api/pdfs/order-confirmation"
+  orderId={orderId}
+  filename={`${orderId}-confirmation.pdf`}
+/>
+
+// Packing slip preview
+<PdfViewer
+  endpoint="/api/pdfs/packing-slip"
+  orderId={orderId}
+  filename={`${orderId}-packing-slip.pdf`}
+/>
+Communications panel
+jsx
+Copy
+Edit
+import CommunicationPanel from '../components/CommunicationPanel';
+
+// … inside your order detail page
+<CommunicationPanel
+  orderId={orderId}
+  customerPreferences={customer.preferences}
+/>
+8. Dependencies
+bash
+Copy
+Edit
+npm install axios react-hot-toast @headlessui/react lodash
+Next Steps in Replit
+
+Paste the above code into your code-gen model.
+
+Copy generated files into src/utils & src/components.
+
+Add routes/UI slots for address entry, PDF preview & communications in your order pages.
+
+Ensure your backend supports /api/address/*, /api/pdfs/*, /api/communications/*.

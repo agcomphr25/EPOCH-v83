@@ -1,0 +1,13 @@
+Fetching SmartyStreets suggestions for: 6
+SimpleAddressInput.tsx:37 Fetching SmartyStreets suggestions for: 65
+addressUtils.ts:23 SmartyStreets autocomplete response: {suggestions: Array(10)}
+SimpleAddressInput.tsx:39 SmartyStreets suggestions received: (10) ['6 Andrews St, North Charleston SC', '6 Eucalyptus Ave, North Charleston SC', '6 Short Aly, North Charleston SC', '6 Stratton Dr, North Charleston SC', '6 1 Dallas Ct, Angleton TX', '6 1 Dr, Elwood NE', '6 1/2 10th St, Nashua NH', '-64 SW Sherman St, Portland OR', '-615 SW Palatine Hill Rd, Portland OR', '-650 SW Gaines St, Portland OR']
+SimpleAddressInput.tsx:37 Fetching SmartyStreets suggestions for: 654
+addressUtils.ts:23 SmartyStreets autocomplete response: {suggestions: Array(8)}
+SimpleAddressInput.tsx:39 SmartyStreets suggestions received: (8) ['65 Hunters Ridge Ln, North Charleston SC', '65 Stratton Dr, North Charleston SC', '6518 Dorchester Rd, North Charleston SC', '6-5 Calle 10, Carolina PR', '65 1/2 13th St, Elkins WV', '65 1/2 2nd Ave, Gloversville NY', '6-5 Ave Ramirez de Arellano, Guaynabo PR', '6-5 Aspen Way, Doylestown PA']
+addressUtils.ts:23 SmartyStreets autocomplete response: {suggestions: Array(9)}
+SimpleAddressInput.tsx:39 SmartyStreets suggestions received: (9) ['6540 Rivers Ave, North Charleston SC', '6541 Rivers Ave, North Charleston SC', '65-4 Calle 53, Carolina PR', '6543 Fain St Ste B, North Charleston SC', '654 1/2 11th St NW, Grand Rapids MI', '654 1/2 16th Ave, East Moline IL', '654 1/2 1st St W, Havre MT', '65-4 Azalea Way, Reading PA', '65-4 Calle 52, Bayamon PR']
+SimpleAddressInput.tsx:37 Fetching SmartyStreets suggestions for: 6543 Fain St Ste B, North Charleston SC
+addressUtils.ts:23 SmartyStreets autocomplete response: {suggestions: Array(2)}
+SimpleAddressInput.tsx:39 SmartyStreets suggestions received: (2) ['6543 Fain St, North Charleston SC', '6543 Fain St Ste B, North Charleston SC']
+addressUtils.ts:70 Error validating address: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON

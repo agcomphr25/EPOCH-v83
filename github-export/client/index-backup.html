@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EPOCH v8 - Manufacturing ERP</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .header {
+        background: #1d4ed8;
+        color: white;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+      }
+      .nav-item {
+        display: inline-block;
+        margin: 10px;
+        padding: 10px 20px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #374151;
+        border: 1px solid #d1d5db;
+      }
+      .nav-item:hover {
+        background: #e5e7eb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>EPOCH v8 - Manufacturing ERP System</h1>
+      <p>Pure HTML fallback - React runtime error detected</p>
+    </div>
+    
+    <nav>
+      <a href="#" class="nav-item">Order Entry</a>
+      <a href="#" class="nav-item">All Orders</a>
+      <a href="#" class="nav-item">Draft Orders</a>
+      <a href="#" class="nav-item">Feature Manager</a>
+      <a href="#" class="nav-item">Inventory</a>
+    </nav>
+    
+    <div>
+      <h2>System Status</h2>
+      <p>React runtime error preventing normal operation. Please check:</p>
+      <ul>
+        <li>Browser console for detailed error messages</li>
+        <li>React version compatibility</li>
+        <li>Vite configuration</li>
+      </ul>
+    </div>
+    
+    <script>
+      console.log("Pure HTML fallback loaded");
+      
+      // Test if React is available
+      if (typeof React !== 'undefined') {
+        console.log("React is available:", React);
+      } else {
+        console.error("React is not available");
+      }
+      
+      // Add click handlers
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          alert('React application is not functional. Please resolve React runtime error.');
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,251 @@
+Table Name,Column Name,Data Type,Full Data Type,Is Nullable,Default Value,Is Primary Key,Foreign Key Reference,Column Position,Table Purpose
+checklist_items,id,integer,"integer(32,0)",NO,nextval('checklist_items_id_seq'::regclass),YES,,1,Employee daily checklist items and tasks
+checklist_items,employee_id,text,text,NO,,NO,,2,Reference to employee
+checklist_items,date,text,text,NO,,NO,,3,Date of checklist
+checklist_items,label,text,text,NO,,NO,,4,Checklist item description
+checklist_items,type,text,text,NO,,NO,,5,Type of checklist item (checkbox/dropdown/text)
+checklist_items,value,text,text,YES,,NO,,6,Value/response for checklist item
+checklist_items,options,ARRAY,ARRAY,YES,,NO,,7,Available options for dropdown items
+checklist_items,required,boolean,boolean,YES,false,NO,,8,Whether item is required
+checklist_items,created_at,timestamp without time zone,timestamp without time zone,YES,CURRENT_TIMESTAMP,NO,,9,Record creation timestamp
+checklist_items,updated_at,timestamp without time zone,timestamp without time zone,YES,CURRENT_TIMESTAMP,NO,,10,Record update timestamp
+communication_logs,id,integer,"integer(32,0)",NO,nextval('communication_logs_id_seq'::regclass),YES,,1,Customer communication tracking
+communication_logs,order_id,text,text,NO,,NO,,2,Related order ID
+communication_logs,message_type,text,text,NO,,NO,,3,Type of communication (email/SMS)
+communication_logs,recipient,text,text,NO,,NO,,4,Recipient contact information
+communication_logs,message,text,text,NO,,NO,,5,Message content
+communication_logs,status,text,text,YES,'pending'::text,NO,,6,Delivery status
+communication_logs,sent_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,7,When message was sent
+communication_logs,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,8,Record creation timestamp
+csv_data,id,integer,"integer(32,0)",NO,nextval('csv_data_id_seq'::regclass),YES,,1,Uploaded CSV file data storage
+csv_data,file_name,text,text,NO,,NO,,2,Original filename
+csv_data,data,jsonb,jsonb,NO,,NO,,3,CSV data as JSON
+csv_data,uploaded_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,4,Upload timestamp
+customer_addresses,id,integer,"integer(32,0)",NO,nextval('customer_addresses_id_seq'::regclass),YES,,1,Customer shipping/billing addresses
+customer_addresses,customer_id,integer,"integer(32,0)",NO,,NO,,2,Reference to customer
+customer_addresses,street_address,text,text,NO,,NO,,3,Street address
+customer_addresses,city,text,text,NO,,NO,,4,City
+customer_addresses,state,text,text,NO,,NO,,5,State/Province
+customer_addresses,zip_code,text,text,NO,,NO,,6,ZIP/Postal code
+customer_addresses,country,text,text,YES,'USA'::text,NO,,7,Country
+customer_addresses,address_type,text,text,YES,'billing'::text,NO,,8,Address type (billing/shipping)
+customer_addresses,validated,boolean,boolean,YES,false,NO,,9,Address validation status
+customer_addresses,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,10,Record creation timestamp
+customer_addresses,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,11,Record update timestamp
+customer_types,id,integer,"integer(32,0)",NO,nextval('customer_types_id_seq'::regclass),YES,,1,Customer classification types
+customer_types,name,text,text,NO,,NO,,2,Customer type name
+customer_types,description,text,text,YES,,NO,,3,Type description
+customer_types,created_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,4,Record creation timestamp
+customers,id,integer,"integer(32,0)",NO,nextval('customers_id_seq'::regclass),YES,,1,Customer master records
+customers,name,text,text,NO,,NO,,2,Customer name
+customers,email,text,text,YES,,NO,,3,Email address
+customers,phone,text,text,YES,,NO,,4,Phone number
+customers,company,text,text,YES,,NO,,5,Company name
+customers,customer_type,text,text,YES,'standard'::text,NO,,6,Customer classification
+customers,notes,text,text,YES,,NO,,7,Customer notes
+customers,is_active,boolean,boolean,YES,true,NO,,8,Active status
+customers,created_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,9,Record creation timestamp
+customers,updated_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,10,Record update timestamp
+employees,id,integer,"integer(32,0)",NO,nextval('employees_id_seq'::regclass),YES,,1,Employee master records
+employees,name,text,text,NO,,NO,,2,Employee name
+employees,role,text,text,NO,,NO,,3,Job role/position
+employees,department,text,text,YES,,NO,,4,Department
+employees,is_active,boolean,boolean,YES,true,NO,,5,Active employment status
+employees,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Record creation timestamp
+employees,employee_code,text,text,YES,,NO,,7,Unique employee code
+enhanced_form_categories,id,integer,"integer(32,0)",NO,nextval('enhanced_form_categories_id_seq'::regclass),YES,,1,Categories for enhanced forms
+enhanced_form_categories,name,text,text,NO,,NO,,2,Category name
+enhanced_form_categories,description,text,text,YES,,NO,,3,Category description
+enhanced_form_categories,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,4,Record creation timestamp
+enhanced_form_categories,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,5,Record update timestamp
+enhanced_form_submissions,id,integer,"integer(32,0)",NO,nextval('enhanced_form_submissions_id_seq'::regclass),YES,,1,Submitted enhanced form data
+enhanced_form_submissions,form_id,integer,"integer(32,0)",NO,,NO,enhanced_forms(id),2,Reference to enhanced form
+enhanced_form_submissions,version,integer,"integer(32,0)",NO,,NO,,3,Form version used
+enhanced_form_submissions,data,jsonb,jsonb,NO,'{}'::jsonb,NO,,4,Submitted form data
+enhanced_form_submissions,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,5,Submission timestamp
+enhanced_form_versions,id,integer,"integer(32,0)",NO,nextval('enhanced_form_versions_id_seq'::regclass),YES,,1,Enhanced form version history
+enhanced_form_versions,form_id,integer,"integer(32,0)",NO,,NO,enhanced_forms(id),2,Reference to enhanced form
+enhanced_form_versions,version,integer,"integer(32,0)",NO,,NO,,3,Version number
+enhanced_form_versions,schema_config,jsonb,jsonb,NO,'{}'::jsonb,NO,,4,Form schema configuration
+enhanced_form_versions,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,5,Version creation timestamp
+enhanced_forms,id,integer,"integer(32,0)",NO,nextval('enhanced_forms_id_seq'::regclass),YES,,1,Enhanced dynamic form definitions
+enhanced_forms,name,text,text,NO,,NO,,2,Form name
+enhanced_forms,description,text,text,YES,,NO,,3,Form description
+enhanced_forms,category_id,integer,"integer(32,0)",YES,,NO,enhanced_form_categories(id),4,Reference to form category
+enhanced_forms,schema_config,jsonb,jsonb,NO,'{}'::jsonb,NO,,5,Form schema configuration
+enhanced_forms,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Record creation timestamp
+enhanced_forms,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,7,Record update timestamp
+feature_categories,id,text,text,NO,,YES,,1,Product feature categories
+feature_categories,name,text,text,NO,,NO,,2,Category name
+feature_categories,display_name,text,text,NO,,NO,,3,Display name
+feature_categories,sort_order,integer,"integer(32,0)",YES,0,NO,,4,Display sort order
+feature_categories,is_active,boolean,boolean,YES,true,NO,,5,Active status
+feature_categories,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Record creation timestamp
+feature_categories,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,7,Record update timestamp
+feature_sub_categories,id,text,text,NO,,YES,,1,Product feature sub-categories
+feature_sub_categories,name,text,text,NO,,NO,,2,Sub-category name
+feature_sub_categories,display_name,text,text,NO,,NO,,3,Display name
+feature_sub_categories,category_id,text,text,YES,,NO,feature_categories(id),4,Parent category reference
+feature_sub_categories,sort_order,integer,"integer(32,0)",YES,0,NO,,5,Display sort order
+feature_sub_categories,is_active,boolean,boolean,YES,true,NO,,6,Active status
+feature_sub_categories,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,7,Record creation timestamp
+feature_sub_categories,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,8,Record update timestamp
+feature_sub_categories,price,real,real(24),YES,0,NO,,9,Sub-category base price
+features,id,text,text,NO,,YES,,1,Product features/options
+features,name,text,text,NO,,NO,,2,Feature name
+features,display_name,text,text,NO,,NO,,3,Display name
+features,type,text,text,NO,,NO,,4,Input type (dropdown/text/number/etc)
+features,required,boolean,boolean,YES,false,NO,,5,Required field status
+features,placeholder,text,text,YES,,NO,,6,Input placeholder text
+features,options,json,json,YES,,NO,,7,Available options for dropdowns
+features,validation,json,json,YES,,NO,,8,Validation rules
+features,category,text,text,YES,,NO,feature_categories(id),9,Parent category reference
+features,sort_order,integer,"integer(32,0)",YES,0,NO,,10,Display sort order
+features,is_active,boolean,boolean,YES,true,NO,,11,Active status
+features,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,12,Record creation timestamp
+features,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,13,Record update timestamp
+features,sub_category,text,text,YES,,NO,feature_sub_categories(id),14,Sub-category reference
+features,price,real,real(24),YES,0,NO,,15,Feature price
+form_submissions,id,integer,"integer(32,0)",NO,nextval('form_submissions_id_seq'::regclass),YES,,1,Basic form submission data
+form_submissions,form_id,integer,"integer(32,0)",NO,,NO,forms(id),2,Reference to form
+form_submissions,data,jsonb,jsonb,NO,,NO,,3,Submitted form data
+form_submissions,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,4,Submission timestamp
+forms,id,integer,"integer(32,0)",NO,nextval('forms_id_seq'::regclass),YES,,1,Basic form definitions
+forms,name,text,text,NO,,NO,,2,Form name
+forms,description,text,text,YES,,NO,,3,Form description
+forms,fields,jsonb,jsonb,NO,'[]'::jsonb,NO,,4,Form field definitions
+forms,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,5,Record creation timestamp
+forms,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Record update timestamp
+inventory_items,id,integer,"integer(32,0)",NO,nextval('inventory_items_id_seq'::regclass),YES,,1,Inventory item master records
+inventory_items,code,text,text,NO,,NO,,2,Unique item code
+inventory_items,name,text,text,NO,,NO,,3,Item name
+inventory_items,description,text,text,YES,,NO,,4,Item description
+inventory_items,category,text,text,YES,,NO,,5,Item category
+inventory_items,on_hand,integer,"integer(32,0)",YES,0,NO,,6,Quantity on hand
+inventory_items,committed,integer,"integer(32,0)",YES,0,NO,,7,Committed quantity
+inventory_items,reorder_point,integer,"integer(32,0)",YES,0,NO,,8,Reorder threshold
+inventory_items,is_active,boolean,boolean,YES,true,NO,,9,Active status
+inventory_items,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,10,Record creation timestamp
+inventory_items,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,11,Record update timestamp
+inventory_scans,id,integer,"integer(32,0)",NO,nextval('inventory_scans_id_seq'::regclass),YES,,1,Inventory scanning transactions
+inventory_scans,item_code,text,text,NO,,NO,,2,Scanned item code
+inventory_scans,expiration_date,date,date,YES,,NO,,3,Product expiration date
+inventory_scans,manufacture_date,date,date,YES,,NO,,4,Product manufacture date
+inventory_scans,lot_number,text,text,YES,,NO,,5,Lot number
+inventory_scans,batch_number,text,text,YES,,NO,,6,Batch number
+inventory_scans,technician_id,text,text,YES,,NO,,7,Scanning technician
+inventory_scans,scanned_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,8,Scan timestamp
+inventory_scans,quantity,integer,"integer(32,0)",NO,1,NO,,9,Scanned quantity
+maintenance_logs,id,integer,"integer(32,0)",NO,nextval('maintenance_logs_id_seq'::regclass),YES,,1,Equipment maintenance completion logs
+maintenance_logs,schedule_id,integer,"integer(32,0)",NO,,NO,maintenance_schedules(id),2,Reference to maintenance schedule
+maintenance_logs,completed_at,timestamp with time zone,timestamp with time zone,NO,,NO,,3,Maintenance completion time
+maintenance_logs,completed_by,text,text,YES,,NO,,4,Person who completed maintenance
+maintenance_logs,notes,text,text,YES,,NO,,5,Maintenance notes
+maintenance_logs,next_due_date,timestamp with time zone,timestamp with time zone,YES,,NO,,6,Next scheduled maintenance
+maintenance_logs,created_at,timestamp with time zone,timestamp with time zone,YES,now(),NO,,7,Record creation timestamp
+maintenance_schedules,id,integer,"integer(32,0)",NO,nextval('maintenance_schedules_id_seq'::regclass),YES,,1,Equipment maintenance schedules
+maintenance_schedules,equipment,text,text,NO,,NO,,2,Equipment name/identifier
+maintenance_schedules,frequency,text,text,NO,,NO,,3,Maintenance frequency
+maintenance_schedules,start_date,timestamp with time zone,timestamp with time zone,NO,,NO,,4,Schedule start date
+maintenance_schedules,description,text,text,YES,,NO,,5,Maintenance description
+maintenance_schedules,is_active,boolean,boolean,YES,true,NO,,6,Active schedule status
+maintenance_schedules,created_at,timestamp with time zone,timestamp with time zone,YES,now(),NO,,7,Record creation timestamp
+onboarding_docs,id,integer,"integer(32,0)",NO,nextval('onboarding_docs_id_seq'::regclass),YES,,1,Employee onboarding documents
+onboarding_docs,employee_id,text,text,NO,,NO,,2,Employee reference
+onboarding_docs,title,text,text,NO,,NO,,3,Document title
+onboarding_docs,url,text,text,NO,,NO,,4,Document URL/path
+onboarding_docs,signed,boolean,boolean,YES,false,NO,,5,Signature status
+onboarding_docs,signed_at,timestamp without time zone,timestamp without time zone,YES,,NO,,6,Signature timestamp
+onboarding_docs,signature_data_url,text,text,YES,,NO,,7,Digital signature data
+onboarding_docs,created_at,timestamp without time zone,timestamp without time zone,YES,CURRENT_TIMESTAMP,NO,,8,Record creation timestamp
+onboarding_docs,updated_at,timestamp without time zone,timestamp without time zone,YES,CURRENT_TIMESTAMP,NO,,9,Record update timestamp
+order_drafts,id,integer,"integer(32,0)",NO,nextval('order_drafts_id_seq'::regclass),YES,,1,Manufacturing order drafts and completed orders
+order_drafts,order_id,text,text,NO,,NO,,2,Unique order identifier
+order_drafts,order_date,timestamp without time zone,timestamp without time zone,NO,,NO,,3,Order date
+order_drafts,due_date,timestamp without time zone,timestamp without time zone,NO,,NO,,4,Order due date
+order_drafts,customer_id,text,text,YES,,NO,,5,Customer reference
+order_drafts,customer_po,text,text,YES,,NO,,6,Customer purchase order
+order_drafts,fb_order_number,text,text,YES,,NO,,7,Facebook order number
+order_drafts,agr_order_details,text,text,YES,,NO,,8,AGR order details
+order_drafts,model_id,text,text,YES,,NO,,9,Stock model reference
+order_drafts,handedness,text,text,YES,,NO,,10,Product handedness (Left/Right)
+order_drafts,features,jsonb,jsonb,YES,,NO,,11,Selected product features
+order_drafts,feature_quantities,jsonb,jsonb,YES,,NO,,12,Feature quantities
+order_drafts,discount_code,text,text,YES,,NO,,13,Applied discount code
+order_drafts,shipping,real,real(24),YES,0,NO,,14,Shipping cost
+order_drafts,status,text,text,YES,'DRAFT'::text,NO,,15,Order status
+order_drafts,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,16,Record creation timestamp
+order_drafts,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,17,Record update timestamp
+order_drafts,shank_length,text,text,YES,,NO,,18,Product shank length
+orders,id,integer,"integer(32,0)",NO,nextval('orders_id_seq'::regclass),YES,,1,Legacy orders table
+orders,order_id,text,text,NO,,NO,,2,Order identifier
+orders,customer,text,text,NO,,NO,,3,Customer name
+orders,product,text,text,NO,,NO,,4,Product name
+orders,quantity,integer,"integer(32,0)",NO,,NO,,5,Order quantity
+orders,status,text,text,NO,,NO,,6,Order status
+orders,date,timestamp without time zone,timestamp without time zone,NO,,NO,,7,Order date
+pdf_documents,id,integer,"integer(32,0)",NO,nextval('pdf_documents_id_seq'::regclass),YES,,1,Generated PDF documents
+pdf_documents,order_id,text,text,NO,,NO,,2,Related order ID
+pdf_documents,document_type,text,text,NO,,NO,,3,Document type (invoice/packing slip/etc)
+pdf_documents,file_url,text,text,NO,,NO,,4,File URL/path
+pdf_documents,file_size,integer,"integer(32,0)",YES,,NO,,5,File size in bytes
+pdf_documents,generated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Generation timestamp
+pdf_documents,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,7,Record creation timestamp
+persistent_discounts,id,integer,"integer(32,0)",NO,nextval('persistent_discounts_id_seq'::regclass),YES,,1,Long-term customer discount rates
+persistent_discounts,customer_type_id,integer,"integer(32,0)",NO,,NO,customer_types(id),2,Customer type reference
+persistent_discounts,percent,integer,"integer(32,0)",YES,,NO,,3,Percentage discount
+persistent_discounts,is_active,integer,"integer(32,0)",NO,1,NO,,5,Active status
+persistent_discounts,created_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,6,Record creation timestamp
+persistent_discounts,updated_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,7,Record update timestamp
+persistent_discounts,name,text,text,NO,,NO,,8,Discount name
+persistent_discounts,description,text,text,YES,,NO,,9,Discount description
+persistent_discounts,fixed_amount,integer,"integer(32,0)",YES,,NO,,10,Fixed amount discount (cents)
+qc_definitions,id,integer,"integer(32,0)",NO,nextval('qc_definitions_id_seq'::regclass),YES,,1,Quality control check definitions
+qc_definitions,line,text,text,NO,,NO,,2,Production line (P1/P2)
+qc_definitions,department,text,text,NO,,NO,,3,Department
+qc_definitions,final,boolean,boolean,YES,false,NO,,4,Final inspection flag
+qc_definitions,key,text,text,NO,,NO,,5,Check identifier key
+qc_definitions,label,text,text,NO,,NO,,6,Check label/description
+qc_definitions,type,text,text,NO,,NO,,7,Check type (checkbox/number/text)
+qc_definitions,required,boolean,boolean,YES,false,NO,,8,Required check flag
+qc_definitions,sort_order,integer,"integer(32,0)",YES,0,NO,,9,Display sort order
+qc_definitions,is_active,boolean,boolean,YES,true,NO,,10,Active status
+qc_definitions,created_at,timestamp with time zone,timestamp with time zone,YES,now(),NO,,11,Record creation timestamp
+qc_submissions,id,integer,"integer(32,0)",NO,nextval('qc_submissions_id_seq'::regclass),YES,,1,Quality control check submissions
+qc_submissions,order_id,text,text,NO,,NO,,2,Related order ID
+qc_submissions,line,text,text,NO,,NO,,3,Production line
+qc_submissions,department,text,text,NO,,NO,,4,Department
+qc_submissions,sku,text,text,NO,,NO,,5,Product SKU
+qc_submissions,final,boolean,boolean,YES,false,NO,,6,Final inspection flag
+qc_submissions,data,jsonb,jsonb,NO,,NO,,7,QC check results data
+qc_submissions,signature,text,text,YES,,NO,,8,Digital signature
+qc_submissions,summary,text,text,YES,,NO,,9,PASS/FAIL summary
+qc_submissions,status,text,text,YES,'pending'::text,NO,,10,Submission status
+qc_submissions,due_date,timestamp with time zone,timestamp with time zone,YES,,NO,,11,Due date
+qc_submissions,submitted_at,timestamp with time zone,timestamp with time zone,YES,now(),NO,,12,Submission timestamp
+qc_submissions,submitted_by,text,text,YES,,NO,,13,Submitted by user
+short_term_sales,id,integer,"integer(32,0)",NO,nextval('short_term_sales_id_seq'::regclass),YES,,1,Temporary sales/promotions
+short_term_sales,name,text,text,NO,,NO,,2,Sale name
+short_term_sales,percent,integer,"integer(32,0)",NO,,NO,,3,Discount percentage
+short_term_sales,start_date,timestamp without time zone,timestamp without time zone,NO,,NO,,4,Sale start date
+short_term_sales,end_date,timestamp without time zone,timestamp without time zone,NO,,NO,,5,Sale end date
+short_term_sales,is_active,integer,"integer(32,0)",NO,1,NO,,6,Active status
+short_term_sales,created_at,timestamp without time zone,timestamp without time zone,NO,now(),NO,,7,Record creation timestamp
+stock_models,id,text,text,NO,,YES,,1,Product stock model definitions
+stock_models,name,text,text,NO,,NO,,2,Model name
+stock_models,display_name,text,text,NO,,NO,,3,Display name
+stock_models,price,real,real(24),NO,,NO,,4,Base price
+stock_models,description,text,text,YES,,NO,,5,Model description
+stock_models,is_active,boolean,boolean,YES,true,NO,,6,Active status
+stock_models,sort_order,integer,"integer(32,0)",YES,0,NO,,7,Display sort order
+stock_models,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,8,Record creation timestamp
+stock_models,updated_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,9,Record update timestamp
+time_clock_entries,id,integer,"integer(32,0)",NO,nextval('time_clock_entries_id_seq'::regclass),YES,,1,Employee time clock entries
+time_clock_entries,employee_id,text,text,NO,,NO,,2,Employee reference
+time_clock_entries,clock_in,timestamp without time zone,timestamp without time zone,YES,,NO,,3,Clock in time
+time_clock_entries,clock_out,timestamp without time zone,timestamp without time zone,YES,,NO,,4,Clock out time
+time_clock_entries,date,date,date,NO,,NO,,5,Work date
+time_clock_entries,created_at,timestamp without time zone,timestamp without time zone,YES,now(),NO,,6,Record creation timestamp
+users,id,integer,"integer(32,0)",NO,nextval('users_id_seq'::regclass),YES,,1,System user accounts
+users,username,text,text,NO,,NO,,2,Username
+users,password,text,text,NO,,NO,,3,Encrypted password

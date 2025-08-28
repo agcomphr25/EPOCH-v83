@@ -1,0 +1,48 @@
+chunk-Z43CC2WG.js?v=0b303021:340 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-Z43CC2WG.js?v=0b303021:340
+commitHookEffectListMount @ chunk-276SZO74.js?v=0b303021:16915
+commitPassiveMountOnFiber @ chunk-276SZO74.js?v=0b303021:18156
+commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=0b303021:18129
+commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=0b303021:18119
+commitPassiveMountEffects @ chunk-276SZO74.js?v=0b303021:18109
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=0b303021:19490
+flushPassiveEffects @ chunk-276SZO74.js?v=0b303021:19447
+commitRootImpl @ chunk-276SZO74.js?v=0b303021:19416
+commitRoot @ chunk-276SZO74.js?v=0b303021:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=0b303021:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=0b303021:9119
+(anonymous) @ chunk-276SZO74.js?v=0b303021:18627Understand this warning
+chunk-Z43CC2WG.js?v=0b303021:340 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-Z43CC2WG.js?v=0b303021:340
+commitHookEffectListMount @ chunk-276SZO74.js?v=0b303021:16915
+invokePassiveEffectMountInDEV @ chunk-276SZO74.js?v=0b303021:18324
+invokeEffectsInDev @ chunk-276SZO74.js?v=0b303021:19701
+commitDoubleInvokeEffectsInDEV @ chunk-276SZO74.js?v=0b303021:19686
+flushPassiveEffectsImpl @ chunk-276SZO74.js?v=0b303021:19503
+flushPassiveEffects @ chunk-276SZO74.js?v=0b303021:19447
+commitRootImpl @ chunk-276SZO74.js?v=0b303021:19416
+commitRoot @ chunk-276SZO74.js?v=0b303021:19277
+performSyncWorkOnRoot @ chunk-276SZO74.js?v=0b303021:18895
+flushSyncCallbacks @ chunk-276SZO74.js?v=0b303021:9119
+(anonymous) @ chunk-276SZO74.js?v=0b303021:18627Understand this warning
+queryClient.ts:53  POST https://c12e21b1-5fd6-431c-9fb3-816da6ed479c-00-vprztzvz79bh.worf.replit.dev/api/communications/email 400 (Bad Request)
+apiRequest @ queryClient.ts:53
+handleSendEmail @ CommunicationCompose.tsx:57
+callCallback2 @ chunk-276SZO74.js?v=0b303021:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=0b303021:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=0b303021:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=0b303021:3736
+executeDispatch @ chunk-276SZO74.js?v=0b303021:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=0b303021:7034
+processDispatchQueue @ chunk-276SZO74.js?v=0b303021:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=0b303021:7051
+(anonymous) @ chunk-276SZO74.js?v=0b303021:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=0b303021:18913
+batchedUpdates @ chunk-276SZO74.js?v=0b303021:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=0b303021:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=0b303021:5478
+dispatchEvent @ chunk-276SZO74.js?v=0b303021:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=0b303021:5449Understand this error
+main.tsx:33 Email send error: Error: SendGrid error
+    at apiRequest (queryClient.ts:69:11)
+    at async handleSendEmail (CommunicationCompose.tsx:57:7)

@@ -1,0 +1,172 @@
+1. Verify your network response
+Open DevTools → Network
+
+Click “Edit” on a draft and look at the GET /api/orders/123 request.
+
+Inspect the response body — is it literally the object you expect, or is it wrapped in something like { data: { … } }?
+
+If your API returns, for example:
+
+json
+Copy
+Edit
+{ 
+  "data": {
+    "orderId": "123",
+    "orderDate": "2025-07-12T14:23:00Z",
+    "customerName": "...",
+    "modelName": "...",
+    "total": 999.99,
+    "status": "DRAFT"
+  }
+}
+then resp.data in Axios is that outer object, and you actually need to pull out resp.data.data.
+
+2. Add debug logging & adapt to your payload
+Update your fetch logic to log the raw response and then map into your form:
+
+jsx
+Copy
+Edit
+// inside OrderEntryPage.jsx...
+
+useEffect(() => {
+  if (!orderId) return;
+
+  const fetchOrder = async () => {
+    setLoading(true);
+    try {
+      const resp = await axios.get(`/api/orders/${orderId}`);
+      console.log('RAW /api/orders/:id response:', resp);
+      // adapt here if your backend nests under `data`
+      const o = resp.data.data ?? resp.data;
+
+      setForm({
+        orderDate: o.orderDate.split('T')[0],  // safe split for ISO timestamps
+        customerName: o.customerName,
+        modelName: o.modelName,
+        total: o.total.toString(),
+      });
+      setStatus(o.status);
+    } catch (err) {
+      console.error('fetchOrder error:', err);
+      toast.error('Failed to load order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchOrder();
+}, [orderId]);
+Why this helps
+console.log(resp) shows you exactly what Axios saw, so you can adjust your destructuring.
+
+resp.data.data ?? resp.data handles both flattened and nested responses.
+
+split('T')[0] is a bit more robust than slice(0,10).
+
+3. Ensure your route is matching
+Double-check that in your router you have:
+
+jsx
+Copy
+Edit
+<Routes>
+  <Route path="/orders/new"         element={<OrderEntryPage />} />
+  <Route path="/orders/edit/:orderId" element={<OrderEntryPage />} />
+  {/* ... */}
+</Routes>
+And your “Edit” link in the table is exactly:
+
+jsx
+Copy
+Edit
+<Link to={`/orders/edit/${order.orderId}`}>{order.orderId}</Link>
+A tiny typo here (e.g. forgetting /orders/) will mean your edit page never sees the orderId param.
+
+4. Full revised OrderEntryPage.jsx
+Here’s a self-contained version with the debug logging and flexible payload handling:
+
+jsx
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+export default function OrderEntryPage() {
+  const { orderId } = useParams();
+  const navigate    = useNavigate();
+
+  const [form, setForm]       = useState({ orderDate:'', customerName:'', modelName:'', total:'' });
+  const [status, setStatus]   = useState('DRAFT');
+  const [loading, setLoading] = useState(!!orderId);
+  const [saving, setSaving]   = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+
+  useEffect(() => {
+    if (!orderId) return;
+
+    const fetchOrder = async () => {
+      setLoading(true);
+      try {
+        const resp = await axios.get(`/api/orders/${orderId}`);
+        console.log('RAW /api/orders/:id response:', resp);
+        const o = resp.data.data ?? resp.data;
+
+        setForm({
+          orderDate: o.orderDate.split('T')[0],
+          customerName: o.customerName,
+          modelName: o.modelName,
+          total: o.total.toString(),
+        });
+        setStatus(o.status);
+      } catch (err) {
+        console.error('fetchOrder error:', err);
+        toast.error('Failed to load order');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrder();
+  }, [orderId]);
+
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setForm(f => ({ ...f, [name]: value }));
+  };
+
+  // ... (handleSave, handleConfirm, handleFinalize unchanged) ...
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <svg className="animate-spin h-12 w-12 text-blue-600" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+      </div>
+    );
+  }
+
+  // ... (render form as before) ...
+}
+Next steps
+Reproduce: Try saving a draft, then click Edit.
+
+Open your console: Do you see the console.log('RAW …', resp) message?
+
+Inspect resp: Adjust the const o = resp.data.data ?? resp.data; line if your API uses a different nesting.
+
+This almost always solves the “blank form” issue. Let me know what you see in the console log or if the shape of your response is different!
+
+
+
+
+
+
+
+Ask ChatGPT

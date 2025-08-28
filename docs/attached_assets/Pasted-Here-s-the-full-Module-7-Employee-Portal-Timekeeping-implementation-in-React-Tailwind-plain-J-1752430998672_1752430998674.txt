@@ -1,0 +1,442 @@
+Here’s the full Module 7: Employee Portal & Timekeeping implementation in React + Tailwind + plain-JS. 🔨🤖🔧
+
+src/hooks/useTimeClock.js
+js
+Copy
+Edit
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+
+/**
+ * useTimeClock(employeeId: string)
+ * - Fetches current clock status from GET /api/timeclock?employeeId={employeeId}
+ * - Exposes:
+ *    { clockedIn, clockInTime, clockOutTime, clockIn(), clockOut() }
+ */
+export default function useTimeClock(employeeId) {
+  const [clockedIn, setClockedIn] = useState(false);
+  const [clockInTime, setClockInTime] = useState(null);
+  const [clockOutTime, setClockOutTime] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch current status
+  const refreshStatus = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`/api/timeclock?employeeId=${employeeId}`);
+      const { status, clockIn, clockOut } = res.data;
+      setClockedIn(status === 'IN');
+      setClockInTime(clockIn || null);
+      setClockOutTime(clockOut || null);
+    } catch (err) {
+      console.error('Failed to fetch timeclock status', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [employeeId]);
+
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  // Clock In
+  const clockIn = async () => {
+    try {
+      await axios.post('/api/timeclock', {
+        employeeId,
+        action: 'IN',
+        timestamp: new Date().toISOString(),
+      });
+      await refreshStatus(); // refresh after action
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  // Clock Out
+  const clockOut = async () => {
+    try {
+      await axios.post('/api/timeclock', {
+        employeeId,
+        action: 'OUT',
+        timestamp: new Date().toISOString(),
+      });
+      await refreshStatus(); // refresh after action
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  return {
+    clockedIn,
+    clockInTime,
+    clockOutTime,
+    clockIn,
+    clockOut,
+    loading,
+  };
+}
+src/components/TimeClock.jsx
+jsx
+Copy
+Edit
+import React from 'react';
+import useTimeClock from '../hooks/useTimeClock';
+import toast from 'react-hot-toast';
+
+export default function TimeClock({ employeeId, disableClockOut }) {
+  const {
+    clockedIn,
+    clockInTime,
+    clockOutTime,
+    clockIn,
+    clockOut,
+    loading,
+  } = useTimeClock(employeeId);
+
+  const handleClockIn = async () => {
+    try {
+      await clockIn();
+      toast.success('Clocked in successfully!');
+    } catch {
+      toast.error('Failed to clock in.');
+    }
+  };
+
+  const handleClockOut = async () => {
+    try {
+      await clockOut();
+      toast.success('Clocked out successfully!');
+    } catch {
+      toast.error('Failed to clock out.');
+    }
+  };
+
+  if (loading) return <p>Loading time clock…</p>;
+
+  return (
+    <div className="p-4 border rounded space-y-2">
+      {!clockedIn ? (
+        <button
+          onClick={handleClockIn}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+        >
+          Clock In
+        </button>
+      ) : (
+        <button
+          onClick={handleClockOut}
+          disabled={disableClockOut}
+          className={`px-4 py-2 rounded text-white 
+            ${disableClockOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+        >
+          Clock Out
+        </button>
+      )}
+      {clockedIn && clockInTime && (
+        <p>In since {new Date(clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+      )}
+      {!clockedIn && clockOutTime && (
+        <p>Out at {new Date(clockOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+      )}
+    </div>
+  );
+}
+src/components/OnboardingDocs.jsx
+jsx
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+export default function OnboardingDocs({ employeeId }) {
+  const [docs, setDocs] = useState([]);
+  const [signingDoc, setSigningDoc] = useState(null);
+  const [sigPad, setSigPad] = useState(null);
+
+  // Fetch docs on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get(`/api/onboarding-docs?employeeId=${employeeId}`);
+        setDocs(res.data);
+      } catch (err) {
+        console.error('Failed to load onboarding docs', err);
+      }
+    })();
+  }, [employeeId]);
+
+  const openSignModal = (doc) => {
+    setSigningDoc(doc);
+  };
+
+  const saveSignature = async () => {
+    if (!sigPad || sigPad.isEmpty()) {
+      toast.error('Please provide a signature.');
+      return;
+    }
+    const dataURL = sigPad.getTrimmedCanvas().toDataURL('image/png');
+    try {
+      await axios.post(`/api/onboarding-docs/${signingDoc.id}/sign`, {
+        signatureDataURL: dataURL,
+      });
+      // mark signed in state
+      setDocs((prev) =>
+        prev.map((d) =>
+          d.id === signingDoc.id ? { ...d, signed: true } : d
+        )
+      );
+      toast.success('Document signed!');
+      setSigningDoc(null);
+      sigPad.clear();
+    } catch {
+      toast.error('Failed to save signature.');
+    }
+  };
+
+  return (
+    <div className="space-y-4 p-4 border rounded">
+      <h2 className="text-xl font-semibold">Onboarding Documents</h2>
+      {docs.map((doc) => (
+        <div key={doc.id} className="flex items-center justify-between border-b pb-2">
+          <span>{doc.title}</span>
+          {doc.signed ? (
+            <a
+              href={doc.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              View PDF
+            </a>
+          ) : (
+            <button
+              onClick={() => openSignModal(doc)}
+              className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600"
+            >
+              Sign
+            </button>
+          )}
+        </div>
+      ))}
+
+      {/* Signature Modal */}
+      {signingDoc && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96 space-y-4">
+            <h3 className="text-lg font-medium">Sign: {signingDoc.title}</h3>
+            <SignatureCanvas
+              penColor="black"
+              canvasProps={{ className: 'border rounded w-full h-48' }}
+              ref={(ref) => setSigPad(ref)}
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setSigningDoc(null)}
+                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveSignature}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Save Signature
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+src/components/EmployeePortal.jsx
+jsx
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import TimeClock from './TimeClock';
+import OnboardingDocs from './OnboardingDocs';
+
+export default function EmployeePortal({ employeeId }) {
+  const [activeTab, setActiveTab] = useState('checklist');
+  const [checklist, setChecklist] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const today = new Date().toISOString().substr(0, 10); // YYYY-MM-DD
+
+  // Load daily checklist
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(
+          `/api/checklist?employeeId=${employeeId}&date=${today}`
+        );
+        setChecklist(res.data);
+      } catch (err) {
+        console.error('Failed to fetch checklist', err);
+        toast.error('Could not load checklist.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [employeeId, today]);
+
+  // Track form changes
+  const updateItem = (id, value) => {
+    setChecklist((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, value } : item
+      )
+    );
+  };
+
+  // Check required fields
+  const allComplete = checklist.every((item) =>
+    item.required ? Boolean(item.value) : true
+  );
+
+  // Save bulk
+  const saveChecklist = async () => {
+    try {
+      await axios.post('/api/checklist/complete', {
+        employeeId,
+        date: today,
+        items: checklist,
+      });
+      toast.success('Checklist saved!');
+    } catch {
+      toast.error('Failed to save.');
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6 p-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Employee Portal</h1>
+        <TimeClock employeeId={employeeId} disableClockOut={!allComplete} />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex space-x-4 border-b">
+        <button
+          onClick={() => setActiveTab('checklist')}
+          className={`pb-2 ${
+            activeTab === 'checklist'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-600'
+          }`}
+        >
+          Daily Checklist
+        </button>
+        <button
+          onClick={() => setActiveTab('onboarding')}
+          className={`pb-2 ${
+            activeTab === 'onboarding'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-600'
+          }`}
+        >
+          Onboarding Docs
+        </button>
+      </div>
+
+      {/* Content */}
+      {activeTab === 'checklist' ? (
+        <div className="space-y-4">
+          {loading ? (
+            <p>Loading checklist…</p>
+          ) : (
+            <>
+              {checklist.map((item) => (
+                <div key={item.id} className="flex items-center space-x-4">
+                  <label className="flex-1">
+                    {item.label}
+                    {item.required && <span className="text-red-500"> *</span>}
+                  </label>
+                  {item.type === 'checkbox' && (
+                    <input
+                      type="checkbox"
+                      checked={!!item.value}
+                      onChange={(e) =>
+                        updateItem(item.id, e.target.checked)
+                      }
+                      className="h-5 w-5"
+                    />
+                  )}
+                  {item.type === 'dropdown' && (
+                    <select
+                      value={item.value || ''}
+                      onChange={(e) =>
+                        updateItem(item.id, e.target.value)
+                      }
+                      className="border rounded p-1"
+                    >
+                      <option value="">Select...</option>
+                      {item.options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {item.type === 'text' && (
+                    <input
+                      type="text"
+                      value={item.value || ''}
+                      onChange={(e) =>
+                        updateItem(item.id, e.target.value)
+                      }
+                      className="border rounded p-1"
+                    />
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={saveChecklist}
+                disabled={!allComplete}
+                className={`mt-4 px-4 py-2 rounded text-white ${
+                  allComplete
+                    ? 'bg-blue-500 hover:bg-blue-600'
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Save Checklist
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <OnboardingDocs employeeId={employeeId} />
+      )}
+    </div>
+  );
+}
+Usage: /src/pages/EmployeePortalPage.jsx
+jsx
+Copy
+Edit
+import React from 'react';
+import EmployeePortal from '../components/EmployeePortal';
+
+export default function EmployeePortalPage() {
+  const employeeId = /* get from auth context or props */;
+  return <EmployeePortal employeeId={employeeId} />;
+}
+📦 Dependencies
+bash
+Copy
+Edit
+npm install axios react-hot-toast react-signature-canvas
+Next Steps
+
+Drop these files into your Replit under src/hooks and src/components.
+
+Add a route for /portal pointing at EmployeePortalPage.jsx.
+
+Ensure your backend implements the described API endpoints

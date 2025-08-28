@@ -1,0 +1,79 @@
+interface Order {
+  id: string;
+  needsLOPAdjustment: boolean;
+  priority: number;
+  priorityChangedAt?: Date;
+  lastScheduledLOPAdjustmentDate?: Date;
+  scheduledLOPAdjustmentDate?: Date;
+  lopAdjustmentOverrideReason?: string;
+}
+
+function todayIsMonday(date: Date = new Date()): boolean {
+  return date.getDay() === 1; // Monday is 1 (Sunday is 0)
+}
+
+function nextMonday(fromDate: Date = new Date()): Date {
+  const day = fromDate.getDay();
+  const diff = (8 - day) % 7 || 7; // Always at least 1 day ahead
+  const result = new Date(fromDate);
+  result.setDate(result.getDate() + diff);
+  return result;
+}
+
+// Example: Call this function daily or on order updates
+function scheduleLOPAdjustments(orders: Order[]) {
+  const today = new Date();
+
+  for (const order of orders) {
+    if (!order.needsLOPAdjustment) continue;
+
+    let priorityEscalated = false;
+    if (order.priorityChangedAt) {
+      // Priority has changed since last LOP scheduling
+      priorityEscalated = !order.lastScheduledLOPAdjustmentDate ||
+        order.priorityChangedAt > order.lastScheduledLOPAdjustmentDate;
+    }
+
+    if (todayIsMonday(today) || priorityEscalated) {
+      order.scheduledLOPAdjustmentDate = today;
+      order.lopAdjustmentOverrideReason = todayIsMonday(today)
+        ? "Scheduled for Monday"
+        : "Priority escalation";
+    } else {
+      order.scheduledLOPAdjustmentDate = nextMonday(today);
+      order.lopAdjustmentOverrideReason = "Deferred for Monday";
+    }
+
+    // TODO: Persist the order update to your DB here (pseudo-code)
+    // await db.updateOrder(order.id, order);
+    console.log(
+      `Order ${order.id}: LOP scheduled for ${order.scheduledLOPAdjustmentDate?.toDateString()} (${order.lopAdjustmentOverrideReason})`
+    );
+  }
+}
+
+// Example usage:
+const orders: Order[] = [
+  {
+    id: "A123",
+    needsLOPAdjustment: true,
+    priority: 50,
+    priorityChangedAt: new Date("2025-07-27T10:00:00Z"), // Sunday
+    lastScheduledLOPAdjustmentDate: new Date("2025-07-20T09:00:00Z"),
+  },
+  {
+    id: "B456",
+    needsLOPAdjustment: true,
+    priority: 80,
+    priorityChangedAt: new Date("2025-07-28T08:00:00Z"), // Monday
+    lastScheduledLOPAdjustmentDate: new Date("2025-07-21T09:00:00Z"),
+  },
+  {
+    id: "C789",
+    needsLOPAdjustment: false,
+    priority: 40,
+  },
+];
+
+// Run the scheduler
+scheduleLOPAdjustments(orders);

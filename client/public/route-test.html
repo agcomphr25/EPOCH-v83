@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPOCH v8 - Route Testing</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .route-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .route-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .route-item.success {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .route-item.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        .route-link {
+            text-decoration: none;
+            color: #007bff;
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        .route-link:hover {
+            text-decoration: underline;
+        }
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-ok {
+            background: #28a745;
+            color: white;
+        }
+        .status-error {
+            background: #dc3545;
+            color: white;
+        }
+        .status-pending {
+            background: #6c757d;
+            color: white;
+        }
+        .test-controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛣️ EPOCH v8 Route Testing</h1>
+            <p>Comprehensive route verification and diagnostics</p>
+        </div>
+        
+        <div class="content">
+            <div class="test-controls">
+                <button class="test-button" onclick="testAllRoutes()">Test All Routes</button>
+                <button class="test-button" onclick="resetTests()">Reset Tests</button>
+                <button class="test-button" onclick="location.href='/'">Go to Main App</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number" id="total-routes">0</div>
+                    <div class="stat-label">Total Routes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="working-routes">0</div>
+                    <div class="stat-label">Working</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" id="failed-routes">0</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+            </div>
+            
+            <div id="route-grid" class="route-grid">
+                <!-- Routes will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // All routes from the React app
+        const routes = [
+            '/',
+            '/order-management',
+            '/order-entry',
+            '/test-order-entry',
+            '/orders',
+            '/orders-list',
+            '/orders-simple',
+            '/all-orders',
+            '/discounts',
+            '/feature-manager',
+            '/stock-models',
+            '/draft-orders',
+            '/customer-management',
+            '/customers',
+            '/purchase-orders',
+            '/p1-purchase-orders',
+            '/p2-purchase-orders',
+            '/production-tracking',
+            '/bom-administration',
+            '/barcode-scanner',
+            '/inventory',
+            '/inventory/scanner',
+            '/inventory/dashboard',
+            '/inventory/manager',
+            '/inventory/receiving',
+            '/qc',
+            '/maintenance',
+            '/employee-portal',
+            '/employee-dashboard',
+            '/employee-portal-new',
+            '/time-clock-admin',
+            '/login',
+            '/module8-test',
+            '/agtest',
+            '/admintest',
+            '/stacitest',
+            '/finance/ap-journal',
+            '/finance/ar-journal',
+            '/finance/cogs-report',
+            '/finance/dashboard',
+            '/forms',
+            '/reports',
+            '/enhanced-forms',
+            '/enhanced-reports',
+            '/documentation',
+            '/p2-forms',
+            '/purchase-review-checklist',
+            '/purchase-review-submissions',
+            '/rfq-risk-assessment',
+            '/manufacturers-certificate',
+            '/packing-slip',
+            '/task-tracker',
+            '/document-management',
+            '/purchase-order-items-queue',
+            '/layup-scheduler',
+            '/ag-bottom-metal-report',
+            '/department-queue/layup-plugging',
+            '/department-queue/barcode',
+            '/department-queue/cnc',
+            '/department-queue/finish-qc',
+            '/department-queue/paint',
+            '/department-queue/qc-shipping'
+        ];
+        
+        let testResults = {};
+        
+        function initializeRoutes() {
+            const grid = document.getElementById('route-grid');
+            document.getElementById('total-routes').textContent = routes.length;
+            
+            grid.innerHTML = routes.map(route => `
+                <div class="route-item" id="route-${route.replace(/[^a-zA-Z0-9]/g, '_')}">
+                    <a href="${route}" class="route-link" target="_blank">${route}</a>
+                    <span class="status-badge status-pending">Pending</span>
+                </div>
+            `).join('');
+        }
+        
+        async function testRoute(route) {
+            const routeId = `route-${route.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const routeElement = document.getElementById(routeId);
+            const badge = routeElement.querySelector('.status-badge');
+            
+            try {
+                const response = await fetch(route, { method: 'HEAD' });
+                const isSuccess = response.ok;
+                
+                testResults[route] = {
+                    status: isSuccess ? 'success' : 'error',
+                    statusCode: response.status
+                };
+                
+                routeElement.className = `route-item ${isSuccess ? 'success' : 'error'}`;
+                badge.className = `status-badge ${isSuccess ? 'status-ok' : 'status-error'}`;
+                badge.textContent = response.status;
+                
+                return isSuccess;
+            } catch (error) {
+                testResults[route] = {
+                    status: 'error',
+                    error: error.message
+                };
+                
+                routeElement.className = 'route-item error';
+                badge.className = 'status-badge status-error';
+                badge.textContent = 'Error';
+                
+                return false;
+            }
+        }
+        
+        async function testAllRoutes() {
+            resetTests();
+            
+            let workingCount = 0;
+            let failedCount = 0;
+            
+            // Test routes in batches to avoid overwhelming the server
+            const batchSize = 5;
+            for (let i = 0; i < routes.length; i += batchSize) {
+                const batch = routes.slice(i, i + batchSize);
+                const results = await Promise.all(batch.map(testRoute));
+                
+                results.forEach(success => {
+                    if (success) {
+                        workingCount++;
+                    } else {
+                        failedCount++;
+                    }
+                });
+                
+                // Update stats
+                document.getElementById('working-routes').textContent = workingCount;
+                document.getElementById('failed-routes').textContent = failedCount;
+                
+                // Small delay between batches
+                if (i + batchSize < routes.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            console.log('Route test results:', testResults);
+        }
+        
+        function resetTests() {
+            testResults = {};
+            document.getElementById('working-routes').textContent = '0';
+            document.getElementById('failed-routes').textContent = '0';
+            
+            const items = document.querySelectorAll('.route-item');
+            items.forEach(item => {
+                item.className = 'route-item';
+                const badge = item.querySelector('.status-badge');
+                badge.className = 'status-badge status-pending';
+                badge.textContent = 'Pending';
+            });
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initializeRoutes();
+            console.log('Route testing tool loaded. Total routes:', routes.length);
+        });
+    </script>
+</body>
+</html>

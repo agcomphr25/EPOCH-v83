@@ -51,6 +51,7 @@ import CancelledOrdersPage from "./pages/CancelledOrdersPage";
 import AGTestDashboard from "./pages/AGTestDashboard";
 import ADMINTestDashboard from "./pages/GLENNTestDashboard";
 import STACITestDashboard from "./pages/STACITestDashboard";
+import JOHNLTestDashboard from "./pages/JOHNLTestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
@@ -216,6 +217,7 @@ function App() {
                   <Route path="/agtest-dashboard" component={AGTestDashboard} />
                   <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
                   <Route path="/stacitest-dashboard" component={STACITestDashboard} />
+                  <Route path="/johnltest-dashboard" component={JOHNLTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

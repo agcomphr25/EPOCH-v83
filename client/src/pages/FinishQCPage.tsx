@@ -303,6 +303,13 @@ export default function FinishQCPage() {
             Move to Paint ({selectedOrders.size})
           </Button>
           
+          <Button
+            onClick={() => toast.success('Test button clicked!')}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            Test
+          </Button>
+          
           {selectedOrders.size > 0 && (
             <Button
               variant="outline"

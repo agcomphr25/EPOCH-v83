@@ -896,7 +896,7 @@ export default function ShippingQueuePage() {
             {/* Order Info */}
             <div className="space-y-1 text-sm">
               <div className="text-gray-600">
-                <span className="font-medium">Customer:</span> {customerInfo?.name || order.customer}
+                <span className="font-medium">Customer:</span> {getCustomerInfo(order.customerId)?.name || order.customer}
               </div>
               <div className="text-gray-600">
                 <span className="font-medium">Model:</span> {getModelDisplayName(modelId)}

@@ -122,10 +122,10 @@ export default function BarcodeQueuePage() {
       // Then move the order to the selected department
       const moveResponse = await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({ 
+        body: { 
           orderIds: [orderId], 
           toDepartment: formData.kickbackDept 
-        })
+        }
       });
 
       return { kickback: await kickbackResponse.json(), move: moveResponse };
@@ -349,10 +349,10 @@ export default function BarcodeQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({ 
+        body: { 
           orderIds, 
           toDepartment: 'CNC' 
-        })
+        }
       });
     },
     onSuccess: () => {

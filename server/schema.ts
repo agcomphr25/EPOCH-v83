@@ -394,12 +394,6 @@ export const orderDrafts = pgTable("order_drafts", {
   specialShippingInternational: boolean("special_shipping_international").default(false),
   specialShippingNextDayAir: boolean("special_shipping_next_day_air").default(false),
   specialShippingBillToReceiver: boolean("special_shipping_bill_to_receiver").default(false),
-  // Cancellation Information
-  isCancelled: boolean("is_cancelled").default(false),
-  cancelledAt: timestamp("cancelled_at"),
-  cancelReason: text("cancel_reason"),
-  // Technician Assignment
-  assignedTechnician: text("assigned_technician"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

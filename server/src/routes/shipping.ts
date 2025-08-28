@@ -31,7 +31,7 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomerById(order.customerId);
+        customer = await storage.getCustomer(order.customerId);
         addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);
@@ -401,7 +401,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
         street: shipTo.street,
         city: shipTo.city,
         state: shipTo.state,
-        zipCode: shipTo.zip || shipTo.zipCode, // Support both field names
+        zipCode: shipTo.zip,
         country: shipTo.country || 'US',
         phone: shipTo.phone || '',
       },

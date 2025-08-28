@@ -309,6 +309,12 @@ export default function Navigation() {
       label: 'STACITEST Dashboard',
       icon: BarChart,
       description: 'P1 & P2 production pipeline overview dashboard'
+    },
+    {
+      path: '/johnltest-dashboard',
+      label: 'JOHNL Dashboard',
+      icon: Settings,
+      description: 'CNC Operations dashboard with queue, orders, and employee portal'
     }
   ];
 

@@ -77,11 +77,14 @@ export default function OrderSummaryModal({ children, orderId }: OrderSummaryMod
     enabled: isOpen,
   });
 
-  const { data: payments = [] } = useQuery({
+  const { data: paymentsData = [] } = useQuery({
     queryKey: ['/api/payments', orderId],
     queryFn: () => apiRequest(`/api/payments?orderId=${orderId}`),
     enabled: isOpen,
   });
+
+  // Handle the payments data structure - API returns { payments: [] }
+  const payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData?.payments || []);
 
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],

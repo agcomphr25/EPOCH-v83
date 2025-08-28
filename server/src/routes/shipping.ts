@@ -31,7 +31,7 @@ router.get('/order/:orderId', async (req: Request, res: Response) => {
     
     if (order.customerId) {
       try {
-        customer = await storage.getCustomer(order.customerId);
+        customer = await storage.getCustomerById(order.customerId);
         addresses = await storage.getCustomerAddresses(order.customerId);
       } catch (customerError) {
         console.warn('Could not fetch customer data:', customerError);

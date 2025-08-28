@@ -1315,7 +1315,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Action Length
     if (summaryLineY > currentY - featuresTableHeight + 15) {
       const actionLengthFeature = features.find(f => f.id === 'action_length');
-      const actionLengthOption = actionLengthFeature?.options?.find(opt => opt.value === order.features?.action_length);
+      const actionLengthOption = actionLengthFeature && Array.isArray((actionLengthFeature.options as any)?.action_length) ? 
+        (actionLengthFeature.options as any).action_length.find((opt: any) => opt.value === (order.features as any)?.action_length) : null;
       actionLengthPrice = actionLengthOption?.price || 0;
 
       page.drawText('Action Length:', {
@@ -2330,7 +2331,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
           console.error(`Error processing label for ${orderId}:`, pdfError);
           return res.status(500).json({ 
             error: 'Failed to process UPS label', 
-            details: pdfError.message,
+            details: pdfError instanceof Error ? pdfError.message : String(pdfError),
             trackingNumber: trackingNumber
           });
         }
@@ -2360,7 +2361,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
     console.error('Error creating real UPS shipping label:', error);
     
     // Check if this is just the structural error we're trying to fix
-    if (error.message && error.message.includes('UPS API returned')) {
+    if (error instanceof Error && error.message.includes('UPS API returned')) {
       return res.status(200).json({
         success: true,
         message: 'UPS shipping label created successfully',
@@ -2370,7 +2371,7 @@ router.get('/ups-shipping-label/:orderId', async (req: Request, res: Response) =
     
     res.status(500).json({ 
       error: 'Failed to create UPS shipping label',
-      details: error.message
+      details: error instanceof Error ? error.message : String(error)
     });
   }
 });
@@ -2504,7 +2505,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 
         // Try to update the order in both tables
         try {
-          await storage.updateOrder(orderId, updateData);
+          await storage.updateFinalizedOrder(orderId, updateData);
           console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
         } catch (finalizedError) {
           // If not found in finalized orders, try draft orders
@@ -2626,7 +2627,7 @@ router.post('/ups-shipping-label/:orderId', async (req: Request, res: Response) 
 
         // Try to update the order in both tables
         try {
-          await storage.updateOrder(orderId, updateData);
+          await storage.updateFinalizedOrder(orderId, updateData);
           console.log(`Updated finalized order ${orderId} status to Shipping Manager`);
         } catch (finalizedError) {
           // If not found in finalized orders, try draft orders
@@ -3718,7 +3719,7 @@ router.get('/track-ups/:trackingNumber', async (req: Request, res: Response) => 
     console.error('UPS tracking error:', error);
     res.status(500).json({ 
       error: 'Failed to fetch UPS tracking information',
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
       // Provide fallback UPS tracking URL
       fallbackUrl: `https://www.ups.com/track?tracknum=${req.params.trackingNumber}`
     });

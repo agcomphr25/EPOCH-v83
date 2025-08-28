@@ -422,27 +422,107 @@ export default function ShippingLabelPage() {
               {/* Shipping Address */}
               <div className="mb-6">
                 <h4 className="font-medium mb-2">Ship To Address</h4>
-                {orderLoading ? (
-                  <div className="p-3 bg-blue-50 rounded-md text-sm">
-                    Loading address...
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Customer Name</label>
+                    <input
+                      type="text"
+                      value={shippingDetails.address.name}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, name: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                      placeholder="Customer name"
+                    />
                   </div>
-                ) : customerAddress ? (
-                  <div className="p-3 bg-gray-50 rounded-md text-sm">
-                    <div className="font-medium">{customerInfo?.name || 'Customer'}</div>
-                    <div>{customerAddress.street}</div>
-                    {customerAddress.street2 && <div>{customerAddress.street2}</div>}
-                    <div>{customerAddress.city}, {customerAddress.state} {customerAddress.zipCode}</div>
-                    {customerAddress.country !== 'United States' && (
-                      <div>{customerAddress.country}</div>
-                    )}
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Street Address</label>
+                    <input
+                      type="text"
+                      value={shippingDetails.address.street}
+                      onChange={(e) => setShippingDetails(prev => ({ 
+                        ...prev, 
+                        address: { ...prev.address, street: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                      placeholder="Street address"
+                    />
                   </div>
-                ) : (
-                  <div className="text-red-500 text-sm">
-                    ⚠️ No shipping address found
-                    <br />
-                    <small>Customer ID: {(orderDetails as any)?.customerId || 'None'}</small>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">City</label>
+                      <input
+                        type="text"
+                        value={shippingDetails.address.city}
+                        onChange={(e) => setShippingDetails(prev => ({ 
+                          ...prev, 
+                          address: { ...prev.address, city: e.target.value }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                        placeholder="City"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">State</label>
+                      <input
+                        type="text"
+                        value={shippingDetails.address.state}
+                        onChange={(e) => setShippingDetails(prev => ({ 
+                          ...prev, 
+                          address: { ...prev.address, state: e.target.value }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                        placeholder="State"
+                      />
+                    </div>
                   </div>
-                )}
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">ZIP Code</label>
+                      <input
+                        type="text"
+                        value={shippingDetails.address.zip}
+                        onChange={(e) => setShippingDetails(prev => ({ 
+                          ...prev, 
+                          address: { ...prev.address, zip: e.target.value }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                        placeholder="ZIP code"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Country</label>
+                      <select
+                        value={shippingDetails.address.country}
+                        onChange={(e) => setShippingDetails(prev => ({ 
+                          ...prev, 
+                          address: { ...prev.address, country: e.target.value }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                      >
+                        <option value="US">United States</option>
+                        <option value="CA">Canada</option>
+                        <option value="MX">Mexico</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {orderLoading && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900 rounded-md text-sm">
+                      Loading customer address...
+                    </div>
+                  )}
+                  
+                  {!orderLoading && !customerAddress && (
+                    <div className="p-3 bg-yellow-50 dark:bg-yellow-900 rounded-md text-sm">
+                      ⚠️ No default customer address found. Please enter shipping address manually.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Billing Options */}

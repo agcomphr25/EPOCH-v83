@@ -306,6 +306,59 @@ export default function ShippingQueuePage() {
     return address;
   };
 
+  // NEW: Get shipping address for an order (checks alt ship-to first, then falls back to customer address)
+  const getOrderShippingAddress = (order: any) => {
+    // Check if order has alternative ship-to address
+    if (order.hasAltShipTo) {
+      // Handle existing customer mode
+      if (order.altShipToCustomerId) {
+        const altCustomerAddress = getCustomerAddress(order.altShipToCustomerId);
+        if (altCustomerAddress) {
+          return altCustomerAddress;
+        }
+      }
+      
+      // Handle manual entry mode
+      if (order.altShipToAddress) {
+        // Convert the manual entry format to match the customer address format
+        return {
+          street: order.altShipToAddress.street || '',
+          street2: order.altShipToAddress.street2 || null,
+          city: order.altShipToAddress.city || '',
+          state: order.altShipToAddress.state || '',
+          zipCode: order.altShipToAddress.zipCode || '',
+          country: order.altShipToAddress.country || 'United States',
+          type: 'shipping',
+          isDefault: true
+        };
+      }
+    }
+    
+    // Fallback to customer's default address
+    return getCustomerAddress(order.customerId);
+  };
+
+  // Get customer info for alt ship-to addresses
+  const getOrderShippingCustomerInfo = (order: any) => {
+    // If order has alt ship-to with existing customer, get that customer's info
+    if (order.hasAltShipTo && order.altShipToCustomerId) {
+      return getCustomerInfo(order.altShipToCustomerId);
+    }
+    
+    // If order has alt ship-to with manual entry, use the manual entry data
+    if (order.hasAltShipTo && order.altShipToName) {
+      return {
+        name: order.altShipToName,
+        phone: order.altShipToPhone || '',
+        email: order.altShipToEmail || '',
+        company: order.altShipToCompany || ''
+      };
+    }
+    
+    // Fallback to original customer info
+    return getCustomerInfo(order.customerId);
+  };
+
   const handleOrderSelection = (orderId: string, checked: boolean) => {
     if (checked) {
       setSelectedOrders(prev => [...prev, orderId]);
@@ -495,9 +548,9 @@ export default function ShippingQueuePage() {
       console.log('Dialog state after timeout:', showShippingDialog);
     }, 500);
 
-    // Pre-populate shipping address from customer data
-    const customerInfo = getCustomerInfo(targetOrder.customerId);
-    const customerAddress = getCustomerAddress(targetOrder.customerId);
+    // Pre-populate shipping address from order-specific or customer data
+    const customerInfo = getOrderShippingCustomerInfo(targetOrder);
+    const customerAddress = getOrderShippingAddress(targetOrder);
     
     if (customerAddress && customerInfo) {
       setShippingDetails(prev => ({
@@ -774,8 +827,8 @@ export default function ShippingQueuePage() {
     const isSelected = selectedCard === order.orderId;
     const modelId = order.stockModelId || order.modelId;
     const materialType = order.features?.material_type;
-    const customerInfo = getCustomerInfo(order.customerId);
-    const customerAddress = getCustomerAddress(order.customerId);
+    const customerInfo = getOrderShippingCustomerInfo(order);
+    const customerAddress = getOrderShippingAddress(order);
     const hasSpecialShipping = hasSpecialShippingInstructions(order);
     
     return (

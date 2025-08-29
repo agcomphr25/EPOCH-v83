@@ -19,11 +19,36 @@ interface BarcodeDisplayProps {
   stockModel?: string;
   paintOption?: string;
   color?: string;
+  features?: any; // Order features object
+  modelId?: string; // Stock model ID
+  isHighPriority?: boolean; // High priority flag
+  isLate?: boolean; // Late order flag
 }
 
-export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption, color }: BarcodeDisplayProps) {
+export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption, color, features, modelId, isHighPriority, isLate }: BarcodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showAveryDialog, setShowAveryDialog] = useState(false);
+
+  // Color coding logic
+  const getBarcodeColor = () => {
+    // Red for high priority or late orders
+    if (isHighPriority || isLate) {
+      return '#FF0000'; // Red
+    }
+    
+    // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
+    const paintedOptions = ['terraine', 'premium', 'standard', 'rattlesnake_rogue'];
+    const isPaintedOption = paintedOptions.some(option => 
+      paintOption?.toLowerCase().includes(option)
+    );
+    const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
+    
+    if (isPaintedOption || isFiberglassModel) {
+      return '#0066FF'; // Blue
+    }
+    
+    return '#000000'; // Black (default)
+  };
 
   const getSizeConfig = () => {
     switch (size) {
@@ -53,7 +78,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
           fontOptions: "",
           font: "monospace",
           background: "#ffffff",
-          lineColor: "#000000",
+          lineColor: getBarcodeColor(),
           margin: 10,
           marginTop: undefined,
           marginBottom: undefined,
@@ -255,6 +280,10 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   stockModel={stockModel}
                   paintOption={paintOption}
                   color={color}
+                  features={features}
+                  modelId={modelId}
+                  isHighPriority={isHighPriority}
+                  isLate={isLate}
                   labelType="detailed"
                   copies={6}
                 />

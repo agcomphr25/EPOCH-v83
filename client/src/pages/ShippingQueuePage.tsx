@@ -829,11 +829,12 @@ export default function ShippingQueuePage() {
     </div>
   );
 
-  // Function to check if order has special shipping instructions
-  function hasSpecialShippingInstructions(order: any) {
-    return order.specialShippingInternational || 
-           order.specialShippingNextDayAir || 
-           order.specialShippingBillToReceiver;
+  // Function to get specific special shipping text
+  function getSpecialShippingText(order: any) {
+    if (order.specialShippingInternational) return "🌍 International";
+    if (order.specialShippingNextDayAir) return "⚡ Next Day Air";
+    if (order.specialShippingBillToReceiver) return "💳 Bill to Receiver";
+    return null;
   }
 
   // Function to render individual order cards
@@ -843,7 +844,7 @@ export default function ShippingQueuePage() {
     const materialType = order.features?.material_type;
     const customerInfo = getOrderShippingCustomerInfo(order);
     const customerAddress = getOrderShippingAddress(order);
-    const hasSpecialShipping = hasSpecialShippingInstructions(order);
+    const specialShippingText = getSpecialShippingText(order);
     
     return (
       <Card 
@@ -851,7 +852,7 @@ export default function ShippingQueuePage() {
         className={`hover:shadow-md transition-all cursor-pointer ${
           isSelected 
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
-            : hasSpecialShipping
+            : specialShippingText
               ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-600'
               : 'border-gray-200 hover:border-gray-300'
         }`}
@@ -879,9 +880,9 @@ export default function ShippingQueuePage() {
                   NOT PAID
                 </Badge>
               )}
-              {hasSpecialShipping && (
+              {specialShippingText && (
                 <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs">
-                  ⚡ SPECIAL SHIPPING
+                  {specialShippingText}
                 </Badge>
               )}
               {materialType && (

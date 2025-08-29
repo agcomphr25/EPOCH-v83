@@ -5589,8 +5589,8 @@ export class DatabaseStorage implements IStorage {
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
     }
 
-    // Create the finalized order data directly
-    const finalizedOrderData: InsertAllOrder = {
+    // Create the finalized order data directly - exclude id field explicitly
+    const finalizedOrderData = {
       orderId: orderData.orderId,
       orderDate: orderData.orderDate,
       dueDate: orderData.dueDate,
@@ -5599,6 +5599,7 @@ export class DatabaseStorage implements IStorage {
       fbOrderNumber: orderData.fbOrderNumber || '',
       agrOrderDetails: orderData.agrOrderDetails || '',
       isCustomOrder: orderData.isCustomOrder,
+      isFlattop: orderData.isFlattop || false,
       modelId: orderData.modelId,
       handedness: orderData.handedness,
       shankLength: orderData.shankLength,
@@ -5661,6 +5662,8 @@ export class DatabaseStorage implements IStorage {
     };
 
     console.log(`📦 INSERTING ORDER: ${orderData.orderId} directly into all_orders table with department: ${currentDepartment}`);
+    console.log('📋 Finalized order data keys:', Object.keys(finalizedOrderData));
+    console.log('📋 Finalized order data:', JSON.stringify(finalizedOrderData, null, 2));
 
     // Insert directly into all_orders table
     const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();

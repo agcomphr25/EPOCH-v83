@@ -1255,8 +1255,8 @@ export default function OrderEntry() {
         method: 'POST'
       });
 
-      // Validate the generated ID format (e.g., AG001)
-      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      // Validate the generated ID format (e.g., EH001, AG001)
+      const orderIdPattern = /^[A-Z]{1,3}\d{3,}$/;
       if (!orderIdPattern.test(response.orderId)) {
         throw new Error('Invalid Order ID format generated');
       }
@@ -1297,7 +1297,7 @@ export default function OrderEntry() {
       }
 
       // Validate Order ID format
-      const orderIdPattern = /^[A-Z]{1,2}[A-Z]\d{3,}$/;
+      const orderIdPattern = /^[A-Z]{1,3}\d{3,}$/;
       if (!orderIdPattern.test(orderId)) {
         setErrors(prev => ({ ...prev, orderId: 'Invalid Order ID format' }));
         return;

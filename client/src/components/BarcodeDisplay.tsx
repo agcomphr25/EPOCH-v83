@@ -193,7 +193,6 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                       <div class="order-header">P1 ORDER</div>
                       <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
                       <div class="order-details">
-                        <div>${orderId}</div>
                         <div class="date-info">Printed: ${currentDate}</div>
                       </div>
                     </div>

@@ -34,6 +34,7 @@ interface POProductFormData {
   swivelStuds: string;
   paintOptions: string;
   texture: string;
+  price: string;
 }
 
 export default function POProductsPage() {
@@ -52,7 +53,8 @@ export default function POProductsPage() {
     qds: '',
     swivelStuds: '',
     paintOptions: '',
-    texture: ''
+    texture: '',
+    price: ''
   });
 
   // Fetch stock models for dropdown
@@ -117,7 +119,8 @@ export default function POProductsPage() {
       qds: '',
       swivelStuds: '',
       paintOptions: '',
-      texture: ''
+      texture: '',
+      price: ''
     });
   };
 
@@ -424,6 +427,27 @@ export default function POProductsPage() {
                       <SelectItem value="grip_forend">Grip & Forend</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Price Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900">Pricing</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price ($)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    data-testid="input-price"
+                    value={formData.price}
+                    onChange={(e) => handleInputChange('price', e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
               </div>
             </div>

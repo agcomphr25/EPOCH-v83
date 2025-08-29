@@ -2459,8 +2459,8 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add barcode text below barcode for verification (clean order ID)
-          page.drawText(`${barcodeText}`, {
+          // Add stock model name below barcode
+          page.drawText(`${modelDisplayName}`, {
             x: x + 8,
             y: y + 18,
             size: 7,
@@ -2588,40 +2588,41 @@ export function registerRoutes(app: Express): Server {
           // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
           
-          // Build base label text line
-          let labelText = `${modelDisplayName} - ${actionLength.toUpperCase()}`;
-          
-          // Draw base text in black
-          page.drawText(labelText, {
+          // Draw action length line
+          page.drawText(`${actionLength.toUpperCase()}`, {
             x: x + 8,
             y: y + 12,
             size: 6,
             color: rgb(0, 0, 0),
           });
           
-          // Draw special labels with appropriate colors
-          let xOffset = x + 8 + (labelText.length * 3.5); // Approximate text width
-          
-          for (const label of specialLabels) {
-            let textColor = rgb(0, 0, 0); // Default black
+          // Draw special labels with appropriate colors on separate line below stock model
+          if (specialLabels.length > 0) {
+            let xOffset = x + 8;
             
-            // Orange for swivel studs
-            if (label.includes('SWIVEL') || label === 'NSNH') {
-              textColor = rgb(1, 0.5, 0); // Orange
+            for (let i = 0; i < specialLabels.length; i++) {
+              const label = specialLabels[i];
+              let textColor = rgb(0, 0, 0); // Default black
+              
+              // Orange for swivel studs
+              if (label.includes('SWIVEL') || label === 'NSNH') {
+                textColor = rgb(1, 0.5, 0); // Orange
+              }
+              // Purple for texture
+              else if (label.includes('TEXTURE')) {
+                textColor = rgb(0.5, 0, 0.8); // Purple
+              }
+              
+              const separator = i > 0 ? ' - ' : '';
+              page.drawText(`${separator}${label}`, {
+                x: xOffset,
+                y: y + 8, // Lower line for special labels
+                size: 5,
+                color: textColor,
+              });
+              
+              xOffset += (separator.length + label.length) * 3; // Approximate text width
             }
-            // Purple for texture
-            else if (label.includes('TEXTURE')) {
-              textColor = rgb(0.5, 0, 0.8); // Purple
-            }
-            
-            page.drawText(` - ${label}`, {
-              x: xOffset,
-              y: y + 12,
-              size: 6,
-              color: textColor,
-            });
-            
-            xOffset += (label.length + 3) * 3.5; // Approximate text width
           }
           
           // Add due date

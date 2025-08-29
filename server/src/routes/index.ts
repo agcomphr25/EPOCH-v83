@@ -2360,7 +2360,7 @@ export function registerRoutes(app: Express): Server {
           const row = Math.floor(labelIndex / 3);
           // Avery 5160 specifications: 0.25" margin between columns, reduced top margin, Label size 2.625" x 1"
           const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const topMargin = 18; // 0.25" * 72 points/inch (reduced from 0.5")
+          const topMargin = 0; // 0 points - no top margin
           const bottomMargin = 36; // 0.5" * 72 points/inch
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch

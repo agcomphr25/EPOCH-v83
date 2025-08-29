@@ -2487,15 +2487,18 @@ export function registerRoutes(app: Express): Server {
                              ? features.texture_options.replace(/_/g, ' ') : null;
           
           // NSNH - No Swivel Studs No Holes (check multiple possible values)
-          if (features.swivel_studs === 'no_swivel_studs' || 
-              features.swivel_studs === 'no_swivel_no_holes' ||
-              (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
-              (features.swivel_studs && features.swivel_studs.includes('no_holes'))) {
+          // Only add NSNH if we don't already have swivel text to avoid duplication
+          const hasNSNH = features.swivel_studs === 'no_swivel_studs' || 
+                         features.swivel_studs === 'no_swivel_no_holes' ||
+                         (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
+                         (features.swivel_studs && features.swivel_studs.includes('no_holes'));
+          
+          if (hasNSNH && !swivelStudsText) {
             specialLabels.push('NSNH');
           }
           
-          // Add non-standard swivel studs in orange (simulated with bold text in PDF)
-          if (swivelStudsText) {
+          // Add non-standard swivel studs (avoid duplication with NSNH)
+          if (swivelStudsText && !hasNSNH) {
             specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
           }
           
@@ -2586,19 +2589,41 @@ export function registerRoutes(app: Express): Server {
           // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
           
-          // Build label text line
+          // Build base label text line
           let labelText = `${modelDisplayName} - ${actionLength.toUpperCase()}`;
-          if (specialLabels.length > 0) {
-            labelText += ` - ${specialLabels.join(' - ')}`;
-          }
           
-          
+          // Draw base text in black
           page.drawText(labelText, {
             x: x + 8,
             y: y + 12,
             size: 6,
             color: rgb(0, 0, 0),
           });
+          
+          // Draw special labels with appropriate colors
+          let xOffset = x + 8 + (labelText.length * 3.5); // Approximate text width
+          
+          for (const label of specialLabels) {
+            let textColor = rgb(0, 0, 0); // Default black
+            
+            // Orange for swivel studs
+            if (label.includes('SWIVEL') || label === 'NSNH') {
+              textColor = rgb(1, 0.5, 0); // Orange
+            }
+            // Purple for texture
+            else if (label.includes('TEXTURE')) {
+              textColor = rgb(0.5, 0, 0.8); // Purple
+            }
+            
+            page.drawText(` - ${label}`, {
+              x: xOffset,
+              y: y + 12,
+              size: 6,
+              color: textColor,
+            });
+            
+            xOffset += (label.length + 3) * 3.5; // Approximate text width
+          }
           
           // Add due date
           const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', { 

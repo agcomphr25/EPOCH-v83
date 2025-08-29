@@ -5661,13 +5661,8 @@ export class DatabaseStorage implements IStorage {
       altShipToAddress: orderData.altShipToAddress
     };
 
-    console.log(`📦 INSERTING ORDER: ${orderData.orderId} directly into all_orders table with department: ${currentDepartment}`);
-    console.log('📋 Finalized order data keys:', Object.keys(finalizedOrderData));
-    console.log('📋 Finalized order data:', JSON.stringify(finalizedOrderData, null, 2));
-
-    // Insert directly into all_orders table - explicitly exclude id
+    // Insert directly into all_orders table
     const { id, createdAt, updatedAt, ...insertData } = finalizedOrderData as any;
-    console.log('🔧 Insert data after removing id/timestamps:', Object.keys(insertData));
     const [finalizedOrder] = await db.insert(allOrders).values(insertData).returning();
 
     // Mark the Order ID as used to prevent duplicate assignments

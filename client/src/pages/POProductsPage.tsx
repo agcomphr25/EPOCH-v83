@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Package, Plus, Save } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Package, Plus, Save, Edit, Trash2, Eye } from 'lucide-react';
 
 interface StockModel {
   id: string;
@@ -18,6 +20,27 @@ interface StockModel {
   description?: string;
   isActive: boolean;
   sortOrder: number;
+}
+
+interface POProduct {
+  id: number;
+  customerName: string;
+  productName: string;
+  material: string;
+  handedness: string;
+  stockModel: string;
+  actionLength: string;
+  actionInlet: string;
+  bottomMetal: string;
+  barrelInlet: string;
+  qds: string;
+  swivelStuds: string;
+  paintOptions: string;
+  texture: string;
+  price: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface POProductFormData {
@@ -39,7 +62,10 @@ interface POProductFormData {
 
 export default function POProductsPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<POProduct | null>(null);
   const [formData, setFormData] = useState<POProductFormData>({
     customerName: '',
     productName: '',
@@ -57,7 +83,15 @@ export default function POProductsPage() {
     price: ''
   });
 
-  // Fetch stock models for dropdown
+  // Fetch PO Products
+  const { data: poProducts = [], isLoading: productsLoading, refetch } = useQuery<POProduct[]>({
+    queryKey: ['/api/po-products'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/po-products');
+      return result;
+    },
+  });
+
   // Fetch stock models for dropdown
   const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery<StockModel[]>({
     queryKey: ['/api/stock-models'],
@@ -73,6 +107,79 @@ export default function POProductsPage() {
     queryFn: async () => {
       const result = await apiRequest('/api/features');
       return result;
+    },
+  });
+
+  // Mutations for CRUD operations
+  const createMutation = useMutation({
+    mutationFn: async (data: Omit<POProduct, 'id' | 'isActive' | 'createdAt' | 'updatedAt'>) => {
+      return apiRequest('/api/po-products', {
+        method: 'POST',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
+      toast({
+        title: "Success",
+        description: "PO Product created successfully",
+      });
+      handleReset();
+      setShowCreateForm(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create PO Product",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<POProduct> }) => {
+      return apiRequest(`/api/po-products/${id}`, {
+        method: 'PUT',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
+      toast({
+        title: "Success",
+        description: "PO Product updated successfully",
+      });
+      setEditingProduct(null);
+      handleReset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update PO Product",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/po-products/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
+      toast({
+        title: "Success",
+        description: "PO Product deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete PO Product",
+        variant: "destructive",
+      });
     },
   });
 
@@ -96,13 +203,16 @@ export default function POProductsPage() {
       return;
     }
 
-    // For now, just show success toast - actual submission logic can be added later
-    toast({
-      title: "PO Product Saved",
-      description: "Product configuration has been saved successfully",
-    });
-    
-    console.log('PO Product Form Data:', formData);
+    const productData = {
+      ...formData,
+      price: parseFloat(formData.price) || 0,
+    };
+
+    if (editingProduct) {
+      updateMutation.mutate({ id: editingProduct.id, data: productData });
+    } else {
+      createMutation.mutate(productData);
+    }
   };
 
   const handleReset = () => {
@@ -122,18 +232,153 @@ export default function POProductsPage() {
       texture: '',
       price: ''
     });
+    setEditingProduct(null);
+  };
+
+  const handleEdit = (product: POProduct) => {
+    setEditingProduct(product);
+    setFormData({
+      customerName: product.customerName,
+      productName: product.productName,
+      material: product.material,
+      handedness: product.handedness,
+      stockModel: product.stockModel,
+      actionLength: product.actionLength,
+      actionInlet: product.actionInlet,
+      bottomMetal: product.bottomMetal,
+      barrelInlet: product.barrelInlet,
+      qds: product.qds,
+      swivelStuds: product.swivelStuds,
+      paintOptions: product.paintOptions,
+      texture: product.texture,
+      price: product.price.toString(),
+    });
+    setShowCreateForm(true);
+  };
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('Are you sure you want to delete this PO Product?')) {
+      deleteMutation.mutate(id);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Package className="h-6 w-6 text-primary" />
-        <h1 className="text-3xl font-bold text-gray-900">PO Products</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Package className="h-6 w-6 text-primary" />
+          <h1 className="text-3xl font-bold text-gray-900">PO Products</h1>
+        </div>
+        <Button 
+          onClick={() => {
+            handleReset();
+            setShowCreateForm(true);
+          }}
+          data-testid="button-add-product"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Product
+        </Button>
       </div>
+
+      {/* Products Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All PO Products</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {productsLoading ? (
+            <div className="text-center py-8">Loading products...</div>
+          ) : poProducts.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No PO Products found</p>
+              <Button 
+                className="mt-4" 
+                onClick={() => setShowCreateForm(true)}
+                data-testid="button-create-first-product"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Product
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Material</TableHead>
+                  <TableHead>Stock Model</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {poProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell data-testid={`text-customer-${product.id}`}>
+                      {product.customerName}
+                    </TableCell>
+                    <TableCell data-testid={`text-product-${product.id}`}>
+                      {product.productName}
+                    </TableCell>
+                    <TableCell data-testid={`text-material-${product.id}`}>
+                      {product.material || '-'}
+                    </TableCell>
+                    <TableCell data-testid={`text-stock-model-${product.id}`}>
+                      {stockModels.find(sm => sm.id === product.stockModel)?.displayName || product.stockModel || '-'}
+                    </TableCell>
+                    <TableCell data-testid={`text-price-${product.id}`}>
+                      ${product.price.toFixed(2)}
+                    </TableCell>
+                    <TableCell data-testid={`text-created-${product.id}`}>
+                      {new Date(product.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(product)}
+                          data-testid={`button-edit-${product.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(product.id)}
+                          data-testid={`button-delete-${product.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Product Form Dialog */}
+      <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingProduct ? 'Edit PO Product' : 'Create New PO Product'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingProduct ? 'Update the product details below.' : 'Fill in the product details below to create a new PO Product.'}
+            </DialogDescription>
+          </DialogHeader>
 
       <Card>
         <CardHeader>
-          <CardTitle>Product Configuration</CardTitle>
+          <CardTitle>{editingProduct ? 'Edit Product' : 'Product Configuration'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -454,9 +699,27 @@ export default function POProductsPage() {
 
             {/* Action Buttons */}
             <div className="flex gap-4 pt-6">
-              <Button type="submit" data-testid="button-save">
+              <Button 
+                type="submit" 
+                data-testid="button-save"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
                 <Save className="h-4 w-4 mr-2" />
-                Save Product
+                {createMutation.isPending || updateMutation.isPending 
+                  ? (editingProduct ? 'Updating...' : 'Saving...') 
+                  : (editingProduct ? 'Update Product' : 'Save Product')
+                }
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  handleReset();
+                  setShowCreateForm(false);
+                }} 
+                data-testid="button-cancel"
+              >
+                Cancel
               </Button>
               <Button type="button" variant="outline" onClick={handleReset} data-testid="button-reset">
                 Reset Form
@@ -465,6 +728,8 @@ export default function POProductsPage() {
           </form>
         </CardContent>
       </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

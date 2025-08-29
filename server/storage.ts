@@ -20,6 +20,8 @@ import {
   orderAttachments,
   // Gateway reports table
   gatewayReports,
+  // PO Products table
+  poProducts,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -88,6 +90,8 @@ import {
   type OrderAttachment, type InsertOrderAttachment,
   // Gateway reports types
   type GatewayReport, type InsertGatewayReport,
+  // PO Products types
+  type POProduct, type InsertPOProduct,
 
 
 } from "./schema";
@@ -606,6 +610,13 @@ export interface IStorage {
   createGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
   updateGatewayReport(id: number, data: Partial<InsertGatewayReport>): Promise<GatewayReport>;
   deleteGatewayReport(id: number): Promise<void>;
+
+  // PO Products CRUD Methods
+  getAllPOProducts(): Promise<POProduct[]>;
+  getPOProduct(id: number): Promise<POProduct | undefined>;
+  createPOProduct(data: InsertPOProduct): Promise<POProduct>;
+  updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
+  deletePOProduct(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5936,6 +5947,62 @@ export class DatabaseStorage implements IStorage {
       .where(eq(gatewayReports.id, id));
   }
 
+  // PO Products CRUD Methods
+  async getAllPOProducts(): Promise<POProduct[]> {
+    return await db
+      .select()
+      .from(poProducts)
+      .where(eq(poProducts.isActive, true))
+      .orderBy(desc(poProducts.createdAt));
+  }
+
+  async getPOProduct(id: number): Promise<POProduct | undefined> {
+    const [product] = await db
+      .select()
+      .from(poProducts)
+      .where(eq(poProducts.id, id));
+    return product || undefined;
+  }
+
+  async createPOProduct(data: InsertPOProduct): Promise<POProduct> {
+    const [product] = await db
+      .insert(poProducts)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return product;
+  }
+
+  async updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct> {
+    const [product] = await db
+      .update(poProducts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(poProducts.id, id))
+      .returning();
+
+    if (!product) {
+      throw new Error(`PO Product with ID ${id} not found`);
+    }
+
+    return product;
+  }
+
+  async deletePOProduct(id: number): Promise<void> {
+    // Soft delete by setting isActive to false
+    await db
+      .update(poProducts)
+      .set({ 
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(poProducts.id, id));
+  }
 
 }
 

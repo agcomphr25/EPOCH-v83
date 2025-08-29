@@ -5665,8 +5665,10 @@ export class DatabaseStorage implements IStorage {
     console.log('📋 Finalized order data keys:', Object.keys(finalizedOrderData));
     console.log('📋 Finalized order data:', JSON.stringify(finalizedOrderData, null, 2));
 
-    // Insert directly into all_orders table
-    const [finalizedOrder] = await db.insert(allOrders).values(finalizedOrderData).returning();
+    // Insert directly into all_orders table - explicitly exclude id
+    const { id, createdAt, updatedAt, ...insertData } = finalizedOrderData as any;
+    console.log('🔧 Insert data after removing id/timestamps:', Object.keys(insertData));
+    const [finalizedOrder] = await db.insert(allOrders).values(insertData).returning();
 
     // Mark the Order ID as used to prevent duplicate assignments
     await this.markOrderIdAsUsed(orderData.orderId);

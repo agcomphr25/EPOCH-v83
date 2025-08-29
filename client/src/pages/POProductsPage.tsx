@@ -378,17 +378,21 @@ export default function POProductsPage() {
                   </Select>
                 </div>
 
-                {/* Texture - Placeholder */}
+                {/* Texture */}
                 <div className="space-y-2">
                   <Label htmlFor="texture">Texture</Label>
-                  <Input
-                    id="texture"
-                    data-testid="input-texture"
-                    value={formData.texture}
-                    onChange={(e) => handleInputChange('texture', e.target.value)}
-                    placeholder="Texture (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.texture} 
+                    onValueChange={(value) => handleInputChange('texture', value)}
+                  >
+                    <SelectTrigger data-testid="select-texture">
+                      <SelectValue placeholder="Select texture option" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="grip_forend">Grip & Forend</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

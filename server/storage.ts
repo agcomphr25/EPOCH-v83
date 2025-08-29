@@ -4001,6 +4001,17 @@ export class DatabaseStorage implements IStorage {
         deptEntryDate = order.createdAt;
     }
 
+    // Safety check: if deptEntryDate is still null, use current time
+    if (!deptEntryDate) {
+      console.warn(`Order ${order.orderId}: No valid entry date found, using current time`);
+      deptEntryDate = now;
+    }
+
+    // Ensure deptEntryDate is a Date object
+    if (!(deptEntryDate instanceof Date)) {
+      deptEntryDate = new Date(deptEntryDate);
+    }
+
     const diffTime = Math.abs(now.getTime() - deptEntryDate.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }

@@ -2463,10 +2463,10 @@ export function registerRoutes(app: Express): Server {
             color: rgb(0, 0, 0),
           });
           
-          // Add stock model name below barcode
-          page.drawText(`${modelDisplayName}`, {
+          // Add stock model and action length on same line below barcode
+          page.drawText(`${modelDisplayName} - ${actionLength.toUpperCase()}`, {
             x: x + 8,
-            y: y + 18,
+            y: y + 22,
             size: 7,
             color: rgb(0, 0, 0),
           });
@@ -2588,13 +2588,6 @@ export function registerRoutes(app: Express): Server {
           // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
           
-          // Draw action length line
-          page.drawText(`${actionLength.toUpperCase()}`, {
-            x: x + 8,
-            y: y + 12,
-            size: 6,
-            color: rgb(0, 0, 0),
-          });
           
           // Draw special labels with appropriate colors on separate line below stock model
           if (specialLabels.length > 0) {
@@ -2616,7 +2609,7 @@ export function registerRoutes(app: Express): Server {
               const separator = i > 0 ? ' - ' : '';
               page.drawText(`${separator}${label}`, {
                 x: xOffset,
-                y: y + 8, // Lower line for special labels
+                y: y + 16, // Move special labels higher
                 size: 5,
                 color: textColor,
               });
@@ -2632,7 +2625,7 @@ export function registerRoutes(app: Express): Server {
           });
           page.drawText(`Due: ${dueDate}`, {
             x: x + 8,
-            y: y + 4,
+            y: y + 10,
             size: 6,
             color: rgb(0, 0, 0),
           });

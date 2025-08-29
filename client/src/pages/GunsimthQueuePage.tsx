@@ -14,13 +14,13 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function GunsimthQueuePage() {
   // Multi-select state
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
-  const [salesOrderContent, setSalesOrderContent] = useState('');
-  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -62,24 +62,10 @@ export default function GunsimthQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order view in modal
-  const handleSalesOrderView = async (orderId: string) => {
-    setSalesOrderLoading(true);
+  // Function to handle sales order modal
+  const handleSalesOrderView = (orderId: string) => {
+    setSelectedOrderId(orderId);
     setSalesOrderModalOpen(true);
-    
-    try {
-      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      if (response.ok) {
-        const htmlContent = await response.text();
-        setSalesOrderContent(htmlContent);
-      } else {
-        setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
-      }
-    } catch (error) {
-      setSalesOrderContent('<p>Error loading sales order. Please try again.</p>');
-    } finally {
-      setSalesOrderLoading(false);
-    }
   };
 
   // Get orders in Gunsmith department
@@ -1107,26 +1093,11 @@ export default function GunsimthQueuePage() {
       )}
 
       {/* Sales Order Modal */}
-      <Dialog open={salesOrderModalOpen} onOpenChange={setSalesOrderModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Sales Order</DialogTitle>
-          </DialogHeader>
-          <div className="mt-4">
-            {salesOrderLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <span className="ml-2">Loading sales order...</span>
-              </div>
-            ) : (
-              <div 
-                className="sales-order-content"
-                dangerouslySetInnerHTML={{ __html: salesOrderContent }}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SalesOrderModal 
+        isOpen={salesOrderModalOpen}
+        onClose={() => setSalesOrderModalOpen(false)}
+        orderId={selectedOrderId}
+      />
     </div>
   );
 }

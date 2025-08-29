@@ -42,6 +42,7 @@ import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import P2PurchaseOrders from "./pages/P2PurchaseOrders";
+import POProductsPage from "./pages/POProductsPage";
 import ProductionTracking from "./pages/ProductionTracking";
 import BarcodeScannerPage from "./pages/BarcodeScannerPage";
 import LayupSchedulerPage from "./pages/LayupSchedulerPage";
@@ -182,6 +183,7 @@ function App() {
                   <Route path="/purchase-orders" component={PurchaseOrders} />
                   <Route path="/p1-purchase-orders" component={PurchaseOrders} />
                   <Route path="/p2-purchase-orders" component={P2PurchaseOrders} />
+                  <Route path="/po-products" component={POProductsPage} />
 
                   {/* Production and BOM Routes */}
                   <Route path="/production-tracking" component={ProductionTracking} />

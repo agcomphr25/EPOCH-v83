@@ -930,7 +930,6 @@ export const insertAllOrderSchema = createInsertSchema(allOrders).omit({
   shipping: z.number().min(0).default(0),
   tikkaOption: z.string().optional().nullable(),
   status: z.string().default("FINALIZED"),
-  finalizedBy: z.string().optional().nullable(),
   // Payment fields
   isPaid: z.boolean().default(false),
   paymentType: z.string().optional().nullable(),

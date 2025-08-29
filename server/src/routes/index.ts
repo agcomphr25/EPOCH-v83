@@ -2366,7 +2366,7 @@ export function registerRoutes(app: Express): Server {
           const labelHeight = 72; // 1" * 72 points/inch
           const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
           const x = leftMargin + (col * (labelWidth + columnGap));
-          const y = 792 - (row * labelHeight); // Position labels starting from very top
+          const y = 792 - labelHeight - (row * labelHeight); // Position labels properly from top
           
           // Draw label border with clear separation  
           page.drawRectangle({

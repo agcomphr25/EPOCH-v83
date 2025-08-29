@@ -5657,8 +5657,7 @@ export class DatabaseStorage implements IStorage {
       altShipToCompany: orderData.altShipToCompany,
       altShipToEmail: orderData.altShipToEmail,
       altShipToPhone: orderData.altShipToPhone,
-      altShipToAddress: orderData.altShipToAddress,
-      finalizedBy: finalizedBy || 'System'
+      altShipToAddress: orderData.altShipToAddress
     };
 
     console.log(`📦 INSERTING ORDER: ${orderData.orderId} directly into all_orders table with department: ${currentDepartment}`);

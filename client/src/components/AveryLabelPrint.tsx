@@ -16,6 +16,10 @@ interface AveryLabelPrintProps {
   stockModel?: string;
   paintOption?: string;
   color?: string; // Added color prop
+  features?: any; // Order features object
+  modelId?: string; // Stock model ID
+  isHighPriority?: boolean; // High priority flag
+  isLate?: boolean; // Late order flag
   labelType?: 'basic' | 'detailed';
   copies?: number;
 }
@@ -32,11 +36,49 @@ export function AveryLabelPrint({
   stockModel,
   paintOption,
   color, // Added color prop
+  features,
+  modelId,
+  isHighPriority,
+  isLate,
   labelType = 'detailed',
   copies = 6
 }: AveryLabelPrintProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [barcodeGenerated, setBarcodeGenerated] = useState(false);
+
+  // Color coding logic
+  const getBarcodeColor = () => {
+    // Red for high priority or late orders
+    if (isHighPriority || isLate) {
+      return '#FF0000'; // Red
+    }
+    
+    // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
+    const paintedOptions = ['terraine', 'premium', 'standard', 'rattlesnake_rogue'];
+    const isPaintedOption = paintedOptions.some(option => 
+      paintOption?.toLowerCase().includes(option)
+    );
+    const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
+    
+    if (isPaintedOption || isFiberglassModel) {
+      return '#0066FF'; // Blue
+    }
+    
+    return '#000000'; // Black (default)
+  };
+
+  // Extract swivel studs and texture options from features
+  const getSwivelStudsText = () => {
+    if (!features?.swivel_studs) return null;
+    return features.swivel_studs !== 'standard_swivel_studs' && features.swivel_studs !== 'standard' 
+      ? features.swivel_studs.replace(/_/g, ' ') : null;
+  };
+
+  const getTextureText = () => {
+    if (!features?.texture_options) return null;
+    return features.texture_options !== 'no_texture' && features.texture_options !== 'none'
+      ? features.texture_options.replace(/_/g, ' ') : null;
+  };
 
   useEffect(() => {
     if (canvasRef.current && barcode) {
@@ -53,7 +95,7 @@ export function AveryLabelPrint({
           fontOptions: "",
           font: "monospace",
           background: "#ffffff",
-          lineColor: "#000000",
+          lineColor: getBarcodeColor(),
           margin: 5,
         });
         setBarcodeGenerated(true);
@@ -91,12 +133,17 @@ export function AveryLabelPrint({
             `${actionLength} ${stockModel}` :
             (actionLength || stockModel || orderId);
 
+          const swivelStudsText = getSwivelStudsText();
+          const textureText = getTextureText();
+          const specialOptionsLine = [swivelStudsText, textureText].filter(Boolean).join(' | ');
+
           return `
             <div class="avery-label">
               <div class="label-content">
                 <div class="line1">${orderId}</div>
                 ${customerName ? `<div class="line2">${customerName}</div>` : ''}
-                ${stockModel || color ? `<div class="line3">${stockModel || ''}${stockModel && color ? ' - ' : ''}${color || ''}</div>` : ''}
+                ${stockModel || paintOption ? `<div class="line3">${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}</div>` : ''}
+                ${specialOptionsLine ? `<div class="line-special"><span class="swivel-studs">${swivelStudsText || ''}</span>${swivelStudsText && textureText ? ' | ' : ''}<span class="texture-options">${textureText || ''}</span></div>` : ''}
                 ${dueDate ? `<div class="line4">Due: ${formatDate(dueDate)}</div>` : ''}
                 <div class="line5">
                   <canvas id="barcode-${index}" width="180" height="25"></canvas>
@@ -186,6 +233,27 @@ export function AveryLabelPrint({
                   text-align: center;
                 }
 
+                /* Special options line for swivel studs and texture */
+                .line-special {
+                  font-size: 5pt;
+                  margin: 1px 0;
+                  text-overflow: ellipsis;
+                  overflow: hidden;
+                  white-space: nowrap;
+                  text-align: center;
+                  line-height: 1.1;
+                }
+
+                .swivel-studs {
+                  color: #FF6600; /* Orange for non-standard swivel studs */
+                  font-weight: bold;
+                }
+
+                .texture-options {
+                  color: #9933CC; /* Purple for texture options */
+                  font-weight: bold;
+                }
+
                 /* Line 5: Barcode */
                 .line5 {
                   display: flex;
@@ -263,6 +331,7 @@ export function AveryLabelPrint({
                   height: 25,
                   displayValue: false,
                   margin: 2,
+                  lineColor: getBarcodeColor(),
                 });
               } catch (error) {
                 console.error(`Error generating barcode for label ${i}:`, error);
@@ -302,11 +371,22 @@ export function AveryLabelPrint({
               {customerName && (
                 <div className="text-xs">{customerName}</div>
               )}
-              {stockModel || color ? (
-                <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`${stockModel || ''}${stockModel && color ? ' - ' : ''}${color || ''}`}>
-                  {`${stockModel || ''}${(stockModel && color) ? ' - ' : ''}${color || ''}`}
+              {stockModel || paintOption ? (
+                <div className="text-xs font-bold" style={{ fontSize: '7px' }} title={`${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}`}>
+                  {`${stockModel || ''}${(stockModel && paintOption) ? ' - ' : ''}${paintOption || ''}`}
                 </div>
               ) : ''}
+              {(getSwivelStudsText() || getTextureText()) && (
+                <div className="text-xs" style={{ fontSize: '6px', lineHeight: '1.1' }}>
+                  {getSwivelStudsText() && (
+                    <span style={{ color: '#FF6600', fontWeight: 'bold' }}>{getSwivelStudsText()}</span>
+                  )}
+                  {getSwivelStudsText() && getTextureText() && ' | '}
+                  {getTextureText() && (
+                    <span style={{ color: '#9933CC', fontWeight: 'bold' }}>{getTextureText()}</span>
+                  )}
+                </div>
+              )}
               {dueDate && (
                 <div className="text-xs font-bold">{`Due: ${formatDate(dueDate)}`}</div>
               )}
@@ -355,9 +435,19 @@ export function AveryLabelPrint({
                 <strong>Stock Model:</strong> {stockModel}
               </div>
             )}
-            {color && (
+            {paintOption && (
               <div>
-                <strong>Color:</strong> {color}
+                <strong>Paint Option:</strong> {paintOption}
+              </div>
+            )}
+            {getSwivelStudsText() && (
+              <div>
+                <strong>Swivel Studs:</strong> <span style={{ color: '#FF6600' }}>{getSwivelStudsText()}</span>
+              </div>
+            )}
+            {getTextureText() && (
+              <div>
+                <strong>Texture:</strong> <span style={{ color: '#9933CC' }}>{getTextureText()}</span>
               </div>
             )}
             <div>

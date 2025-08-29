@@ -269,17 +269,28 @@ export default function POProductsPage() {
                   </Select>
                 </div>
 
-                {/* Barrel Inlet - Placeholder */}
+                {/* Barrel Inlet */}
                 <div className="space-y-2">
                   <Label htmlFor="barrelInlet">Barrel Inlet</Label>
-                  <Input
-                    id="barrelInlet"
-                    data-testid="input-barrel-inlet"
-                    value={formData.barrelInlet}
-                    onChange={(e) => handleInputChange('barrelInlet', e.target.value)}
-                    placeholder="Barrel Inlet (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.barrelInlet} 
+                    onValueChange={(value) => handleInputChange('barrelInlet', value)}
+                    disabled={featuresLoading}
+                  >
+                    <SelectTrigger data-testid="select-barrel-inlet">
+                      <SelectValue placeholder={featuresLoading ? "Loading..." : "Select barrel inlet"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {features
+                        .find((f: any) => f.name === 'barrel_inlet' || f.id === 'barrel_inlet')
+                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        .map((option: any) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* QDs - Placeholder */}

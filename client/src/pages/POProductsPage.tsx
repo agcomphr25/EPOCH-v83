@@ -27,6 +27,7 @@ interface POProductFormData {
   handedness: string;
   stockModel: string;
   actionInlet: string;
+  bottomMetal: string;
   barrelInlet: string;
   qds: string;
   swivelStuds: string;
@@ -44,6 +45,7 @@ export default function POProductsPage() {
     handedness: '',
     stockModel: '',
     actionInlet: '',
+    bottomMetal: '',
     barrelInlet: '',
     qds: '',
     swivelStuds: '',
@@ -107,6 +109,7 @@ export default function POProductsPage() {
       handedness: '',
       stockModel: '',
       actionInlet: '',
+      bottomMetal: '',
       barrelInlet: '',
       qds: '',
       swivelStuds: '',
@@ -232,6 +235,30 @@ export default function POProductsPage() {
                     <SelectContent>
                       {features
                         .find((f: any) => f.name === 'action_inlet' || f.id === 'action_inlet')
+                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        .map((option: any) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Bottom Metal */}
+                <div className="space-y-2">
+                  <Label htmlFor="bottomMetal">Bottom Metal</Label>
+                  <Select 
+                    value={formData.bottomMetal} 
+                    onValueChange={(value) => handleInputChange('bottomMetal', value)}
+                    disabled={featuresLoading}
+                  >
+                    <SelectTrigger data-testid="select-bottom-metal">
+                      <SelectValue placeholder={featuresLoading ? "Loading..." : "Select bottom metal"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {features
+                        .find((f: any) => f.name === 'bottom_metal' || f.id === 'bottom_metal')
                         ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
                         .map((option: any) => (
                           <SelectItem key={option.value} value={option.value}>

@@ -45,7 +45,7 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
   const handleDownloadPdf = async () => {
     try {
       setDownloadingPdf(true);
-      window.open(`/api/sales-order/${orderId}`, '_blank');
+      window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
     } catch (error) {
       console.error('Error downloading PDF:', error);
     } finally {

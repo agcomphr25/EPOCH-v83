@@ -321,6 +321,12 @@ export default function Navigation() {
       label: 'JENS Dashboard',
       icon: Shield,
       description: 'Quality Control dashboard with Finish QC queue, orders, and employee portal'
+    },
+    {
+      path: '/staciwtest-dashboard',
+      label: 'STACIW Dashboard',
+      icon: Factory,
+      description: 'Comprehensive order and production management dashboard'
     }
   ];
 

@@ -2451,6 +2451,10 @@ export function registerRoutes(app: Express): Server {
           // Skip the original barcode drawing - will be drawn with proper color below
           console.log(`✅ Preparing Code 39 barcode for ${barcodeText}`);
           
+          // Get model and action length (using display names) - need these early for display
+          const actionLength = order.features?.action_length || 'unknown';
+          const modelDisplayName = stockModelMap.get(order.modelId) || order.modelId || 'Unknown';
+          
           // Add order information at top
           page.drawText(`${order.orderId}`, {
             x: x + 8,
@@ -2466,10 +2470,6 @@ export function registerRoutes(app: Express): Server {
             size: 7,
             color: rgb(0, 0, 0),
           });
-          
-          // Add model and action length (using display names)
-          const actionLength = order.features?.action_length || 'unknown';
-          const modelDisplayName = stockModelMap.get(order.modelId) || order.modelId || 'Unknown';
           
           // Check for special features to add to label
           const features = order.features || {};

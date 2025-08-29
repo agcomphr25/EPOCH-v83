@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar, Truck, DollarSign, Package, AlertTriangle } from 'lucide-react';
+import { TrendingUp, ArrowLeft, CheckCircle, ArrowRight, FileText, Calendar, Truck, DollarSign, Package, AlertTriangle, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,6 +22,11 @@ export default function QCShippingQueuePage() {
   const [showLabelCreator, setShowLabelCreator] = useState(false);
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
+
+  // State for bulk printing modal
+  const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
+  const [printQueue, setPrintQueue] = useState<{ orderId: string, type: 'sales' | 'qc' }[]>([]);
+  const [currentPrintIndex, setCurrentPrintIndex] = useState(0);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -396,23 +401,56 @@ export default function QCShippingQueuePage() {
     if (selectedOrders.size === 0) return;
     
     const orderIds = Array.from(selectedOrders);
-    console.log('Bulk sales order download - Selected order IDs:', orderIds);
+    const queue = orderIds.map(orderId => ({ orderId, type: 'sales' as const }));
     
-    orderIds.forEach((orderId, index) => {
-      // Add small delay between opening tabs to prevent browser blocking
-      setTimeout(() => {
-        console.log(`Opening sales order PDF for ${orderId} (index ${index})`);
-        window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-      }, index * 100);
-    });
+    setPrintQueue(queue);
+    setCurrentPrintIndex(0);
+    setShowBulkPrintModal(true);
+  };
 
-    // Show toast notification after processing
-    setTimeout(() => {
-      toast({
-        title: "Sales orders opened",
-        description: `${orderIds.length} sales orders opened in new tabs for printing`
-      });
-    }, (orderIds.length * 100) + 500);
+  // Handle bulk QC checklist download with modal
+  const handleBulkQCChecklistDownloadModal = () => {
+    if (selectedOrders.size === 0) return;
+    
+    const orderIds = Array.from(selectedOrders);
+    const queue = orderIds.map(orderId => ({ orderId, type: 'qc' as const }));
+    
+    setPrintQueue(queue);
+    setCurrentPrintIndex(0);
+    setShowBulkPrintModal(true);
+  };
+
+  // Open current PDF in queue
+  const openCurrentPDF = () => {
+    if (currentPrintIndex >= printQueue.length) return;
+    
+    const current = printQueue[currentPrintIndex];
+    const url = current.type === 'sales' 
+      ? `/api/shipping-pdf/sales-order/${current.orderId}`
+      : `/api/shipping-pdf/qc-checklist/${current.orderId}`;
+    
+    window.open(url, '_blank');
+  };
+
+  // Move to next PDF in queue
+  const nextPDF = () => {
+    if (currentPrintIndex < printQueue.length - 1) {
+      setCurrentPrintIndex(currentPrintIndex + 1);
+    }
+  };
+
+  // Move to previous PDF in queue
+  const previousPDF = () => {
+    if (currentPrintIndex > 0) {
+      setCurrentPrintIndex(currentPrintIndex - 1);
+    }
+  };
+
+  // Close bulk print modal
+  const closeBulkPrintModal = () => {
+    setShowBulkPrintModal(false);
+    setPrintQueue([]);
+    setCurrentPrintIndex(0);
   };
 
   // UPS Label functionality moved from ShippingManagement.tsx
@@ -853,7 +891,7 @@ export default function QCShippingQueuePage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleBulkQCChecklistDownload}
+                  onClick={handleBulkQCChecklistDownloadModal}
                   disabled={selectedOrders.size === 0}
                   size="sm"
                   className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-900/20"
@@ -920,6 +958,75 @@ export default function QCShippingQueuePage() {
                   </div>
                 </div>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Bulk Print Queue Modal */}
+      {showBulkPrintModal && (
+        <Dialog open={showBulkPrintModal} onOpenChange={closeBulkPrintModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Bulk Print Queue
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="text-lg font-semibold mb-2">
+                  {printQueue[currentPrintIndex]?.type === 'sales' ? 'Sales Order' : 'QC Checklist'}
+                </div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {printQueue[currentPrintIndex]?.orderId}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {currentPrintIndex + 1} of {printQueue.length}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={previousPDF}
+                  disabled={currentPrintIndex === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <Button
+                  onClick={openCurrentPDF}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Open PDF
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={nextPDF}
+                  disabled={currentPrintIndex === printQueue.length - 1}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeBulkPrintModal}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Close Queue
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

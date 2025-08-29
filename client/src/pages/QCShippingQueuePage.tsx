@@ -393,23 +393,23 @@ export default function QCShippingQueuePage() {
 
   // Handle bulk sales order download
   const handleBulkSalesOrderDownload = () => {
+    if (selectedOrders.size === 0) return;
+    
     const orderIds = Array.from(selectedOrders);
-    if (orderIds.length === 0) return;
-
     let successCount = 0;
     let errorCount = 0;
 
-    // Open each sales order PDF with a small delay to prevent browser blocking
     orderIds.forEach((orderId, index) => {
-      setTimeout(() => {
-        try {
+      try {
+        // Add small delay between opening tabs to prevent browser blocking
+        setTimeout(() => {
           window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
           successCount++;
-        } catch (error) {
-          console.error(`Error opening sales order for ${orderId}:`, error);
-          errorCount++;
-        }
-      }, index * 100);
+        }, index * 100);
+      } catch (error) {
+        console.error(`Error generating sales order for ${orderId}:`, error);
+        errorCount++;
+      }
     });
 
     // Show toast notification after processing

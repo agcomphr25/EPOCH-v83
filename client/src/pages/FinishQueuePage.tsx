@@ -13,12 +13,15 @@ import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function FinishQueuePage() {
   // Multi-select state
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState<string>('');
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -66,13 +69,10 @@ export default function FinishQueuePage() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order download
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Function to handle sales order modal
+  const handleSalesOrderView = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setSalesOrderModalOpen(true);
   };
 
   // Get orders in Finish department
@@ -539,7 +539,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -616,7 +616,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -693,7 +693,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -770,7 +770,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -847,7 +847,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -924,7 +924,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -999,7 +999,7 @@ export default function FinishQueuePage() {
                               <Badge
                                 variant="outline"
                                 className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() => handleSalesOrderDownload(order.orderId)}
+                                onClick={() => handleSalesOrderView(order.orderId)}
                               >
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
@@ -1066,6 +1066,13 @@ export default function FinishQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Sales Order Modal */}
+      <SalesOrderModal 
+        isOpen={salesOrderModalOpen}
+        onClose={() => setSalesOrderModalOpen(false)}
+        orderId={selectedOrderId}
+      />
     </div>
   );
 }

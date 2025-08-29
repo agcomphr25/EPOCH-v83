@@ -238,7 +238,11 @@ export default function POProductsPage() {
                     <SelectContent>
                       {features
                         .find((f: any) => f.name === 'action_length' || f.id === 'action_length')
-                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        ?.options?.filter((option: any) => 
+                          option.value && 
+                          option.value.trim() !== '' && 
+                          option.value.toLowerCase() !== 'none'
+                        )
                         .map((option: any) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}

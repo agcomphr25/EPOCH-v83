@@ -578,20 +578,23 @@ export default function OrderEntry() {
 
   // Load order data only after initial data is loaded
   useEffect(() => {
-    if (!initialDataLoaded || modelOptions.length === 0) return;
+    if (!initialDataLoaded) return;
 
     const editOrderId = getOrderIdFromUrl();
     if (editOrderId) {
-      setIsEditMode(true);
-      setEditingOrderId(editOrderId);
-      console.log('🔄 Loading existing order with model options available:', modelOptions.length);
-      loadExistingOrder(editOrderId);
+      // Only load existing order if we have model options
+      if (modelOptions.length > 0) {
+        setIsEditMode(true);
+        setEditingOrderId(editOrderId);
+        console.log('🔄 Loading existing order with model options available:', modelOptions.length);
+        loadExistingOrder(editOrderId);
+      }
     } else {
       setIsEditMode(false);
       setEditingOrderId(null);
-      generateOrderId();
+      generateOrderId(); // Generate order ID even without stock models
     }
-  }, [initialDataLoaded, modelOptions.length]); // Wait for both initial data AND model options
+  }, [initialDataLoaded, modelOptions.length]); // Wait for initial data, but don't block on model options
 
   // Clear Medium action length when switching to Ferrata/Armor models and LOP for CAT/Visigoth models
   useEffect(() => {

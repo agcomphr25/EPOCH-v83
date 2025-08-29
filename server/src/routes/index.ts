@@ -2486,18 +2486,17 @@ export function registerRoutes(app: Express): Server {
                              features.texture_options !== 'none'
                              ? features.texture_options.replace(/_/g, ' ') : null;
           
-          // NSNH - No Swivel Studs No Holes (check multiple possible values)
-          // Only add NSNH if we don't already have swivel text to avoid duplication
+          // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"
           const hasNSNH = features.swivel_studs === 'no_swivel_studs' || 
                          features.swivel_studs === 'no_swivel_no_holes' ||
                          (features.swivel_studs && features.swivel_studs.includes('no_swivel')) ||
                          (features.swivel_studs && features.swivel_studs.includes('no_holes'));
           
-          if (hasNSNH && !swivelStudsText) {
+          if (hasNSNH) {
             specialLabels.push('NSNH');
           }
           
-          // Add non-standard swivel studs (avoid duplication with NSNH)
+          // Add non-standard swivel studs (only if it's not a "no swivel" case)
           if (swivelStudsText && !hasNSNH) {
             specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
           }

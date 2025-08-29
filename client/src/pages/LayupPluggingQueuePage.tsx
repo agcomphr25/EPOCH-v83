@@ -264,18 +264,8 @@ function QueueOrderItem({
           ) : null;
         })()}
 
-        {/* Show Sales Order and Kickback Badges */}
+        {/* Show Kickback Badge */}
         <div className="text-xs mt-0.5 flex gap-1 flex-wrap">
-          {handleSalesOrderDownload && (
-            <Badge
-              variant="outline"
-              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-              onClick={() => handleSalesOrderDownload(order.orderId)}
-            >
-              <Eye className="w-3 h-3 mr-1" />
-              View Sales Order
-            </Badge>
-          )}
           {hasKickbacks && getKickbackStatus && handleKickbackClick && hasKickbacks(order.orderId) && (
             <Badge
               variant="destructive"

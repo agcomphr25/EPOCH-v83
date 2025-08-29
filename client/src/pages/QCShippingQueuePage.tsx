@@ -401,15 +401,15 @@ export default function QCShippingQueuePage() {
 
     // Open each sales order PDF with a small delay to prevent browser blocking
     orderIds.forEach((orderId, index) => {
-      try {
-        setTimeout(() => {
+      setTimeout(() => {
+        try {
           window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
           successCount++;
-        }, index * 100);
-      } catch (error) {
-        console.error(`Error opening sales order for ${orderId}:`, error);
-        errorCount++;
-      }
+        } catch (error) {
+          console.error(`Error opening sales order for ${orderId}:`, error);
+          errorCount++;
+        }
+      }, index * 100);
     });
 
     // Show toast notification after processing

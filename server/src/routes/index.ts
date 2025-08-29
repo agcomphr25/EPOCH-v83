@@ -2473,6 +2473,16 @@ export function registerRoutes(app: Express): Server {
           const features = order.features || {};
           const specialLabels = [];
           
+          // Extract swivel studs and texture options for color-coded display
+          const swivelStudsText = features.swivel_studs && 
+                                 features.swivel_studs !== 'standard_swivel_studs' && 
+                                 features.swivel_studs !== 'standard' 
+                                 ? features.swivel_studs.replace(/_/g, ' ') : null;
+          
+          const textureText = features.texture_options && 
+                             features.texture_options !== 'no_texture' && 
+                             features.texture_options !== 'none'
+                             ? features.texture_options.replace(/_/g, ' ') : null;
           
           // NSNH - No Swivel Studs No Holes (check multiple possible values)
           if (features.swivel_studs === 'no_swivel_studs' || 
@@ -2482,21 +2492,14 @@ export function registerRoutes(app: Express): Server {
             specialLabels.push('NSNH');
           }
           
-          // Texture - specific display based on texture type
-          if (features.texture_options && 
-              features.texture_options !== 'no_texture' && 
-              features.texture_options !== 'none' &&
-              !features.texture_options.includes('no_')) {
-            // Show specific texture type
-            if (features.texture_options.includes('grip_only')) {
-              specialLabels.push('GRIP');
-            } else if (features.texture_options.includes('forend_only')) {
-              specialLabels.push('FOREND');
-            } else if (features.texture_options.includes('grip_and_forend')) {
-              specialLabels.push('GRIP & FOREND');
-            } else {
-              specialLabels.push('TEXTURE');
-            }
+          // Add non-standard swivel studs in orange (simulated with bold text in PDF)
+          if (swivelStudsText) {
+            specialLabels.push(`SWIVEL: ${swivelStudsText.toUpperCase()}`);
+          }
+          
+          // Add texture options in purple (simulated with different style in PDF)
+          if (textureText) {
+            specialLabels.push(`TEXTURE: ${textureText.toUpperCase()}`);
           }
           
           // Carbon Camo Ready
@@ -2506,18 +2509,30 @@ export function registerRoutes(app: Express): Server {
           }
           
           
-          // Check if paint option should make barcode blue
+          // Determine barcode color based on specifications
           const paintOption = features.paint_options || '';
-          const shouldBeBlue = paintOption.includes('terrain') || 
-                               paintOption.includes('premium') || 
-                               paintOption.includes('standard') ||
-                               paintOption === 'terrain' ||
-                               paintOption === 'premium' ||
-                               paintOption === 'standard' ||
-                               order.orderId.startsWith('FG');
+          const modelId = order.modelId || '';
           
-          // Set barcode color - blue for specific paint options, black otherwise
-          const barcodeColor = shouldBeBlue ? rgb(0, 0, 1) : rgb(0, 0, 0);
+          // Check if this order is high priority or late (you can add this logic later)
+          const isHighPriority = false; // TODO: Add high priority logic
+          const isLate = false; // TODO: Add due date checking logic
+          
+          // Red for high priority or late orders
+          let barcodeColor = rgb(0, 0, 0); // Default black
+          if (isHighPriority || isLate) {
+            barcodeColor = rgb(1, 0, 0); // Red
+          } else {
+            // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
+            const paintedOptions = ['terraine', 'premium', 'standard', 'rattlesnake_rogue'];
+            const isPaintedOption = paintedOptions.some(option => 
+              paintOption.toLowerCase().includes(option)
+            );
+            const isFiberglassModel = modelId.toLowerCase().startsWith('fg');
+            
+            if (isPaintedOption || isFiberglassModel) {
+              barcodeColor = rgb(0, 0.4, 1); // Blue (#0066FF)
+            }
+          }
           
           // Redraw barcode with appropriate color
           const redrawCode39Barcode = (text: string, startX: number, startY: number, color: any) => {

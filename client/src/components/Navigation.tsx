@@ -327,6 +327,12 @@ export default function Navigation() {
       label: 'STACIW Dashboard',
       icon: Factory,
       description: 'Comprehensive order and production management dashboard'
+    },
+    {
+      path: '/darlenebtest-dashboard',
+      label: 'DARLENEB Dashboard',
+      icon: Users,
+      description: 'Order management and customer relations dashboard'
     }
   ];
 

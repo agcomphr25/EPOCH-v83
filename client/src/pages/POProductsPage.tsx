@@ -319,17 +319,28 @@ export default function POProductsPage() {
                   />
                 </div>
 
-                {/* Paint Options - Placeholder */}
+                {/* Paint Options */}
                 <div className="space-y-2">
                   <Label htmlFor="paintOptions">Paint Options</Label>
-                  <Input
-                    id="paintOptions"
-                    data-testid="input-paint-options"
-                    value={formData.paintOptions}
-                    onChange={(e) => handleInputChange('paintOptions', e.target.value)}
-                    placeholder="Paint Options (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.paintOptions} 
+                    onValueChange={(value) => handleInputChange('paintOptions', value)}
+                    disabled={featuresLoading}
+                  >
+                    <SelectTrigger data-testid="select-paint-options">
+                      <SelectValue placeholder={featuresLoading ? "Loading..." : "Select paint options"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {features
+                        .find((f: any) => f.name === 'paint_options' || f.id === 'paint_options')
+                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        .map((option: any) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Texture - Placeholder */}

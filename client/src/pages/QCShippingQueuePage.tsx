@@ -14,7 +14,6 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
-import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function QCShippingQueuePage() {
   // State for selected orders and shipping functionality
@@ -23,8 +22,6 @@ export default function QCShippingQueuePage() {
   const [showLabelCreator, setShowLabelCreator] = useState(false);
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
-  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
-  const [salesOrderOrderId, setSalesOrderOrderId] = useState<string>('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -389,10 +386,9 @@ export default function QCShippingQueuePage() {
     }, (orderIds.length * 100) + 500);
   };
 
-  // Handle sales order modal
+  // Handle sales order PDF download
   const handleSalesOrderView = (orderId: string) => {
-    setSalesOrderOrderId(orderId);
-    setSalesOrderModalOpen(true);
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
   // UPS Label functionality moved from ShippingManagement.tsx
@@ -897,12 +893,6 @@ export default function QCShippingQueuePage() {
         </Dialog>
       )}
 
-      {/* Sales Order Modal */}
-      <SalesOrderModal 
-        isOpen={salesOrderModalOpen}
-        onClose={() => setSalesOrderModalOpen(false)}
-        orderId={salesOrderOrderId}
-      />
     </div>
   );
 }

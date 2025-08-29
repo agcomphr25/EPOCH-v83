@@ -331,14 +331,39 @@ export default function POProductsPage() {
                       <SelectValue placeholder={featuresLoading ? "Loading..." : "Select paint options"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {features
-                        .find((f: any) => f.name === 'paint_options' || f.id === 'paint_options')
-                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
-                        .map((option: any) => (
+                      {(() => {
+                        // Find all paint-related features from different categories
+                        const paintFeatures = features.filter((f: any) => 
+                          f.category === 'paint_options' ||
+                          f.displayName === 'Premium Options' ||
+                          f.displayName === 'Terrain Options' ||
+                          f.displayName === 'Rogue Options' ||
+                          f.displayName === 'Standard Options' ||
+                          f.displayName === 'Carbon Camo Ready' ||
+                          f.displayName === 'Camo Options' ||
+                          f.id === 'metallic_finishes' ||
+                          f.name === 'metallic_finishes' ||
+                          f.category === 'paint' ||
+                          f.subcategory === 'paint'
+                        );
+
+                        const allOptions: any[] = [];
+                        paintFeatures.forEach((feature: any) => {
+                          if (feature.options) {
+                            feature.options.forEach((option: any) => {
+                              if (option.value && option.value.trim() !== '') {
+                                allOptions.push(option);
+                              }
+                            });
+                          }
+                        });
+
+                        return allOptions.map((option: any) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
-                        ))}
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>

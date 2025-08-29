@@ -330,6 +330,12 @@ export default function Navigation() {
       label: 'P2 Purchase Orders',
       icon: FileText,
       description: 'P2 customer management and purchase orders with Part #, Quantity, Price'
+    },
+    {
+      path: '/po-products',
+      label: 'PO Products',
+      icon: Package,
+      description: 'Product configuration for purchase orders'
     }
   ];
 

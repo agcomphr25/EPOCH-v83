@@ -2358,9 +2358,9 @@ export function registerRoutes(app: Express): Server {
           // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications: 0.25" margin between columns, 0.5" top/bottom margins, Label size 2.625" x 1"
+          // Avery 5160 specifications: 0.25" margin between columns, reduced top margin, Label size 2.625" x 1"
           const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const topMargin = 36; // 0.5" * 72 points/inch
+          const topMargin = 18; // 0.25" * 72 points/inch (reduced from 0.5")
           const bottomMargin = 36; // 0.5" * 72 points/inch
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch

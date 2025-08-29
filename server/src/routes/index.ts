@@ -2355,15 +2355,17 @@ export function registerRoutes(app: Express): Server {
           const order = orderDetails[i];
           const labelIndex = i - startIndex;
           
-          // Calculate label position (3x10 grid) - Avery 8160 format with correct margins
+          // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 8160 specifications: Left margin 0.21975", Top margin 0.5", Label size 1" x 2-5/8"
-          const leftMargin = 15.8; // 0.21975" * 72 points/inch
-          const topMargin = 36; // 0.5" * 72 points/inch  
+          // Avery 5160 specifications: 0.25" margin between columns, 0.5" top/bottom margins, Label size 2.625" x 1"
+          const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
+          const topMargin = 36; // 0.5" * 72 points/inch
+          const bottomMargin = 36; // 0.5" * 72 points/inch
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
-          const x = leftMargin + (col * labelWidth);
+          const columnGap = 18; // 0.25" * 72 points/inch (gap between columns)
+          const x = leftMargin + (col * (labelWidth + columnGap));
           const y = 792 - topMargin - (row * labelHeight) - labelHeight; // Flip Y coordinate
           
           // Draw label border with clear separation  

@@ -315,6 +315,12 @@ export default function Navigation() {
       label: 'JOHNL Dashboard',
       icon: Settings,
       description: 'CNC Operations dashboard with queue, orders, and employee portal'
+    },
+    {
+      path: '/jenstest-dashboard',
+      label: 'JENS Dashboard',
+      icon: Shield,
+      description: 'Quality Control dashboard with Finish QC queue, orders, and employee portal'
     }
   ];
 

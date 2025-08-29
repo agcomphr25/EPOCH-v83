@@ -26,6 +26,7 @@ interface POProductFormData {
   material: string;
   handedness: string;
   stockModel: string;
+  actionLength: string;
   actionInlet: string;
   bottomMetal: string;
   barrelInlet: string;
@@ -44,6 +45,7 @@ export default function POProductsPage() {
     material: '',
     handedness: '',
     stockModel: '',
+    actionLength: '',
     actionInlet: '',
     bottomMetal: '',
     barrelInlet: '',
@@ -108,6 +110,7 @@ export default function POProductsPage() {
       material: '',
       handedness: '',
       stockModel: '',
+      actionLength: '',
       actionInlet: '',
       bottomMetal: '',
       barrelInlet: '',
@@ -215,6 +218,30 @@ export default function POProductsPage() {
                         .map((model) => (
                           <SelectItem key={model.id} value={model.id}>
                             {model.displayName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Action Length */}
+                <div className="space-y-2">
+                  <Label htmlFor="actionLength">Action Length</Label>
+                  <Select 
+                    value={formData.actionLength} 
+                    onValueChange={(value) => handleInputChange('actionLength', value)}
+                    disabled={featuresLoading}
+                  >
+                    <SelectTrigger data-testid="select-action-length">
+                      <SelectValue placeholder={featuresLoading ? "Loading..." : "Select action length"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {features
+                        .find((f: any) => f.name === 'action_length' || f.id === 'action_length')
+                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        .map((option: any) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                     </SelectContent>

@@ -396,36 +396,22 @@ export default function QCShippingQueuePage() {
     if (selectedOrders.size === 0) return;
     
     const orderIds = Array.from(selectedOrders);
-    let successCount = 0;
-    let errorCount = 0;
-
+    console.log('Bulk sales order download - Selected order IDs:', orderIds);
+    
     orderIds.forEach((orderId, index) => {
-      try {
-        // Add small delay between opening tabs to prevent browser blocking
-        setTimeout(() => {
-          window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-          successCount++;
-        }, index * 100);
-      } catch (error) {
-        console.error(`Error generating sales order for ${orderId}:`, error);
-        errorCount++;
-      }
+      // Add small delay between opening tabs to prevent browser blocking
+      setTimeout(() => {
+        console.log(`Opening sales order PDF for ${orderId} (index ${index})`);
+        window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+      }, index * 100);
     });
 
     // Show toast notification after processing
     setTimeout(() => {
-      if (errorCount === 0) {
-        toast({
-          title: "Sales orders opened",
-          description: `${successCount} sales orders opened in new tabs for printing`
-        });
-      } else {
-        toast({
-          title: "Partial success",
-          description: `${successCount} sales orders opened, ${errorCount} failed`,
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "Sales orders opened",
+        description: `${orderIds.length} sales orders opened in new tabs for printing`
+      });
     }, (orderIds.length * 100) + 500);
   };
 

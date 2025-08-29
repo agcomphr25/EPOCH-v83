@@ -311,17 +311,22 @@ export default function POProductsPage() {
                   </Select>
                 </div>
 
-                {/* Swivel Studs - Placeholder */}
+                {/* Swivel Studs */}
                 <div className="space-y-2">
                   <Label htmlFor="swivelStuds">Swivel Studs</Label>
-                  <Input
-                    id="swivelStuds"
-                    data-testid="input-swivel-studs"
-                    value={formData.swivelStuds}
-                    onChange={(e) => handleInputChange('swivelStuds', e.target.value)}
-                    placeholder="Swivel Studs (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.swivelStuds} 
+                    onValueChange={(value) => handleInputChange('swivelStuds', value)}
+                  >
+                    <SelectTrigger data-testid="select-swivel-studs">
+                      <SelectValue placeholder="Select swivel studs option" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="3_ah">3 (AH)</SelectItem>
+                      <SelectItem value="2_privateer">2 (Privateer)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Paint Options */}

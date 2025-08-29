@@ -52,10 +52,20 @@ export default function POProductsPage() {
   });
 
   // Fetch stock models for dropdown
+  // Fetch stock models for dropdown
   const { data: stockModels = [], isLoading: stockModelsLoading } = useQuery<StockModel[]>({
     queryKey: ['/api/stock-models'],
     queryFn: async () => {
       const result = await apiRequest('/api/stock-models');
+      return result;
+    },
+  });
+
+  // Fetch features for Action Inlet dropdown
+  const { data: features = [], isLoading: featuresLoading } = useQuery({
+    queryKey: ['/api/features'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/features');
       return result;
     },
   });
@@ -208,17 +218,28 @@ export default function POProductsPage() {
                   </Select>
                 </div>
 
-                {/* Action Inlet - Placeholder */}
+                {/* Action Inlet */}
                 <div className="space-y-2">
                   <Label htmlFor="actionInlet">Action Inlet</Label>
-                  <Input
-                    id="actionInlet"
-                    data-testid="input-action-inlet"
-                    value={formData.actionInlet}
-                    onChange={(e) => handleInputChange('actionInlet', e.target.value)}
-                    placeholder="Action Inlet (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.actionInlet} 
+                    onValueChange={(value) => handleInputChange('actionInlet', value)}
+                    disabled={featuresLoading}
+                  >
+                    <SelectTrigger data-testid="select-action-inlet">
+                      <SelectValue placeholder={featuresLoading ? "Loading..." : "Select action inlet"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {features
+                        .find((f: any) => f.name === 'action_inlet' || f.id === 'action_inlet')
+                        ?.options?.filter((option: any) => option.value && option.value.trim() !== '')
+                        .map((option: any) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Barrel Inlet - Placeholder */}

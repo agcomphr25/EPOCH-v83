@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -333,6 +333,12 @@ export default function Navigation() {
       label: 'DARLENEB Dashboard',
       icon: Users,
       description: 'Order management and customer relations dashboard'
+    },
+    {
+      path: '/timstest-dashboard',
+      label: 'TIMS Dashboard',
+      icon: Cog,
+      description: 'CNC operations and maintenance management dashboard'
     }
   ];
 

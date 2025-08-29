@@ -293,17 +293,22 @@ export default function POProductsPage() {
                   </Select>
                 </div>
 
-                {/* QDs - Placeholder */}
+                {/* QDs */}
                 <div className="space-y-2">
                   <Label htmlFor="qds">QDs</Label>
-                  <Input
-                    id="qds"
-                    data-testid="input-qds"
-                    value={formData.qds}
-                    onChange={(e) => handleInputChange('qds', e.target.value)}
-                    placeholder="QDs (placeholder)"
-                    disabled
-                  />
+                  <Select 
+                    value={formData.qds} 
+                    onValueChange={(value) => handleInputChange('qds', value)}
+                  >
+                    <SelectTrigger data-testid="select-qds">
+                      <SelectValue placeholder="Select QDs option" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="2_on_left">2 on Left</SelectItem>
+                      <SelectItem value="2_on_right">2 on Right</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Swivel Studs - Placeholder */}

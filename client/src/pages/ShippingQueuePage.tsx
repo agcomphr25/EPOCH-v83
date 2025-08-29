@@ -834,6 +834,7 @@ export default function ShippingQueuePage() {
     if (order.specialShippingInternational) return "🌍 International";
     if (order.specialShippingNextDayAir) return "⚡ Next Day Air";
     if (order.specialShippingBillToReceiver) return "💳 Bill to Receiver";
+    if (order.hasAltShipTo) return "📍 Alt Ship To";
     return null;
   }
 

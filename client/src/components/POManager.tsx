@@ -516,27 +516,15 @@ export default function POManager() {
                   </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="poNumber">PO Number</Label>
-                      <Input
-                        id="poNumber"
-                        name="poNumber"
-                        value={formData.poNumber}
-                        onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="customerId">Customer ID</Label>
-                      <Input
-                        id="customerId"
-                        name="customerId"
-                        value={formData.customerId}
-                        onChange={(e) => setFormData({...formData, customerId: e.target.value})}
-                        required
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="poNumber">PO Number</Label>
+                    <Input
+                      id="poNumber"
+                      name="poNumber"
+                      value={formData.poNumber}
+                      onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                      required
+                    />
                   </div>
 
                   <div>

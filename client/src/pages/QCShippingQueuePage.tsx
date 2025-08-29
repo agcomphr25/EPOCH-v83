@@ -391,6 +391,44 @@ export default function QCShippingQueuePage() {
     window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
+  // Handle bulk sales order download
+  const handleBulkSalesOrderDownload = () => {
+    const orderIds = Array.from(selectedOrders);
+    if (orderIds.length === 0) return;
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Open each sales order PDF with a small delay to prevent browser blocking
+    orderIds.forEach((orderId, index) => {
+      try {
+        setTimeout(() => {
+          window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+          successCount++;
+        }, index * 100);
+      } catch (error) {
+        console.error(`Error opening sales order for ${orderId}:`, error);
+        errorCount++;
+      }
+    });
+
+    // Show toast notification after processing
+    setTimeout(() => {
+      if (errorCount === 0) {
+        toast({
+          title: "Sales orders opened",
+          description: `${successCount} sales orders opened in new tabs for printing`
+        });
+      } else {
+        toast({
+          title: "Partial success",
+          description: `${successCount} sales orders opened, ${errorCount} failed`,
+          variant: "destructive"
+        });
+      }
+    }, (orderIds.length * 100) + 500);
+  };
+
   // UPS Label functionality moved from ShippingManagement.tsx
   const handleCreateLabel = (orderId: string) => {
     setSelectedOrderId(orderId);
@@ -818,6 +856,14 @@ export default function QCShippingQueuePage() {
                   size="sm"
                 >
                   Clear Selection
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleBulkSalesOrderDownload}
+                  size="sm"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Print Sales Orders ({selectedOrders.size})
                 </Button>
                 <Button
                   variant="outline"

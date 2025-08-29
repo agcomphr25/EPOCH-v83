@@ -20,6 +20,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, Link } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
+import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
@@ -41,8 +42,7 @@ export default function BarcodeQueuePage() {
   const [selectAll, setSelectAll] = useState(false);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
-  const [salesOrderContent, setSalesOrderContent] = useState('');
-  const [salesOrderLoading, setSalesOrderLoading] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
   const [kickbackOrderId, setKickbackOrderId] = useState('');
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
@@ -161,46 +161,10 @@ export default function BarcodeQueuePage() {
     submitKickbackMutation.mutate({ formData, orderId: kickbackOrderId });
   };
 
-  // Function to handle sales order view in modal
-  const handleSalesOrderView = async (orderId: string) => {
-    setSalesOrderLoading(true);
+  // Function to handle sales order modal
+  const handleSalesOrderView = (orderId: string) => {
+    setSelectedOrderId(orderId);
     setSalesOrderModalOpen(true);
-    setSalesOrderContent('');
-
-    try {
-      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        setSalesOrderContent(url);
-      } else {
-        setSalesOrderContent('');
-        toast({
-          title: "Error loading sales order",
-          description: "Failed to load sales order PDF",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error loading sales order:', error);
-      setSalesOrderContent('');
-      toast({
-        title: "Error loading sales order", 
-        description: "Failed to load sales order PDF",
-        variant: "destructive"
-      });
-    } finally {
-      setSalesOrderLoading(false);
-    }
-  };
-
-  // Function to handle sales order download - opens in new tab
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
   };
 
 
@@ -981,41 +945,6 @@ export default function BarcodeQueuePage() {
         </div>
       )}
 
-      {/* Sales Order Modal */}
-      <Dialog open={salesOrderModalOpen} onOpenChange={(open) => {
-        setSalesOrderModalOpen(open);
-        if (!open && salesOrderContent) {
-          // Clean up blob URL to prevent memory leaks
-          URL.revokeObjectURL(salesOrderContent);
-          setSalesOrderContent('');
-        }
-      }}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Sales Order</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            {salesOrderLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <span className="ml-2">Loading sales order...</span>
-              </div>
-            ) : salesOrderContent ? (
-              <div className="w-full h-[70vh]">
-                <iframe 
-                  src={salesOrderContent}
-                  className="w-full h-full border-0"
-                  title="Sales Order PDF"
-                />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-gray-500">Failed to load sales order</p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Kickback Modal */}
       <Dialog open={kickbackModalOpen} onOpenChange={setKickbackModalOpen}>
@@ -1157,6 +1086,13 @@ export default function BarcodeQueuePage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Sales Order Modal */}
+      <SalesOrderModal 
+        isOpen={salesOrderModalOpen}
+        onClose={() => setSalesOrderModalOpen(false)}
+        orderId={selectedOrderId}
+      />
     </div>
   );
 }

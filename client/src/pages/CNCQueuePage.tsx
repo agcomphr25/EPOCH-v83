@@ -14,6 +14,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import FBNumberSearch from '@/components/FBNumberSearch';
+import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function CNCQueuePage() {
   const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<Set<string>>(new Set());
@@ -22,6 +23,8 @@ export default function CNCQueuePage() {
   const [selectAllGunsmith, setSelectAllGunsmith] = useState(false);
   const [selectAllFinish, setSelectAllFinish] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
+  const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -112,13 +115,10 @@ export default function CNCQueuePage() {
     createKickbackMutation.mutate(kickbackData);
   };
 
-  // Function to handle sales order download - opens in new tab
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-    toast({
-      title: "Sales order opened",
-      description: `Sales order for ${orderId} opened in new tab for viewing`
-    });
+  // Function to handle sales order modal
+  const handleSalesOrderView = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setSalesOrderModalOpen(true);
   };
 
   // Get stock models for display names
@@ -640,7 +640,7 @@ export default function CNCQueuePage() {
                             className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSalesOrderDownload(order.orderId);
+                              handleSalesOrderView(order.orderId);
                             }}
                           >
                             <FileText className="w-3 h-3" />
@@ -849,6 +849,12 @@ export default function CNCQueuePage() {
         </div>
       )}
 
+      {/* Sales Order Modal */}
+      <SalesOrderModal 
+        isOpen={salesOrderModalOpen}
+        onClose={() => setSalesOrderModalOpen(false)}
+        orderId={selectedOrderId}
+      />
     </div>
   );
 }

@@ -2560,3 +2560,54 @@ export type InsertCustomerSatisfactionSurvey = z.infer<typeof insertCustomerSati
 export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inferSelect;
 export type InsertCustomerSatisfactionResponse = z.infer<typeof insertCustomerSatisfactionResponseSchema>;
 export type CustomerSatisfactionResponse = typeof customerSatisfactionResponses.$inferSelect;
+
+// PO Products table for Purchase Order product configurations
+export const poProducts = pgTable("po_products", {
+  id: serial("id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  productName: text("product_name").notNull(),
+  material: text("material"), // carbon_fiber, fiberglass
+  handedness: text("handedness"), // right, left
+  stockModel: text("stock_model"),
+  actionLength: text("action_length"),
+  actionInlet: text("action_inlet"),
+  bottomMetal: text("bottom_metal"),
+  barrelInlet: text("barrel_inlet"),
+  qds: text("qds"), // none, 2_on_left, 2_on_right
+  swivelStuds: text("swivel_studs"), // none, 3_ah, 2_privateer
+  paintOptions: text("paint_options"),
+  texture: text("texture"), // none, grip_forend
+  price: real("price"),
+  notes: text("notes"), // Optional notes field
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for PO Products
+export const insertPOProductSchema = createInsertSchema(poProducts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerName: z.string().min(1, "Customer name is required"),
+  productName: z.string().min(1, "Product name is required"),
+  material: z.string().optional().nullable(),
+  handedness: z.string().optional().nullable(),
+  stockModel: z.string().optional().nullable(),
+  actionLength: z.string().optional().nullable(),
+  actionInlet: z.string().optional().nullable(),
+  bottomMetal: z.string().optional().nullable(),
+  barrelInlet: z.string().optional().nullable(),
+  qds: z.string().optional().nullable(),
+  swivelStuds: z.string().optional().nullable(),
+  paintOptions: z.string().optional().nullable(),
+  texture: z.string().optional().nullable(),
+  price: z.number().min(0, "Price must be positive").optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// Types for PO Products
+export type InsertPOProduct = z.infer<typeof insertPOProductSchema>;
+export type POProduct = typeof poProducts.$inferSelect;

@@ -3,7 +3,7 @@
 -- =====================================================
 -- Created: August 29, 2025
 -- Purpose: Transfer Users table data from Development to Production Database
--- Records: 10 users (3 Admin, 7 Employee accounts)
+-- Records: 21 users (3 Admin, 18 Employee accounts)
 --
 -- INSTRUCTIONS:
 -- 1. Run this script in your Production Database
@@ -38,7 +38,7 @@ DELETE FROM users;
 SELECT setval('users_id_seq', 1, false);
 
 -- Step 4: Insert all users from Development Database
--- (3 Admin Accounts + 7 Employee Accounts)
+-- (3 Admin Accounts + 18 Employee Accounts)
 
 -- ADMIN ACCOUNTS
 INSERT INTO users (id, username, password, password_hash, role, employee_id, can_override_prices, is_active, created_at, updated_at, last_login_at, failed_login_attempts, account_locked_until, password_changed_at, locked_until) VALUES 
@@ -54,7 +54,18 @@ INSERT INTO users (id, username, password, password_hash, role, employee_id, can
 (15, 'joeyb', '7024', '$2b$12$2K4A7yYdfDpjyWKgW/ufc./pIrjsn1sZh4AUdxpl72EYpKxDuOLDu', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:17:34.054Z', '2025-08-24T04:17:34.054Z', NULL, 0, NULL, '2025-08-24T04:17:34.054Z', NULL),
 (16, 'agrace', '0564', '$2b$12$lvwTLDfjdhf1xwQniVZqSeEK04W8YXrimpf2cRtquwddL0HiRWgKq', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:18:07.454Z', '2025-08-24T04:18:07.454Z', NULL, 0, NULL, '2025-08-24T04:18:07.454Z', NULL),
 (17, 'faleeshah', '4047', '$2b$12$wmcq5xugogI8yBJCgdMmo.ZccKU8605ucglXpRI17JNj0IJxEJcCS', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:18:41.114Z', '2025-08-24T04:18:41.114Z', NULL, 0, NULL, '2025-08-24T04:18:41.114Z', NULL),
-(18, 'johnl', '4968', '$2b$12$YGMguM..hdLP/vVuH9g6h.24hb5uAhQ.Vq7YR35xo6WFd6sh/qlry', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:21:34.215Z', '2025-08-24T04:21:34.215Z', NULL, 0, NULL, '2025-08-24T04:21:34.215Z', NULL);
+(18, 'johnl', '4968', '$2b$12$YGMguM..hdLP/vVuH9g6h.24hb5uAhQ.Vq7YR35xo6WFd6sh/qlry', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:21:34.215Z', '2025-08-24T04:21:34.215Z', NULL, 0, NULL, '2025-08-24T04:21:34.215Z', NULL),
+(19, 'tasham', '1967', '$2b$12$QqxDJeDKU3mXYYxK0vyIOe3LC1qrtgt8BCcSt7tkyWRB6J4D.C0ZO', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:21:59.235Z', '2025-08-24T04:21:59.235Z', NULL, 0, NULL, '2025-08-24T04:21:59.235Z', NULL),
+(20, 'jens', '1627', '$2b$12$oSLt/OG8RbI3J9uz145yO.bcS5c64y0JHJhyBgh.qHUz9r41V2SLm', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:22:30.611Z', '2025-08-24T04:22:30.611Z', NULL, 0, NULL, '2025-08-24T04:22:30.611Z', NULL),
+(21, 'angiet', '8312', '$2b$12$ZM69RFMyp9PSGn.xbEu0He7oPyK8wDDiJbPMC7UYCM5aMEMo0QqwW', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:23:11.921Z', '2025-08-24T04:23:11.921Z', NULL, 0, NULL, '2025-08-24T04:23:11.921Z', NULL),
+(22, 'blaket', '6269', '$2b$12$H3U4VRVgspfuQRAt1efxS.EioUdvLFpUD5pS3vMbFuhmsNU0Ck9hq', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:23:42.233Z', '2025-08-24T04:23:42.233Z', NULL, 0, NULL, '2025-08-24T04:23:42.233Z', NULL),
+(23, 'lauriet', '1610', '$2b$12$I4QwPevTvRrYb0lSbW/gFOfD/xCZD9/0sGAZU8k99sDZoTxAVr0mq', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:24:15.502Z', '2025-08-24T04:24:15.502Z', NULL, 0, NULL, '2025-08-24T04:24:15.502Z', NULL),
+(24, 'bradw', '5810', '$2b$12$7AAtm3EiDwNSaNGuxFbVvOrHxVC8I6tOFLdYM4Cxk6TZ.mNSzJrim', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:24:42.759Z', '2025-08-24T04:24:42.759Z', NULL, 0, NULL, '2025-08-24T04:24:42.759Z', NULL),
+(25, 'staciw', '2294', '$2b$12$BU/BmbaBtRMIgWPr2dUWbusPqJ5mv7A5a9k26racCIiRSFA55wN26', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:25:18.359Z', '2025-08-24T04:25:18.359Z', NULL, 0, NULL, '2025-08-24T04:25:18.359Z', NULL),
+(26, 'tandym', '3933', '$2b$12$6jV11DFKMHDZvf7LxA.6uuAAhwNSCspnouuRAGEoah/uz1y7KEIr6', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:25:50.160Z', '2025-08-24T04:25:50.160Z', NULL, 0, NULL, '2025-08-24T04:25:50.160Z', NULL),
+(27, 'tandyd', '3933', '$2b$12$wb3hJF/ll8VbjfjlXjzMMukNGueMQiQy6S6Kzlf/lvNGw5uXif9vO', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:26:00.010Z', '2025-08-24T04:26:00.010Z', NULL, 0, NULL, '2025-08-24T04:26:00.010Z', NULL),
+(28, 'hunta', '3933', '$2b$12$DtnsnQ6qSuh8k9DnCow5Gu2KDfkj14hhZu9EhCfpAlT07e8sRmsE6', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:26:11.658Z', '2025-08-24T04:26:11.658Z', NULL, 0, NULL, '2025-08-24T04:26:11.658Z', NULL),
+(29, 'halls', '3933', '$2b$12$2lRdvZCVzP5uEyViE0.ofeH97k003BXTP3dCC9Gi0TDEZQizYqGt.', 'EMPLOYEE', NULL, false, true, '2025-08-24T04:26:24.440Z', '2025-08-24T04:26:24.440Z', NULL, 0, NULL, '2025-08-24T04:26:24.440Z', NULL);
 
 -- Step 5: Update the sequence to continue from the highest ID
 SELECT setval('users_id_seq', (SELECT MAX(id) FROM users), true);
@@ -68,10 +79,10 @@ SELECT
 FROM users;
 
 -- Expected Results:
--- total_users: 10
+-- total_users: 21
 -- admin_users: 3
--- employee_users: 7 
--- active_users: 8
+-- employee_users: 18 
+-- active_users: 19
 
 -- =====================================================
 -- USER ACCOUNT SUMMARY:
@@ -81,7 +92,7 @@ FROM users;
 --   - epoch (Fibergl@ss) - INACTIVE
 --   - deploy (DeploymentPass123!) - INACTIVE
 --
--- EMPLOYEE ACCOUNTS (7):
+-- EMPLOYEE ACCOUNTS (18):
 --   - tims (PIN: 6590) - ACTIVE
 --   - glennj (PIN: 7894) - ACTIVE
 --   - darleneb (PIN: 6065) - ACTIVE
@@ -89,7 +100,18 @@ FROM users;
 --   - agrace (PIN: 0564) - ACTIVE
 --   - faleeshah (PIN: 4047) - ACTIVE
 --   - johnl (PIN: 4968) - ACTIVE
+--   - tasham (PIN: 1967) - ACTIVE
+--   - jens (PIN: 1627) - ACTIVE
+--   - angiet (PIN: 8312) - ACTIVE
+--   - blaket (PIN: 6269) - ACTIVE
+--   - lauriet (PIN: 1610) - ACTIVE
+--   - bradw (PIN: 5810) - ACTIVE
+--   - staciw (PIN: 2294) - ACTIVE
+--   - tandym (PIN: 3933) - ACTIVE
+--   - tandyd (PIN: 3933) - ACTIVE
+--   - hunta (PIN: 3933) - ACTIVE
+--   - halls (PIN: 3933) - ACTIVE
 -- =====================================================
 -- TRANSFER COMPLETE
--- All 10 user accounts successfully transferred from Development to Production
+-- All 21 user accounts successfully transferred from Development to Production
 -- =====================================================

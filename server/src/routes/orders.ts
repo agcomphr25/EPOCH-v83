@@ -446,23 +446,7 @@ router.post('/production-orders/generate/:purchaseOrderId', async (req: Request,
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const orderId = req.params.id;
-    const order = await storage.getOrderById(orderId);
-
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
-    res.json(order);
-  } catch (error) {
-    console.error('Get order error:', error);
-    res.status(500).json({ error: "Failed to fetch order" });
-  }
-});
-
-// Order ID Generation
+// Order ID Generation - MUST be before parameterized routes
 router.get('/last-id', async (req: Request, res: Response) => {
   try {
     const lastOrder = await storage.getLastOrderId();
@@ -491,6 +475,23 @@ router.post('/generate-id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Order ID generation failed:', error);
     res.status(500).json({ error: "Failed to generate order ID" });
+  }
+});
+
+// Parameterized route - MUST be after specific routes
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const orderId = req.params.id;
+    const order = await storage.getOrderById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('Get order error:', error);
+    res.status(500).json({ error: "Failed to fetch order" });
   }
 });
 

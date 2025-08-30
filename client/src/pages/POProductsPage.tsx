@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Package, Plus, Save, Edit, Trash2, Eye } from 'lucide-react';
@@ -37,6 +38,7 @@ interface POProduct {
   swivelStuds: string;
   paintOptions: string;
   texture: string;
+  flatTop: boolean;
   price: number;
   isActive: boolean;
   createdAt: string;
@@ -57,6 +59,7 @@ interface POProductFormData {
   swivelStuds: string;
   paintOptions: string;
   texture: string;
+  flatTop: boolean;
   price: string;
 }
 
@@ -80,6 +83,7 @@ export default function POProductsPage() {
     swivelStuds: '',
     paintOptions: '',
     texture: '',
+    flatTop: false,
     price: ''
   });
 
@@ -183,7 +187,7 @@ export default function POProductsPage() {
     },
   });
 
-  const handleInputChange = (field: keyof POProductFormData, value: string) => {
+  const handleInputChange = (field: keyof POProductFormData, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -230,6 +234,7 @@ export default function POProductsPage() {
       swivelStuds: '',
       paintOptions: '',
       texture: '',
+      flatTop: false,
       price: ''
     });
     setEditingProduct(null);
@@ -251,6 +256,7 @@ export default function POProductsPage() {
       swivelStuds: product.swivelStuds,
       paintOptions: product.paintOptions,
       texture: product.texture,
+      flatTop: product.flatTop || false,
       price: product.price.toString(),
     });
     setShowCreateForm(true);
@@ -672,6 +678,21 @@ export default function POProductsPage() {
                       <SelectItem value="grip_forend">Grip & Forend</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Flat Top Checkbox */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="flatTop"
+                      checked={formData.flatTop}
+                      onCheckedChange={(checked) => handleInputChange('flatTop', checked as boolean)}
+                      data-testid="checkbox-flat-top"
+                    />
+                    <Label htmlFor="flatTop" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      Flat Top
+                    </Label>
+                  </div>
                 </div>
               </div>
             </div>

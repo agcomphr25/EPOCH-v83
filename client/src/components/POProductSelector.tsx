@@ -136,12 +136,9 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
           itemType: 'custom_model',
           itemId: sp.product.id.toString(),
           itemName: sp.product.productName,
-          stockModelId: sp.product.stockModel || 'mesa_universal',
-          stockModelName: sp.product.productName,
           quantity: sp.quantity,
           unitPrice: sp.product.price,
           totalPrice: sp.product.price * sp.quantity,
-          handedness: sp.product.handedness,
           specifications: {
             stockModel: sp.product.stockModel,
             material: sp.product.material,
@@ -156,7 +153,8 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
             texture: sp.product.texture,
             flatTop: sp.product.flatTop
           },
-          notes: `Product from PO Products: ${sp.product.customerName}`
+          notes: `Product from PO Products: ${sp.product.customerName}`,
+          orderCount: 0
         };
 
         await apiRequest(`/api/pos/${poId}/items`, {

@@ -544,6 +544,7 @@ export default function POManager() {
               poId={selectedPO.id}
               poNumber={selectedPO.poNumber}
               customerId={selectedPO.customerId}
+              customerName={selectedPO.customerName}
             />
           </div>
 

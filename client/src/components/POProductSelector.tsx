@@ -133,7 +133,7 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
       for (const sp of selectedProducts) {
         const poItemData = {
           poId: poId,
-          itemType: 'po_product',
+          itemType: 'custom_model',
           itemId: sp.product.id.toString(),
           itemName: sp.product.productName,
           quantity: sp.quantity,

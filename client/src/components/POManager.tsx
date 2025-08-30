@@ -533,18 +533,10 @@ export default function POManager() {
             </Button>
           </div>
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Purchase Order Items</h3>
-              <Button onClick={() => setShowOrderEntry(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Order Item
-              </Button>
-            </div>
             <POItemsManager
               poId={selectedPO.id}
-              poNumber={selectedPO.poNumber}
-              customerId={selectedPO.customerId}
               customerName={selectedPO.customerName}
+              onAddItem={() => setShowOrderEntry(true)}
             />
           </div>
 

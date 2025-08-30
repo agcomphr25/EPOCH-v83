@@ -147,13 +147,9 @@ export default function POItemsManager({ poId, customerName, onAddItem }: POItem
             <div className="text-center">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Items Added</h3>
-              <p className="text-gray-500 mb-4">
-                This purchase order doesn't have any items yet.
+              <p className="text-gray-500">
+                This purchase order doesn't have any items yet. Use the "Add Item" button above to get started.
               </p>
-              <Button onClick={onAddItem} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Add Your First Item
-              </Button>
             </div>
           </CardContent>
         </Card>

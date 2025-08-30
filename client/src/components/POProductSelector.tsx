@@ -129,7 +129,39 @@ export default function POProductSelector({ poId, customerName, isOpen, onClose,
     }
 
     try {
-      // For now, just show success message since the backend PO items API needs work
+      // Save each selected product as a PO item
+      for (const sp of selectedProducts) {
+        const poItemData = {
+          poId: poId,
+          itemType: 'po_product',
+          itemId: sp.product.id.toString(),
+          itemName: sp.product.productName,
+          quantity: sp.quantity,
+          unitPrice: sp.product.price,
+          totalPrice: sp.product.price * sp.quantity,
+          specifications: {
+            stockModel: sp.product.stockModel,
+            material: sp.product.material,
+            handedness: sp.product.handedness,
+            actionLength: sp.product.actionLength,
+            actionInlet: sp.product.actionInlet,
+            bottomMetal: sp.product.bottomMetal,
+            barrelInlet: sp.product.barrelInlet,
+            qds: sp.product.qds,
+            swivelStuds: sp.product.swivelStuds,
+            paintOptions: sp.product.paintOptions,
+            texture: sp.product.texture,
+            flatTop: sp.product.flatTop
+          },
+          notes: `Product from PO Products: ${sp.product.customerName}`
+        };
+
+        await apiRequest(`/api/pos/${poId}/items`, {
+          method: 'POST',
+          body: poItemData
+        });
+      }
+
       toast({
         title: "Products Added",
         description: `Added ${selectedProducts.length} product(s) to the purchase order`,

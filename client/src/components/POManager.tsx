@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check } from 'lucide-react';
+import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, ChevronsUpDown, Check, UserPlus } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
@@ -228,6 +228,18 @@ export default function POManager() {
   const [isGeneratingOrders, setIsGeneratingOrders] = useState(false);
   const [scheduleData, setScheduleData] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [newCustomerData, setNewCustomerData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    customerType: 'Individual' as string,
+    address: '',
+    city: '',
+    state: '',
+    zipCode: ''
+  });
 
 
   // Form state
@@ -294,6 +306,43 @@ export default function POManager() {
     },
     onError: () => {
       toast.error('Failed to delete purchase order');
+    }
+  });
+
+  const createCustomerMutation = useMutation({
+    mutationFn: async (customerData: any) => {
+      return apiRequest('/api/customers/create-bypass', {
+        method: 'POST',
+        body: JSON.stringify(customerData)
+      });
+    },
+    onSuccess: (newCustomer) => {
+      toast.success('Customer created successfully');
+      // Update form data with new customer
+      setFormData({
+        ...formData,
+        customerName: newCustomer.name,
+        customerId: newCustomer.id.toString()
+      });
+      setSelectedCustomer(newCustomer);
+      // Refresh customers list
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/with-pos'] });
+      setShowCreateCustomer(false);
+      // Reset new customer form
+      setNewCustomerData({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        customerType: 'Individual',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: ''
+      });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to create customer');
     }
   });
 
@@ -416,6 +465,33 @@ export default function POManager() {
     });
   };
 
+  const handleCreateCustomer = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    if (!newCustomerData.name) {
+      toast.error('Customer name is required');
+      return;
+    }
+    
+    createCustomerMutation.mutate(newCustomerData);
+  };
+
+  const handleCreateCustomerDialogClose = () => {
+    setShowCreateCustomer(false);
+    setNewCustomerData({
+      name: '',
+      email: '',
+      phone: '',
+      company: '',
+      customerType: 'Individual',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    });
+  };
+
   const handleDelete = (id: number) => {
     if (window.confirm('Are you sure you want to delete this purchase order?')) {
       deleteMutation.mutate(id);
@@ -528,7 +604,19 @@ export default function POManager() {
                   </div>
 
                   <div>
-                    <Label htmlFor="customerName">Customer Name</Label>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label htmlFor="customerName">Customer Name</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowCreateCustomer(true)}
+                        className="flex items-center gap-1"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        Create New Customer
+                      </Button>
+                    </div>
                     <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -549,7 +637,24 @@ export default function POManager() {
                             onValueChange={setCustomerSearchValue}
                           />
                           <CommandList>
-                            <CommandEmpty>No customers found.</CommandEmpty>
+                            <CommandEmpty>
+                              <div className="text-center py-4">
+                                <p className="text-sm text-gray-500 mb-2">No customers found.</p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setCustomerSearchOpen(false);
+                                    setShowCreateCustomer(true);
+                                  }}
+                                  className="flex items-center gap-1"
+                                >
+                                  <UserPlus className="w-4 h-4" />
+                                  Create New Customer
+                                </Button>
+                              </div>
+                            </CommandEmpty>
                             <CommandGroup>
                               {customers
                                 .filter((customer: Customer) =>
@@ -794,6 +899,129 @@ export default function POManager() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Creation Dialog */}
+      <Dialog open={showCreateCustomer} onOpenChange={(open) => {
+        if (!open) {
+          handleCreateCustomerDialogClose();
+        }
+        setShowCreateCustomer(open);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Customer</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateCustomer} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerNameNew">Customer Name *</Label>
+                <Input
+                  id="customerNameNew"
+                  value={newCustomerData.name}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})}
+                  required
+                  placeholder="Enter customer name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerCompany">Company</Label>
+                <Input
+                  id="customerCompany"
+                  value={newCustomerData.company}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, company: e.target.value})}
+                  placeholder="Company name (optional)"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerEmail">Email</Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  value={newCustomerData.email}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})}
+                  placeholder="customer@email.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerPhone">Phone</Label>
+                <Input
+                  id="customerPhone"
+                  value={newCustomerData.phone}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})}
+                  placeholder="Phone number"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="customerType">Customer Type</Label>
+              <Select value={newCustomerData.customerType} onValueChange={(value) => setNewCustomerData({...newCustomerData, customerType: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Individual">Individual</SelectItem>
+                  <SelectItem value="Business">Business</SelectItem>
+                  <SelectItem value="Government">Government</SelectItem>
+                  <SelectItem value="Military">Military</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="customerAddress">Address</Label>
+              <Input
+                id="customerAddress"
+                value={newCustomerData.address}
+                onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})}
+                placeholder="Street address"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="customerCity">City</Label>
+                <Input
+                  id="customerCity"
+                  value={newCustomerData.city}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, city: e.target.value})}
+                  placeholder="City"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerState">State</Label>
+                <Input
+                  id="customerState"
+                  value={newCustomerData.state}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, state: e.target.value})}
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerZip">ZIP Code</Label>
+                <Input
+                  id="customerZip"
+                  value={newCustomerData.zipCode}
+                  onChange={(e) => setNewCustomerData({...newCustomerData, zipCode: e.target.value})}
+                  placeholder="ZIP code"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={handleCreateCustomerDialogClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createCustomerMutation.isPending}>
+                {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

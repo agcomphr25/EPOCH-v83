@@ -2577,6 +2577,7 @@ export const poProducts = pgTable("po_products", {
   swivelStuds: text("swivel_studs"), // none, 3_ah, 2_privateer
   paintOptions: text("paint_options"),
   texture: text("texture"), // none, grip_forend
+  flatTop: boolean("flat_top").default(false),
   price: real("price"),
   notes: text("notes"), // Optional notes field
   isActive: boolean("is_active").default(true),
@@ -2603,6 +2604,7 @@ export const insertPOProductSchema = createInsertSchema(poProducts).omit({
   swivelStuds: z.string().optional().nullable(),
   paintOptions: z.string().optional().nullable(),
   texture: z.string().optional().nullable(),
+  flatTop: z.boolean().default(false),
   price: z.number().min(0, "Price must be positive").optional().nullable(),
   notes: z.string().optional().nullable(),
   isActive: z.boolean().default(true),

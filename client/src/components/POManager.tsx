@@ -18,7 +18,7 @@ import { Pencil, Trash2, Plus, Eye, Package, Search, TrendingUp, ShoppingCart, C
 // @ts-ignore
 import debounce from 'lodash.debounce';
 import { toast } from 'react-hot-toast';
-import POOrderEntry from './POOrderEntry';
+import POProductSelector from './POProductSelector';
 import POItemsManager from './POItemsManager';
 
 // Component to display PO quantity
@@ -548,9 +548,10 @@ export default function POManager() {
             />
           </div>
 
-          {/* Comprehensive Order Entry Dialog */}
-          <POOrderEntry
+          {/* Product Selection Dialog */}
+          <POProductSelector
             poId={selectedPO.id}
+            customerName={selectedPO.customerName}
             isOpen={showOrderEntry}
             onClose={() => setShowOrderEntry(false)}
             onSuccess={() => {

@@ -1239,11 +1239,10 @@ export default function LayupScheduler() {
       // Auto-triggering scheduling if no assignments exist yet
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       if (!hasAssignments && orders.length > 0) {
-        console.log('🎯 Auto-scheduling temporarily disabled to prevent React render errors');
-        console.log('🎯 Would auto-schedule:', orders.length, 'orders');
-        // setTimeout(() => {
-        //   handleAutoSchedule();
-        // }, 1000); // Increased delay to ensure component is fully loaded
+        console.log('🎯 Auto-scheduling triggered for:', orders.length, 'orders');
+        setTimeout(() => {
+          handleAutoSchedule();
+        }, 1500); // Increased delay to ensure component is fully loaded
       }
     } else {
       console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
@@ -1893,11 +1892,11 @@ export default function LayupScheduler() {
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
 
         // Auto-trigger the algorithmic scheduler to process the production queue
-        console.log('🤖 PRODUCTION FLOW: Auto-scheduling temporarily disabled to prevent React render errors');
-        // setTimeout(() => {
-        //   console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
-        //   generateAlgorithmicSchedule();
-        // }, 1000);
+        console.log('🤖 PRODUCTION FLOW: Auto-triggering algorithmic schedule...');
+        setTimeout(() => {
+          console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
+          generateAlgorithmicSchedule();
+        }, 1000);
       } else {
         console.log('🏭 PRODUCTION FLOW: Schedule looks complete -', scheduledOrderCount, 'scheduled,', unscheduledOrderCount, 'remaining');
       }

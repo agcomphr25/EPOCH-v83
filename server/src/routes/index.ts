@@ -1816,9 +1816,20 @@ export function registerRoutes(app: Express): Server {
         
         // Find molds that support this item's stock model
         const itemStockModel = item.stockModelId || item.itemId;
+        
+        // Handle both numeric IDs and string IDs for stock model matching
         const compatibleMolds = enabledMolds.filter(m => {
-          return m.stockModels && Array.isArray(m.stockModels) && 
-                 m.stockModels.includes(itemStockModel);
+          if (!m.stockModels || !Array.isArray(m.stockModels)) return false;
+          
+          // Check direct match
+          if (m.stockModels.includes(itemStockModel)) return true;
+          
+          // If itemStockModel is numeric (like "1"), try to match with mesa_universal
+          if (itemStockModel === "1" || itemStockModel === 1) {
+            return m.stockModels.includes("mesa_universal");
+          }
+          
+          return false;
         });
         
         console.log(`🔧 Item ${item.itemName} (stock model: ${itemStockModel})`);
@@ -1833,8 +1844,8 @@ export function registerRoutes(app: Express): Server {
         console.log(`🔧 Daily mold capacity: ${dailyMoldCapacity}`);
         console.log(`🔧 Weekly capacity: ${maxItemsPerWeek} items/week`);
         
-        // If no compatible molds, use fallback capacity
-        const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 8; // Fallback to 8 per week (2 per day)
+        // If no compatible molds, use Mesa Universal capacity: 8 items/day × 4 days = 32 per week
+        const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 32; // Mesa Universal: 8/day × 4 days
         
         // Calculate items per week needed to meet due date
         const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
@@ -1842,18 +1853,18 @@ export function registerRoutes(app: Express): Server {
         const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
         totalItemsPerWeek += actualItemsPerWeek;
         
-        // Generate weekly due dates
+        // Generate weekly due dates starting the week after current week
         const weeklySchedule = [];
+        
+        // Start from next Monday (the week following current week)
+        const nextWeekStart = new Date(today);
+        const daysUntilNextMonday = (8 - nextWeekStart.getDay()) % 7 || 7; // Get next Monday
+        nextWeekStart.setDate(nextWeekStart.getDate() + daysUntilNextMonday);
+        
         for (let week = 0; week < weeksNeeded; week++) {
-          const weekDueDate = new Date(finalDueDate);
-          weekDueDate.setDate(weekDueDate.getDate() - (weeksNeeded - week - 1) * 7);
-          
-          // Ensure due date is on Thursday (end of production week)
-          const dayOfWeek = weekDueDate.getDay();
-          if (dayOfWeek !== 4) { // Not Thursday
-            const daysToThursday = dayOfWeek < 4 ? (4 - dayOfWeek) : (4 + 7 - dayOfWeek);
-            weekDueDate.setDate(weekDueDate.getDate() + daysToThursday);
-          }
+          // Calculate Thursday of this production week (week ends on Thursday)
+          const weekDueDate = new Date(nextWeekStart);
+          weekDueDate.setDate(weekDueDate.getDate() + (week * 7) + 3); // +3 days from Monday = Thursday
           
           const itemsThisWeek = Math.min(actualItemsPerWeek, itemsNeeded - (week * actualItemsPerWeek));
           

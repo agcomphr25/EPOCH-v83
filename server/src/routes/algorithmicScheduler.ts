@@ -88,9 +88,14 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           });
         }
         
-        // For all other orders, use STRICT exact matching - NO EXCEPTIONS
+        // For all other orders, use STRICT exact matching OR universal molds
         const hasMatch = moldStockModels.some((moldModel: string) => {
           const normalizedMoldModel = moldModel.toLowerCase().replace(/[\s\-]/g, '_');
+          // Universal molds work with any stock model
+          if (normalizedMoldModel === 'universal') {
+            return true;
+          }
+          // Otherwise require exact match
           return normalizedMoldModel === normalizedStockModel;
         });
         

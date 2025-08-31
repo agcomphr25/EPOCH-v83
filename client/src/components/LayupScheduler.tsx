@@ -556,15 +556,16 @@ function DroppableCell({
   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
   const hasOrders = orders.length > 0;
 
-  // NEW LOGIC: Show empty cells when week is unlocked (for drag-and-drop), hide when week is locked (show only assigned orders)
+  // NEW LOGIC: Hide cells for non-work days (unless Friday for visibility), hide empty cells when week is locked
   const weekIsLocked = isWeekLocked(date);
+  const shouldHideCell = isNonWorkDay && !isFriday; // Hide all non-work days except Friday
   const shouldHideEmptyCell = weekIsLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
 
   return (
     <div
       ref={setNodeRef}
       className={`${cellHeight} border p-1 transition-all duration-200 ${
-        shouldHideEmptyCell
+        shouldHideCell || shouldHideEmptyCell
           ? 'border-transparent bg-transparent opacity-0 pointer-events-none'
           : isOver
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
@@ -573,7 +574,7 @@ function DroppableCell({
               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
       }`}
     >
-      {!shouldHideEmptyCell && (
+      {!(shouldHideCell || shouldHideEmptyCell) && (
         <>
           {orders.length > 0 && (
             <div className="text-xs text-gray-500 mb-1">

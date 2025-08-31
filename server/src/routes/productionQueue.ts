@@ -469,4 +469,140 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
   }
 });
 
+// Move selected weeks from PO item to layup scheduler
+router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
+  try {
+    const { poItem, selectedWeeks } = req.body;
+    
+    if (!poItem || !poItem.id || !selectedWeeks || selectedWeeks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "PO item data and selected weeks are required"
+      });
+    }
+
+    console.log(`🏭 PO WEEKS TO LAYUP: Moving ${selectedWeeks.length} weeks for PO item ${poItem.id} to layup scheduler...`);
+
+    // First, get the production schedule to determine quantities for each week
+    const scheduleResponse = await fetch(`http://localhost:5000/api/pos/${poItem.poid}/calculate-production-schedule`, {
+      method: 'POST'
+    });
+    
+    if (!scheduleResponse.ok) {
+      throw new Error('Failed to calculate production schedule');
+    }
+    
+    const schedule = await scheduleResponse.json();
+    
+    if (!schedule.success || !schedule.itemSchedules || schedule.itemSchedules.length === 0) {
+      throw new Error('Invalid production schedule');
+    }
+
+    const weeklySchedule = schedule.itemSchedules[0].weeklySchedule;
+    const createdOrders = [];
+    let totalUnitsCreated = 0;
+
+    // Create orders for each selected week
+    for (const weekNumber of selectedWeeks) {
+      const weekData = weeklySchedule.find(w => w.week === weekNumber);
+      if (!weekData) {
+        console.warn(`⚠️ Week ${weekNumber} not found in schedule`);
+        continue;
+      }
+
+      const unitsThisWeek = weekData.itemsToComplete;
+      const weekDueDate = new Date(weekData.dueDate);
+
+      console.log(`📅 Creating ${unitsThisWeek} orders for week ${weekNumber} (due: ${weekDueDate.toLocaleDateString()})`);
+
+      // Create individual orders for this week's quantity
+      for (let i = 1; i <= unitsThisWeek; i++) {
+        const orderQuery = `
+          INSERT INTO all_orders (
+            order_id,
+            order_date,
+            due_date,
+            customer_id,
+            model_id,
+            current_department,
+            status,
+            notes,
+            features,
+            created_at,
+            updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
+          ) RETURNING order_id, model_id, current_department
+        `;
+
+        // Generate unique order ID for this week and unit
+        const orderIndex = totalUnitsCreated + i;
+        const orderId = `PO${poItem.ponumber}-W${weekNumber}-${String(orderIndex).padStart(3, '0')}`;
+        
+        const orderResult = await pool.query(orderQuery, [
+          orderId,
+          new Date().toISOString(),
+          weekDueDate.toISOString(),
+          poItem.customername || 'PO Customer',
+          poItem.stockmodelid,
+          'Layup/Plugging', // Move directly to layup
+          'FINALIZED',
+          `PO Item: ${poItem.itemname} (Week ${weekNumber}, Unit ${i}/${unitsThisWeek}) - PO #${poItem.ponumber}`,
+          JSON.stringify({ 
+            po_item_id: poItem.id, 
+            po_number: poItem.ponumber, 
+            week_number: weekNumber,
+            unit_number: orderIndex,
+            week_due_date: weekDueDate.toISOString()
+          })
+        ]);
+
+        const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
+        if (orders.length > 0) {
+          createdOrders.push(orders[0]);
+          console.log(`✅ Created order ${orderId} for PO item ${poItem.itemname} (week ${weekNumber}, unit ${i}/${unitsThisWeek})`);
+        }
+      }
+
+      totalUnitsCreated += unitsThisWeek;
+    }
+
+    // Update the PO item to track partial production
+    const updatePOItemQuery = `
+      UPDATE purchase_order_items 
+      SET 
+        order_count = COALESCE(order_count, 0) + $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `;
+    
+    await pool.query(updatePOItemQuery, [totalUnitsCreated, poItem.id]);
+
+    const result = {
+      success: true,
+      message: `Successfully moved ${selectedWeeks.length} weeks (${totalUnitsCreated} units) to layup scheduler`,
+      itemName: poItem.itemname,
+      weeksSelected: selectedWeeks.length,
+      totalUnits: totalUnitsCreated,
+      createdOrders: createdOrders.length,
+      weeks: selectedWeeks,
+      orders: createdOrders.map(order => ({
+        orderId: order.order_id,
+        stockModelId: order.model_id
+      }))
+    };
+
+    console.log(`🏭 PO WEEKS TO LAYUP: Successfully created ${createdOrders.length} orders for ${selectedWeeks.length} weeks of PO item ${poItem.itemname}`);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ PO WEEKS TO LAYUP: Error moving PO weeks to layup:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to move selected weeks to layup scheduler",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

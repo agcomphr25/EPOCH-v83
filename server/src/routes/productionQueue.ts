@@ -77,13 +77,11 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
           UPDATE all_orders 
           SET 
             current_department = 'P1 Production Queue',
-            updated_at = NOW(),
-            priority_score = $1,
-            queue_position = $2
-          WHERE order_id = $3
+            updated_at = NOW()
+          WHERE order_id = $1
         `;
         
-        await pool.query(updateQuery, [order.priorityScore, i + 1, order.orderId]);
+        await pool.query(updateQuery, [order.orderId]);
         updatedOrders.push({
           orderId: order.orderId,
           priorityScore: order.priorityScore,
@@ -193,8 +191,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.status,
         o.customer_id as customerId,
         o.features,
-        NULL as priorityScore,
-        NULL as queuePosition,
+        0 as priorityScore,
+        0 as queuePosition,
         o.created_at as createdAt,
         c.name as customerName
       FROM all_orders o
@@ -202,8 +200,6 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status = 'FINALIZED'
       ORDER BY 
-        COALESCE(o.priority_score, 0) DESC,
-        COALESCE(o.queue_position, 999999) ASC,
         o.due_date ASC,
         o.created_at ASC
     `;
@@ -262,13 +258,11 @@ router.post('/update-priorities', async (req: Request, res: Response) => {
         const updateQuery = `
           UPDATE all_orders 
           SET 
-            priority_score = $1,
-            queue_position = $2,
             updated_at = NOW()
-          WHERE order_id = $3
+          WHERE order_id = $1
         `;
         
-        await pool.query(updateQuery, [order.priorityScore, i + 1, order.orderId]);
+        await pool.query(updateQuery, [order.orderId]);
         updatedOrders.push({
           orderId: order.orderId,
           priorityScore: order.priorityScore,

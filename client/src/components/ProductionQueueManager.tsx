@@ -405,7 +405,7 @@ export default function ProductionQueueManager() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-gray-400" />
-                        {new Date(item.dueDate).toLocaleDateString()}
+                        {new Date(item.duedate).toLocaleDateString()}
                       </div>
                     </TableCell>
                     <TableCell className={item.isOverdue ? 'text-red-600 font-semibold' : ''}>

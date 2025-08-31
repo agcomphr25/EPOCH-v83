@@ -36,6 +36,24 @@ interface ProductionQueueOrder {
   urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
 }
 
+interface POItem {
+  id: number;
+  poId: number;
+  poNumber: string;
+  itemName: string;
+  stockModelId: string;
+  stockModelName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  customerName: string;
+  dueDate: string;
+  priorityScore: number;
+  daysToDue: number;
+  isOverdue: boolean;
+  urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
+}
+
 export default function ProductionQueueManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -44,6 +62,12 @@ export default function ProductionQueueManager() {
   const { data: productionQueue = [], isLoading, refetch } = useQuery<ProductionQueueOrder[]>({
     queryKey: ['/api/production-queue/prioritized'],
     queryFn: () => apiRequest('/api/production-queue/prioritized'),
+  });
+
+  // Fetch P1 Purchase Order items ready for production
+  const { data: poItems = [], isLoading: isLoadingPOItems, refetch: refetchPOItems } = useQuery<POItem[]>({
+    queryKey: ['/api/production-queue/po-items'],
+    queryFn: () => apiRequest('/api/production-queue/po-items'),
   });
 
   // Auto-populate production queue mutation
@@ -88,6 +112,30 @@ export default function ProductionQueueManager() {
     }
   });
 
+  // Move PO item to layup scheduler mutation
+  const movePOToLayupMutation = useMutation({
+    mutationFn: (poItem: POItem) => 
+      apiRequest('/api/production-queue/po-to-layup', {
+        method: 'POST',
+        body: JSON.stringify({ poItem })
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: "PO Item Moved to Layup",
+        description: `Successfully moved ${result.itemName} to layup scheduler`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/po-items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Move PO Item",
+        description: error.message || "Failed to move PO item to layup scheduler",
+        variant: "destructive",
+      });
+    }
+  });
+
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
       case 'critical': return 'bg-red-500 hover:bg-red-600 text-white';
@@ -116,12 +164,12 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingPOItems) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Card>
           <CardContent className="p-8">
-            <div className="text-center">Loading production queue...</div>
+            <div className="text-center">Loading production queues...</div>
           </CardContent>
         </Card>
       </div>
@@ -214,12 +262,100 @@ export default function ProductionQueueManager() {
         </Card>
       </div>
 
+      {/* P1 Purchase Order Queue */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-blue-600" />
+            P1 Purchase Order Queue
+          </CardTitle>
+          <p className="text-sm text-gray-500">
+            Priority queue for purchase order items - these will be scheduled first
+          </p>
+        </CardHeader>
+        <CardContent>
+          {poItems.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>No PO items ready for production</p>
+              <p className="text-sm">PO items with quantities will appear here for scheduling</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>PO #</TableHead>
+                  <TableHead>Item Name</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Stock Model</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Days to Due</TableHead>
+                  <TableHead>Urgency</TableHead>
+                  <TableHead className="w-32">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {poItems.map((item) => (
+                  <TableRow key={item.id} className={item.isOverdue ? 'bg-red-50' : ''}>
+                    <TableCell className="font-medium">
+                      {item.poNumber}
+                    </TableCell>
+                    <TableCell>{item.itemName}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-gray-400" />
+                        {item.customerName}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item.stockModelId}</Badge>
+                    </TableCell>
+                    <TableCell className="font-semibold text-blue-600">
+                      {item.quantity} units
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-gray-400" />
+                        {new Date(item.dueDate).toLocaleDateString()}
+                      </div>
+                    </TableCell>
+                    <TableCell className={item.isOverdue ? 'text-red-600 font-semibold' : ''}>
+                      {item.daysToDue} days
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getUrgencyBadgeColor(item.urgencyLevel)}>
+                        {item.urgencyLevel.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => movePOToLayupMutation.mutate(item)}
+                        disabled={movePOToLayupMutation.isPending}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        Move to Layup
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Prioritized Production Queue
+            Regular Production Queue
           </CardTitle>
+          <p className="text-sm text-gray-500">
+            Ready for layup orders - these will fill remaining schedule slots
+          </p>
         </CardHeader>
         <CardContent>
           {productionQueue.length === 0 ? (

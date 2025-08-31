@@ -18,7 +18,8 @@ import {
   CheckCircle,
   Calendar,
   User,
-  Package
+  Package,
+  ArrowRight
 } from 'lucide-react';
 
 interface ProductionQueueOrder {

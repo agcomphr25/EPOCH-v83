@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { 
   RefreshCw, 
@@ -38,25 +41,56 @@ interface ProductionQueueOrder {
 
 interface POItem {
   id: number;
-  poId: number;
-  poNumber: string;
-  itemName: string;
-  stockModelId: string;
-  stockModelName: string;
+  poid: number;
+  ponumber: string;
+  itemname: string;
+  stockmodelid: string;
+  stockmodelname: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  customerName: string;
-  dueDate: string;
+  unitprice: string;
+  totalprice: string;
+  customername: string;
+  duedate: string;
   priorityScore: number;
   daysToDue: number;
   isOverdue: boolean;
   urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
 }
 
+interface WeekSchedule {
+  week: number;
+  dueDate: string;
+  itemsToComplete: number;
+  cumulativeItems: number;
+}
+
+interface ProductionSchedule {
+  success: boolean;
+  poNumber: string;
+  finalDueDate: string;
+  availableWeeks: number;
+  totalItemsNeeded: number;
+  totalItemsPerWeekRequired: number;
+  overallFeasible: boolean;
+  itemSchedules: {
+    itemId: number;
+    itemName: string;
+    totalQuantity: number;
+    itemsPerWeek: number;
+    weeksNeeded: number;
+    weeklySchedule: WeekSchedule[];
+  }[];
+}
+
 export default function ProductionQueueManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // State for week selection dialog
+  const [selectedPOItem, setSelectedPOItem] = useState<POItem | null>(null);
+  const [productionSchedule, setProductionSchedule] = useState<ProductionSchedule | null>(null);
+  const [selectedWeeks, setSelectedWeeks] = useState<number[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Fetch prioritized production queue
   const { data: productionQueue = [], isLoading, refetch } = useQuery<ProductionQueueOrder[]>({
@@ -112,25 +146,47 @@ export default function ProductionQueueManager() {
     }
   });
 
-  // Move PO item to layup scheduler mutation
-  const movePOToLayupMutation = useMutation({
-    mutationFn: (poItem: POItem) => 
-      apiRequest('/api/production-queue/po-to-layup', {
+  // Fetch production schedule for PO
+  const fetchProductionScheduleMutation = useMutation({
+    mutationFn: (poId: number) => 
+      apiRequest(`/api/pos/${poId}/calculate-production-schedule`, {
+        method: 'POST'
+      }),
+    onSuccess: (result: ProductionSchedule) => {
+      setProductionSchedule(result);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Calculate Schedule",
+        description: error.message || "Failed to calculate production schedule",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Move selected weeks to layup scheduler mutation
+  const moveWeeksToLayupMutation = useMutation({
+    mutationFn: ({ poItem, weeks }: { poItem: POItem; weeks: number[] }) => 
+      apiRequest('/api/production-queue/po-weeks-to-layup', {
         method: 'POST',
-        body: JSON.stringify({ poItem })
+        body: JSON.stringify({ poItem, selectedWeeks: weeks })
       }),
     onSuccess: (result: any) => {
       toast({
-        title: "PO Item Moved to Layup",
-        description: `Successfully moved ${result.itemName} to layup scheduler`,
+        title: "Selected Weeks Moved to Layup",
+        description: `Successfully moved ${selectedWeeks.length} weeks to layup scheduler`,
       });
+      setIsDialogOpen(false);
+      setSelectedPOItem(null);
+      setSelectedWeeks([]);
+      setProductionSchedule(null);
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/po-items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Move PO Item",
-        description: error.message || "Failed to move PO item to layup scheduler",
+        title: "Failed to Move Weeks",
+        description: error.message || "Failed to move selected weeks to layup scheduler",
         variant: "destructive",
       });
     }
@@ -142,6 +198,31 @@ export default function ProductionQueueManager() {
       case 'high': return 'bg-orange-500 hover:bg-orange-600 text-white';
       case 'medium': return 'bg-yellow-500 hover:bg-yellow-600 text-white';
       default: return 'bg-green-500 hover:bg-green-600 text-white';
+    }
+  };
+
+  const handleOpenWeekSelection = async (poItem: POItem) => {
+    setSelectedPOItem(poItem);
+    setIsDialogOpen(true);
+    setSelectedWeeks([]);
+    // Fetch production schedule for this PO
+    await fetchProductionScheduleMutation.mutateAsync(poItem.poid);
+  };
+
+  const handleWeekToggle = (weekNumber: number) => {
+    setSelectedWeeks(prev => 
+      prev.includes(weekNumber) 
+        ? prev.filter(w => w !== weekNumber)
+        : [...prev, weekNumber].sort((a, b) => a - b)
+    );
+  };
+
+  const handleMoveSelectedWeeks = () => {
+    if (selectedPOItem && selectedWeeks.length > 0) {
+      moveWeeksToLayupMutation.mutate({
+        poItem: selectedPOItem,
+        weeks: selectedWeeks
+      });
     }
   };
 
@@ -299,17 +380,17 @@ export default function ProductionQueueManager() {
                 {poItems.map((item) => (
                   <TableRow key={item.id} className={item.isOverdue ? 'bg-red-50' : ''}>
                     <TableCell className="font-medium">
-                      {item.poNumber}
+                      {item.ponumber}
                     </TableCell>
-                    <TableCell>{item.itemName}</TableCell>
+                    <TableCell>{item.itemname}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <User className="w-3 h-3 text-gray-400" />
-                        {item.customerName}
+                        {item.customername}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.stockModelId}</Badge>
+                      <Badge variant="outline">{item.stockmodelname}</Badge>
                     </TableCell>
                     <TableCell className="font-semibold text-blue-600">
                       {item.quantity} units
@@ -332,11 +413,12 @@ export default function ProductionQueueManager() {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => movePOToLayupMutation.mutate(item)}
-                        disabled={movePOToLayupMutation.isPending}
+                        onClick={() => handleOpenWeekSelection(item)}
+                        disabled={fetchProductionScheduleMutation.isPending}
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
-                        Move to Layup
+                        <Calendar className="w-4 h-4 mr-1" />
+                        Select Weeks
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -448,6 +530,112 @@ export default function ProductionQueueManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Week Selection Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Weeks for Production Schedule</DialogTitle>
+          </DialogHeader>
+          
+          {selectedPOItem && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-lg">{selectedPOItem.itemname}</h4>
+                <p className="text-sm text-gray-600">PO #{selectedPOItem.ponumber} - {selectedPOItem.quantity} units</p>
+                <p className="text-sm text-gray-600">Customer: {selectedPOItem.customername}</p>
+              </div>
+
+              {fetchProductionScheduleMutation.isPending && (
+                <div className="text-center py-4">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  <p>Calculating production schedule...</p>
+                </div>
+              )}
+
+              {productionSchedule && productionSchedule.itemSchedules.length > 0 && (
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600">
+                    <p>Total weeks needed: {productionSchedule.itemSchedules[0].weeksNeeded}</p>
+                    <p>Items per week: {productionSchedule.itemSchedules[0].itemsPerWeek}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h5 className="font-medium">Select weeks to move to layup scheduler:</h5>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto">
+                      {productionSchedule.itemSchedules[0].weeklySchedule.map((week) => (
+                        <div
+                          key={week.week}
+                          className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-gray-50"
+                        >
+                          <Checkbox
+                            id={`week-${week.week}`}
+                            checked={selectedWeeks.includes(week.week)}
+                            onCheckedChange={() => handleWeekToggle(week.week)}
+                          />
+                          <label
+                            htmlFor={`week-${week.week}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            <div className="font-medium">Week {week.week}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(week.dueDate).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-blue-600">
+                              {week.itemsToComplete} units
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedWeeks.length > 0 && (
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-sm font-medium text-blue-800">
+                        Selected: {selectedWeeks.length} weeks
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Total units: {selectedWeeks.reduce((total, weekNum) => {
+                          const week = productionSchedule.itemSchedules[0].weeklySchedule.find(w => w.week === weekNum);
+                          return total + (week?.itemsToComplete || 0);
+                        }, 0)}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      onClick={handleMoveSelectedWeeks}
+                      disabled={selectedWeeks.length === 0 || moveWeeksToLayupMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {moveWeeksToLayupMutation.isPending ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                          Moving...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="w-4 h-4 mr-2" />
+                          Move Selected to Layup
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                      disabled={moveWeeksToLayupMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

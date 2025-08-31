@@ -560,7 +560,14 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
 
         const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
         if (orders.length > 0) {
-          createdOrders.push(orders[0]);
+          // Store order with week metadata for scheduling
+          const orderWithMeta = {
+            ...orders[0],
+            weekNumber: weekNumber,
+            weekDueDate: weekDueDate.toISOString(),
+            stockModelId: poItem.stockmodelid
+          };
+          createdOrders.push(orderWithMeta);
           console.log(`✅ Created order ${orderId} for PO item ${poItem.itemname} (week ${weekNumber}, unit ${i}/${unitsThisWeek})`);
         }
       }
@@ -578,6 +585,59 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
     `;
     
     await pool.query(updatePOItemQuery, [totalUnitsCreated, poItem.id]);
+
+    // Add created orders to layup schedule for their respective weeks
+    console.log(`📅 Adding ${createdOrders.length} orders to layup schedule...`);
+    
+    for (const order of createdOrders) {
+      // Use the metadata we stored with the order
+      const weekDueDate = new Date(order.weekDueDate);
+      
+      // Find a compatible mold for this stock model
+      const moldsQuery = `
+        SELECT mold_id, stock_models
+        FROM molds 
+        WHERE enabled = true 
+        AND stock_models ? $1
+        LIMIT 1
+      `;
+      
+      const moldResult = await pool.query(moldsQuery, [order.stockModelId]);
+      const molds = Array.isArray(moldResult) ? moldResult : (moldResult.rows || []);
+      
+      if (molds.length > 0) {
+        const mold = molds[0];
+        
+        // Add to layup schedule
+        const scheduleQuery = `
+          INSERT INTO layup_schedule (
+            order_id,
+            scheduled_date,
+            mold_id,
+            employee_id,
+            priority_score,
+            is_locked,
+            created_at,
+            updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, NOW(), NOW()
+          )
+        `;
+        
+        await pool.query(scheduleQuery, [
+          order.order_id,
+          weekDueDate.toISOString(),
+          mold.mold_id,
+          null, // No specific employee assigned yet
+          1500, // High priority for PO items
+          false
+        ]);
+        
+        console.log(`✅ Added order ${order.order_id} to layup schedule for week ${order.weekNumber} (${weekDueDate.toLocaleDateString()})`);
+      } else {
+        console.warn(`⚠️ No compatible mold found for stock model ${order.stockModelId} - order ${order.order_id} not scheduled`);
+      }
+    }
 
     const result = {
       success: true,

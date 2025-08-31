@@ -3344,7 +3344,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Calculate production schedule for due date fulfillment
-    const productionSchedule = this.calculateProductionSchedule(po.expectedDelivery, items);
+    const productionSchedule = await this.calculateProductionSchedule(po.expectedDelivery, items);
 
     // Generate base order ID: [First 3 letters of customer][Last 5 digits of PO#]
     const customerPrefix = customer.name.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
@@ -3396,11 +3396,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Helper to calculate production schedule for P1 POs
-  private calculateProductionSchedule(dueDate: string, items: any[]): Record<number, {
+  private async calculateProductionSchedule(dueDate: string, items: any[]): Promise<Record<number, {
     itemsPerWeek: number;
     weeksNeeded: number;
     weeklyDueDates: Date[];
-  }> {
+  }>> {
     const finalDueDate = new Date(dueDate);
     const today = new Date();
 
@@ -3415,14 +3415,31 @@ export class DatabaseStorage implements IStorage {
 
     const schedule: Record<number, any> = {};
 
-    items.forEach(item => {
-      // Assume production capacity of 10 items per week per item type (configurable)
-      const maxItemsPerWeek = 10;
+    for (const item of items) {
       const itemsNeeded = item.quantity;
+      
+      // Get mold capacity for this specific item
+      const molds = await this.getAllMolds();
+      const enabledMolds = molds.filter(m => m.enabled);
+      
+      // Find molds that support this item's stock model
+      const itemStockModel = item.stockModelId || item.itemId;
+      const compatibleMolds = enabledMolds.filter(m => {
+        return m.stockModels && Array.isArray(m.stockModels) && 
+               m.stockModels.includes(itemStockModel);
+      });
+      
+      // Calculate weekly capacity based on compatible molds
+      // Assume 4 working days per week (Mon-Thu) and account for mold multipliers
+      const dailyMoldCapacity = compatibleMolds.reduce((sum, m) => sum + m.multiplier, 0);
+      const maxItemsPerWeek = dailyMoldCapacity * 4; // 4 working days per week
+      
+      // If no compatible molds, use fallback capacity
+      const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 8; // Fallback to 8 per week
 
       // Calculate items per week needed to meet due date
       const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
-      const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, maxItemsPerWeek);
+      const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, effectiveWeeklyCapacity);
       const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
 
       console.log(`   Item ${item.itemName} (${item.quantity} units):`);
@@ -3457,7 +3474,7 @@ export class DatabaseStorage implements IStorage {
         weeksNeeded: weeksNeeded,
         weeklyDueDates: weeklyDueDates
       };
-    });
+    }
 
     return schedule;
   }

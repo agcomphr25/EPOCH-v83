@@ -1807,14 +1807,38 @@ export function registerRoutes(app: Express): Server {
       let totalItemsPerWeek = 0;
       
       for (const item of poItems) {
-        // Assume production capacity of 10 items per week per item type
-        const maxItemsPerWeek = 10;
         const itemsNeeded = item.quantity;
         totalItemsNeeded += itemsNeeded;
         
+        // Get mold capacity for this specific item
+        const molds = await storage.getAllMolds();
+        const enabledMolds = molds.filter(m => m.enabled);
+        
+        // Find molds that support this item's stock model
+        const itemStockModel = item.stockModelId || item.itemId;
+        const compatibleMolds = enabledMolds.filter(m => {
+          return m.stockModels && Array.isArray(m.stockModels) && 
+                 m.stockModels.includes(itemStockModel);
+        });
+        
+        console.log(`🔧 Item ${item.itemName} (stock model: ${itemStockModel})`);
+        console.log(`🔧 Enabled molds: ${enabledMolds.length}`);
+        console.log(`🔧 Compatible molds: ${compatibleMolds.length}`, compatibleMolds.map(m => ({ moldId: m.moldId, multiplier: m.multiplier })));
+        
+        // Calculate weekly capacity based on compatible molds
+        // Assume 4 working days per week (Mon-Thu) and account for mold multipliers
+        const dailyMoldCapacity = compatibleMolds.reduce((sum, m) => sum + m.multiplier, 0);
+        const maxItemsPerWeek = dailyMoldCapacity * 4; // 4 working days per week
+        
+        console.log(`🔧 Daily mold capacity: ${dailyMoldCapacity}`);
+        console.log(`🔧 Weekly capacity: ${maxItemsPerWeek} items/week`);
+        
+        // If no compatible molds, use fallback capacity
+        const effectiveWeeklyCapacity = maxItemsPerWeek > 0 ? maxItemsPerWeek : 8; // Fallback to 8 per week (2 per day)
+        
         // Calculate items per week needed to meet due date
         const itemsPerWeekNeeded = Math.ceil(itemsNeeded / availableWeeks);
-        const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, maxItemsPerWeek);
+        const actualItemsPerWeek = Math.min(itemsPerWeekNeeded, effectiveWeeklyCapacity);
         const weeksNeeded = Math.ceil(itemsNeeded / actualItemsPerWeek);
         totalItemsPerWeek += actualItemsPerWeek;
         
@@ -1848,15 +1872,23 @@ export function registerRoutes(app: Express): Server {
           itemsPerWeek: actualItemsPerWeek,
           weeksNeeded: weeksNeeded,
           weeklySchedule: weeklySchedule,
-          feasible: itemsPerWeekNeeded <= maxItemsPerWeek
+          feasible: itemsPerWeekNeeded <= effectiveWeeklyCapacity,
+          moldCapacity: {
+            compatibleMolds: compatibleMolds.length,
+            dailyCapacity: dailyMoldCapacity,
+            weeklyCapacity: effectiveWeeklyCapacity
+          }
         });
         
         console.log(`   Item: ${item.itemName}`);
         console.log(`     Quantity: ${itemsNeeded}`);
+        console.log(`     Compatible molds: ${compatibleMolds.length}`);
+        console.log(`     Daily mold capacity: ${dailyMoldCapacity}`);
+        console.log(`     Weekly capacity: ${effectiveWeeklyCapacity}`);
         console.log(`     Items/week needed: ${itemsPerWeekNeeded}`);
         console.log(`     Items/week actual: ${actualItemsPerWeek}`);
         console.log(`     Weeks needed: ${weeksNeeded}`);
-        console.log(`     Feasible: ${itemsPerWeekNeeded <= maxItemsPerWeek ? 'Yes' : 'No'}`);
+        console.log(`     Feasible: ${itemsPerWeekNeeded <= effectiveWeeklyCapacity ? 'Yes' : 'No'}`);
       }
       
       const overallFeasible = scheduleData.every(item => item.feasible);

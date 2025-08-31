@@ -209,12 +209,24 @@ router.get('/prioritized', async (req: Request, res: Response) => {
 
     // Calculate current priority metrics
     const now = new Date();
-    const enhancedQueue = prioritizedQueue.map((order: any) => {
+    const enhancedQueue = prioritizedQueue.map((order: any, index: number) => {
       const dueDate = new Date(order.dueDate || order.orderDate);
       const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
       return {
-        ...order,
+        orderId: order.orderid,
+        fbOrderNumber: order.fbordernumber,
+        modelId: order.modelid,
+        stockModelId: order.modelid,
+        dueDate: order.duedate,
+        orderDate: order.orderdate,
+        currentDepartment: order.currentdepartment,
+        status: order.status,
+        customerId: order.customerid,
+        customerName: order.customername,
+        features: order.features,
+        priorityScore: order.priorityscore || 1000 - index,
+        queuePosition: index + 1,
         daysToDue,
         isOverdue: daysToDue < 0,
         urgencyLevel: daysToDue < 0 ? 'critical' : 
@@ -316,7 +328,6 @@ router.get('/po-items', async (req: Request, res: Response) => {
       WHERE poi.quantity > 0 
         AND (poi.item_id IS NOT NULL AND poi.item_id != '' AND poi.item_id != 'None')
         AND po.status != 'CANCELED'
-        AND poi.item_type = 'stock_model'
         AND (poi.order_count = 0 OR poi.order_count IS NULL)
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;

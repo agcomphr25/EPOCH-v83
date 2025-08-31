@@ -3805,11 +3805,56 @@ export default function LayupScheduler() {
                   </div>
                 </div>
 
-                {/* Schedule Grid */}
-                <div
-                  className="grid gap-1"
-                  style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
-                >
+                {/* Main Content: Unassigned Orders + Schedule Grid */}
+                <div className="flex gap-6">
+                  {/* Left Sidebar: Unassigned Orders Queue */}
+                  <div className="w-80 flex-shrink-0">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        Unassigned Orders
+                      </h3>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        {processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule
+                      </div>
+                      
+                      {/* Orders List */}
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {processedOrders
+                          .filter(order => !orderAssignments[order.orderId])
+                          .slice(0, 50) // Limit display for performance
+                          .map((order) => (
+                            <DraggableOrderItem
+                              key={order.orderId}
+                              order={order}
+                              priority={order.priorityScore || 0}
+                              getModelDisplayName={getModelDisplayName}
+                              features={features}
+                              processedOrders={processedOrders}
+                              isLocked={false}
+                            />
+                          ))}
+                        
+                        {processedOrders.filter(o => !orderAssignments[o.orderId]).length > 50 && (
+                          <div className="text-xs text-gray-500 text-center py-2">
+                            ... and {processedOrders.filter(o => !orderAssignments[o.orderId]).length - 50} more orders
+                          </div>
+                        )}
+                        
+                        {processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0 && (
+                          <div className="text-center text-gray-500 py-8">
+                            <div className="text-sm">All orders have been scheduled!</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Schedule Grid */}
+                  <div className="flex-1">
+                    <div
+                      className="grid gap-1"
+                      style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}
+                    >
                   {/* Rows for each mold - Show relevant molds sorted by order count (most orders first) */}
                   {(() => {
                     // Get molds that are compatible with any order in the current queue
@@ -4066,6 +4111,8 @@ export default function LayupScheduler() {
                       </React.Fragment>
                     ));
                   })()}
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (

@@ -3158,7 +3158,35 @@ export default function LayupScheduler() {
                             if (checked) {
                               setSelectedWorkDays(prev => [...prev, day].sort());
                             } else {
-                              setSelectedWorkDays(prev => prev.filter(d => d !== day));
+                              // When removing a work day, handle capacity redistribution
+                              const newWorkDays = selectedWorkDays.filter(d => d !== day);
+                              setSelectedWorkDays(newWorkDays);
+                              
+                              // Find orders assigned to the removed day and redistribute them
+                              const ordersOnRemovedDay = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+                                const assignmentDate = new Date(assignment.date);
+                                return assignmentDate.getDay() === day;
+                              });
+                              
+                              if (ordersOnRemovedDay.length > 0) {
+                                console.log(`🔄 Redistributing ${ordersOnRemovedDay.length} orders from removed work day ${day}`);
+                                
+                                // Remove orders from the eliminated day
+                                const updatedAssignments = { ...orderAssignments };
+                                ordersOnRemovedDay.forEach(([orderId]) => {
+                                  delete updatedAssignments[orderId];
+                                });
+                                
+                                // Update assignments without the removed day orders
+                                setOrderAssignments(updatedAssignments);
+                                setHasUnsavedScheduleChanges(true);
+                                
+                                // Show notification
+                                toast({
+                                  title: "Work Day Removed",
+                                  description: `${ordersOnRemovedDay.length} orders moved back to production queue for rescheduling`,
+                                });
+                              }
                             }
                           }}
                         />

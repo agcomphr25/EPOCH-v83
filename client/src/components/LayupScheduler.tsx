@@ -3158,33 +3158,91 @@ export default function LayupScheduler() {
                             if (checked) {
                               setSelectedWorkDays(prev => [...prev, day].sort());
                             } else {
-                              // When removing a work day, handle capacity redistribution
+                              // When removing a work day, handle capacity redistribution with priority-based scheduling
                               const newWorkDays = selectedWorkDays.filter(d => d !== day);
                               setSelectedWorkDays(newWorkDays);
                               
-                              // Find orders assigned to the removed day and redistribute them
+                              // Find orders assigned to the removed day
                               const ordersOnRemovedDay = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
                                 const assignmentDate = new Date(assignment.date);
                                 return assignmentDate.getDay() === day;
                               });
                               
                               if (ordersOnRemovedDay.length > 0) {
-                                console.log(`🔄 Redistributing ${ordersOnRemovedDay.length} orders from removed work day ${day}`);
+                                console.log(`🔄 Handling capacity reduction: ${ordersOnRemovedDay.length} orders affected by removing work day ${day}`);
                                 
-                                // Remove orders from the eliminated day
+                                // Calculate new total capacity with reduced work days
+                                const dailyCapacity = 20; // Based on algorithm logs
+                                const newTotalCapacity = newWorkDays.length * dailyCapacity * 4; // 4 weeks shown typically
+                                
+                                // Get all currently assigned orders with their priority data
+                                const allAssignedOrders = Object.entries(orderAssignments)
+                                  .filter(([orderId, assignment]) => {
+                                    const assignmentDate = new Date(assignment.date);
+                                    return newWorkDays.includes(assignmentDate.getDay()); // Only count orders on remaining work days
+                                  })
+                                  .map(([orderId, assignment]) => {
+                                    const orderData = orders.find((o: any) => o.orderId === orderId);
+                                    return {
+                                      orderId,
+                                      assignment,
+                                      priorityScore: orderData?.priorityScore || 99,
+                                      source: orderData?.source || 'regular'
+                                    };
+                                  });
+                                
+                                // Include orders from the removed day in the redistribution pool
+                                const ordersFromRemovedDay = ordersOnRemovedDay.map(([orderId]) => {
+                                  const orderData = orders.find((o: any) => o.orderId === orderId);
+                                  return {
+                                    orderId,
+                                    assignment: null, // Will need new assignment
+                                    priorityScore: orderData?.priorityScore || 99,
+                                    source: orderData?.source || 'regular'
+                                  };
+                                });
+                                
+                                // Combine and sort by priority (P1 PO first, then by priority score)
+                                const allOrdersByPriority = [...allAssignedOrders, ...ordersFromRemovedDay]
+                                  .sort((a, b) => {
+                                    // P1 Purchase Orders get highest priority
+                                    const aIsP1PO = a.source === 'p1_purchase_order';
+                                    const bIsP1PO = b.source === 'p1_purchase_order';
+                                    if (aIsP1PO && !bIsP1PO) return -1;
+                                    if (!aIsP1PO && bIsP1PO) return 1;
+                                    
+                                    // Then by priority score (lower = higher priority)
+                                    return a.priorityScore - b.priorityScore;
+                                  });
+                                
+                                // Keep only the highest priority orders that fit in new capacity
+                                const ordersToKeep = allOrdersByPriority.slice(0, Math.floor(newTotalCapacity * 0.8)); // Use 80% of capacity to avoid overcrowding
+                                const ordersToRemove = allOrdersByPriority.slice(Math.floor(newTotalCapacity * 0.8));
+                                
+                                // Create new assignments keeping only the highest priority orders
                                 const updatedAssignments = { ...orderAssignments };
+                                
+                                // Remove all orders from the eliminated day first
                                 ordersOnRemovedDay.forEach(([orderId]) => {
                                   delete updatedAssignments[orderId];
                                 });
                                 
-                                // Update assignments without the removed day orders
+                                // Remove lowest priority orders that exceed new capacity
+                                ordersToRemove.forEach(order => {
+                                  if (order.assignment) { // Only remove if it was previously assigned to a valid day
+                                    delete updatedAssignments[order.orderId];
+                                  }
+                                });
+                                
+                                // Update assignments
                                 setOrderAssignments(updatedAssignments);
                                 setHasUnsavedScheduleChanges(true);
                                 
-                                // Show notification
+                                // Show notification about redistribution
+                                const removedCount = ordersOnRemovedDay.length + ordersToRemove.filter(o => o.assignment).length;
                                 toast({
                                   title: "Work Day Removed",
-                                  description: `${ordersOnRemovedDay.length} orders moved back to production queue for rescheduling`,
+                                  description: `Redistributed schedule: ${ordersToKeep.filter(o => !o.assignment).length} orders kept, ${removedCount} lowest priority orders moved to production queue`,
                                 });
                               }
                             }

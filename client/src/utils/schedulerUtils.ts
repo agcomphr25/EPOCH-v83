@@ -61,10 +61,19 @@ export function generateLayupSchedule(
 
   const totalDailyEmployeeCapacity = Object.values(employeeDailyCapacities).reduce((a, b) => a + b, 0);
 
-  // 2. Enhanced sorting for Mesa Universal priority scheduling
+  // 2. Enhanced sorting for P1 PO priority scheduling
+  console.log(`🔄 Scheduling ${orders.length} orders - checking for P1 PO priority...`);
+  const p1POOrders = orders.filter(o => o.source === 'p1_purchase_order');
+  const regularOrders = orders.filter(o => o.source !== 'p1_purchase_order');
+  console.log(`📋 Found ${p1POOrders.length} P1 PO orders, ${regularOrders.length} regular orders`);
+  
   const sortedOrders = [...orders].sort((a, b) => {
-    // REMOVED: Mesa Universal no longer gets special priority - it's just another PO order
-    // All orders are now prioritized equally by due date and priority score
+    // Priority 1: P1 Purchase Orders get scheduled FIRST before regular orders
+    const aIsP1PO = a.source === 'p1_purchase_order';
+    const bIsP1PO = b.source === 'p1_purchase_order';
+    
+    if (aIsP1PO && !bIsP1PO) return -1; // a (P1 PO) goes first
+    if (!aIsP1PO && bIsP1PO) return 1;  // b (P1 PO) goes first
 
     // Priority 2: Production orders have priority scores 20-35 (urgent), regular orders 50+
     const aPriority = a.priorityScore || 99; // Default to lowest priority if not set

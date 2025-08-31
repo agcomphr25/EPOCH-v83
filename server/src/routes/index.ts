@@ -260,57 +260,55 @@ export function registerRoutes(app: Express): Server {
       // Combine both sources  
       const combinedUnscheduledOrders = [...unscheduledOrders, ...formattedActiveOrders];
       
-      // Directly fetch Mesa Universal production orders from production_orders table
-      const directProductionOrdersResult = await pool.query(`
+      // Fetch P1 PO orders from all_orders table (orders created from P1 PO week selection)
+      console.log('🔍 Fetching P1 PO orders from all_orders table...');
+      const p1POOrdersResult = await pool.query(`
         SELECT 
-          po.order_id as "orderId",
-          po.customer_name as customer,
-          po.item_name as product,
-          po.order_date,
-          po.due_date as "dueDate",
-          po.current_department as "currentDepartment",
-          po.status,
-          po.po_number as "poNumber",
-          po.id as "poId",
-          po.id as "productionOrderId",
-          'production_order' as source
-        FROM production_orders po
-        LEFT JOIN layup_schedule ls ON po.order_id = ls.order_id
-        WHERE po.current_department = 'P1 Production Queue' 
-          AND ls.order_id IS NULL
-          AND po.status = 'IN_PROGRESS'
-          AND po.item_name LIKE '%Mesa%Universal%'
-        ORDER BY po.due_date ASC
+          order_id as "orderId",
+          customer,
+          stock_model_id as "stockModelId",
+          due_date as "dueDate",
+          current_department as "currentDepartment",
+          status,
+          features,
+          priority_score as "priorityScore",
+          created_at as "createdAt",
+          'p1_purchase_order' as source
+        FROM all_orders 
+        WHERE current_department = 'P1 Production Queue' 
+          AND order_id LIKE 'PO%'
+          AND status = 'Pending'
+        ORDER BY due_date ASC
       `);
 
-      // Format the direct production orders
-      const directProductionOrders = (directProductionOrdersResult?.rows || []).map((po: any) => ({
-        id: po.poId,
+      // Format the P1 PO orders
+      const p1POOrdersRows = Array.isArray(p1POOrdersResult) ? p1POOrdersResult : (p1POOrdersResult?.rows || []);
+      console.log(`🔍 Found ${p1POOrdersRows.length} P1 PO orders in all_orders table`);
+      
+      const p1POOrders = p1POOrdersRows.map((po: any) => ({
+        id: po.orderId,
         orderId: po.orderId,
-        orderDate: po.order_date,
+        orderDate: po.createdAt,
         dueDate: po.dueDate,
         currentDepartment: po.currentDepartment,
         customerId: po.customer,
-        features: {},
-        modelId: 'mesa_universal',  // Set directly for Mesa Universal
-        stockModelId: 'mesa_universal',
-        product: po.product,
+        features: po.features || {},
+        modelId: po.stockModelId,
+        stockModelId: po.stockModelId,
+        product: po.stockModelId,
         status: po.status,
-        source: po.source,  // This will be 'production_order'
-        poNumber: po.poNumber,
-        poId: po.poId,
-        productionOrderId: po.productionOrderId,
-        priorityScore: calculatePriorityScore(po.dueDate || po.order_date)
+        source: po.source,  // This will be 'p1_purchase_order'
+        priorityScore: po.priorityScore || 1500
       }));
 
-      console.log(`🏭 Found ${directProductionOrders.length} Mesa Universal production orders`);
+      console.log(`🏭 Found ${p1POOrders.length} P1 PO orders from week selection`);
 
       // Combine both order types into unified production queue with enhanced stock model inference
-      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${directProductionOrders.length} production orders for P1 layup queue`);
+      console.log(`📦 Processing ${combinedUnscheduledOrders.length} total main orders + ${p1POOrders.length} P1 PO orders for P1 layup queue`);
       
       const combinedQueue = [
-        // Add the direct production orders first
-        ...directProductionOrders,
+        // Add the P1 PO orders first (highest priority)
+        ...p1POOrders,
         ...combinedUnscheduledOrders.map(order => {
           // Determine correct source type based on order characteristics
           // Only treat as production_order if it has poId or productionOrderId

@@ -371,7 +371,7 @@ export default function ProductionQueueManager() {
         </Card>
       </div>
 
-      <Accordion type="multiple" defaultValue={["po-queue", "regular-queue", "attention-orders"]} className="space-y-4">
+      <Accordion type="multiple" defaultValue={[]} className="space-y-4">
         {/* Orders That Need Attention */}
         <AccordionItem value="attention-orders">
           <Card>

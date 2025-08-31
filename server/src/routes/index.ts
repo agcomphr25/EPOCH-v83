@@ -265,19 +265,17 @@ export function registerRoutes(app: Express): Server {
       const p1POOrdersResult = await pool.query(`
         SELECT 
           order_id as "orderId",
-          customer,
-          stock_model_id as "stockModelId",
+          customer_id as "customerId",
+          model_id as "stockModelId",
           due_date as "dueDate",
           current_department as "currentDepartment",
           status,
           features,
-          priority_score as "priorityScore",
           created_at as "createdAt",
           'p1_purchase_order' as source
         FROM all_orders 
-        WHERE current_department = 'P1 Production Queue' 
-          AND order_id LIKE 'PO%'
-          AND status = 'Pending'
+        WHERE order_id LIKE 'PO%'
+          AND (current_department = 'P1 Production Queue' OR current_department = 'Layup/Plugging')
         ORDER BY due_date ASC
       `);
 
@@ -291,7 +289,7 @@ export function registerRoutes(app: Express): Server {
         orderDate: po.createdAt,
         dueDate: po.dueDate,
         currentDepartment: po.currentDepartment,
-        customerId: po.customer,
+        customerId: po.customerId,
         features: po.features || {},
         modelId: po.stockModelId,
         stockModelId: po.stockModelId,

@@ -4164,6 +4164,20 @@ export default function LayupScheduler() {
               </div>
             )}
           </div>
+          
+          {/* Drag Overlay for visual feedback during drag operations */}
+          <DragOverlay>
+            {activeId ? (
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-600 rounded-lg shadow-lg opacity-90 transform rotate-2">
+                <div className="text-sm font-bold text-blue-800 dark:text-blue-200">
+                  {getDisplayOrderId({ orderId: activeId }) || activeId}
+                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-300">
+                  Dragging...
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       </div>
     </div>

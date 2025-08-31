@@ -2421,6 +2421,12 @@ export default function LayupScheduler() {
               const dayOfWeek = assignmentDate.getDay();
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
 
+              // FILTER OUT NON-WORK DAYS: Skip assignments for days not in selectedWorkDays
+              if (!selectedWorkDays.includes(dayOfWeek)) {
+                console.log(`🖨️ PRINT FILTER: Skipping ${dayName} assignment - ${orderId} → ${assignment.moldId} (not a selected work day)`);
+                return;
+              }
+
               // Log Thursday assignments specifically
               if (dayOfWeek === 4) {
                 console.log(`🖨️ THURSDAY ASSIGNMENT FOUND: ${orderId} → ${assignment.moldId} on ${assignmentDateOnly} (${dayName})`);
@@ -2482,7 +2488,7 @@ export default function LayupScheduler() {
                 const date = new Date(dateStr + 'T12:00:00'); // Add noon to avoid timezone issues
                 const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
                 const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-                const isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 4; // Monday (1) through Thursday (4) only
+                const isWorkDay = selectedWorkDays.includes(dayOfWeek); // Only include selected work days
 
                 // Compare dates using the same noon approach to avoid timezone issues
                 const weekStart = new Date(currentWeekStart);

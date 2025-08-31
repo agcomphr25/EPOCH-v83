@@ -32,7 +32,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
     `;
 
     const ordersResult = await pool.query(ordersQuery);
-    const eligibleOrders = ordersResult || [];
+    const eligibleOrders = Array.isArray(ordersResult) ? ordersResult : (ordersResult.rows || []);
 
     console.log(`📋 Found ${eligibleOrders.length} eligible orders for production queue`);
 
@@ -138,7 +138,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
       ORDER BY due_date ASC, created_at ASC
     `);
     
-    const orders = queueResult.rows || [];
+    const orders = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -209,7 +209,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     `;
 
     const queueResult = await pool.query(queueQuery);
-    const prioritizedQueue = queueResult.rows || [];
+    const prioritizedQueue = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -291,6 +291,174 @@ router.post('/update-priorities', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Failed to update priorities",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get PO items ready for production
+router.get('/po-items', async (req: Request, res: Response) => {
+  try {
+    console.log('🏭 PO ITEMS: Fetching PO items ready for production...');
+    
+    const poItemsQuery = `
+      SELECT 
+        poi.id,
+        poi.po_id as poId,
+        po.po_number as poNumber,
+        poi.item_name as itemName,
+        poi.item_id as stockModelId,
+        poi.item_name as stockModelName,
+        poi.quantity,
+        poi.unit_price as unitPrice,
+        poi.total_price as totalPrice,
+        poi.specifications,
+        poi.notes,
+        po.customer_name as customerName,
+        po.expected_delivery as dueDate,
+        po.created_at as createdAt
+      FROM purchase_order_items poi
+      JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE poi.quantity > 0 
+        AND (poi.item_id IS NOT NULL AND poi.item_id != '' AND poi.item_id != 'None')
+        AND po.status != 'CANCELED'
+        AND poi.item_type = 'stock_model'
+        AND (poi.order_count = 0 OR poi.order_count IS NULL)
+      ORDER BY po.expected_delivery ASC, po.created_at ASC
+    `;
+
+    const poItemsResult = await pool.query(poItemsQuery);
+    const poItems = Array.isArray(poItemsResult) ? poItemsResult : (poItemsResult.rows || []);
+
+    // Calculate priority metrics for each PO item
+    const now = new Date();
+    const enhancedPOItems = poItems.map((item: any) => {
+      const dueDate = new Date(item.dueDate || item.createdAt);
+      const daysToDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Calculate priority score based on due date urgency
+      let priorityScore = 1000; // Base priority
+      
+      // Due date urgency (higher score = higher priority)
+      if (daysToDue < 0) priorityScore += 500; // Overdue orders get highest priority
+      else if (daysToDue <= 7) priorityScore += 300; // Due within a week
+      else if (daysToDue <= 14) priorityScore += 200; // Due within 2 weeks
+      else if (daysToDue <= 30) priorityScore += 100; // Due within a month
+
+      return {
+        ...item,
+        priorityScore,
+        daysToDue,
+        isOverdue: daysToDue < 0,
+        urgencyLevel: daysToDue < 0 ? 'critical' : 
+                     daysToDue <= 7 ? 'high' : 
+                     daysToDue <= 14 ? 'medium' : 'normal'
+      };
+    });
+
+    console.log(`📋 Fetched ${enhancedPOItems.length} PO items ready for production`);
+    res.json(enhancedPOItems);
+    
+  } catch (error) {
+    console.error('❌ PO ITEMS: Error fetching PO items:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch PO items",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Move PO item to layup scheduler
+router.post('/po-to-layup', async (req: Request, res: Response) => {
+  try {
+    const { poItem } = req.body;
+    
+    if (!poItem || !poItem.id) {
+      return res.status(400).json({
+        success: false,
+        error: "PO item data is required"
+      });
+    }
+
+    console.log(`🏭 PO TO LAYUP: Moving PO item ${poItem.id} to layup scheduler...`);
+
+    // Create regular orders for the PO item quantity that go into the layup scheduler
+    // Each unit will become a separate order in the all_orders table
+    const createdOrders = [];
+    
+    for (let i = 1; i <= poItem.quantity; i++) {
+      const orderQuery = `
+        INSERT INTO all_orders (
+          order_id,
+          order_date,
+          due_date,
+          customer_id,
+          model_id,
+          current_department,
+          status,
+          notes,
+          features,
+          created_at,
+          updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
+        ) RETURNING order_id, model_id, current_department
+      `;
+
+      // Generate unique order ID for each unit
+      const orderId = `PO${poItem.poNumber}-${String(i).padStart(3, '0')}`;
+      
+      const orderResult = await pool.query(orderQuery, [
+        orderId,
+        new Date().toISOString(),
+        poItem.dueDate,
+        poItem.customerName, // Using customer name as ID for PO orders
+        poItem.stockModelId,
+        'Layup/Plugging', // Move directly to layup
+        'FINALIZED',
+        `PO Item: ${poItem.itemName} (Unit ${i}/${poItem.quantity}) - PO #${poItem.poNumber}`,
+        JSON.stringify({ po_item_id: poItem.id, po_number: poItem.poNumber, unit_number: i })
+      ]);
+
+      const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
+      if (orders.length > 0) {
+        createdOrders.push(orders[0]);
+        console.log(`✅ Created order ${orderId} for PO item ${poItem.itemName} (unit ${i}/${poItem.quantity})`);
+      }
+    }
+
+    // Update the PO item to track that it's been moved to production
+    const updatePOItemQuery = `
+      UPDATE purchase_order_items 
+      SET 
+        order_count = $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `;
+    
+    await pool.query(updatePOItemQuery, [poItem.quantity, poItem.id]);
+
+    const result = {
+      success: true,
+      message: `Successfully moved ${poItem.itemName} (${poItem.quantity} units) to layup scheduler`,
+      itemName: poItem.itemName,
+      quantity: poItem.quantity,
+      createdOrders: createdOrders.length,
+      orders: createdOrders.map(order => ({
+        orderId: order.order_id,
+        stockModelId: order.model_id
+      }))
+    };
+
+    console.log(`🏭 PO TO LAYUP: Successfully created ${createdOrders.length} orders for PO item ${poItem.itemName}`);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ PO TO LAYUP: Error moving PO item to layup:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to move PO item to layup scheduler",
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

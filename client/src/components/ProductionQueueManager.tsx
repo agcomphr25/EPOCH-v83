@@ -52,6 +52,7 @@ interface POItem {
   totalprice: string;
   customername: string;
   duedate: string;
+  ordercount: number; // Track how many units have been moved to production
   priorityScore: number;
   daysToDue: number;
   isOverdue: boolean;
@@ -394,7 +395,12 @@ export default function ProductionQueueManager() {
                       <Badge variant="outline">{item.stockmodelname}</Badge>
                     </TableCell>
                     <TableCell className="font-semibold text-blue-600">
-                      {item.quantity} units
+                      {item.quantity - (item.ordercount || 0)} / {item.quantity} units
+                      {item.ordercount > 0 && (
+                        <div className="text-xs text-gray-500">
+                          ({item.ordercount} moved to production)
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

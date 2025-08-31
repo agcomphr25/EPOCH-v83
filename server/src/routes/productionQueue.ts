@@ -310,25 +310,26 @@ router.get('/po-items', async (req: Request, res: Response) => {
     const poItemsQuery = `
       SELECT 
         poi.id,
-        poi.po_id as poId,
-        po.po_number as poNumber,
-        poi.item_name as itemName,
-        poi.item_id as stockModelId,
-        poi.item_name as stockModelName,
+        poi.po_id as poid,
+        po.po_number as ponumber,
+        poi.item_name as itemname,
+        poi.item_id as stockmodelid,
+        poi.item_name as stockmodelname,
         poi.quantity,
-        poi.unit_price as unitPrice,
-        poi.total_price as totalPrice,
+        poi.unit_price as unitprice,
+        poi.total_price as totalprice,
+        poi.order_count as ordercount,
         poi.specifications,
         poi.notes,
-        po.customer_name as customerName,
-        po.expected_delivery as dueDate,
+        po.customer_name as customername,
+        po.expected_delivery as duedate,
         po.created_at as createdAt
       FROM purchase_order_items poi
       JOIN purchase_orders po ON poi.po_id = po.id
       WHERE poi.quantity > 0 
         AND (poi.item_id IS NOT NULL AND poi.item_id != '' AND poi.item_id != 'None')
         AND po.status != 'CANCELED'
-        AND (poi.order_count = 0 OR poi.order_count IS NULL)
+        AND (poi.order_count < poi.quantity OR poi.order_count IS NULL)
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;
 

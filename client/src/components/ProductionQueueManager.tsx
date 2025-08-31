@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { 
   RefreshCw, 
@@ -59,6 +60,19 @@ interface POItem {
   urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
 }
 
+interface Kickback {
+  id: number;
+  orderId: string;
+  department: string;
+  issueDescription: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  reportedBy: string;
+  reportedAt: string;
+  resolvedAt?: string;
+  resolutionNotes?: string;
+}
+
 interface WeekSchedule {
   week: number;
   dueDate: string;
@@ -104,6 +118,18 @@ export default function ProductionQueueManager() {
   const { data: poItems = [], isLoading: isLoadingPOItems, refetch: refetchPOItems } = useQuery<POItem[]>({
     queryKey: ['/api/production-queue/po-items'],
     queryFn: () => apiRequest('/api/production-queue/po-items'),
+  });
+
+  // Fetch orders that need attention (kickbacks with OPEN or IN_PROGRESS status)
+  const { data: attentionOrders = [], isLoading: isLoadingAttention, refetch: refetchAttention } = useQuery<Kickback[]>({
+    queryKey: ['/api/kickbacks/attention'],
+    queryFn: async () => {
+      const [openKickbacks, inProgressKickbacks] = await Promise.all([
+        apiRequest('/api/kickbacks/status/OPEN'),
+        apiRequest('/api/kickbacks/status/IN_PROGRESS')
+      ]);
+      return [...openKickbacks, ...inProgressKickbacks];
+    },
   });
 
   // Auto-populate production queue mutation
@@ -247,7 +273,7 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
-  if (isLoading || isLoadingPOItems) {
+  if (isLoading || isLoadingPOItems || isLoadingAttention) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Card>
@@ -345,18 +371,126 @@ export default function ProductionQueueManager() {
         </Card>
       </div>
 
-      {/* P1 Purchase Order Queue */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5 text-blue-600" />
-            P1 Purchase Order Queue
-          </CardTitle>
-          <p className="text-sm text-gray-500">
-            Priority queue for purchase order items - these will be scheduled first
-          </p>
-        </CardHeader>
-        <CardContent>
+      <Accordion type="multiple" defaultValue={["po-queue", "regular-queue", "attention-orders"]} className="space-y-4">
+        {/* Orders That Need Attention */}
+        <AccordionItem value="attention-orders">
+          <Card>
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Orders That Need Attention
+                  {attentionOrders.length > 0 && (
+                    <Badge className="bg-red-500 hover:bg-red-600 text-white ml-2">
+                      {attentionOrders.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+                <p className="text-sm text-gray-500 text-left">
+                  Production issues and kickbacks requiring immediate attention
+                </p>
+              </CardHeader>
+            </AccordionTrigger>
+            <AccordionContent>
+              <CardContent>
+                {attentionOrders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-300" />
+                    <p>No orders requiring attention</p>
+                    <p className="text-sm">All production issues are resolved</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Issue Description</TableHead>
+                        <TableHead>Severity</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Reported By</TableHead>
+                        <TableHead>Reported Date</TableHead>
+                        <TableHead className="w-32">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {attentionOrders.map((kickback) => (
+                        <TableRow key={kickback.id} className="bg-red-50">
+                          <TableCell className="font-medium">
+                            {kickback.orderId}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{kickback.department}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {kickback.issueDescription}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={
+                              kickback.severity === 'CRITICAL' ? 'bg-red-500 hover:bg-red-600 text-white' :
+                              kickback.severity === 'HIGH' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                              kickback.severity === 'MEDIUM' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' :
+                              'bg-green-500 hover:bg-green-600 text-white'
+                            }>
+                              {kickback.severity}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={
+                              kickback.status === 'OPEN' ? 'bg-red-500 hover:bg-red-600 text-white' :
+                              'bg-yellow-500 hover:bg-yellow-600 text-white'
+                            }>
+                              {kickback.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <User className="w-3 h-3 text-gray-400" />
+                              {kickback.reportedBy}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              {new Date(kickback.reportedAt).toLocaleDateString()}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <ArrowRight className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </AccordionContent>
+          </Card>
+        </AccordionItem>
+
+        {/* P1 Purchase Order Queue */}
+        <AccordionItem value="po-queue">
+          <Card>
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-600" />
+                  P1 Purchase Order Queue
+                </CardTitle>
+                <p className="text-sm text-gray-500 text-left">
+                  Priority queue for purchase order items - these will be scheduled first
+                </p>
+              </CardHeader>
+            </AccordionTrigger>
+            <AccordionContent>
+              <CardContent>
           {poItems.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -433,20 +567,27 @@ export default function ProductionQueueManager() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </AccordionContent>
+          </Card>
+        </AccordionItem>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Regular Production Queue
-          </CardTitle>
-          <p className="text-sm text-gray-500">
-            Ready for layup orders - these will fill remaining schedule slots
-          </p>
-        </CardHeader>
-        <CardContent>
+        {/* Regular Production Queue */}
+        <AccordionItem value="regular-queue">
+          <Card>
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Regular Production Queue
+                </CardTitle>
+                <p className="text-sm text-gray-500 text-left">
+                  Ready for layup orders - these will fill remaining schedule slots
+                </p>
+              </CardHeader>
+            </AccordionTrigger>
+            <AccordionContent>
+              <CardContent>
           {productionQueue.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -535,8 +676,11 @@ export default function ProductionQueueManager() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </AccordionContent>
+          </Card>
+        </AccordionItem>
+      </Accordion>
 
       {/* Week Selection Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

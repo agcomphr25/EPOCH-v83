@@ -198,7 +198,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
-        AND o.status = 'FINALIZED'
+        AND o.status IN ('FINALIZED', 'Active')
       ORDER BY 
         o.due_date ASC,
         o.created_at ASC

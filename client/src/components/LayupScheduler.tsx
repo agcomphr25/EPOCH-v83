@@ -2318,75 +2318,158 @@ export default function LayupScheduler() {
               opacity: 0.9;
             }
             @media print {
+              * {
+                box-sizing: border-box !important;
+              }
               body {
                 margin: 0 !important;
-                padding: 0 !important;
-                font-size: 8px !important;
-                line-height: 1.1 !important;
+                padding: 8px !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 10px !important;
+                line-height: 1.2 !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
               .header {
-                margin: 0 !important;
-                margin-bottom: 2px !important;
-                padding: 0 !important;
-                padding-bottom: 2px !important;
+                margin: 0 0 8px 0 !important;
+                padding: 4px 0 !important;
+                border-bottom: 1px solid #000 !important;
+                page-break-inside: avoid !important;
               }
               .header h1 {
-                font-size: 10px !important;
+                font-size: 14px !important;
+                margin: 0 0 2px 0 !important;
+                font-weight: bold !important;
               }
               .header h2 {
-                font-size: 8px !important;
+                font-size: 12px !important;
+                margin: 0 0 2px 0 !important;
+                font-weight: normal !important;
               }
               .header p {
-                font-size: 6px !important;
+                font-size: 9px !important;
+                margin: 0 !important;
+                color: #666 !important;
               }
               .stats {
-                margin-bottom: 1px !important;
+                margin-bottom: 8px !important;
+                display: flex !important;
+                gap: 12px !important;
+                page-break-inside: avoid !important;
               }
               .stat {
-                padding: 1px 2px !important;
-                font-size: 6px !important;
+                padding: 2px 4px !important;
+                font-size: 9px !important;
+                background: #f0f0f0 !important;
+                border: 1px solid #ccc !important;
+                border-radius: 3px !important;
               }
               .schedule-table {
-                break-inside: avoid;
-                margin: 0 !important;
+                width: 100% !important;
+                border-collapse: collapse !important;
+                margin: 0 0 12px 0 !important;
+                page-break-inside: avoid !important;
+                table-layout: fixed !important;
               }
               .schedule-table th {
-                padding: 1px !important;
-                font-size: 6px !important;
+                padding: 4px 2px !important;
+                font-size: 9px !important;
+                font-weight: bold !important;
+                border: 1px solid #333 !important;
+                background: #e8e8e8 !important;
+                text-align: center !important;
+                vertical-align: middle !important;
               }
               .schedule-table .mold-header {
-                padding: 1px !important;
-                font-size: 6px !important;
-                width: 40px !important;
+                padding: 4px 2px !important;
+                font-size: 8px !important;
+                width: 80px !important;
+                background: #d4edda !important;
+                border: 1px solid #333 !important;
+                text-align: left !important;
+                vertical-align: middle !important;
+                word-wrap: break-word !important;
               }
               .schedule-table .cell {
-                padding: 0.5px !important;
-                min-height: 25px !important;
+                padding: 2px !important;
+                border: 1px solid #333 !important;
+                vertical-align: top !important;
+                min-height: 40px !important;
+                width: auto !important;
+                overflow: hidden !important;
               }
               .order-card {
-                margin: 0 0 1px 0 !important;
-                padding: 2px 3px !important;
+                margin: 0 0 2px 0 !important;
+                padding: 3px 4px !important;
                 font-size: 8px !important;
+                border: 1px solid #666 !important;
+                border-radius: 2px !important;
+                background: white !important;
+                color: black !important;
+                line-height: 1.1 !important;
+                display: block !important;
+                break-inside: avoid !important;
               }
               .order-id {
                 font-size: 8px !important;
+                font-weight: bold !important;
+                margin: 0 !important;
+                color: black !important;
               }
               .order-details {
-                font-size: 12px !important;
-                font-weight: bold !important;
-                line-height: 1.2 !important;
+                font-size: 7px !important;
+                font-weight: normal !important;
+                line-height: 1.1 !important;
+                margin: 1px 0 0 0 !important;
+                color: #333 !important;
               }
               .mold-info {
-                font-size: 12px !important;
-                font-weight: bold !important;
-                line-height: 1.2 !important;
+                font-size: 7px !important;
+                font-weight: normal !important;
+                line-height: 1.1 !important;
+                margin: 1px 0 0 0 !important;
+                color: #666 !important;
               }
               .material-badge, .po-badge, .heavy-fill-badge, .lop-badge {
-                font-size: 4px !important;
-                padding: 0.5px 1px !important;
+                font-size: 6px !important;
+                padding: 1px 2px !important;
+                margin: 0 1px 0 0 !important;
+                display: inline-block !important;
+                border: 1px solid #999 !important;
+                border-radius: 2px !important;
+                background: #f5f5f5 !important;
+                color: black !important;
+              }
+              .material-badge.cf {
+                background: #e3f2fd !important;
+                border-color: #1976d2 !important;
+              }
+              .material-badge.fg {
+                background: #f3e5f5 !important;
+                border-color: #7b1fa2 !important;
+              }
+              .po-badge {
+                background: #fff3e0 !important;
+                border-color: #f57c00 !important;
+              }
+              .heavy-fill-badge {
+                background: #ffebee !important;
+                border-color: #d32f2f !important;
+              }
+              .lop-badge {
+                background: #fffde7 !important;
+                border-color: #f57f17 !important;
               }
               .order-count {
-                font-size: 6px !important;
+                font-size: 7px !important;
+                color: #666 !important;
+              }
+              /* Page break controls */
+              .page-break {
+                page-break-before: always !important;
+              }
+              .no-break {
+                page-break-inside: avoid !important;
               }
             }
           </style>

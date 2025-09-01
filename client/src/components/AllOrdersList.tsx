@@ -703,7 +703,7 @@ export default function AllOrdersList() {
             </TableBody>
           </Table>
 
-          {filteredOrders.length === 0 && (
+          {sortedOrders.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No orders found for the selected criteria
             </div>

@@ -144,7 +144,9 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
   // Determine card styling based on source and material
   const getCardStyling = () => {
     // Check if this is a purchase order (has poId or productionOrderId)
-    if (order.poId || order.productionOrderId || order.source === 'production_order') {
+    // BUT exclude Mesa Universal orders - they should always be colored by material type
+    if ((order.poId || order.productionOrderId || order.source === 'production_order') && 
+        modelId !== 'mesa_universal') {
       return {
         bg: 'bg-purple-100 dark:bg-purple-800/50 hover:bg-purple-200 dark:hover:bg-purple-800/70 border-2 border-purple-300 dark:border-purple-600',
         text: 'text-purple-800 dark:text-purple-200'

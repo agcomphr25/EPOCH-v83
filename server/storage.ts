@@ -3586,7 +3586,7 @@ export class DatabaseStorage implements IStorage {
         customer: productionOrders.customerName,
         product: productionOrders.itemName,
         status: productionOrders.productionStatus,
-        department: productionOrders.currentDepartment,
+        department: productionOrders.productionStatus,
         priorityScore: sql<number>`CASE 
           WHEN ${productionOrders.dueDate} < CURRENT_DATE THEN 1 
           WHEN ${productionOrders.dueDate} <= CURRENT_DATE + INTERVAL '7 days' THEN 10
@@ -3603,7 +3603,7 @@ export class DatabaseStorage implements IStorage {
         conditions.push(eq(productionOrders.productionStatus, filters.status));
       }
       if (filters?.department) {
-        conditions.push(eq(productionOrders.currentDepartment, filters.department));
+        conditions.push(eq(productionOrders.productionStatus, filters.department));
       }
 
       if (conditions.length > 0) {

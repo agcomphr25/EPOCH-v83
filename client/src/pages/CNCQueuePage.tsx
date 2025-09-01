@@ -334,13 +334,20 @@ export default function CNCQueuePage() {
       });
     },
     onSuccess: () => {
-      toast.success(`Progressed ${selectedGunsimthOrders.size} orders to Gunsmith`);
+      toast({
+        title: "Success",
+        description: `Progressed ${selectedGunsimthOrders.size} orders to Gunsmith`
+      });
       setSelectedGunsimthOrders(new Set());
       setSelectAllGunsmith(false);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error: any) => {
-      toast.error(`Failed to progress orders: ${error.message || error}`);
+      toast({
+        title: "Error",
+        description: `Failed to progress orders: ${error.message || error}`,
+        variant: "destructive"
+      });
     }
   });
 
@@ -356,19 +363,30 @@ export default function CNCQueuePage() {
       });
     },
     onSuccess: () => {
-      toast.success(`Progressed ${selectedFinishOrders.size} orders to Finish`);
+      toast({
+        title: "Success",
+        description: `Progressed ${selectedFinishOrders.size} orders to Finish`
+      });
       setSelectedFinishOrders(new Set());
       setSelectAllFinish(false);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error: any) => {
-      toast.error(`Failed to progress orders: ${error.message || error}`);
+      toast({
+        title: "Error",
+        description: `Failed to progress orders: ${error.message || error}`,
+        variant: "destructive"
+      });
     }
   });
 
   const handleProgressToGunsmith = () => {
     if (selectedGunsimthOrders.size === 0) {
-      toast.error('Please select at least one order');
+      toast({
+        title: "Error",
+        description: 'Please select at least one order',
+        variant: "destructive"
+      });
       return;
     }
     progressToGunsmith.mutate(Array.from(selectedGunsimthOrders));
@@ -376,7 +394,11 @@ export default function CNCQueuePage() {
 
   const handleProgressToFinish = () => {
     if (selectedFinishOrders.size === 0) {
-      toast.error('Please select at least one order');
+      toast({
+        title: "Error",
+        description: 'Please select at least one order',
+        variant: "destructive"
+      });
       return;
     }
     progressToFinish.mutate(Array.from(selectedFinishOrders));
@@ -416,15 +438,26 @@ export default function CNCQueuePage() {
       const order = cncOrders.find((order: any) => order.orderId === orderId);
       if (order) {
         toggleOrderSelection(order.orderId, order.departmentType);
-        toast.success(`Order ${orderId} found and selected`);
+        toast({
+          title: "Order found",
+          description: `Order ${orderId} found and selected`
+        });
       }
     } else {
       // Find the order in all orders to show current department
       const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
       if (allOrder) {
-        toast.error(`Order ${orderId} is currently in ${allOrder.currentDepartment} department, not CNC`);
+        toast({
+          title: "Order not in CNC",
+          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not CNC`,
+          variant: "destructive"
+        });
       } else {
-        toast.error(`Order ${orderId} not found`);
+        toast({
+          title: "Order not found",
+          description: `Order ${orderId} not found`,
+          variant: "destructive"
+        });
       }
     }
   };

@@ -3919,7 +3919,7 @@ export default function LayupScheduler() {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
-                                      scheduleEntries,
+                                      entries: scheduleEntries,
                                       weekStart: dates[0].toISOString(),
                                       workDays: selectedWorkDays
                                     })

@@ -448,55 +448,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Save weekly layup schedule (for week lock functionality)
-  app.post('/api/layup-schedule/save', async (req, res) => {
-    try {
-      console.log('🔧 LAYUP SCHEDULE SAVE CALLED', req.body);
-      const { scheduleEntries, weekStart, workDays } = req.body;
-      
-      if (!scheduleEntries || !Array.isArray(scheduleEntries)) {
-        return res.status(400).json({ error: 'scheduleEntries array is required' });
-      }
-      
-      const { storage } = await import('../../storage');
-      
-      // Save each schedule entry
-      const savedEntries = [];
-      for (const entry of scheduleEntries) {
-        try {
-          // First delete any existing schedule for this order to avoid duplicates
-          await storage.deleteLayupScheduleByOrder(entry.orderId);
-          
-          // Create the new schedule entry
-          const scheduleData = {
-            orderId: entry.orderId,
-            scheduledDate: new Date(entry.scheduledDate),
-            moldId: entry.moldId,
-            employeeId: entry.employeeId || null,
-            isOverride: entry.isOverride || false
-          };
-          
-          const result = await storage.createLayupSchedule(scheduleData);
-          savedEntries.push(result);
-          console.log(`✅ Saved schedule for order ${entry.orderId}`);
-        } catch (error) {
-          console.error(`❌ Failed to save schedule for order ${entry.orderId}:`, error);
-        }
-      }
-      
-      console.log('🔧 Weekly schedule saved successfully:', savedEntries.length, 'entries');
-      res.json({
-        success: true,
-        savedEntries: savedEntries.length,
-        weekStart,
-        workDays
-      });
-      
-    } catch (error) {
-      console.error('❌ Layup schedule save error:', error);
-      res.status(500).json({ error: "Failed to save layup schedule" });
-    }
-  });
 
   // Generate layup schedule from production queue
   app.post('/api/layup-schedule/generate', async (req, res) => {

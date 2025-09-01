@@ -1415,7 +1415,8 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         ne(allOrders.status, 'CANCELLED'),
-        eq(allOrders.isCancelled, false)
+        eq(allOrders.isCancelled, false),
+        sql`${allOrders.orderId} NOT LIKE 'P1-%'`
       )
     )
     .orderBy(desc(allOrders.updatedAt));
@@ -1644,6 +1645,7 @@ export class DatabaseStorage implements IStorage {
   // Get all finalized orders with payment status
   async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
     // Optimized: Use single query to get orders with customer names and payment totals
+    // Exclude P1 purchase orders from All Orders list
     const ordersWithCustomers = await db
       .select({
         // Order fields
@@ -1682,6 +1684,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(sql`${allOrders.orderId} NOT LIKE 'P1-%'`)
       .orderBy(desc(allOrders.updatedAt));
 
     // Get all payments aggregated by order ID in parallel

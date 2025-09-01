@@ -339,6 +339,12 @@ export default function Navigation() {
       label: 'TIMS Dashboard',
       icon: Cog,
       description: 'CNC operations and maintenance management dashboard'
+    },
+    {
+      path: '/bradwtest-dashboard',
+      label: 'BRADW Dashboard',
+      icon: Users,
+      description: 'Gunsmith queue, orders, and employee portal dashboard'
     }
   ];
 

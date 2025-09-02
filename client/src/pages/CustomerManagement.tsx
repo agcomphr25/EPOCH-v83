@@ -192,6 +192,7 @@ const CustomerFormFields = ({
           )}
         </div>
         
+        {/* Company field temporarily hidden - can be restored by uncommenting
         <div className="space-y-2">
           <Label htmlFor="company" className="text-sm font-medium">Company</Label>
           <Input
@@ -201,6 +202,7 @@ const CustomerFormFields = ({
             placeholder="Company name"
           />
         </div>
+        */}
         
         <div className="space-y-2">
           <Label htmlFor="customerType" className="text-sm font-medium">Type</Label>

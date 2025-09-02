@@ -1,7 +1,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Wrench, FileText, Users } from 'lucide-react';
+import { Wrench, FileText, Users, Factory } from 'lucide-react';
 import { Link } from 'wouter';
+import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function BRADWTestDashboard() {
   return (
@@ -51,6 +52,24 @@ export default function BRADWTestDashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Production Pipeline Overview */}
+      <div className="mt-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2 text-lg">
+              <div className="p-2 rounded-lg bg-blue-100">
+                <Factory className="w-5 h-5 text-blue-600" />
+              </div>
+              <span>Production Pipeline Overview</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <PipelineVisualization />
+          </CardContent>
+        </Card>
+      </div>
+
     </div>
   );
 }

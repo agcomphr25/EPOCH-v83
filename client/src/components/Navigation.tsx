@@ -351,6 +351,12 @@ export default function Navigation() {
       label: 'FALEESHAH Dashboard',
       icon: Shield,
       description: 'Quality Control, Shipping & Customer Management dashboard'
+    },
+    {
+      path: '/joeybtest-dashboard',
+      label: 'JOEYB Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard'
     }
   ];
 

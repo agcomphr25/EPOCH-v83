@@ -1038,7 +1038,7 @@ export default function OrdersList() {
                           const nextDept = getNextDepartment(displayDepartment || '');
                           const isComplete = displayDepartment === 'Shipping';
                           const isScrapped = order.status === 'SCRAPPED';
-                          const isFulfilled = order.status === 'FULFILLED' || order.status === 'FINALIZED';
+                          const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
 
                           if (!isScrapped && !isComplete && !isFulfilled && nextDept) {
                             return (

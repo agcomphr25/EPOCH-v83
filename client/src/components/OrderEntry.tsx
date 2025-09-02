@@ -332,8 +332,16 @@ export default function OrderEntry() {
       if (bottomMetalFeature?.options) {
         const option = bottomMetalFeature.options.find(opt => opt.value === features.bottom_metal);
         if (option?.price) {
-          total += option.price;
-          console.log('💰 Price calculation - Bottom metal:', features.bottom_metal, 'price:', option.price);
+          let bottomMetalPrice = option.price;
+          
+          // Special pricing: SepFJ10 seasonal sale + AG bottom metal = $100 instead of $149
+          if (discountCode === 'short_term_4' && features.bottom_metal.includes('ag_') && option.price === 149) {
+            bottomMetalPrice = 100;
+            console.log('💰 Special pricing applied: SepFJ10 + AG bottom metal - price changed from $149 to $100');
+          }
+          
+          total += bottomMetalPrice;
+          console.log('💰 Price calculation - Bottom metal:', features.bottom_metal, 'price:', bottomMetalPrice);
         }
       }
     }

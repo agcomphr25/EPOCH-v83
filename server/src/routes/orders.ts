@@ -946,6 +946,61 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Undo cancellation of an order (restore order)
+router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+
+    console.log('🔄 UNDO CANCEL ORDER ROUTE CALLED');
+    console.log('🔄 Order ID:', orderId);
+
+    // Check if the order exists and is cancelled
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      console.log('🔄 Order not found:', orderId);
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (!order.isCancelled) {
+      console.log('🔄 Order is not cancelled:', orderId);
+      return res.status(400).json({ error: 'Order is not cancelled' });
+    }
+
+    console.log('🔄 Found cancelled order:', order.id, order.status);
+
+    // Restore the order by removing cancellation information
+    const updateData = {
+      isCancelled: false,
+      cancelledAt: null,
+      cancelReason: null,
+      status: 'FINALIZED', // Restore to finalized status
+      currentDepartment: 'P1 Production Queue', // Put back in production queue
+      updatedAt: new Date()
+    };
+
+    console.log('🔄 Restoring order with data:', updateData);
+
+    const updatedOrder = await storage.updateOrder(orderId, updateData);
+    
+    if (!updatedOrder) {
+      console.log('🔄 Failed to restore order:', orderId);
+      return res.status(404).json({ error: 'Failed to restore order' });
+    }
+
+    console.log('🔄 Order restored successfully:', updatedOrder.orderId);
+
+    res.json({ 
+      success: true, 
+      message: 'Order restored successfully and returned to production queue',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('🔄 Error restoring order:', error);
+    res.status(500).json({ error: 'Failed to restore order' });
+  }
+});
+
 // Cancel an order
 router.post('/cancel/:orderId', async (req: Request, res: Response) => {
   try {

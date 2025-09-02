@@ -404,7 +404,7 @@ export default function CNCQueuePage() {
     progressToFinish.mutate(Array.from(selectedFinishOrders));
   };
 
-  // Auto-select order when scanned
+  // Auto-select order when scanned - Show order summary modal
   const handleOrderScanned = useCallback((orderId: string) => {
     // Prevent any navigation by maintaining current URL
     window.history.pushState(null, '', window.location.href);
@@ -413,14 +413,14 @@ export default function CNCQueuePage() {
     const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
     
     if (orderExists) {
-      const order = cncOrders.find((order: any) => order.orderId === orderId);
-      if (order) {
-        toggleOrderSelection(order.orderId, order.departmentType);
-        toast({
-          title: "Order Scanned",
-          description: `Order ${orderId} selected automatically in CNC department`,
-        });
-      }
+      // Show the order summary modal instead of just selecting the order
+      setSelectedOrderId(orderId);
+      setSalesOrderModalOpen(true);
+      
+      toast({
+        title: "Order Scanned",
+        description: `Order ${orderId} details displayed`,
+      });
     } else {
       toast({
         title: "Order Not Found",
@@ -428,7 +428,7 @@ export default function CNCQueuePage() {
         variant: "destructive"
       });
     }
-  }, [cncOrders, toggleOrderSelection, toast]);
+  }, [cncOrders, toast]);
 
   // Handle order found via FishBowl number search
   const handleOrderFound = (orderId: string) => {

@@ -512,10 +512,10 @@ export default function CustomerManagement() {
   const [isProcessingCSV, setIsProcessingCSV] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch customers
+  // Fetch customers using bypass route
   const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['/api/customers'],
-    queryFn: () => apiRequest('/api/customers'),
+    queryKey: ['/api/customers/bypass'],
+    queryFn: () => apiRequest('/api/customers/bypass'),
   });
 
   // Fetch all addresses for table display
@@ -798,7 +798,7 @@ export default function CustomerManagement() {
       return customer;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
       setIsCreateDialogOpen(false);
       resetForm();
@@ -825,7 +825,7 @@ export default function CustomerManagement() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       setIsEditDialogOpen(false);
       resetForm();
       toast({
@@ -848,7 +848,7 @@ export default function CustomerManagement() {
       method: 'DELETE',
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       setIsDeleteDialogOpen(false);
       resetForm();
       toast({
@@ -1259,15 +1259,15 @@ export default function CustomerManagement() {
         ...csvData.map(row => headers.map(header => row[header] || '').join(','))
       ].join('\n');
 
-      // Send to our customer CSV import endpoint
-      const result = await apiRequest('/api/customers/import/csv', {
+      // Send to our customer CSV import bypass endpoint
+      const result = await apiRequest('/api/customers/import-bypass/csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csvData: csvString }),
       });
 
       setIsProcessingCSV(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
 
       let description = '';
       
@@ -1322,7 +1322,7 @@ export default function CustomerManagement() {
           </Button>
           <Button 
             variant="outline" 
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers'] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] })}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh

@@ -760,7 +760,7 @@ export default function CustomerManagement() {
   const createCustomerMutation = useMutation({
     mutationFn: async (data: CustomerFormData) => {
       // Create customer first
-      const customer = await apiRequest('/api/customers', {
+      const customer = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -844,7 +844,7 @@ export default function CustomerManagement() {
 
   // Delete customer mutation
   const deleteCustomerMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/customers/${id}`, {
+    mutationFn: (id: number) => apiRequest(`/api/customers/delete-bypass/${id}`, {
       method: 'DELETE',
     }),
     onSuccess: () => {

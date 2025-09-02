@@ -305,12 +305,6 @@ export default function Navigation() {
       description: 'Complete navigation dashboard for all system sections'
     },
     {
-      path: '/stacitest-dashboard',
-      label: 'STACITEST Dashboard',
-      icon: BarChart,
-      description: 'P1 & P2 production pipeline overview dashboard'
-    },
-    {
       path: '/johnltest-dashboard',
       label: 'JOHNL Dashboard',
       icon: Settings,

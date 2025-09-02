@@ -334,10 +334,11 @@ export default function OrderEntry() {
         if (option?.price) {
           let bottomMetalPrice = option.price;
           
-          // Special pricing: SepFG10 seasonal sale + AG bottom metal = $100 instead of $149
-          if (discountCode === 'short_term_3' && features.bottom_metal.includes('ag_') && option.price === 149) {
+          // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+          if ((discountCode === 'short_term_3' || discountCode === 'short_term_1') && features.bottom_metal.includes('ag_') && option.price === 149) {
             bottomMetalPrice = 100;
-            console.log('💰 Special pricing applied: SepFG10 + AG bottom metal - price changed from $149 to $100');
+            const saleName = discountCode === 'short_term_3' ? 'SepFG10' : 'SepCF25';
+            console.log(`💰 Special pricing applied: ${saleName} + AG bottom metal - price changed from $149 to $100`);
           }
           
           total += bottomMetalPrice;
@@ -2976,8 +2977,8 @@ export default function OrderEntry() {
                       const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
                       let displayPrice = option?.price || 0;
                       
-                      // Special pricing: SepFG10 seasonal sale + AG bottom metal = $100 instead of $149
-                      if (discountCode === 'short_term_3' && features.bottom_metal.includes('ag_') && option?.price === 149) {
+                      // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+                      if ((discountCode === 'short_term_3' || discountCode === 'short_term_1') && features.bottom_metal.includes('ag_') && option?.price === 149) {
                         displayPrice = 100;
                       }
                       

@@ -135,7 +135,7 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <span className="font-semibold">Product Details</span>
               </div>
               <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                <p className="font-medium">{orderData.modelId?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                <p className="font-medium">{orderData.modelId?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="outline">{orderData.currentDepartment}</Badge>
                   {orderData.isPaid && (

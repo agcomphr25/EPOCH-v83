@@ -277,7 +277,7 @@ router.post('/:id/communications', authenticateToken, async (req: Request, res: 
 
 
 
-router.post('/customers', authenticateToken, async (req: Request, res: Response) => {
+router.post('/customers', async (req: Request, res: Response) => {
   try {
     const customerData = insertP2CustomerSchema.parse(req.body);
     const newCustomer = await storage.createP2Customer(customerData);
@@ -291,7 +291,7 @@ router.post('/customers', authenticateToken, async (req: Request, res: Response)
   }
 });
 
-router.put('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const updates = req.body;
@@ -303,7 +303,7 @@ router.put('/customers/:id', authenticateToken, async (req: Request, res: Respon
   }
 });
 
-router.delete('/customers/:id', authenticateToken, async (req: Request, res: Response) => {
+router.delete('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     await storage.deleteP2Customer(customerId);

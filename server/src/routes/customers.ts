@@ -167,6 +167,23 @@ router.put('/update-bypass/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Customer delete without authentication (for Customer Management)
+router.delete('/delete-bypass/:id', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 BYPASS CUSTOMER DELETE ROUTE CALLED');
+    console.log('🔧 Customer ID:', req.params.id);
+    
+    const customerId = parseInt(req.params.id);
+    await storage.deleteCustomer(customerId);
+    
+    console.log('🔧 Customer deleted successfully:', customerId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete customer error:', error);
+    res.status(500).json({ error: "Failed to delete customer" });
+  }
+});
+
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const customerData = insertCustomerSchema.parse(req.body);

@@ -59,6 +59,7 @@ import DARLENEBTestDashboard from "./pages/DARLENEBTestDashboard";
 import TIMSTestDashboard from "./pages/TIMSTestDashboard";
 import BRADWTestDashboard from "./pages/BRADWTestDashboard";
 import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
+import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
@@ -232,6 +233,7 @@ function App() {
                   <Route path="/timstest-dashboard" component={TIMSTestDashboard} />
                   <Route path="/bradwtest-dashboard" component={BRADWTestDashboard} />
                   <Route path="/faleeshahtest-dashboard" component={FALEESHAHTestDashboard} />
+                  <Route path="/joeybtest-dashboard" component={JOEYBTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

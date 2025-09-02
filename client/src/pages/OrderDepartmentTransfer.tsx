@@ -118,7 +118,7 @@ export default function OrderDepartmentTransfer() {
     setIsLoading(true);
 
     try {
-      const response = await apiRequest(`/api/orders/${orderId.trim()}/department`, {
+      const response = await fetch(`/api/orders/${orderId.trim()}/department`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -128,7 +128,13 @@ export default function OrderDepartmentTransfer() {
         })
       });
 
+      console.log('Transfer response status:', response.status);
+      console.log('Transfer response ok:', response.ok);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('Transfer result:', result);
+        
         setCurrentDepartment(targetDepartment);
         setTargetDepartment('');
         toast({
@@ -136,10 +142,17 @@ export default function OrderDepartmentTransfer() {
           description: `Order ${orderId} has been moved to ${targetDepartment}`,
         });
       } else {
-        const error = await response.json();
+        let errorMessage = 'Failed to transfer order';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError);
+        }
+        
         toast({
           title: 'Transfer Failed',
-          description: error.message || 'Failed to transfer order',
+          description: errorMessage,
           variant: 'destructive'
         });
       }

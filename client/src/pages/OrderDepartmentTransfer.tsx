@@ -46,7 +46,7 @@ export default function OrderDepartmentTransfer() {
     setCurrentDepartment('');
 
     try {
-      const response = await apiRequest(`/api/orders/${orderId.trim()}`);
+      const response = await fetch(`/api/orders/${orderId.trim()}`);
       
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
@@ -55,6 +55,7 @@ export default function OrderDepartmentTransfer() {
         let order;
         try {
           order = await response.json();
+          console.log('Order data:', order);
         } catch (jsonError) {
           console.error('Error parsing JSON:', jsonError);
           throw new Error('Invalid response format');

@@ -27,6 +27,7 @@ interface POProduct {
   id: number;
   customerName: string;
   productName: string;
+  productType: string;
   material: string;
   handedness: string;
   stockModel: string;
@@ -48,6 +49,7 @@ interface POProduct {
 interface POProductFormData {
   customerName: string;
   productName: string;
+  productType: string;
   material: string;
   handedness: string;
   stockModel: string;
@@ -72,6 +74,7 @@ export default function POProductsPage() {
   const [formData, setFormData] = useState<POProductFormData>({
     customerName: '',
     productName: '',
+    productType: '',
     material: '',
     handedness: '',
     stockModel: '',
@@ -223,6 +226,7 @@ export default function POProductsPage() {
     setFormData({
       customerName: '',
       productName: '',
+      productType: '',
       material: '',
       handedness: '',
       stockModel: '',
@@ -245,6 +249,7 @@ export default function POProductsPage() {
     setFormData({
       customerName: product.customerName,
       productName: product.productName,
+      productType: product.productType || '',
       material: product.material,
       handedness: product.handedness,
       stockModel: product.stockModel,
@@ -314,6 +319,7 @@ export default function POProductsPage() {
                 <TableRow>
                   <TableHead>Customer</TableHead>
                   <TableHead>Product Name</TableHead>
+                  <TableHead>Product Type</TableHead>
                   <TableHead>Material</TableHead>
                   <TableHead>Stock Model</TableHead>
                   <TableHead>Price</TableHead>
@@ -329,6 +335,9 @@ export default function POProductsPage() {
                     </TableCell>
                     <TableCell data-testid={`text-product-${product.id}`}>
                       {product.productName}
+                    </TableCell>
+                    <TableCell data-testid={`text-product-type-${product.id}`}>
+                      {product.productType || '-'}
                     </TableCell>
                     <TableCell data-testid={`text-material-${product.id}`}>
                       {product.material || '-'}
@@ -413,6 +422,31 @@ export default function POProductsPage() {
                   required
                 />
               </div>
+            </div>
+
+            {/* Product Type */}
+            <div className="space-y-2">
+              <Label htmlFor="productType">Product Type</Label>
+              <Select 
+                value={formData.productType} 
+                onValueChange={(value) => handleInputChange('productType', value)}
+              >
+                <SelectTrigger data-testid="select-product-type">
+                  <SelectValue placeholder="Select product type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stock">Stock</SelectItem>
+                  <SelectItem value="AG-M5-SA">AG-M5-SA</SelectItem>
+                  <SelectItem value="AG-M5-LA">AG-M5-LA</SelectItem>
+                  <SelectItem value="AG-M5-LA-CIP">AG-M5-LA-CIP</SelectItem>
+                  <SelectItem value="AG-BDL-SA">AG-BDL-SA</SelectItem>
+                  <SelectItem value="AG-BDL-LA">AG-BDL-LA</SelectItem>
+                  <SelectItem value="4-ARCA">4" ARCA</SelectItem>
+                  <SelectItem value="6-ARCA">6" ARCA</SelectItem>
+                  <SelectItem value="8-ARCA">8" ARCA</SelectItem>
+                  <SelectItem value="AG-PIC-RAIL">AG PIC RAIL</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Features Section */}

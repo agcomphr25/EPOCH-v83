@@ -2566,6 +2566,7 @@ export const poProducts = pgTable("po_products", {
   id: serial("id").primaryKey(),
   customerName: text("customer_name").notNull(),
   productName: text("product_name").notNull(),
+  productType: text("product_type"), // stock, AG-M5-SA, AG-M5-LA, etc.
   material: text("material"), // carbon_fiber, fiberglass
   handedness: text("handedness"), // right, left
   stockModel: text("stock_model"),

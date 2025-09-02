@@ -2974,7 +2974,14 @@ export default function OrderEntry() {
                     <span className="text-blue-600 font-bold">${features.bottom_metal ? (() => {
                       const feature = featureDefs.find(f => f.id === 'bottom_metal');
                       const option = feature?.options?.find(opt => opt.value === features.bottom_metal);
-                      return (option?.price || 0).toFixed(2);
+                      let displayPrice = option?.price || 0;
+                      
+                      // Special pricing: SepFG10 seasonal sale + AG bottom metal = $100 instead of $149
+                      if (discountCode === 'short_term_3' && features.bottom_metal.includes('ag_') && option?.price === 149) {
+                        displayPrice = 100;
+                      }
+                      
+                      return displayPrice.toFixed(2);
                     })() : '0.00'}</span>
                   </div>
                 </div>

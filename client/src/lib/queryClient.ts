@@ -23,7 +23,11 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(url: string, options: RequestInit = {}) {
+interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
+  body?: any;
+}
+
+export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
 
@@ -69,7 +73,18 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
     throw new Error(errorMessage);
   }
 
-  return response.json();
+  // Handle empty responses (like 204 No Content)
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return null;
+  }
+
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  // For non-JSON responses, return text
+  return response.text();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

@@ -47,13 +47,22 @@ export default function OrderDepartmentTransfer() {
 
     try {
       const response = await apiRequest(`/api/orders/${orderId.trim()}`);
+      
       if (response.ok || response.status === 304) {
-        const order = await response.json();
-        setCurrentDepartment(order.currentDepartment || order.department || 'Unknown');
+        let order;
+        try {
+          order = await response.json();
+        } catch (jsonError) {
+          console.error('Error parsing JSON:', jsonError);
+          throw new Error('Invalid response format');
+        }
+        
+        const department = order.currentDepartment || order.department || 'Unknown';
+        setCurrentDepartment(department);
         setOrderFound(true);
         toast({
           title: 'Order Found',
-          description: `Order ${orderId} is currently in ${order.currentDepartment || order.department || 'Unknown'} department`,
+          description: `Order ${orderId} is currently in ${department} department`,
         });
       } else if (response.status === 404) {
         toast({
@@ -65,7 +74,7 @@ export default function OrderDepartmentTransfer() {
       } else {
         toast({
           title: 'Error',
-          description: `Failed to search for order (${response.status})`,
+          description: `Failed to search for order (Status: ${response.status})`,
           variant: 'destructive'
         });
         setOrderFound(false);
@@ -74,7 +83,7 @@ export default function OrderDepartmentTransfer() {
       console.error('Error searching order:', error);
       toast({
         title: 'Error',
-        description: 'Failed to search for order',
+        description: 'Failed to search for order - please try again',
         variant: 'destructive'
       });
       setOrderFound(false);

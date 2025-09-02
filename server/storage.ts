@@ -1684,7 +1684,12 @@ export class DatabaseStorage implements IStorage {
       })
       .from(allOrders)
       .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
-      .where(sql`${allOrders.orderId} NOT LIKE 'P1-%'`)
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`
+        )
+      )
       .orderBy(desc(allOrders.updatedAt));
 
     // Get all payments aggregated by order ID in parallel

@@ -76,6 +76,19 @@ router.delete('/p2-purchase-orders-bypass/:id', async (req: Request, res: Respon
   }
 });
 
+// Bypass route to get all customers (without authentication)
+router.get('/bypass', async (req: Request, res: Response) => {
+  try {
+    console.log('🔧 CUSTOMERS BYPASS ROUTE CALLED');
+    const customers = await storage.getAllCustomers();
+    console.log('🔧 Found customers:', customers.length);
+    res.json(customers);
+  } catch (error) {
+    console.error('🔧 Get customers bypass error:', error);
+    res.status(500).json({ error: "Failed to fetch customers via bypass route" });
+  }
+});
+
 // Regular Customers Management
 router.get('/', async (req: Request, res: Response) => {
   try {

@@ -1102,6 +1102,73 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Specific endpoint for department transfers with validation
+router.patch('/:orderId/department', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { department } = req.body;
+    
+    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}`);
+    
+    if (!department) {
+      return res.status(400).json({ error: 'Department is required' });
+    }
+    
+    // Validate department name
+    const validDepartments = [
+      'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
+      'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC', 
+      'Shipping', 'Fulfilled'
+    ];
+    
+    if (!validDepartments.includes(department)) {
+      return res.status(400).json({ error: 'Invalid department name' });
+    }
+    
+    // Try to find and update the order
+    let updatedOrder;
+    let orderType = '';
+    
+    try {
+      updatedOrder = await storage.updateFinalizedOrder(orderId, { 
+        currentDepartment: department
+      });
+      orderType = 'finalized';
+      console.log(`✅ Updated finalized order ${orderId} to ${department}`);
+    } catch (finalizedError) {
+      try {
+        updatedOrder = await storage.updateOrderDraft(orderId, { 
+          currentDepartment: department
+        });
+        orderType = 'draft';
+        console.log(`✅ Updated draft order ${orderId} to ${department}`);
+      } catch (draftError) {
+        console.error(`❌ Order ${orderId} not found in either table`);
+        return res.status(404).json({ error: `Order ${orderId} not found` });
+      }
+    }
+    
+    // Log the manual transfer for audit purposes
+    console.log(`📋 MANUAL TRANSFER: ${orderId} (${orderType}) moved to ${department} via Department Transfer Tool`);
+    
+    res.json({
+      success: true,
+      message: `Order ${orderId} successfully transferred to ${department}`,
+      order: updatedOrder,
+      auditInfo: {
+        transferType: 'manual',
+        orderType,
+        timestamp: new Date(),
+        targetDepartment: department
+      }
+    });
+    
+  } catch (error) {
+    console.error(`❌ Department transfer error for ${req.params.orderId}:`, error);
+    res.status(500).json({ error: 'Failed to transfer order to department' });
+  }
+});
+
 // CSV Export endpoint for orders
 router.get('/export/csv', async (req: Request, res: Response) => {
   try {

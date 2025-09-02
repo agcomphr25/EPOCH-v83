@@ -59,6 +59,7 @@ import TIMSTestDashboard from "./pages/TIMSTestDashboard";
 import BRADWTestDashboard from "./pages/BRADWTestDashboard";
 import FALEESHAHTestDashboard from "./pages/FALEESHAHTestDashboard";
 import JOEYBTestDashboard from "./pages/JOEYBTestDashboard";
+import OrderDepartmentTransfer from "./pages/OrderDepartmentTransfer";
 import { BOMAdministration } from "./pages/BOMAdministration";
 import AGBottomMetalReport from "./pages/AGBottomMetalReport";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
@@ -235,6 +236,7 @@ function App() {
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />
+                  <Route path="/order-department-transfer" component={OrderDepartmentTransfer} />
                   <Route path="/communications/inbox" component={CommunicationInboxPage} />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route path="/enhanced-reports" component={EnhancedReportsPage} />

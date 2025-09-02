@@ -175,8 +175,8 @@ export default function Navigation() {
     {
       path: '/ag-bottom-metal-report',
       label: 'AG Bottom Metal Report',
-      icon: FileText,
-      description: 'Orders with AG bottom metal specifications'
+      icon: DollarSign,
+      description: 'Comprehensive pricing analysis for AG bottom metal orders by price tiers'
     },
     {
       path: '/p2-forms',

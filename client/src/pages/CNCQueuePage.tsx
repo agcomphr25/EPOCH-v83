@@ -13,7 +13,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
-import FBNumberSearch from '@/components/FBNumberSearch';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function CNCQueuePage() {
@@ -430,37 +429,6 @@ export default function CNCQueuePage() {
     }
   }, [cncOrders, toast]);
 
-  // Handle order found via FishBowl number search
-  const handleOrderFound = (orderId: string) => {
-    // Check if the order exists in the current CNC queue
-    const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
-    if (orderExists) {
-      const order = cncOrders.find((order: any) => order.orderId === orderId);
-      if (order) {
-        toggleOrderSelection(order.orderId, order.departmentType);
-        toast({
-          title: "Order found",
-          description: `Order ${orderId} found and selected`
-        });
-      }
-    } else {
-      // Find the order in all orders to show current department
-      const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
-      if (allOrder) {
-        toast({
-          title: "Order not in CNC",
-          description: `Order ${orderId} is currently in ${allOrder.currentDepartment} department, not CNC`,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Order not found",
-          description: `Order ${orderId} not found`,
-          variant: "destructive"
-        });
-      }
-    }
-  };
 
 
 
@@ -476,8 +444,6 @@ export default function CNCQueuePage() {
         <BarcodeScanner onOrderScanned={handleOrderScanned} />
       </div>
 
-      {/* FishBowl Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {/* Order Search Box */}
       <Card>
@@ -490,16 +456,19 @@ export default function CNCQueuePage() {
                 const allOrders = [...gunsimthQueue, ...finishQueue];
                 const orderExists = allOrders.some((o: any) => o.orderId === order.orderId);
                 if (orderExists) {
-                  setHighlightedOrderId(order.orderId);
-                  setTimeout(() => {
-                    const element = document.getElementById(`order-${order.orderId}`);
-                    if (element) {
-                      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                  }, 100);
+                  // Select the order card and show order summary modal
+                  const orderInQueue = cncOrders.find((o: any) => o.orderId === order.orderId);
+                  if (orderInQueue) {
+                    toggleOrderSelection(orderInQueue.orderId, orderInQueue.departmentType);
+                  }
+                  
+                  // Show order summary modal
+                  setSelectedOrderId(order.orderId);
+                  setSalesOrderModalOpen(true);
+                  
                   toast({
                     title: "Order found",
-                    description: `Order ${order.orderId} highlighted in the list`
+                    description: `Order ${order.orderId} selected and details displayed`
                   });
                 } else {
                   toast({

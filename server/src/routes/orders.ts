@@ -980,7 +980,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
 
     console.log('🔄 Restoring order with data:', updateData);
 
-    const updatedOrder = await storage.updateOrder(orderId, updateData);
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
     
     if (!updatedOrder) {
       console.log('🔄 Failed to restore order:', orderId);

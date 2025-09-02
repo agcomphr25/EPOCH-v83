@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Calendar, User, AlertTriangle, XCircle } from 'lucide-react';
+import { Search, Calendar, User, AlertTriangle, XCircle, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { toast } from 'react-hot-toast';
 
 interface Customer {
   id: number;
@@ -36,6 +37,7 @@ export default function CancelledOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'orderDate' | 'cancelledAt' | 'orderId' | 'customer'>('cancelledAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const queryClient = useQueryClient();
 
   // Fetch cancelled orders specifically
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
@@ -47,6 +49,21 @@ export default function CancelledOrdersPage() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
+  });
+
+  // Undo cancellation mutation
+  const undoCancellationMutation = useMutation({
+    mutationFn: (orderId: string) => apiRequest(`/api/orders/undo-cancel/${orderId}`, {
+      method: 'POST'
+    }),
+    onSuccess: () => {
+      toast.success('Order restored successfully!');
+      // Invalidate and refetch cancelled orders
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/cancelled'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to restore order');
+    }
   });
 
   const getCustomerName = (customerId: string) => {
@@ -140,6 +157,12 @@ export default function CancelledOrdersPage() {
 
   const getDisplayOrderId = (order: Order) => {
     return order.fbOrderNumber || order.orderId;
+  };
+
+  const handleUndoCancel = (orderId: string) => {
+    if (confirm('Are you sure you want to restore this cancelled order? It will be returned to the production queue.')) {
+      undoCancellationMutation.mutate(orderId);
+    }
   };
 
   if (ordersLoading) {
@@ -289,12 +312,26 @@ export default function CancelledOrdersPage() {
                       )}
                     </div>
 
-                    <div className="text-right text-sm text-gray-500">
-                      {order.cancelledAt && (
-                        <div>
-                          Cancelled: {formatDate(order.cancelledAt)}
-                        </div>
-                      )}
+                    <div className="flex flex-col items-end gap-3">
+                      <Button
+                        onClick={() => handleUndoCancel(order.orderId)}
+                        disabled={undoCancellationMutation.isPending}
+                        size="sm"
+                        variant="outline"
+                        className="border-green-200 hover:bg-green-50 hover:border-green-300 text-green-700"
+                        data-testid={`button-undo-${order.orderId}`}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        {undoCancellationMutation.isPending ? 'Restoring...' : 'Undo Cancellation'}
+                      </Button>
+                      
+                      <div className="text-right text-sm text-gray-500">
+                        {order.cancelledAt && (
+                          <div>
+                            Cancelled: {formatDate(order.cancelledAt)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

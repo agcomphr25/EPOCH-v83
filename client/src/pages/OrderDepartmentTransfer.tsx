@@ -48,6 +48,9 @@ export default function OrderDepartmentTransfer() {
     try {
       const response = await apiRequest(`/api/orders/${orderId.trim()}`);
       
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
       if (response.ok || response.status === 304) {
         let order;
         try {

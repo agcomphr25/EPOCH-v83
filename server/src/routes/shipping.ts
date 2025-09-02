@@ -547,7 +547,7 @@ router.post('/create-label', async (req: Request, res: Response) => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: isDeployment ? 90000 : 60000, // 90 seconds in deployment, 60 seconds in development
+        timeout: isDeployment ? 45000 : 30000, // 45 seconds in deployment, 30 seconds in development
       });
       console.log('UPS OAuth API call successful');
     } catch (error: any) {
@@ -863,7 +863,7 @@ async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
         },
-        timeout: process.env.REPLIT_DEPLOYMENT === '1' ? 45000 : 30000 // Extra timeout for deployment environment
+        timeout: process.env.REPLIT_DEPLOYMENT === '1' ? 20000 : 15000 // Shorter timeout for OAuth token
       }
     );
     
@@ -878,6 +878,31 @@ async function getUPSOAuthToken(clientId: string, clientSecret: string): Promise
     console.error('OAuth token error details:', error.response?.data || error.message);
     throw new Error(`Failed to get UPS OAuth token: ${error.response?.data?.error_description || error.message}`);
   }
+}
+
+// Convert full state names to 2-letter abbreviations for UPS API
+function convertStateToAbbreviation(state: string): string {
+  const stateMap: { [key: string]: string } = {
+    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+    'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+    'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+    'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+    'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+    'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+    'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+    'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+    'District of Columbia': 'DC'
+  };
+  
+  // If already an abbreviation, return as-is
+  if (state && state.length === 2) {
+    return state.toUpperCase();
+  }
+  
+  // Convert full name to abbreviation
+  return stateMap[state] || state;
 }
 
 // Build UPS shipment payload for OAuth REST API (2024+) - No notification to avoid validation errors
@@ -914,7 +939,7 @@ function buildUPSShipmentPayloadOAuth(shipmentDetails: any, shipperNumber: strin
           "Address": {
             "AddressLine": [shipmentDetails.shipToAddress.street],
             "City": shipmentDetails.shipToAddress.city,
-            "StateProvinceCode": shipmentDetails.shipToAddress.state,
+            "StateProvinceCode": convertStateToAbbreviation(shipmentDetails.shipToAddress.state),
             "PostalCode": shipmentDetails.shipToAddress.zipCode.replace(/\D/g, ''),
             "CountryCode": shipmentDetails.shipToAddress.country || "US"
           }

@@ -3714,25 +3714,129 @@ export default function LayupScheduler() {
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Configure employee assignments and capacity settings for production scheduling.
                       </p>
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {employees.map((employee: any) => (
-                          <div key={employee.id} className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="font-medium text-sm">{employee.name}</div>
-                                <div className="text-xs text-gray-500">{employee.department || 'Layup Department'}</div>
+                          <div key={employee.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-sm">{employee.name}</div>
+                                  <div className="text-xs text-gray-500">{employee.department || 'Layup Department'}</div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ID: {employee.employeeId}
+                                </div>
                               </div>
-                              <div className="text-sm">
-                                <span className="font-medium">Capacity:</span> {employee.dailyCapacity || 10} units/day
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
+                                    Daily Capacity
+                                  </label>
+                                  <div className="flex items-center space-x-2">
+                                    <Input
+                                      type="number"
+                                      value={employee.dailyCapacity || 10}
+                                      min={1}
+                                      max={50}
+                                      onChange={async (e) => {
+                                        const newCapacity = parseInt(e.target.value) || 10;
+                                        try {
+                                          const response = await fetch(`/api/layup-employee-settings/${employee.id}`, {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              rate: employee.rate || 2.00,
+                                              dailyCapacity: newCapacity,
+                                              hours: employee.hours || 8
+                                            })
+                                          });
+                                          if (response.ok) {
+                                            toast({
+                                              title: "Settings Updated",
+                                              description: `${employee.name}'s capacity updated to ${newCapacity} units/day`,
+                                            });
+                                            // Refresh data
+                                            window.location.reload();
+                                          }
+                                        } catch (error) {
+                                          toast({
+                                            title: "Update Failed",
+                                            description: "Failed to update employee capacity",
+                                            variant: "destructive"
+                                          });
+                                        }
+                                      }}
+                                      className="w-20 text-sm"
+                                    />
+                                    <span className="text-xs text-gray-500">units/day</span>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
+                                    Hourly Rate
+                                  </label>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-gray-500">$</span>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={employee.rate || 2.00}
+                                      min={0}
+                                      max={100}
+                                      onChange={async (e) => {
+                                        const newRate = parseFloat(e.target.value) || 2.00;
+                                        try {
+                                          const response = await fetch(`/api/layup-employee-settings/${employee.id}`, {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              rate: newRate,
+                                              dailyCapacity: employee.dailyCapacity || 10,
+                                              hours: employee.hours || 8
+                                            })
+                                          });
+                                          if (response.ok) {
+                                            toast({
+                                              title: "Settings Updated",
+                                              description: `${employee.name}'s rate updated to $${newRate.toFixed(2)}/hour`,
+                                            });
+                                            // Refresh data
+                                            window.location.reload();
+                                          }
+                                        } catch (error) {
+                                          toast({
+                                            title: "Update Failed",
+                                            description: "Failed to update employee rate",
+                                            variant: "destructive"
+                                          });
+                                        }
+                                      }}
+                                      className="w-20 text-sm"
+                                    />
+                                    <span className="text-xs text-gray-500">/hour</span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <div className="text-xs text-gray-500">
+                                  Daily Hours: {employee.hours || 8}h
+                                </div>
+                                <div className="text-xs font-medium text-green-600 dark:text-green-400">
+                                  ${((employee.rate || 2.00) * (employee.hours || 8)).toFixed(2)}/day
+                                </div>
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <p className="text-xs text-green-700 dark:text-green-300">
-                          <strong>Note:</strong> Employee capacity settings are currently managed automatically. 
-                          Advanced employee management features will be available in future updates.
+                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          <strong>How to use:</strong> Modify capacity and hourly rate values directly. 
+                          Changes are saved automatically and will update production scheduling calculations.
+                          The daily cost calculation shows total labor cost per employee per day.
                         </p>
                       </div>
                     </div>

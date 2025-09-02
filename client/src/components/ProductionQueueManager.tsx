@@ -98,6 +98,209 @@ interface ProductionSchedule {
   }[];
 }
 
+// Hierarchical PO Selector Component
+interface POHierarchicalSelectorProps {
+  poItems: POItem[];
+  onMoveToLayup: (selectedItems: { item: POItem; quantity: number }[]) => void;
+}
+
+function POHierarchicalSelector({ poItems, onMoveToLayup }: POHierarchicalSelectorProps) {
+  const [selectedItems, setSelectedItems] = useState<Map<number, number>>(new Map());
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+  const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
+
+  // Group items by customer and PO number
+  const groupedItems = poItems.reduce((acc, item) => {
+    if (!acc[item.customername]) {
+      acc[item.customername] = {};
+    }
+    if (!acc[item.customername][item.ponumber]) {
+      acc[item.customername][item.ponumber] = [];
+    }
+    acc[item.customername][item.ponumber].push(item);
+    return acc;
+  }, {} as Record<string, Record<string, POItem[]>>);
+
+  const handleItemQuantityChange = (itemId: number, quantity: number) => {
+    const newSelectedItems = new Map(selectedItems);
+    if (quantity > 0) {
+      newSelectedItems.set(itemId, quantity);
+    } else {
+      newSelectedItems.delete(itemId);
+    }
+    setSelectedItems(newSelectedItems);
+  };
+
+  const toggleCustomer = (customerName: string) => {
+    const newExpanded = new Set(expandedCustomers);
+    if (newExpanded.has(customerName)) {
+      newExpanded.delete(customerName);
+    } else {
+      newExpanded.add(customerName);
+    }
+    setExpandedCustomers(newExpanded);
+  };
+
+  const togglePO = (poNumber: string) => {
+    const newExpanded = new Set(expandedPOs);
+    if (newExpanded.has(poNumber)) {
+      newExpanded.delete(poNumber);
+    } else {
+      newExpanded.add(poNumber);
+    }
+    setExpandedPOs(newExpanded);
+  };
+
+  const handleMoveSelected = () => {
+    const itemsToMove = Array.from(selectedItems.entries()).map(([itemId, quantity]) => {
+      const item = poItems.find(item => item.id === itemId)!;
+      return { item, quantity };
+    });
+    onMoveToLayup(itemsToMove);
+    setSelectedItems(new Map());
+  };
+
+  const getUrgencyBadgeColor = (urgencyLevel: string) => {
+    switch (urgencyLevel) {
+      case 'critical': return 'bg-red-500 hover:bg-red-600 text-white';
+      case 'high': return 'bg-orange-500 hover:bg-orange-600 text-white';
+      case 'medium': return 'bg-yellow-500 hover:bg-yellow-600 text-white';
+      default: return 'bg-green-500 hover:bg-green-600 text-white';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Move Selected Button */}
+      {selectedItems.size > 0 && (
+        <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg border">
+          <span className="text-sm font-medium">
+            {selectedItems.size} items selected ({Array.from(selectedItems.values()).reduce((sum, qty) => sum + qty, 0)} total units)
+          </span>
+          <Button 
+            onClick={handleMoveSelected}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <ArrowRight className="w-4 h-4 mr-2" />
+            Move to Layup Schedule
+          </Button>
+        </div>
+      )}
+
+      {/* Customer/PO/Items Hierarchy */}
+      <div className="space-y-2">
+        {Object.entries(groupedItems).map(([customerName, pos]) => (
+          <Card key={customerName} className="border">
+            <CardHeader 
+              className="cursor-pointer hover:bg-gray-50 p-4"
+              onClick={() => toggleCustomer(customerName)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-blue-600" />
+                  <span className="font-semibold text-lg">{customerName}</span>
+                  <Badge variant="secondary">
+                    {Object.keys(pos).length} PO{Object.keys(pos).length !== 1 ? 's' : ''}
+                  </Badge>
+                </div>
+                <div className="text-gray-400">
+                  {expandedCustomers.has(customerName) ? '▼' : '▶'}
+                </div>
+              </div>
+            </CardHeader>
+            
+            {expandedCustomers.has(customerName) && (
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  {Object.entries(pos).map(([poNumber, items]) => (
+                    <Card key={poNumber} className="border-l-4 border-l-blue-500 bg-gray-50">
+                      <CardHeader 
+                        className="cursor-pointer hover:bg-gray-100 p-3"
+                        onClick={() => togglePO(poNumber)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-green-600" />
+                            <span className="font-medium">PO #{poNumber}</span>
+                            <Badge variant="outline">
+                              {items.length} item{items.length !== 1 ? 's' : ''}
+                            </Badge>
+                            <div className="text-sm text-gray-500">
+                              Due: {new Date(items[0].duedate).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="text-gray-400">
+                            {expandedPOs.has(poNumber) ? '▼' : '▶'}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      
+                      {expandedPOs.has(poNumber) && (
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            {items.map((item) => {
+                              const availableQuantity = item.quantity - (item.ordercount || 0);
+                              const selectedQuantity = selectedItems.get(item.id) || 0;
+                              
+                              return (
+                                <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded border">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{item.itemname}</span>
+                                      <Badge variant="outline">{item.stockmodelname}</Badge>
+                                      <Badge className={getUrgencyBadgeColor(item.urgencyLevel)}>
+                                        {item.urgencyLevel.toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    <div className="text-sm text-gray-500 mt-1">
+                                      Available: {availableQuantity} / {item.quantity} units
+                                      {item.ordercount > 0 && (
+                                        <span className="ml-2">({item.ordercount} in production)</span>
+                                      )}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      Due in {item.daysToDue} days
+                                      {item.isOverdue && <span className="text-red-600 font-semibold ml-1">(OVERDUE)</span>}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <Select
+                                      value={selectedQuantity.toString()}
+                                      onValueChange={(value) => handleItemQuantityChange(item.id, parseInt(value))}
+                                    >
+                                      <SelectTrigger className="w-20">
+                                        <SelectValue placeholder="0" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="0">0</SelectItem>
+                                        {Array.from({ length: availableQuantity }, (_, i) => i + 1).map(num => (
+                                          <SelectItem key={num} value={num.toString()}>
+                                            {num}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <span className="text-sm text-gray-500">units</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductionQueueManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -220,6 +423,30 @@ export default function ProductionQueueManager() {
     }
   });
 
+  // Move selected PO items to layup scheduler mutation
+  const moveSelectedItemsToLayupMutation = useMutation({
+    mutationFn: (selectedItems: { item: POItem; quantity: number }[]) => 
+      apiRequest('/api/production-queue/move-selected-po-items', {
+        method: 'POST',
+        body: JSON.stringify({ selectedItems })
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: "Items Moved to Layup",
+        description: `Successfully moved ${result.totalItemsMoved} items to layup scheduler`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/po-items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Move Items",
+        description: error.message || "Failed to move selected items to layup scheduler",
+        variant: "destructive",
+      });
+    }
+  });
+
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
       case 'critical': return 'bg-red-500 hover:bg-red-600 text-white';
@@ -251,6 +478,12 @@ export default function ProductionQueueManager() {
         poItem: selectedPOItem,
         weeks: selectedWeeks
       });
+    }
+  };
+
+  const handleMoveSelectedItemsToLayup = (selectedItems: { item: POItem; quantity: number }[]) => {
+    if (selectedItems.length > 0) {
+      moveSelectedItemsToLayupMutation.mutate(selectedItems);
     }
   };
 
@@ -498,74 +731,10 @@ export default function ProductionQueueManager() {
               <p className="text-sm">PO items with quantities will appear here for scheduling</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PO #</TableHead>
-                  <TableHead>Item Name</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Stock Model</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Days to Due</TableHead>
-                  <TableHead>Urgency</TableHead>
-                  <TableHead className="w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {poItems.map((item) => (
-                  <TableRow key={item.id} className={item.isOverdue ? 'bg-red-50' : ''}>
-                    <TableCell className="font-medium">
-                      {item.ponumber}
-                    </TableCell>
-                    <TableCell>{item.itemname}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3 text-gray-400" />
-                        {item.customername}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{item.stockmodelname}</Badge>
-                    </TableCell>
-                    <TableCell className="font-semibold text-blue-600">
-                      {item.quantity - (item.ordercount || 0)} / {item.quantity} units
-                      {item.ordercount > 0 && (
-                        <div className="text-xs text-gray-500">
-                          ({item.ordercount} moved to production)
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-gray-400" />
-                        {new Date(item.duedate).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell className={item.isOverdue ? 'text-red-600 font-semibold' : ''}>
-                      {item.daysToDue} days
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getUrgencyBadgeColor(item.urgencyLevel)}>
-                        {item.urgencyLevel.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleOpenWeekSelection(item)}
-                        disabled={fetchProductionScheduleMutation.isPending}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        <Calendar className="w-4 h-4 mr-1" />
-                        Select Weeks
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <POHierarchicalSelector 
+              poItems={poItems} 
+              onMoveToLayup={(selectedItems) => handleMoveSelectedItemsToLayup(selectedItems)}
+            />
           )}
               </CardContent>
             </AccordionContent>

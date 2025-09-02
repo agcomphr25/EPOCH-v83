@@ -383,11 +383,12 @@ export default function AllOrdersPage() {
                         const nextDept = getNextDepartment(order.currentDepartment);
                         const isComplete = order.currentDepartment === 'Shipping';
                         const isScrapped = order.status === 'SCRAPPED';
+                        const isFulfilled = order.status === 'FULFILLED'; // Only exclude FULFILLED, not FINALIZED
                         
                         return (
                           <>
                             {/* Push to Layup/Plugging Button - Only for P1 Production Queue */}
-                            {!isScrapped && !isComplete && order.currentDepartment === 'P1 Production Queue' && (
+                            {!isScrapped && !isComplete && !isFulfilled && order.currentDepartment === 'P1 Production Queue' && (
                               <Button
                                 size="sm"
                                 onClick={() => handlePushToLayupPlugging(order.orderId)}
@@ -400,7 +401,7 @@ export default function AllOrdersPage() {
                             )}
                             
                             {/* Progress to Next Department Button - For all other departments */}
-                            {!isScrapped && !isComplete && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
+                            {!isScrapped && !isComplete && !isFulfilled && nextDept && order.currentDepartment !== 'P1 Production Queue' && (
                               <Button
                                 size="sm"
                                 onClick={() => handleProgressOrder(order.orderId, nextDept)}

@@ -3775,7 +3775,7 @@ export default function LayupScheduler() {
                                 
                                 <div>
                                   <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                                    Hourly Rate
+                                    Production Rate
                                   </label>
                                   <div className="flex items-center space-x-2">
                                     <span className="text-xs text-gray-500">$</span>
@@ -3800,7 +3800,7 @@ export default function LayupScheduler() {
                                           if (response.ok) {
                                             toast({
                                               title: "Settings Updated",
-                                              description: `${employee.name}'s rate updated to $${newRate.toFixed(2)}/hour`,
+                                              description: `${employee.name}'s production rate updated to $${newRate.toFixed(2)}/hour`,
                                             });
                                             // Refresh data
                                             window.location.reload();
@@ -3808,7 +3808,7 @@ export default function LayupScheduler() {
                                         } catch (error) {
                                           toast({
                                             title: "Update Failed",
-                                            description: "Failed to update employee rate",
+                                            description: "Failed to update production rate",
                                             variant: "destructive"
                                           });
                                         }
@@ -3822,10 +3822,10 @@ export default function LayupScheduler() {
                               
                               <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
                                 <div className="text-xs text-gray-500">
-                                  Daily Hours: {employee.hours || 8}h
+                                  Production Hours: {employee.hours || 8}h/day
                                 </div>
                                 <div className="text-xs font-medium text-green-600 dark:text-green-400">
-                                  ${((employee.rate || 2.00) * (employee.hours || 8)).toFixed(2)}/day
+                                  ${((employee.rate || 2.00) * (employee.hours || 8)).toFixed(2)}/day production cost
                                 </div>
                               </div>
                             </div>
@@ -3834,9 +3834,9 @@ export default function LayupScheduler() {
                       </div>
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          <strong>How to use:</strong> Modify capacity and hourly rate values directly. 
+                          <strong>How to use:</strong> Modify capacity and production rate values directly. 
                           Changes are saved automatically and will update production scheduling calculations.
-                          The daily cost calculation shows total labor cost per employee per day.
+                          The daily cost calculation shows total mold production costs per employee per day.
                         </p>
                       </div>
                     </div>

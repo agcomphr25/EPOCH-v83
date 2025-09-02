@@ -152,12 +152,22 @@ export function SalesOrderModal({ isOpen, onClose, orderId }: SalesOrderModalPro
                 <div className="space-y-2">
                   <h3 className="font-semibold">Features & Options</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {Object.entries(orderData.features).map(([key, value]) => (
-                      <div key={key} className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600">{formatFeatureName(key)}:</span>
-                        <span className="font-medium">{formatFeatureValue(key, value)}</span>
+                    {/* Ensure action_length is always shown if it exists */}
+                    {orderData.features.action_length && (
+                      <div key="action_length" className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">Action Length:</span>
+                        <span className="font-medium">{formatFeatureValue('action_length', orderData.features.action_length)}</span>
                       </div>
-                    ))}
+                    )}
+                    {/* Show all other features */}
+                    {Object.entries(orderData.features)
+                      .filter(([key]) => key !== 'action_length') // Avoid duplicating action_length
+                      .map(([key, value]) => (
+                        <div key={key} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">{formatFeatureName(key)}:</span>
+                          <span className="font-medium">{formatFeatureValue(key, value)}</span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               </>

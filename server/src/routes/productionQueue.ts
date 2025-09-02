@@ -666,4 +666,131 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
   }
 });
 
+// Move selected PO items to layup scheduler
+router.post('/move-selected-po-items', async (req: Request, res: Response) => {
+  try {
+    const { selectedItems }: { selectedItems: { item: any; quantity: number }[] } = req.body;
+    
+    if (!selectedItems || selectedItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Selected items data is required"
+      });
+    }
+
+    console.log(`🏭 MOVE SELECTED PO ITEMS: Moving ${selectedItems.length} selected PO items to layup scheduler...`);
+
+    const createdOrders = [];
+    let totalItemsMoved = 0;
+    
+    for (const { item, quantity } of selectedItems) {
+      console.log(`📦 Processing ${quantity} units of ${item.itemname} (PO #${item.ponumber})`);
+      
+      // Create individual orders for each quantity unit
+      for (let i = 1; i <= quantity; i++) {
+        try {
+          // Generate unique order ID
+          const orderIdQuery = `
+            SELECT COALESCE(MAX(CAST(SUBSTRING(order_id FROM 3) AS INTEGER)), 0) + 1 as next_id
+            FROM all_orders 
+            WHERE order_id ~ '^AG[0-9]+$'
+          `;
+          
+          const orderIdResult = await pool.query(orderIdQuery);
+          const nextOrderNumber = orderIdResult.rows?.[0]?.next_id || 1;
+          const orderId = `AG${nextOrderNumber}`;
+
+          // Create order in all_orders table
+          const orderQuery = `
+            INSERT INTO all_orders (
+              order_id,
+              order_date,
+              due_date,
+              customer_id,
+              model_id,
+              current_department,
+              status,
+              notes,
+              total_price,
+              is_priority,
+              priority_score,
+              created_at,
+              po_reference,
+              po_item_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *
+          `;
+
+          const orderResult = await pool.query(orderQuery, [
+            orderId,
+            new Date().toISOString(),
+            item.duedate,
+            item.customername || 'PO Customer',
+            item.stockmodelid,
+            'P1 Production Queue',
+            'ACTIVE',
+            `Created from PO #${item.ponumber} - ${item.itemname}`,
+            parseFloat(item.unitprice) || 0,
+            true, // Mark as priority since it's from PO
+            item.priorityScore || 1000,
+            new Date().toISOString(),
+            item.ponumber,
+            item.id
+          ]);
+
+          const createdOrder = orderResult.rows[0];
+          createdOrders.push(createdOrder);
+          totalItemsMoved++;
+          
+          console.log(`✅ Created order ${orderId} for PO item ${item.itemname} (${i}/${quantity})`);
+          
+        } catch (orderError) {
+          console.error(`❌ Failed to create order for ${item.itemname} (unit ${i}):`, orderError);
+        }
+      }
+
+      // Update the order count for the PO item
+      try {
+        const currentOrderCount = item.ordercount || 0;
+        const newOrderCount = currentOrderCount + quantity;
+        
+        const updatePOItemQuery = `
+          UPDATE purchase_order_items 
+          SET order_count = $1 
+          WHERE id = $2
+        `;
+        
+        await pool.query(updatePOItemQuery, [newOrderCount, item.id]);
+        console.log(`📋 Updated PO item ${item.id} order count: ${currentOrderCount} → ${newOrderCount}`);
+        
+      } catch (updateError) {
+        console.error(`❌ Failed to update order count for PO item ${item.id}:`, updateError);
+      }
+    }
+
+    const result = {
+      success: true,
+      message: `Successfully moved ${totalItemsMoved} items to production queue`,
+      totalItemsMoved,
+      createdOrders: createdOrders.length,
+      items: selectedItems.map(({ item, quantity }) => ({
+        itemName: item.itemname,
+        poNumber: item.ponumber,
+        quantity
+      }))
+    };
+
+    console.log(`🏭 MOVE SELECTED PO ITEMS: Successfully created ${createdOrders.length} orders from ${selectedItems.length} PO items`);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ MOVE SELECTED PO ITEMS: Error moving selected PO items:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to move selected PO items to layup scheduler",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

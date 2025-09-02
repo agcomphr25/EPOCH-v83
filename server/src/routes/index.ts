@@ -959,6 +959,31 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Update employee layup settings
+  app.put('/api/layup-employee-settings/:id', async (req, res) => {
+    try {
+      console.log('🔧 EMPLOYEE UPDATE ROUTE CALLED:', req.params.id);
+      console.log('🔧 Request body:', req.body);
+
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const { rate, dailyCapacity, hours } = req.body;
+
+      // Update employee settings
+      const updatedEmployee = await storage.updateEmployeeLayupSettings(id, {
+        rate: parseFloat(rate),
+        dailyCapacity: parseInt(dailyCapacity),
+        hours: parseInt(hours) || 8
+      });
+
+      console.log('🔧 Updated employee:', updatedEmployee);
+      res.json(updatedEmployee);
+    } catch (error) {
+      console.error('🔧 Employee update error:', error);
+      res.status(500).json({ error: "Failed to update employee settings" });
+    }
+  });
+
   // Address routes - bypass to old monolithic routes temporarily
   app.get('/api/addresses/all', async (req, res) => {
     try {

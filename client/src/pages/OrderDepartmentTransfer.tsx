@@ -47,18 +47,25 @@ export default function OrderDepartmentTransfer() {
 
     try {
       const response = await apiRequest(`/api/orders/${orderId.trim()}`);
-      if (response.ok) {
+      if (response.ok || response.status === 304) {
         const order = await response.json();
-        setCurrentDepartment(order.department || 'Unknown');
+        setCurrentDepartment(order.currentDepartment || order.department || 'Unknown');
         setOrderFound(true);
         toast({
           title: 'Order Found',
-          description: `Order ${orderId} is currently in ${order.department || 'Unknown'} department`,
+          description: `Order ${orderId} is currently in ${order.currentDepartment || order.department || 'Unknown'} department`,
         });
-      } else {
+      } else if (response.status === 404) {
         toast({
           title: 'Order Not Found',
           description: `Order ${orderId} does not exist`,
+          variant: 'destructive'
+        });
+        setOrderFound(false);
+      } else {
+        toast({
+          title: 'Error',
+          description: `Failed to search for order (${response.status})`,
           variant: 'destructive'
         });
         setOrderFound(false);

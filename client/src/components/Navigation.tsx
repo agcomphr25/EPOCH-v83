@@ -345,6 +345,12 @@ export default function Navigation() {
       label: 'BRADW Dashboard',
       icon: Users,
       description: 'Gunsmith queue, orders, and employee portal dashboard'
+    },
+    {
+      path: '/faleeshahtest-dashboard',
+      label: 'FALEESHAH Dashboard',
+      icon: Shield,
+      description: 'Quality Control, Shipping & Customer Management dashboard'
     }
   ];
 

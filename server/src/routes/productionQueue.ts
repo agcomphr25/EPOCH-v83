@@ -305,7 +305,7 @@ router.post('/update-priorities', async (req: Request, res: Response) => {
 // Get PO items ready for production
 router.get('/po-items', async (req: Request, res: Response) => {
   try {
-    console.log('🏭 PO ITEMS: Fetching PO items ready for production...');
+    console.log('🏭 PO ITEMS: Fetching STOCK MODEL PO items ready for production (excluding non-stock items)...');
     
     const poItemsQuery = `
       SELECT 
@@ -321,6 +321,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
         poi.order_count as ordercount,
         poi.specifications,
         poi.notes,
+        poi.item_type as itemtype,
         po.customer_name as customername,
         po.expected_delivery as duedate,
         po.created_at as createdAt
@@ -328,6 +329,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
       JOIN purchase_orders po ON poi.po_id = po.id
       WHERE poi.quantity > 0 
         AND (poi.item_id IS NOT NULL AND poi.item_id != '' AND poi.item_id != 'None')
+        AND poi.item_type = 'stock_model'
         AND po.status != 'CANCELED'
         AND (poi.order_count < poi.quantity OR poi.order_count IS NULL)
       ORDER BY po.expected_delivery ASC, po.created_at ASC
@@ -362,7 +364,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
       };
     });
 
-    console.log(`📋 Fetched ${enhancedPOItems.length} PO items ready for production`);
+    console.log(`📋 Fetched ${enhancedPOItems.length} STOCK MODEL PO items ready for production (non-stock items excluded)`);
     res.json(enhancedPOItems);
     
   } catch (error) {

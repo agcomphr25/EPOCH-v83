@@ -1687,7 +1687,9 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
-          sql`${allOrders.orderId} NOT LIKE 'PO%'`
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
+          sql`${allOrders.orderId} != 'AG1'`
         )
       )
       .orderBy(desc(allOrders.updatedAt));

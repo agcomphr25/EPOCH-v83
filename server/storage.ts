@@ -5734,13 +5734,21 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Order ${orderId} is already finalized`);
     }
 
-    // CRITICAL: Prevent orders with "None" stock model from going to Production Queue
-    if (!draft.modelId || draft.modelId.toLowerCase() === 'none' || draft.modelId.toLowerCase().trim() === '') {
-      console.log(`❌ FINALIZE BLOCKED: Order ${orderId} has stock model "${draft.modelId}" - cannot send to Production Queue`);
-      throw new Error(`Cannot finalize order ${orderId}: Orders with "None" or empty stock model cannot be sent to Production Queue. Please select a valid stock model.`);
+    // Special handling for orders with "None" stock model - route directly to Shipping QC
+    const hasNoStockModel = !draft.modelId || draft.modelId.toLowerCase() === 'none' || draft.modelId.toLowerCase().trim() === '';
+    
+    let currentDepartment: string;
+    let barcode: string;
+    
+    if (hasNoStockModel) {
+      console.log(`🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`);
+      currentDepartment = 'Shipping QC';
+      barcode = draft.barcode || `NOSTOCK-${orderId}`;
+    } else {
+      console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
+      currentDepartment = 'P1 Production Queue';
+      barcode = draft.barcode || `P1-${orderId}`;
     }
-
-    console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
     
 
     // Create the finalized order data
@@ -5767,8 +5775,8 @@ export class DatabaseStorage implements IStorage {
       shipping: draft.shipping,
       tikkaOption: draft.tikkaOption,
       status: 'FINALIZED',
-      barcode: draft.barcode,
-      currentDepartment: draft.currentDepartment,
+      barcode: barcode,
+      currentDepartment: currentDepartment,
       departmentHistory: draft.departmentHistory,
       scrappedQuantity: draft.scrappedQuantity,
       totalProduced: draft.totalProduced,
@@ -5820,6 +5828,13 @@ export class DatabaseStorage implements IStorage {
 
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
+
+    // Log the finalization result based on department
+    if (hasNoStockModel) {
+      console.log(`🚀 FINALIZED TO SHIPPING QC: Order ${orderId} (ready-to-sell product) sent to Shipping QC department`);
+    } else {
+      console.log(`🎯 FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue for manufacturing`);
+    }
 
     return finalizedOrder;
   }

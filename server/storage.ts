@@ -1645,6 +1645,7 @@ export class DatabaseStorage implements IStorage {
         orderDate: allOrders.orderDate,
         dueDate: allOrders.dueDate,
         customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
         currentDepartment: allOrders.currentDepartment,
         status: allOrders.status,
         modelId: allOrders.modelId,

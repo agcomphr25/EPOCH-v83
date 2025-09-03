@@ -167,12 +167,6 @@ export default function Navigation() {
       description: 'Advanced reporting with PDF/CSV export'
     },
     {
-      path: '/gateway-reports',
-      label: 'Gateway Report',
-      icon: BarChart,
-      description: 'Track daily activity across production areas'
-    },
-    {
       path: '/ag-bottom-metal-report',
       label: 'AG Bottom Metal Report',
       icon: DollarSign,

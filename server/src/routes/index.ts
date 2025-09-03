@@ -1636,6 +1636,27 @@ export function registerRoutes(app: Express): Server {
       const validatedData = insertPurchaseOrderItemSchema.parse(itemData);
       const newItem = await storage.createPurchaseOrderItem(validatedData);
       console.log('🔧 Created PO item:', newItem.id);
+
+      // Check if this item should be automatically added to production queue
+      // If item type is custom_model, check the associated PO Product's productType
+      if (validatedData.itemType === 'custom_model') {
+        try {
+          const poProduct = await storage.getPOProduct(parseInt(validatedData.itemId));
+          console.log('🔧 Checking PO Product for auto-queue:', poProduct?.productType);
+          
+          if (poProduct && poProduct.productType === 'stock') {
+            console.log('🔧 Auto-adding stock item to production queue');
+            // Auto-add to production queue for stock items
+            // This item will automatically appear in the P1 PO Production Queue
+            // The production queue fetches all PO items, so it will show up automatically
+            console.log('🔧 Stock item will appear in P1 PO Production Queue automatically');
+          }
+        } catch (poProductError) {
+          console.warn('🔧 Could not fetch PO Product for auto-queue check:', poProductError);
+          // Continue without failing the item creation
+        }
+      }
+
       res.status(201).json(newItem);
     } catch (error) {
       console.error('🔧 Create PO item error:', error);

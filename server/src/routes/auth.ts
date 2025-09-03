@@ -12,11 +12,26 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     console.log('Login attempt with body:', req.body);
     
-    const { username, password } = loginSchema.parse(req.body);
-    const ipAddress = req.ip || req.connection.remoteAddress || null;
-    const userAgent = req.get('User-Agent') || null;
+    // Basic validation first
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: "Invalid request body" });
+    }
+
+    if (!req.body.username || !req.body.password) {
+      return res.status(400).json({ error: "Username and password are required" });
+    }
+
+    const username = String(req.body.username).trim();
+    const password = String(req.body.password);
+
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password cannot be empty" });
+    }
 
     console.log('Attempting to authenticate user:', username);
+    
+    const ipAddress = req.ip || req.connection.remoteAddress || null;
+    const userAgent = req.get('User-Agent') || null;
     
     const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
     

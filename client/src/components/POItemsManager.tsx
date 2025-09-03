@@ -23,6 +23,29 @@ interface POItem {
   updatedAt?: string;
 }
 
+interface POProduct {
+  id: number;
+  customerName: string;
+  productName: string;
+  productType: string;
+  material: string;
+  handedness: string;
+  stockModel: string;
+  actionLength: string;
+  actionInlet: string;
+  bottomMetal: string;
+  barrelInlet: string;
+  qds: string;
+  swivelStuds: string;
+  paintOptions: string;
+  texture: string;
+  flatTop: boolean;
+  price: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface POItemsManagerProps {
   poId: number;
   customerName: string;
@@ -41,6 +64,16 @@ export default function POItemsManager({ poId, customerName, onAddItem }: POItem
       const result = await apiRequest(`/api/pos/${poId}/items`);
       return result;
     },
+  });
+
+  // Fetch PO Products for product type lookup
+  const { data: poProducts = [] } = useQuery<POProduct[]>({
+    queryKey: ['/api/po-products'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/po-products');
+      return result;
+    },
+    enabled: poItems.some(item => item.itemType === 'custom_model'),
   });
 
   // Delete mutation
@@ -91,6 +124,14 @@ export default function POItemsManager({ poId, customerName, onAddItem }: POItem
 
   const getTotalValue = () => {
     return poItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  };
+
+  const getProductTypeForItem = (item: POItem) => {
+    if (item.itemType === 'custom_model') {
+      const poProduct = poProducts.find(product => product.id.toString() === item.itemId);
+      return poProduct?.productType || item.itemType;
+    }
+    return item.itemType;
   };
 
   if (isLoading) {
@@ -169,7 +210,7 @@ export default function POItemsManager({ poId, customerName, onAddItem }: POItem
                     <div className="flex items-center gap-3">
                       <h3 className="font-medium text-gray-900">{item.itemName}</h3>
                       <Badge variant="outline" className="text-xs">
-                        {item.itemType}
+                        {getProductTypeForItem(item)}
                       </Badge>
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
@@ -224,8 +265,8 @@ export default function POItemsManager({ poId, customerName, onAddItem }: POItem
                   <p className="mt-1 text-sm text-gray-900">{selectedItem.itemName}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Item Type</label>
-                  <p className="mt-1 text-sm text-gray-900">{selectedItem.itemType}</p>
+                  <label className="text-sm font-medium text-gray-500">Product Type</label>
+                  <p className="mt-1 text-sm text-gray-900">{getProductTypeForItem(selectedItem)}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Quantity</label>

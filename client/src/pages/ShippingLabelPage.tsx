@@ -14,14 +14,6 @@ export default function ShippingLabelPage() {
   
   const orderId = params?.orderId;
   
-  // Debug logging for deployment issues
-  React.useEffect(() => {
-    console.log('ShippingLabelPage mounted');
-    console.log('Route match:', match);
-    console.log('Route params:', params);
-    console.log('Order ID:', orderId);
-    console.log('Current location:', location);
-  }, [match, params, orderId, location]);
   
   const [shippingDetails, setShippingDetails] = useState({
     weight: '3',
@@ -188,13 +180,11 @@ export default function ShippingLabelPage() {
   };
 
   if (!orderId) {
-    console.log('No order ID found, showing error page');
     return (
       <div className="p-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Invalid Order</h1>
           <p className="mb-4">No order ID provided</p>
-          <p className="text-sm text-gray-600 mb-4">Debug: Route params: {JSON.stringify(params)}</p>
           <Button onClick={() => setLocation('/shipping')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Shipping
@@ -203,8 +193,6 @@ export default function ShippingLabelPage() {
       </div>
     );
   }
-
-  console.log('Rendering shipping label page for order:', orderId);
 
   return (
     <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">

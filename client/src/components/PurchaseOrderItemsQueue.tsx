@@ -105,11 +105,16 @@ export default function PurchaseOrderItemsQueue() {
 
       // Filter items to only show stock items in the production queue
       const stockItems = allItems.filter(item => {
+        // Include stock_model items directly
+        if (item.itemType === 'stock_model') {
+          return true;
+        }
+        // Include custom_model items with stock product type
         if (item.itemType === 'custom_model') {
           const poProduct = products.find((product: POProduct) => product.id.toString() === item.itemId);
           return poProduct?.productType === 'stock';
         }
-        return false; // Only show custom_model items with stock product type
+        return false;
       });
 
       setItems(stockItems);

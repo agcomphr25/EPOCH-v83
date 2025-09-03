@@ -90,7 +90,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     res.status(500).json({ 
       error: "Failed to create user", 
-      details: error.message 
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -122,13 +122,14 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     // If password is being updated, ensure it gets hashed
+    let updateData = userData;
     if (userData.password) {
       const { AuthService } = require('../../auth');
       const passwordHash = await AuthService.hashPassword(userData.password);
-      userData = { ...userData, passwordHash };
+      updateData = { ...userData, passwordHash };
     }
 
-    const updatedUser = await storage.updateUser(id, userData);
+    const updatedUser = await storage.updateUser(id, updateData);
     console.log('User updated successfully:', updatedUser.id);
 
     // Remove password hash from response for security  
@@ -144,7 +145,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
     res.status(500).json({ 
       error: "Failed to update user", 
-      details: error.message 
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });

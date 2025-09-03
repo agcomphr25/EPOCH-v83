@@ -185,7 +185,12 @@ export default function UserManagement() {
       // For updates, don't require password if not provided
       const updateData = { ...formData };
       if (!updateData.password) {
-        delete updateData.password; // Don't update password if not provided
+        const { password, ...dataWithoutPassword } = updateData;
+        updateUserMutation.mutate({
+          id: editingUser.id,
+          data: dataWithoutPassword,
+        });
+        return;
       }
       updateUserMutation.mutate({
         id: editingUser.id,

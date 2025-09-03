@@ -165,7 +165,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isValidPassword = await this.verifyPassword(password, user.passwordHash);
+    const isValidPassword = user.passwordHash ? await this.verifyPassword(password, user.passwordHash) : false;
 
     if (!isValidPassword) {
       // Increment failed login attempts
@@ -244,7 +244,7 @@ export class AuthService {
       return false;
     }
 
-    const isValidCurrentPassword = await this.verifyPassword(currentPassword, user.passwordHash);
+    const isValidCurrentPassword = user.passwordHash ? await this.verifyPassword(currentPassword, user.passwordHash) : false;
     if (!isValidCurrentPassword) {
       return false;
     }

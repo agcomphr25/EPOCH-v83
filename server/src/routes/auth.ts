@@ -3,7 +3,7 @@ import { z } from 'zod';
 import cookieParser from 'cookie-parser';
 import { AuthService } from '../../auth';
 import { authenticateToken, authenticatePortalToken } from '../../middleware/auth';
-import { loginSchema, changePasswordSchema, insertUserSchema } from '@shared/schema';
+import { loginSchema, changePasswordSchema, insertUserSchema } from '../../schema';
 
 const router = Router();
 

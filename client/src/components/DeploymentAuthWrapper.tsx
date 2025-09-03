@@ -7,8 +7,13 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Authentication disabled for all environments
-  return false;
+  // Check if we're in production/deployment environment
+  const host = window.location.host;
+  
+  // Enable authentication for deployed sites
+  return host.includes('.replit.app') || 
+         host.includes('.repl.co') || 
+         import.meta.env.MODE === 'production';
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

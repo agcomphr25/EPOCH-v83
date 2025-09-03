@@ -21,9 +21,6 @@
 import { Pool } from '@neondatabase/serverless';
 import ws from 'ws';
 import { neonConfig } from '@neondatabase/serverless';
-import readline from 'readline';
-import fs from 'fs';
-import path from 'path';
 
 // Configure WebSocket for Neon
 neonConfig.webSocketConstructor = ws;
@@ -77,26 +74,8 @@ class ProductionToDevMigration {
 
     try {
       for (const table of this.config.tablesToMigrate) {
-        try {
-          // Check if table exists first
-          const tableExists = await client.query(`
-            SELECT EXISTS (
-              SELECT FROM information_schema.tables 
-              WHERE table_schema = 'public' 
-              AND table_name = $1
-            )
-          `, [table]);
-          
-          if (tableExists.rows[0].exists) {
-            const result = await client.query(`SELECT COUNT(*) as count FROM "${table}"`);
-            counts[table] = parseInt(result.rows[0].count);
-          } else {
-            counts[table] = 0; // Table doesn't exist, set count to 0
-          }
-        } catch (tableError) {
-          console.log(`⚠️  Table "${table}" not accessible, setting count to 0`);
-          counts[table] = 0;
-        }
+        const result = await client.query(`SELECT COUNT(*) as count FROM ${table}`);
+        counts[table] = parseInt(result.rows[0].count);
       }
     } catch (error) {
       console.error(`Error getting table counts:`, error);
@@ -134,6 +113,8 @@ class ProductionToDevMigration {
     
     try {
       // Create backups directory if it doesn't exist
+      const fs = require('fs');
+      const path = require('path');
       const backupDir = path.join(process.cwd(), 'backups');
       
       if (!fs.existsSync(backupDir)) {
@@ -221,36 +202,9 @@ class ProductionToDevMigration {
     const devClient = await this.devPool.connect();
 
     try {
-      // Check if table exists in both databases
-      const prodTableExists = await prodClient.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = $1
-        )
-      `, [tableName]);
-      
-      const devTableExists = await devClient.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = $1
-        )
-      `, [tableName]);
-      
-      if (!prodTableExists.rows[0].exists) {
-        console.log(`   ⚠️  Table "${tableName}" doesn't exist in production - skipping`);
-        return;
-      }
-      
-      if (!devTableExists.rows[0].exists) {
-        console.log(`   ⚠️  Table "${tableName}" doesn't exist in development - skipping`);
-        return;
-      }
-      
       // Get production data
       console.log(`   📥 Fetching data from production...`);
-      const prodResult = await prodClient.query(`SELECT * FROM "${tableName}"`);
+      const prodResult = await prodClient.query(`SELECT * FROM ${tableName}`);
       const rowCount = prodResult.rows.length;
       
       if (rowCount === 0) {
@@ -343,52 +297,23 @@ class ProductionToDevMigration {
   }
 }
 
-// Interactive prompt for database URL
-function promptForInput(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(question, (answer: string) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
 // Main execution
 async function main() {
-  console.log('🚀 Production to Development Database Migration');
-  console.log('===============================================\n');
-  
-  // Get development URL from environment
+  // Get environment variables
+  const productionUrl = process.env.PRODUCTION_DATABASE_URL;
   const developmentUrl = process.env.DATABASE_URL;
+
+  if (!productionUrl) {
+    console.error('❌ PRODUCTION_DATABASE_URL environment variable is required');
+    console.log('\nUsage:');
+    console.log('  PRODUCTION_DATABASE_URL="postgresql://..." tsx scripts/migrate-production-to-dev.ts');
+    process.exit(1);
+  }
 
   if (!developmentUrl) {
     console.error('❌ DATABASE_URL environment variable is required');
     process.exit(1);
   }
-
-  // Get production URL from command line argument or interactive prompt
-  let productionUrl = process.argv[2];
-  
-  if (!productionUrl) {
-    console.log('📋 Please provide your production database connection string');
-    console.log('   (This should look like: postgresql://user:password@host:port/database)\n');
-    
-    productionUrl = await promptForInput('🔗 Enter production DATABASE_URL: ');
-  } else {
-    console.log('📋 Using production database URL from command line argument\n');
-  }
-
-  if (!productionUrl || !productionUrl.startsWith('postgresql://')) {
-    console.error('❌ Invalid database URL. Must start with postgresql://');
-    process.exit(1);
-  }
-
-  console.log('\n✅ Database URL received successfully!\n');
 
   // Define tables to migrate (order matters for foreign key constraints)
   const tablesToMigrate = [
@@ -421,7 +346,9 @@ async function main() {
   }
 }
 
-// Run the migration
-main().catch(console.error);
+// Run if called directly
+if (require.main === module) {
+  main().catch(console.error);
+}
 
 export default ProductionToDevMigration;

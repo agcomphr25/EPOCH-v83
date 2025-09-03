@@ -975,7 +975,8 @@ export default function ShippingQueuePage() {
               variant="outline"
               onClick={(e) => {
                 e.stopPropagation();
-                window.open(`/shipping/label/${order.orderId}`, '_blank');
+                // Use React router navigation for better deployment compatibility
+                setLocation(`/shipping/label/${order.orderId}`);
               }}
               className="flex-1 text-xs h-8"
             >

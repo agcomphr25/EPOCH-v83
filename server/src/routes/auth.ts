@@ -10,15 +10,22 @@ const router = Router();
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
+    console.log('Login attempt with body:', req.body);
+    
     const { username, password } = loginSchema.parse(req.body);
     const ipAddress = req.ip || req.connection.remoteAddress || null;
     const userAgent = req.get('User-Agent') || null;
 
+    console.log('Attempting to authenticate user:', username);
+    
     const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
     
     if (!result) {
+      console.log('Authentication failed for user:', username);
       return res.status(401).json({ error: "Invalid username or password" });
     }
+
+    console.log('Authentication successful for user:', username);
 
     // Set secure cookie with enhanced security
     res.cookie('sessionToken', result.sessionToken, {
@@ -38,6 +45,7 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Login error:', error);
     if (error instanceof Error) {
+      console.log('Error message:', error.message);
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: "Login failed" });

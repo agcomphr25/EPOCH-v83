@@ -202,8 +202,51 @@ export default function AllOrdersPage() {
     return departmentMatch && searchMatch;
   });
 
-  // Sort orders based on selected sort option
+  // Function to calculate search relevance score
+  const getSearchRelevanceScore = (order: any, searchTerm: string) => {
+    if (!searchTerm.trim()) return 0;
+    
+    const searchLower = searchTerm.toLowerCase();
+    let score = 0;
+    
+    // Higher scores for exact matches and earlier field matches
+    if (order.orderId?.toLowerCase() === searchLower) score += 100;
+    else if (order.orderId?.toLowerCase().startsWith(searchLower)) score += 50;
+    else if (order.orderId?.toLowerCase().includes(searchLower)) score += 20;
+    
+    if (order.fbOrderNumber?.toLowerCase() === searchLower) score += 90;
+    else if (order.fbOrderNumber?.toLowerCase().startsWith(searchLower)) score += 45;
+    else if (order.fbOrderNumber?.toLowerCase().includes(searchLower)) score += 18;
+    
+    if (order.customer?.toLowerCase() === searchLower) score += 80;
+    else if (order.customer?.toLowerCase().startsWith(searchLower)) score += 40;
+    else if (order.customer?.toLowerCase().includes(searchLower)) score += 15;
+    
+    if (order.customerId?.toLowerCase() === searchLower) score += 70;
+    else if (order.customerId?.toLowerCase().includes(searchLower)) score += 10;
+    
+    if (order.modelId?.toLowerCase() === searchLower) score += 60;
+    else if (order.modelId?.toLowerCase().startsWith(searchLower)) score += 30;
+    else if (order.modelId?.toLowerCase().includes(searchLower)) score += 8;
+    
+    if (order.product?.toLowerCase().includes(searchLower)) score += 5;
+    
+    return score;
+  };
+
+  // Sort orders based on search relevance first, then selected sort option
   const sortedOrders = [...filteredOrders].sort((a, b) => {
+    // If search term exists, prioritize by relevance first
+    if (searchTerm.trim()) {
+      const scoreA = getSearchRelevanceScore(a, searchTerm);
+      const scoreB = getSearchRelevanceScore(b, searchTerm);
+      
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA; // Higher relevance first
+      }
+    }
+    
+    // Then apply regular sorting
     switch (sortBy) {
       case 'orderDate':
         return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(); // Newest first

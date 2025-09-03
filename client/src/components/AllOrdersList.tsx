@@ -7,6 +7,7 @@ interface Order {
   dueDate: string;
   customerId: string;
   customer?: string;
+  customerPO?: string;
   product?: string;
   modelId: string;
   currentDepartment: string;
@@ -506,6 +507,7 @@ export default function AllOrdersList() {
                 <TableHead>Order ID</TableHead>
                 <TableHead>Order Date</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>Customer PO</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Current Department</TableHead>
                 <TableHead>Due Date</TableHead>
@@ -566,6 +568,11 @@ export default function AllOrdersList() {
                           {order.customer || 'N/A'}
                         </span>
                       </CustomerDetailsTooltip>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
+                        {order.customerPO || '-'}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {order.product || getModelDisplayName(order.modelId)}

@@ -100,22 +100,6 @@ export default function LoginPage() {
             <CardDescription className="text-center">
               Enter your credentials to access the system
             </CardDescription>
-            {/* Testing credentials info for deployed environment */}
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mt-4 rounded">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
-                    <strong>Testing Access:</strong>
-                  </p>
-                  <p className="text-sm text-blue-600">
-                    Username: <code className="bg-blue-100 px-1 rounded">epoch</code>
-                  </p>
-                  <p className="text-sm text-blue-600">
-                    Password: <code className="bg-blue-100 px-1 rounded">Fibergl@ss</code>
-                  </p>
-                </div>
-              </div>
-            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

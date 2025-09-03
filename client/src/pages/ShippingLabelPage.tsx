@@ -122,141 +122,24 @@ export default function ShippingLabelPage() {
           description: `Label created with tracking number: ${labelData.trackingNumber}`,
         });
         
-        // Open label in popup window for printing - with improved error handling
+        // Handle label display and download
         if (labelData.labelBase64) {
           // Create a data URL from the Base64 string
           const dataUrl = `data:image/gif;base64,${labelData.labelBase64}`;
           
-          try {
-            // Try to open popup window with improved popup blocker handling
-            const popup = window.open('', '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no');
-            
-            if (popup && !popup.closed) {
-              // Write content to popup
-              popup.document.write(`
-                <html>
-                  <head>
-                    <title>UPS Shipping Label - Order ${orderId}</title>
-                    <style>
-                      body { 
-                        margin: 0; 
-                        padding: 20px; 
-                        font-family: Arial, sans-serif; 
-                        text-align: center; 
-                        background: #f5f5f5;
-                      }
-                      .label-container { 
-                        background: white; 
-                        padding: 20px; 
-                        border-radius: 8px; 
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                        display: inline-block;
-                        max-width: 100%;
-                      }
-                      img { 
-                        max-width: 100%; 
-                        height: auto; 
-                        border: 1px solid #ddd;
-                      }
-                      .info { 
-                        margin-bottom: 15px; 
-                        color: #333;
-                      }
-                      .print-btn { 
-                        background: #1976d2; 
-                        color: white; 
-                        border: none; 
-                        padding: 10px 20px; 
-                        border-radius: 5px; 
-                        cursor: pointer; 
-                        font-size: 16px;
-                        margin-top: 15px;
-                      }
-                      .print-btn:hover { 
-                        background: #1565c0; 
-                      }
-                      .download-btn {
-                        background: #28a745;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 5px;
-                        cursor: pointer;
-                        font-size: 16px;
-                        margin: 15px 5px 0 5px;
-                      }
-                      .download-btn:hover {
-                        background: #218838;
-                      }
-                      @media print {
-                        body { background: white; padding: 0; }
-                        .label-container { box-shadow: none; padding: 0; }
-                        .print-btn, .download-btn, .info { display: none; }
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div class="label-container">
-                      <div class="info">
-                        <h2>UPS Shipping Label</h2>
-                        <p><strong>Order:</strong> ${orderId}</p>
-                        <p><strong>Tracking:</strong> ${labelData.trackingNumber || 'Generated'}</p>
-                      </div>
-                      <img src="${dataUrl}" alt="UPS Shipping Label" onerror="alert('Label image failed to load')" />
-                      <div>
-                        <button class="print-btn" onclick="window.print()">Print Label</button>
-                        <button class="download-btn" onclick="
-                          const link = document.createElement('a');
-                          link.href = '${dataUrl}';
-                          link.download = 'UPS_Label_${orderId}_${labelData.trackingNumber || 'label'}.gif';
-                          link.click();
-                        ">Download Label</button>
-                      </div>
-                    </div>
-                  </body>
-                </html>
-              `);
-              popup.document.close();
-              
-              // Auto-focus the popup window after a short delay to ensure content is loaded
-              setTimeout(() => {
-                if (popup && !popup.closed) {
-                  popup.focus();
-                }
-              }, 100);
-              
-            } else {
-              // Popup was blocked - provide fallback
-              toast({
-                title: "Popup Blocked",
-                description: "Your browser blocked the popup. Label will download automatically.",
-                variant: "default"
-              });
-              
-              // Fallback: Create download link
-              const link = document.createElement('a');
-              link.href = dataUrl;
-              link.download = `UPS_Label_${orderId}_${labelData.trackingNumber || 'label'}.gif`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }
-          } catch (popupError) {
-            console.error('Error opening popup window:', popupError);
-            // Fallback to direct download
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = `UPS_Label_${orderId}_${labelData.trackingNumber || 'label'}.gif`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            toast({
-              title: "Label Downloaded",
-              description: "Label downloaded as file due to popup restrictions.",
-              variant: "default"
-            });
-          }
+          // Always trigger automatic download for deployment compatibility
+          const link = document.createElement('a');
+          link.href = dataUrl;
+          link.download = `UPS_Label_${orderId}_${labelData.trackingNumber || 'label'}.gif`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          toast({
+            title: "Label Downloaded",
+            description: "Shipping label has been downloaded. You can now print it from your downloads folder.",
+            variant: "default"
+          });
         }
       } else {
         const error = await response.json();

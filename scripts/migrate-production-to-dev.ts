@@ -21,6 +21,9 @@
 import { Pool } from '@neondatabase/serverless';
 import ws from 'ws';
 import { neonConfig } from '@neondatabase/serverless';
+import readline from 'readline';
+import fs from 'fs';
+import path from 'path';
 
 // Configure WebSocket for Neon
 neonConfig.webSocketConstructor = ws;
@@ -113,8 +116,6 @@ class ProductionToDevMigration {
     
     try {
       // Create backups directory if it doesn't exist
-      const fs = require('fs');
-      const path = require('path');
       const backupDir = path.join(process.cwd(), 'backups');
       
       if (!fs.existsSync(backupDir)) {
@@ -299,7 +300,6 @@ class ProductionToDevMigration {
 
 // Interactive prompt for database URL
 function promptForInput(question: string): Promise<string> {
-  const readline = require('readline');
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -370,9 +370,7 @@ async function main() {
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  main().catch(console.error);
-}
+// Run the migration
+main().catch(console.error);
 
 export default ProductionToDevMigration;

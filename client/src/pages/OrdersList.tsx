@@ -891,6 +891,7 @@ export default function OrdersList() {
                   <TableHead>Order ID</TableHead>
                   <TableHead>Current Department</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Customer PO</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Order Date</TableHead>
                   <TableHead>Due Date</TableHead>
@@ -981,6 +982,11 @@ export default function OrdersList() {
                             <MessageSquare className="h-4 w-4 text-green-600" />
                           </Button>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
+                        {order.customerPO || '-'}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -1099,14 +1105,14 @@ export default function OrdersList() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem 
-                              onClick={() => handleViewSalesOrder(order.orderId)}
+                              onClick={() => handleSalesOrderView(order.orderId)}
                               className="text-blue-600"
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               View Sales Order
                             </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={() => handleSalesOrderDownload(order.orderId)}
+                              onClick={() => handleSalesOrderView(order.orderId)}
                               className="text-blue-600"
                             >
                               <FileText className="mr-2 h-4 w-4" />

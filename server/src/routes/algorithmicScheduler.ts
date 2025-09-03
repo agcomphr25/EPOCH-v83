@@ -221,7 +221,9 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       return workDates;
     };
 
-    const workDates = generateWorkDates(new Date(), scheduleDays, enforcedWorkDays);
+    // For scheduling week 9/1-9/4, start from Monday September 1, 2025
+    const startDate = new Date('2025-09-01'); // Start from the specific Monday
+    const workDates = generateWorkDates(startDate, scheduleDays, enforcedWorkDays);
     const allocations: any[] = [];
     const dailyMoldUsage = new Map<string, number>();
     const dailyAllocationCount = new Map<string, number>();
@@ -411,17 +413,16 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Save the algorithmic schedule results to the layup_schedule table
     if (allocations.length > 0) {
       try {
-        // Clear existing schedule for the current week to replace with new algorithmic schedule
-        const now = new Date();
-        const currentWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 1);
-        const nextWeekEnd = new Date(currentWeekStart.getTime() + (14 * 24 * 60 * 60 * 1000)); // 2 weeks
+        // Clear existing schedule for the target week to replace with new algorithmic schedule
+        const targetWeekStart = new Date('2025-09-01'); // Start of week 9/1-9/4
+        const targetWeekEnd = new Date('2025-09-07'); // End of week to clear
         
-        console.log(`🗑️ Clearing existing schedule from ${currentWeekStart.toISOString()} to ${nextWeekEnd.toISOString()}`);
+        console.log(`🗑️ Clearing existing schedule from ${targetWeekStart.toISOString()} to ${targetWeekEnd.toISOString()}`);
         
         await pool.query(`
           DELETE FROM layup_schedule 
           WHERE scheduled_date >= $1 AND scheduled_date <= $2
-        `, [currentWeekStart.toISOString(), nextWeekEnd.toISOString()]);
+        `, [targetWeekStart.toISOString(), targetWeekEnd.toISOString()]);
 
         // Get employee assignments (all active employees for now)
         const employees = employeeResult || [];

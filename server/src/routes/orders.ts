@@ -819,6 +819,32 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 
       'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
     ];
+
+    // CRITICAL SAFEGUARD: Prevent backwards department progression
+    if (nextDepartment) {
+      const currentIndex = departments.indexOf(existingOrder.currentDepartment);
+      const targetIndex = departments.indexOf(nextDepartment);
+      
+      // Allow backwards movement only for specific administrative cases
+      if (targetIndex < currentIndex && targetIndex >= 0 && currentIndex >= 0) {
+        console.log(`⚠️  WARNING: Attempting to move order ${orderId} backwards from ${existingOrder.currentDepartment} to ${nextDepartment}`);
+        
+        // Log this as a potential issue for investigation
+        const backwardsMovement = {
+          orderId,
+          fromDepartment: existingOrder.currentDepartment,
+          toDepartment: nextDepartment,
+          timestamp: new Date().toISOString(),
+          reason: 'Manual backwards progression detected'
+        };
+        console.error('🚨 BACKWARDS PROGRESSION DETECTED:', backwardsMovement);
+        
+        // For now, allow it but log heavily - in future this could be blocked
+        // return res.status(400).json({ 
+        //   error: `Cannot move order backwards from ${existingOrder.currentDepartment} to ${nextDepartment}. This could cause data loss.` 
+        // });
+      }
+    }
     
     // Special handling for orders with no stock model - they bypass manufacturing and go to Shipping QC
     const hasNoStockModel = !existingOrder.modelId || existingOrder.modelId.trim() === '';

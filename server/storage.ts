@@ -5743,7 +5743,7 @@ export class DatabaseStorage implements IStorage {
     if (hasNoStockModel) {
       console.log(`🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`);
       currentDepartment = 'Shipping QC';
-      barcode = draft.barcode || `NOSTOCK-${orderId}`;
+      barcode = `NOSTOCK-${orderId}`; // Force NOSTOCK barcode for ready-to-sell products
     } else {
       console.log(`✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`);
       currentDepartment = 'P1 Production Queue';

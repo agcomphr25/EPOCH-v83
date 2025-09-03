@@ -823,6 +823,9 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     // Special handling for orders with no stock model - they bypass manufacturing and go to Shipping QC
     const hasNoStockModel = !existingOrder.modelId || existingOrder.modelId.trim() === '';
     
+    // Special handling for flat top orders - they bypass CNC and go directly to Finish
+    const isFlatTop = existingOrder.isFlattop || false;
+    
     // If no nextDepartment provided, calculate it automatically
     let targetDepartment = nextDepartment;
     if (!targetDepartment) {
@@ -830,7 +833,14 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       if (hasNoStockModel && existingOrder.currentDepartment === 'P1 Production Queue') {
         targetDepartment = 'Shipping QC';
         console.log(`🚀 Order ${orderId} has no stock model - routing directly to Shipping QC`);
-      } else {
+      } 
+      // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
+      else if (isFlatTop && existingOrder.currentDepartment === 'Layup/Plugging') {
+        targetDepartment = 'Finish';
+        console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+      }
+      // Regular progression for all other cases
+      else {
         const currentIndex = departments.indexOf(existingOrder.currentDepartment);
         if (currentIndex >= 0 && currentIndex < departments.length - 1) {
           targetDepartment = departments[currentIndex + 1];

@@ -121,6 +121,13 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
 
+    // If password is being updated, ensure it gets hashed
+    if (userData.password) {
+      const { AuthService } = require('../../auth');
+      const passwordHash = await AuthService.hashPassword(userData.password);
+      userData = { ...userData, passwordHash };
+    }
+
     const updatedUser = await storage.updateUser(id, userData);
     console.log('User updated successfully:', updatedUser.id);
 

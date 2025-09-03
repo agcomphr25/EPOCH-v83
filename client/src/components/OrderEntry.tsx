@@ -441,7 +441,7 @@ export default function OrderEntry() {
 
     console.log('💰 Price calculation - Final total:', total);
     return total;
-  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems, otherOptionsQuantities]);
+  }, [modelOptions, modelId, priceOverride, featureDefs, features, miscItems, otherOptionsQuantities, discountCode]);
 
   // Store discount details for appliesTo logic
   const [discountDetails, setDiscountDetails] = useState<any>(null);

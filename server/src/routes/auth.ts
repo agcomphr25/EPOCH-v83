@@ -33,7 +33,7 @@ router.post('/login', async (req: Request, res: Response) => {
       success: true,
       user: result.user,
       sessionToken: result.sessionToken,
-      token: result.token // Include JWT token for client-side storage
+      token: result.sessionToken // Use session token for client-side storage
     });
   } catch (error) {
     console.error('Login error:', error);

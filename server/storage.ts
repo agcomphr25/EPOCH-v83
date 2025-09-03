@@ -18,8 +18,7 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Gateway reports table
-  gatewayReports,
+  // Gateway reports table - temporarily removed
   // PO Products table
   poProducts,
   // Types
@@ -88,8 +87,7 @@ import {
   type Payment, type InsertPayment,
   // Order attachment types
   type OrderAttachment, type InsertOrderAttachment,
-  // Gateway reports types
-  type GatewayReport, type InsertGatewayReport,
+  // Gateway reports types - temporarily removed
   // PO Products types
   type POProduct, type InsertPOProduct,
 
@@ -602,14 +600,7 @@ export interface IStorage {
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
 
-  // Gateway Reports CRUD Methods
-  getAllGatewayReports(): Promise<GatewayReport[]>;
-  getGatewayReport(id: number): Promise<GatewayReport | undefined>;
-  getGatewayReportByDate(reportDate: string): Promise<GatewayReport | undefined>;
-  getGatewayReportsByDateRange(startDate: string, endDate: string): Promise<GatewayReport[]>;
-  createGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
-  updateGatewayReport(id: number, data: Partial<InsertGatewayReport>): Promise<GatewayReport>;
-  deleteGatewayReport(id: number): Promise<void>;
+  // Gateway Reports CRUD Methods - temporarily removed
 
   // PO Products CRUD Methods
   getAllPOProducts(): Promise<POProduct[]>;
@@ -5929,75 +5920,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Gateway Reports CRUD Methods Implementation
-  async getAllGatewayReports(): Promise<GatewayReport[]> {
-    return await db
-      .select()
-      .from(gatewayReports)
-      .orderBy(desc(gatewayReports.reportDate));
-  }
-
-  async getGatewayReport(id: number): Promise<GatewayReport | undefined> {
-    const [report] = await db
-      .select()
-      .from(gatewayReports)
-      .where(eq(gatewayReports.id, id));
-    return report || undefined;
-  }
-
-  async getGatewayReportByDate(reportDate: string): Promise<GatewayReport | undefined> {
-    const [report] = await db
-      .select()
-      .from(gatewayReports)
-      .where(eq(gatewayReports.reportDate, reportDate));
-    return report || undefined;
-  }
-
-  async getGatewayReportsByDateRange(startDate: string, endDate: string): Promise<GatewayReport[]> {
-    return await db
-      .select()
-      .from(gatewayReports)
-      .where(and(
-        gte(gatewayReports.reportDate, startDate),
-        lte(gatewayReports.reportDate, endDate)
-      ))
-      .orderBy(desc(gatewayReports.reportDate));
-  }
-
-  async createGatewayReport(data: InsertGatewayReport): Promise<GatewayReport> {
-    const [report] = await db
-      .insert(gatewayReports)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-    return report;
-  }
-
-  async updateGatewayReport(id: number, data: Partial<InsertGatewayReport>): Promise<GatewayReport> {
-    const [report] = await db
-      .update(gatewayReports)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(gatewayReports.id, id))
-      .returning();
-
-    if (!report) {
-      throw new Error(`Gateway report with ID ${id} not found`);
-    }
-
-    return report;
-  }
-
-  async deleteGatewayReport(id: number): Promise<void> {
-    await db
-      .delete(gatewayReports)
-      .where(eq(gatewayReports.id, id));
-  }
+  // Gateway Reports CRUD Methods Implementation - temporarily removed
 
   // PO Products CRUD Methods
   async getAllPOProducts(): Promise<POProduct[]> {

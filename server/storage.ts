@@ -4130,13 +4130,22 @@ export class DatabaseStorage implements IStorage {
         'P1 Production Queue', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC', 'Shipping'
       ];
 
+      // Special handling for flat top orders - they bypass CNC and go directly to Finish
+      const isFlatTop = currentOrder.isFlattop || false;
+
       let nextDept = nextDepartment;
       if (!nextDept) {
-        const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
-        if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
-          throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+        // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
+        if (isFlatTop && currentOrder.currentDepartment === 'Layup/Plugging') {
+          nextDept = 'Finish';
+          console.log(`🏔️ Order ${orderId} is flat top - bypassing CNC, routing directly to Finish`);
+        } else {
+          const currentIndex = departmentFlow.indexOf(currentOrder.currentDepartment || '');
+          if (currentIndex === -1 || currentIndex >= departmentFlow.length - 1) {
+            throw new Error(`Cannot progress from ${currentOrder.currentDepartment}`);
+          }
+          nextDept = departmentFlow[currentIndex + 1];
         }
-        nextDept = departmentFlow[currentIndex + 1];
       }
 
       // Prepare completion timestamp update based on current department

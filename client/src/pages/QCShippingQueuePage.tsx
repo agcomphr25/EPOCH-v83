@@ -112,10 +112,9 @@ export default function QCShippingQueuePage() {
       (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
     );
     
-    // Separate orders with stock models from orders without stock models
-    const regularOrders = filteredOrders.filter((order: any) => 
-      order.modelId && order.modelId.trim() !== '' && order.modelId.toLowerCase() !== 'none'
-    );
+    // Include ALL orders in QC/Shipping queue - don't filter by stock model validity
+    // This ensures orders aren't hidden due to data inconsistencies or missing stock models
+    const regularOrders = filteredOrders;
     
     // Sort orders by due date
     return regularOrders.sort((a: any, b: any) => {

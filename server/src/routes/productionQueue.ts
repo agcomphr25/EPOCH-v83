@@ -327,9 +327,13 @@ router.get('/po-items', async (req: Request, res: Response) => {
         po.created_at as createdAt
       FROM purchase_order_items poi
       JOIN purchase_orders po ON poi.po_id = po.id
+      LEFT JOIN po_products pp ON (poi.item_type = 'custom_model' AND poi.item_id = pp.id::text)
       WHERE poi.quantity > 0 
         AND (poi.item_id IS NOT NULL AND poi.item_id != '' AND poi.item_id != 'None')
-        AND poi.item_type = 'stock_model'
+        AND (
+          poi.item_type = 'stock_model' 
+          OR (poi.item_type = 'custom_model' AND pp.product_type = 'stock')
+        )
         AND po.status != 'CANCELED'
         AND (poi.order_count < poi.quantity OR poi.order_count IS NULL)
       ORDER BY po.expected_delivery ASC, po.created_at ASC

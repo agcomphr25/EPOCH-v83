@@ -7,6 +7,20 @@ import { loginSchema, changePasswordSchema, insertUserSchema } from '../../schem
 
 const router = Router();
 
+// GET /api/auth/test - Simple test endpoint
+router.get('/test', async (req: Request, res: Response) => {
+  try {
+    res.json({
+      success: true,
+      message: "Auth endpoint is working",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown'
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Test endpoint failed" });
+  }
+});
+
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
@@ -33,30 +47,45 @@ router.post('/login', async (req: Request, res: Response) => {
     const ipAddress = req.ip || req.connection.remoteAddress || null;
     const userAgent = req.get('User-Agent') || null;
     
-    const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
-    
-    if (!result) {
-      console.log('Authentication failed for user:', username);
-      return res.status(401).json({ error: "Invalid username or password" });
+    try {
+      const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
+      
+      if (!result) {
+        console.log('Authentication failed for user:', username);
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      console.log('Authentication successful for user:', username);
+
+      // Set secure cookie with enhanced security
+      res.cookie('sessionToken', result.sessionToken, {
+        httpOnly: true,
+        secure: true, // Always use secure cookies
+        sameSite: 'strict',
+        maxAge: 8 * 60 * 60 * 1000, // 8 hours
+        path: '/', // Explicit path
+      });
+
+      res.json({
+        success: true,
+        user: result.user,
+        sessionToken: result.sessionToken,
+        token: result.sessionToken // Use session token for client-side storage
+      });
+    } catch (authError) {
+      console.error('AuthService.authenticate error:', authError);
+      
+      // Handle specific auth errors
+      if (authError instanceof Error) {
+        if (authError.message.includes('locked') || authError.message.includes('deactivated')) {
+          return res.status(401).json({ error: authError.message });
+        }
+        // For any other auth service errors, return a generic message
+        return res.status(401).json({ error: "Authentication failed" });
+      }
+      
+      return res.status(500).json({ error: "Authentication service error" });
     }
-
-    console.log('Authentication successful for user:', username);
-
-    // Set secure cookie with enhanced security
-    res.cookie('sessionToken', result.sessionToken, {
-      httpOnly: true,
-      secure: true, // Always use secure cookies
-      sameSite: 'strict',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-      path: '/', // Explicit path
-    });
-
-    res.json({
-      success: true,
-      user: result.user,
-      sessionToken: result.sessionToken,
-      token: result.sessionToken // Use session token for client-side storage
-    });
   } catch (error) {
     console.error('Login error:', error);
     if (error instanceof Error) {

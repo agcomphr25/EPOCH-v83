@@ -77,8 +77,26 @@ class ProductionToDevMigration {
 
     try {
       for (const table of this.config.tablesToMigrate) {
-        const result = await client.query(`SELECT COUNT(*) as count FROM ${table}`);
-        counts[table] = parseInt(result.rows[0].count);
+        try {
+          // Check if table exists first
+          const tableExists = await client.query(`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables 
+              WHERE table_schema = 'public' 
+              AND table_name = $1
+            )
+          `, [table]);
+          
+          if (tableExists.rows[0].exists) {
+            const result = await client.query(`SELECT COUNT(*) as count FROM "${table}"`);
+            counts[table] = parseInt(result.rows[0].count);
+          } else {
+            counts[table] = 0; // Table doesn't exist, set count to 0
+          }
+        } catch (tableError) {
+          console.log(`⚠️  Table "${table}" not accessible, setting count to 0`);
+          counts[table] = 0;
+        }
       }
     } catch (error) {
       console.error(`Error getting table counts:`, error);
@@ -203,9 +221,36 @@ class ProductionToDevMigration {
     const devClient = await this.devPool.connect();
 
     try {
+      // Check if table exists in both databases
+      const prodTableExists = await prodClient.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = $1
+        )
+      `, [tableName]);
+      
+      const devTableExists = await devClient.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = $1
+        )
+      `, [tableName]);
+      
+      if (!prodTableExists.rows[0].exists) {
+        console.log(`   ⚠️  Table "${tableName}" doesn't exist in production - skipping`);
+        return;
+      }
+      
+      if (!devTableExists.rows[0].exists) {
+        console.log(`   ⚠️  Table "${tableName}" doesn't exist in development - skipping`);
+        return;
+      }
+      
       // Get production data
       console.log(`   📥 Fetching data from production...`);
-      const prodResult = await prodClient.query(`SELECT * FROM ${tableName}`);
+      const prodResult = await prodClient.query(`SELECT * FROM "${tableName}"`);
       const rowCount = prodResult.rows.length;
       
       if (rowCount === 0) {
@@ -326,11 +371,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Prompt for production database URL
-  console.log('📋 Please provide your production database connection string');
-  console.log('   (This should look like: postgresql://user:password@host:port/database)\n');
+  // Get production URL from command line argument or interactive prompt
+  let productionUrl = process.argv[2];
   
-  const productionUrl = await promptForInput('🔗 Enter production DATABASE_URL: ');
+  if (!productionUrl) {
+    console.log('📋 Please provide your production database connection string');
+    console.log('   (This should look like: postgresql://user:password@host:port/database)\n');
+    
+    productionUrl = await promptForInput('🔗 Enter production DATABASE_URL: ');
+  } else {
+    console.log('📋 Using production database URL from command line argument\n');
+  }
 
   if (!productionUrl || !productionUrl.startsWith('postgresql://')) {
     console.error('❌ Invalid database URL. Must start with postgresql://');

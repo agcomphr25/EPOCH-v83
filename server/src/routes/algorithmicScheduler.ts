@@ -120,11 +120,19 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           
           let priority = 0;
           
-          // Mesa Universal orders get highest priority (business requirement)
+          // ALL P1 PO orders get highest priority (1000+)
+          if (order.source === 'production_order' || order.source === 'p1_purchase_order' || 
+              order.poId || order.productionOrderId) {
+            priority += 1000; // Very high priority for ALL P1 PO orders
+            console.log(`🏭 P1 PO PRIORITY: Order ${order.orderId} gets +1000 priority (source: ${order.source})`);
+          }
+          
+          // Mesa Universal orders get additional priority boost
           const stockModelId = order.stockModelId || order.modelId || '';
           if (stockModelId.toLowerCase().includes('mesa_universal') || 
               stockModelId.toLowerCase().includes('mesa universal')) {
-            priority += 1000; // Very high priority
+            priority += 100; // Additional priority for Mesa Universal
+            console.log(`🏔️ MESA PRIORITY: Order ${order.orderId} gets +100 additional Mesa priority`);
           }
           
           // Due date urgency scoring (closer due dates = higher priority)
@@ -167,7 +175,12 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       const isMesaUniversal = stockModelId.toLowerCase().includes('mesa_universal') || 
                               stockModelId.toLowerCase().includes('mesa universal');
-      console.log(`   ${index + 1}. ${order.orderId}: ${stockModelId}, Due ${dueDate.toDateString()}${isMesaUniversal ? ' [MESA UNIVERSAL - HIGH PRIORITY]' : ''}`);
+      const isP1PO = order.source === 'production_order' || order.source === 'p1_purchase_order' || 
+                     order.poId || order.productionOrderId;
+      let priorityTags = '';
+      if (isP1PO) priorityTags += ' [P1 PO - HIGH PRIORITY]';
+      if (isMesaUniversal) priorityTags += ' [MESA UNIVERSAL]';
+      console.log(`   ${index + 1}. ${order.orderId}: ${stockModelId}, Due ${dueDate.toDateString()}${priorityTags}`);
     });
 
     // Generate work dates based on configured work days

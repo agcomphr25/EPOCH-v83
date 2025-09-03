@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, sql } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -2437,7 +2437,7 @@ export const orderAttachmentsRelations = relations(orderAttachments, ({ one }) =
 
 // Gateway Reports table for daily activity tracking
 export const gatewayReports = pgTable("gateway_reports", {
-  id: serial("id").primaryKey(),
+  id: integer("id").primaryKey().default(sql`nextval('gateway_reports_id_seq')`),
   reportDate: date("report_date").notNull(), // The specific date for this report (YYYY-MM-DD)
   buttpadsUnits: integer("buttpads_units").notNull().default(0), // Units processed in Buttpads area
   duratecUnits: integer("duratec_units").notNull().default(0), // Units processed in Duratec area

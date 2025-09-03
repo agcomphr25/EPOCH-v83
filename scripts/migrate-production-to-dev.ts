@@ -297,23 +297,47 @@ class ProductionToDevMigration {
   }
 }
 
+// Interactive prompt for database URL
+function promptForInput(question: string): Promise<string> {
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer: string) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
 // Main execution
 async function main() {
-  // Get environment variables
-  const productionUrl = process.env.PRODUCTION_DATABASE_URL;
+  console.log('🚀 Production to Development Database Migration');
+  console.log('===============================================\n');
+  
+  // Get development URL from environment
   const developmentUrl = process.env.DATABASE_URL;
-
-  if (!productionUrl) {
-    console.error('❌ PRODUCTION_DATABASE_URL environment variable is required');
-    console.log('\nUsage:');
-    console.log('  PRODUCTION_DATABASE_URL="postgresql://..." tsx scripts/migrate-production-to-dev.ts');
-    process.exit(1);
-  }
 
   if (!developmentUrl) {
     console.error('❌ DATABASE_URL environment variable is required');
     process.exit(1);
   }
+
+  // Prompt for production database URL
+  console.log('📋 Please provide your production database connection string');
+  console.log('   (This should look like: postgresql://user:password@host:port/database)\n');
+  
+  const productionUrl = await promptForInput('🔗 Enter production DATABASE_URL: ');
+
+  if (!productionUrl || !productionUrl.startsWith('postgresql://')) {
+    console.error('❌ Invalid database URL. Must start with postgresql://');
+    process.exit(1);
+  }
+
+  console.log('\n✅ Database URL received successfully!\n');
 
   // Define tables to migrate (order matters for foreign key constraints)
   const tablesToMigrate = [

@@ -103,18 +103,96 @@ class ProductionToDevMigration {
     console.log('');
   }
 
-  async createDevelopmentBackup(): Promise<string> {
-    console.log('💾 Creating development database backup...\n');
+  async createDatabaseBackup(pool: Pool, dbName: string): Promise<string> {
+    console.log(`💾 Creating ${dbName} database backup...\n`);
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFile = `dev-backup-${timestamp}.sql`;
+    const backupFile = `${dbName}-backup-${timestamp}.sql`;
     
-    // Note: In a real implementation, you'd use pg_dump here
-    // For now, we'll just log the intent
-    console.log(`✅ Backup would be saved as: ${backupFile}`);
-    console.log('   (Implement pg_dump command for actual backup)\n');
+    const client = await pool.connect();
     
-    return backupFile;
+    try {
+      // Create backups directory if it doesn't exist
+      const fs = require('fs');
+      const path = require('path');
+      const backupDir = path.join(process.cwd(), 'backups');
+      
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+        console.log(`📁 Created backups directory: ${backupDir}`);
+      }
+      
+      const backupPath = path.join(backupDir, backupFile);
+      
+      // Get all table names
+      const tablesResult = await client.query(`
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public'
+        ORDER BY tablename
+      `);
+      
+      const tables = tablesResult.rows.map(row => row.tablename);
+      console.log(`📋 Found ${tables.length} tables to backup: ${tables.join(', ')}`);
+      
+      // Create SQL backup file content
+      let backupContent = `-- Database Backup: ${dbName}\n`;
+      backupContent += `-- Created: ${new Date().toISOString()}\n`;
+      backupContent += `-- Tables: ${tables.join(', ')}\n\n`;
+      
+      // Add table creation and data for each table
+      for (const tableName of tables) {
+        console.log(`   📦 Backing up table: ${tableName}`);
+        
+        // Get table schema
+        const schemaResult = await client.query(`
+          SELECT column_name, data_type, is_nullable, column_default
+          FROM information_schema.columns 
+          WHERE table_name = $1 AND table_schema = 'public'
+          ORDER BY ordinal_position
+        `, [tableName]);
+        
+        // Get table data
+        const dataResult = await client.query(`SELECT * FROM "${tableName}"`);
+        
+        backupContent += `-- Table: ${tableName}\n`;
+        backupContent += `-- Rows: ${dataResult.rows.length}\n`;
+        
+        if (dataResult.rows.length > 0) {
+          const columns = Object.keys(dataResult.rows[0]);
+          
+          // Create INSERT statements
+          for (const row of dataResult.rows) {
+            const values = columns.map(col => {
+              const value = row[col];
+              if (value === null) return 'NULL';
+              if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+              if (value instanceof Date) return `'${value.toISOString()}'`;
+              if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+              return value;
+            });
+            
+            backupContent += `INSERT INTO "${tableName}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${values.join(', ')});\n`;
+          }
+        }
+        
+        backupContent += '\n';
+      }
+      
+      // Write backup file
+      fs.writeFileSync(backupPath, backupContent);
+      
+      console.log(`✅ ${dbName} backup created: ${backupPath}`);
+      console.log(`📊 Backup contains ${tables.length} tables\n`);
+      
+      return backupPath;
+      
+    } catch (error) {
+      console.error(`❌ Error creating ${dbName} backup:`, error);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async migrateTable(tableName: string): Promise<void> {
@@ -184,8 +262,15 @@ class ProductionToDevMigration {
       await this.validateEnvironment();
       await this.showTableCounts();
       
-      // Create backup
-      await this.createDevelopmentBackup();
+      // Create backups of BOTH databases before proceeding
+      console.log('🛡️  Creating safety backups before migration...\n');
+      const prodBackupPath = await this.createDatabaseBackup(this.prodPool, 'production');
+      const devBackupPath = await this.createDatabaseBackup(this.devPool, 'development');
+      
+      console.log('🔒 Backup Summary:');
+      console.log(`   Production backup: ${prodBackupPath}`);
+      console.log(`   Development backup: ${devBackupPath}`);
+      console.log('   Both databases are now safely backed up!\n');
       
       console.log('🔄 Starting table migrations...\n');
       

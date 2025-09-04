@@ -152,7 +152,7 @@ export default function Navigation() {
     },
     {
       path: '/barcode-scanner',
-      label: 'Barcode Scanner',
+      label: 'Barcde Scanner',
       icon: Scan,
       description: 'Scan order barcodes to view pricing summary and payment status'
     },

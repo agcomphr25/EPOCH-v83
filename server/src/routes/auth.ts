@@ -126,20 +126,22 @@ router.get('/session', async (req: Request, res: Response) => {
       try {
         let user = null;
         
-        // Try JWT authentication first
-        if (bearerToken) {
-          const jwtPayload = AuthService.verifyJWT(bearerToken);
-          if (jwtPayload) {
-            const dbUser = await AuthService.getUserById(jwtPayload.userId);
-            if (dbUser && dbUser.isActive) {
-              user = dbUser;
+        // Try session-based authentication first (session tokens from login)
+        user = await AuthService.getUserBySession(token);
+        
+        // Fallback to JWT authentication if session fails
+        if (!user && bearerToken) {
+          try {
+            const jwtPayload = AuthService.verifyJWT(bearerToken);
+            if (jwtPayload) {
+              const dbUser = await AuthService.getUserById(jwtPayload.userId);
+              if (dbUser && dbUser.isActive) {
+                user = dbUser;
+              }
             }
+          } catch (jwtError) {
+            console.log('JWT verification failed:', jwtError);
           }
-        }
-
-        // Fallback to session-based authentication
-        if (!user && cookieToken) {
-          user = await AuthService.getUserBySession(cookieToken);
         }
 
         if (user) {
@@ -157,15 +159,8 @@ router.get('/session', async (req: Request, res: Response) => {
       }
     }
 
-    // Return anonymous user for manufacturing system access
-    res.json({
-      id: 0,
-      username: 'anonymous',
-      role: 'OPERATOR',
-      employeeId: null,
-      isActive: true,
-      canOverridePrices: false
-    });
+    // Return 401 for unauthenticated users in deployment
+    return res.status(401).json({ error: "Authentication required" });
   } catch (error) {
     console.error('Session check error:', error);
     res.status(500).json({ error: "Session check failed" });

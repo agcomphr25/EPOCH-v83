@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination';
+import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -49,6 +58,14 @@ interface Order {
   createdAt?: string;
 }
 
+interface PaginatedOrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -56,6 +73,8 @@ export default function AllOrdersPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50); // Orders per page
 
   // Department progression flow
   const departments = [
@@ -92,6 +111,7 @@ export default function AllOrdersPage() {
       
       // Clear all caches and force immediate refetch
       queryClient.clear();
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: any, variables) => {
@@ -104,13 +124,16 @@ export default function AllOrdersPage() {
     }
   });
 
-  const { data: orders = [], isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
-    queryFn: () => apiRequest('/api/orders/with-payment-status'),
-    refetchInterval: 500, // Refresh every 0.5 seconds
-    staleTime: 0, // Data is always stale, force fresh fetch
-    gcTime: 0 // Don't cache at all (renamed from cacheTime in React Query v5)
+  const { data: paginatedData, isLoading } = useQuery<PaginatedOrdersResponse>({
+    queryKey: ['/api/orders/with-payment-status/paginated', currentPage, pageSize],
+    queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?page=${currentPage}&limit=${pageSize}`),
+    staleTime: 30000, // Cache for 30 seconds to improve performance
+    gcTime: 60000 // Keep in cache for 1 minute
   });
+
+  const orders = paginatedData?.orders || [];
+  const totalOrders = paginatedData?.total || 0;
+  const totalPages = paginatedData?.totalPages || 1;
 
   // Cancel order mutation
   const cancelOrderMutation = useMutation({
@@ -121,6 +144,7 @@ export default function AllOrdersPage() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/pipeline-counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
@@ -303,7 +327,9 @@ export default function AllOrdersPage() {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span>📋 All Orders</span>
-              <span className="text-sm text-gray-500">Orders ({sortedOrders.length})</span>
+              <span className="text-sm text-gray-500">
+                Page {currentPage} of {totalPages} ({totalOrders} total orders)
+              </span>
             </div>
             <div className="flex items-center gap-4">
               {/* Search Input */}
@@ -376,7 +402,7 @@ export default function AllOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedOrders.map(order => (
+              {orders.map(order => (
                 <TableRow key={order.orderId} className={order.isVerified ? "bg-green-50 dark:bg-green-950" : ""}>
                   <TableCell className="font-medium">
                     {order.fbOrderNumber || order.orderId}
@@ -485,12 +511,70 @@ export default function AllOrdersPage() {
             </TableBody>
           </Table>
 
-          {sortedOrders.length === 0 && (
+          {orders.length === 0 && !isLoading && (
             <div className="text-center py-8 text-gray-500">
               No orders found for the selected criteria
             </div>
           )}
         </CardContent>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="text-sm text-gray-500">
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalOrders)} of {totalOrders} orders
+            </div>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                
+                {/* Page Numbers */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNumber;
+                  if (totalPages <= 5) {
+                    pageNumber = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNumber = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNumber = totalPages - 4 + i;
+                  } else {
+                    pageNumber = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <PaginationItem key={pageNumber}>
+                      <PaginationLink
+                        onClick={() => setCurrentPage(pageNumber)}
+                        isActive={currentPage === pageNumber}
+                        className="cursor-pointer"
+                      >
+                        {pageNumber}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
 
       {/* Cancel Order Dialog */}

@@ -49,7 +49,7 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
       }
     }
     
-    // Create kickbacks for orders needing attention
+    // Log orders needing attention (these will be returned by a separate endpoint)
     for (const order of ordersNeedingAttention) {
       const stockModel = order.stockModelId || order.modelId || 'empty';
       const features = order.features || {};
@@ -62,42 +62,11 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         missingItems.push('action length');
       }
       
-      const reasonText = `Order needs attention: Missing ${missingItems.join(' and ')}. Cannot proceed to production until resolved.`;
-      
-      console.log(`⚠️ CREATING KICKBACK: Order ${order.orderId} needs attention (missing: ${missingItems.join(', ')})`);
-      
-      try {
-        // Check if a kickback already exists for this order
-        const existingKickbacks = await storage.getKickbacksByOrderId(order.orderId);
-        const hasOpenKickback = existingKickbacks.some((kb: any) => kb.status === 'OPEN' || kb.status === 'IN_PROGRESS');
-        
-        if (!hasOpenKickback) {
-          const kickbackData = {
-            orderId: order.orderId,
-            kickbackDept: 'CNC', // Using CNC as default department for configuration issues
-            reasonCode: 'DESIGN_ISSUE',
-            reasonText: reasonText,
-            kickbackDate: new Date(),
-            reportedBy: 'SYSTEM_AUTO_CLEANUP',
-            status: 'OPEN',
-            priority: 'MEDIUM',
-            impactedDepartments: ['P1 Production Queue'],
-            rootCause: `Missing required configuration: ${missingItems.join(', ')}`,
-            correctiveAction: null
-          };
-          
-          await storage.createKickback(kickbackData);
-          console.log(`✅ Created kickback for order ${order.orderId} - now in "Orders That Need Attention"`);
-        } else {
-          console.log(`ℹ️ Order ${order.orderId} already has an open kickback - skipping`);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to create kickback for order ${order.orderId}:`, error);
-      }
+      console.log(`⚠️ ORDER NEEDS ATTENTION: Order ${order.orderId} missing: ${missingItems.join(', ')}`);
     }
     
     if (ordersToMoveToShipping.length > 0 || ordersNeedingAttention.length > 0) {
-      console.log(`🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMoveToShipping.length} orders to Shipping QC, created kickbacks for ${ordersNeedingAttention.length} orders needing attention`);
+      console.log(`🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMoveToShipping.length} orders to Shipping QC, identified ${ordersNeedingAttention.length} orders needing attention`);
     }
   } catch (error) {
     console.error('❌ Error in autoMoveInvalidStockModelOrders:', error);
@@ -901,6 +870,88 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Failed to move selected PO items to layup scheduler",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get Orders That Need Attention (missing critical information for layup scheduling)
+router.get('/attention', async (req: Request, res: Response) => {
+  try {
+    console.log('🏭 ATTENTION QUEUE: Fetching orders that need attention...');
+    
+    const attentionQuery = `
+      SELECT 
+        o.order_id as orderId,
+        o.fb_order_number as fbOrderNumber,
+        o.model_id as modelId,
+        o.model_id as stockModelId,
+        o.due_date as dueDate,
+        o.order_date as orderDate,
+        o.current_department as currentDepartment,
+        o.status,
+        o.customer_id as customerId,
+        o.features,
+        o.created_at as createdAt,
+        c.name as customerName
+      FROM all_orders o
+      LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+      WHERE o.current_department = 'P1 Production Queue'
+        AND o.status IN ('FINALIZED', 'Active')
+        AND (
+          o.model_id IS NULL OR 
+          o.model_id = '' OR 
+          o.features->>'action_length' IS NULL OR 
+          o.features->>'action_length' = '' OR 
+          o.features->>'action_length' = 'null'
+        )
+      ORDER BY 
+        o.due_date ASC,
+        o.created_at ASC
+    `;
+
+    const attentionResult = await pool.query(attentionQuery);
+    const attentionOrders = Array.isArray(attentionResult) ? attentionResult : (attentionResult.rows || []);
+
+    // Format the response with missing items identified
+    const formattedOrders = attentionOrders.map((order: any) => {
+      const missingItems = [];
+      
+      if (!order.modelid || order.modelid === '') {
+        missingItems.push('stock model');
+      }
+      
+      const features = order.features || {};
+      if (!features.action_length || features.action_length === '' || features.action_length === null) {
+        missingItems.push('action length');
+      }
+      
+      return {
+        orderId: order.orderid,
+        fbOrderNumber: order.fbordernumber,
+        modelId: order.modelid,
+        stockModelId: order.modelid,
+        dueDate: order.duedate,
+        orderDate: order.orderdate,
+        currentDepartment: order.currentdepartment,
+        status: order.status,
+        customerId: order.customerid,
+        customerName: order.customername,
+        features: order.features,
+        createdAt: order.createdat,
+        missingItems: missingItems,
+        reasonText: `Missing ${missingItems.join(' and ')} - cannot proceed to layup scheduling`
+      };
+    });
+
+    console.log(`📋 Found ${formattedOrders.length} orders needing attention`);
+    res.json(formattedOrders);
+    
+  } catch (error) {
+    console.error('❌ ATTENTION QUEUE: Error fetching orders needing attention:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch orders needing attention",
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

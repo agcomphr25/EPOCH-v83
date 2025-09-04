@@ -323,16 +323,10 @@ export default function ProductionQueueManager() {
     queryFn: () => apiRequest('/api/production-queue/po-items'),
   });
 
-  // Fetch orders that need attention (kickbacks with OPEN or IN_PROGRESS status)
-  const { data: attentionOrders = [], isLoading: isLoadingAttention, refetch: refetchAttention } = useQuery<Kickback[]>({
-    queryKey: ['/api/kickbacks/attention'],
-    queryFn: async () => {
-      const [openKickbacks, inProgressKickbacks] = await Promise.all([
-        apiRequest('/api/kickbacks/status/OPEN'),
-        apiRequest('/api/kickbacks/status/IN_PROGRESS')
-      ]);
-      return [...openKickbacks, ...inProgressKickbacks];
-    },
+  // Fetch orders that need attention (missing critical information for layup scheduling)
+  const { data: attentionOrders = [], isLoading: isLoadingAttention, refetch: refetchAttention } = useQuery<any[]>({
+    queryKey: ['/api/production-queue/attention'],
+    queryFn: () => apiRequest('/api/production-queue/attention'),
   });
 
   // Auto-populate production queue mutation
@@ -620,7 +614,7 @@ export default function ProductionQueueManager() {
                   )}
                 </CardTitle>
                 <p className="text-sm text-gray-500 text-left">
-                  Production issues and kickbacks requiring immediate attention
+                  Orders missing critical information required for layup scheduling
                 </p>
               </CardHeader>
             </AccordionTrigger>
@@ -637,55 +631,40 @@ export default function ProductionQueueManager() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Order ID</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Issue Description</TableHead>
-                        <TableHead>Severity</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Reported By</TableHead>
-                        <TableHead>Reported Date</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Stock Model</TableHead>
+                        <TableHead>Missing Items</TableHead>
+                        <TableHead>Due Date</TableHead>
                         <TableHead className="w-32">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {attentionOrders.map((kickback) => (
-                        <TableRow key={kickback.id} className="bg-red-50">
+                      {Array.isArray(attentionOrders) && attentionOrders.map((order) => (
+                        <TableRow key={order.orderId} className="bg-amber-50">
                           <TableCell className="font-medium">
-                            {kickback.orderId}
+                            {order.orderId}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{kickback.department}</Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {kickback.issueDescription}
+                            {order.customerName || order.customerId}
                           </TableCell>
                           <TableCell>
-                            <Badge className={
-                              kickback.severity === 'CRITICAL' ? 'bg-red-500 hover:bg-red-600 text-white' :
-                              kickback.severity === 'HIGH' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
-                              kickback.severity === 'MEDIUM' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' :
-                              'bg-green-500 hover:bg-green-600 text-white'
-                            }>
-                              {kickback.severity}
+                            <Badge variant="outline">
+                              {order.modelId || 'Missing'}
                             </Badge>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={
-                              kickback.status === 'OPEN' ? 'bg-red-500 hover:bg-red-600 text-white' :
-                              'bg-yellow-500 hover:bg-yellow-600 text-white'
-                            }>
-                              {kickback.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <User className="w-3 h-3 text-gray-400" />
-                              {kickback.reportedBy}
+                          <TableCell className="max-w-xs">
+                            <div className="flex flex-wrap gap-1">
+                              {order.missingItems?.map((item: string) => (
+                                <Badge key={item} className="bg-red-500 hover:bg-red-600 text-white text-xs">
+                                  {item}
+                                </Badge>
+                              ))}
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-gray-400" />
-                              {new Date(kickback.reportedAt).toLocaleDateString()}
+                              {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'Not set'}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -695,7 +674,7 @@ export default function ProductionQueueManager() {
                               className="text-blue-600 hover:text-blue-700"
                             >
                               <ArrowRight className="w-4 h-4 mr-1" />
-                              View
+                              Edit
                             </Button>
                           </TableCell>
                         </TableRow>

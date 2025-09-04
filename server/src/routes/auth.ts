@@ -115,54 +115,67 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
 
 // GET /api/auth/session - Check current session (no auth required for manufacturing system)
 router.get('/session', async (req: Request, res: Response) => {
-  try {
-    // Try to get authenticated user first
-    const authHeader = req.headers['authorization'];
-    const bearerToken = authHeader && authHeader.split(' ')[1];
-    const cookieToken = req.cookies?.sessionToken;
-    const token = bearerToken || cookieToken;
+  // Add timeout to prevent hanging
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Session check timeout')), 5000); // 5 second timeout
+  });
 
-    if (token) {
-      try {
-        let user = null;
-        
-        // Try session-based authentication first (session tokens from login)
-        user = await AuthService.getUserBySession(token);
-        
-        // Fallback to JWT authentication if session fails
-        if (!user && bearerToken) {
+  try {
+    await Promise.race([
+      (async () => {
+        // Try to get authenticated user first
+        const authHeader = req.headers['authorization'];
+        const bearerToken = authHeader && authHeader.split(' ')[1];
+        const cookieToken = req.cookies?.sessionToken;
+        const token = bearerToken || cookieToken;
+
+        if (token) {
           try {
-            const jwtPayload = AuthService.verifyJWT(bearerToken);
-            if (jwtPayload) {
-              const dbUser = await AuthService.getUserById(jwtPayload.userId);
-              if (dbUser && dbUser.isActive) {
-                user = dbUser;
+            let user = null;
+            
+            // Try session-based authentication first (session tokens from login)
+            user = await AuthService.getUserBySession(token);
+            
+            // Fallback to JWT authentication if session fails
+            if (!user && bearerToken) {
+              try {
+                const jwtPayload = AuthService.verifyJWT(bearerToken);
+                if (jwtPayload) {
+                  const dbUser = await AuthService.getUserById(jwtPayload.userId);
+                  if (dbUser && dbUser.isActive) {
+                    user = dbUser;
+                  }
+                }
+              } catch (jwtError) {
+                console.log('JWT verification failed:', jwtError);
               }
             }
-          } catch (jwtError) {
-            console.log('JWT verification failed:', jwtError);
+
+            if (user) {
+              return res.json({
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                employeeId: user.employeeId,
+                isActive: user.isActive,
+                canOverridePrices: user.canOverridePrices
+              });
+            }
+          } catch (authError) {
+            console.log('Authentication failed:', authError);
           }
         }
 
-        if (user) {
-          return res.json({
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            employeeId: user.employeeId,
-            isActive: user.isActive,
-            canOverridePrices: user.canOverridePrices
-          });
-        }
-      } catch (authError) {
-        console.log('Authentication failed, returning anonymous user:', authError);
-      }
-    }
-
-    // Return 401 for unauthenticated users in deployment
-    return res.status(401).json({ error: "Authentication required" });
+        // Return 401 for unauthenticated users in deployment
+        return res.status(401).json({ error: "Authentication required" });
+      })(),
+      timeoutPromise
+    ]);
   } catch (error) {
     console.error('Session check error:', error);
+    if (error instanceof Error && error.message === 'Session check timeout') {
+      return res.status(408).json({ error: "Session validation timeout" });
+    }
     res.status(500).json({ error: "Session check failed" });
   }
 });

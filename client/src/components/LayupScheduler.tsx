@@ -2487,12 +2487,15 @@ export default function LayupScheduler() {
               }
               body {
                 margin: 0 !important;
-                padding: 8px !important;
+                padding: 20px 8px 8px 8px !important;
                 font-family: Arial, sans-serif !important;
                 font-size: 10px !important;
                 line-height: 1.2 !important;
                 -webkit-print-color-adjust: exact !important;
                 color-adjust: exact !important;
+              }
+              @page {
+                margin: 0.75in 0.5in 0.5in 0.5in !important;
               }
               .header {
                 margin: 0 0 8px 0 !important;

@@ -2145,7 +2145,7 @@ export default function LayupScheduler() {
         return `${actionLengthAbbr} ${actionDisplay}`;
       } else {
         // For non-APR orders, show action length
-        let actionLengthValue = order.features.action_length;
+        let actionLengthValue = order.features.action_length || order.features.actionLength;
 
         if ((!actionLengthValue || actionLengthValue === 'none') && order.features.action_inlet) {
           const inletToLengthMap: {[key: string]: string} = {
@@ -2829,7 +2829,7 @@ export default function LayupScheduler() {
                               const actionLength = getActionLengthDisplay(order);
                               const lopDisplay = getLOPDisplay(order);
                               const hasHeavyFill = getHeavyFillDisplay(order);
-                              const customer = order.customerName || order.customer || 'Unknown Customer';
+                              const customer = order.customerName || order.customer || order.customerId || 'Unknown Customer';
 
                               return `
                                 <div class="order-item" style="border-bottom: 1px solid #ddd; padding: 8px 0; ${index === orders.length - 1 ? 'border-bottom: none;' : ''}">

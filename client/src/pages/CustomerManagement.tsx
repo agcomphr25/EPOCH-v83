@@ -42,7 +42,6 @@ type Customer = {
   name: string;
   email?: string;
   phone?: string;
-  company?: string;
   contact?: string;
   customerType: string;
   preferredCommunicationMethod?: string[]; // Array of "email" and/or "sms"
@@ -72,7 +71,6 @@ type CustomerFormData = {
   name: string;
   email: string;
   phone: string;
-  company: string;
   contact: string;
   customerType: string;
   preferredCommunicationMethod: string[]; // Array of "email" and/or "sms"
@@ -104,7 +102,6 @@ const initialFormData: CustomerFormData = {
   name: '',
   email: '',
   phone: '',
-  company: '',
   contact: '',
   customerType: 'standard',
   preferredCommunicationMethod: [],
@@ -192,17 +189,6 @@ const CustomerFormFields = ({
           )}
         </div>
         
-        {/* Company field temporarily hidden - can be restored by uncommenting
-        <div className="space-y-2">
-          <Label htmlFor="company" className="text-sm font-medium">Company</Label>
-          <Input
-            id="company"
-            value={formData.company}
-            onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-            placeholder="Company name"
-          />
-        </div>
-        */}
         
         <div className="space-y-2">
           <Label htmlFor="customerType" className="text-sm font-medium">Type</Label>
@@ -536,8 +522,7 @@ export default function CustomerManagement() {
   // Filter customers based on search and status
   const filteredCustomers = customers.filter((customer: Customer) => {
     const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.company?.toLowerCase().includes(searchTerm.toLowerCase());
+                         customer.email?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterActive === 'all' || 
                          (filterActive === 'active' && customer.isActive) ||
@@ -769,7 +754,6 @@ export default function CustomerManagement() {
           name: data.name,
           email: data.email,
           phone: data.phone,
-          company: data.company,
           contact: data.contact,
           customerType: data.customerType,
           preferredCommunicationMethod: data.preferredCommunicationMethod,
@@ -982,7 +966,6 @@ export default function CustomerManagement() {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          company: formData.company,
           contact: formData.contact,
           customerType: formData.customerType,
           preferredCommunicationMethod: formData.preferredCommunicationMethod,
@@ -1054,7 +1037,6 @@ export default function CustomerManagement() {
       name: customer.name,
       email: customer.email || '',
       phone: customer.phone || '',
-      company: customer.company || '',
       contact: customer.contact || '',
       customerType: customer.customerType,
       preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
@@ -1184,12 +1166,11 @@ export default function CustomerManagement() {
 
   const exportCustomers = () => {
     const csvContent = [
-      ['Name', 'Email', 'Phone', 'Company', 'Customer Type', 'Status', 'Notes', 'Created Date'],
+      ['Name', 'Email', 'Phone', 'Customer Type', 'Status', 'Notes', 'Created Date'],
       ...filteredCustomers.map((customer: Customer) => [
         customer.name,
         customer.email || '',
         customer.phone || '',
-        customer.company || '',
         customer.customerType,
         customer.isActive ? 'Active' : 'Inactive',
         customer.notes || '',
@@ -1456,7 +1437,7 @@ export default function CustomerManagement() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search customers by name, email, or company..."
+                  placeholder="Search customers by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -1846,14 +1827,6 @@ export default function CustomerManagement() {
           {/* Additional Customer Fields - Full Width */}
           <div className="space-y-4 pt-4 border-t">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-company">Company</Label>
-                <Input
-                  id="edit-company"
-                  value={formData.company}
-                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                />
-              </div>
 
               <div>
                 <Label htmlFor="edit-customerType">Customer Type</Label>

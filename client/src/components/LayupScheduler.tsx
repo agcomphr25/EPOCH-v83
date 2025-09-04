@@ -642,13 +642,39 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
 
   // Clear schedule function for testing
-  const clearSchedule = useCallback(() => {
-    console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS');
-    setOrderAssignments({});
-    toast({
-      title: "Schedule Cleared",
-      description: "All order assignments have been cleared. Ready for fresh scheduling.",
-    });
+  const clearSchedule = useCallback(async () => {
+    console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS AND DATABASE');
+    
+    try {
+      // Clear frontend state
+      setOrderAssignments({});
+      
+      // Clear database schedule entries
+      const response = await fetch('/api/layup-schedule', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Schedule Cleared",
+          description: "All order assignments and database schedule cleared. Ready for fresh scheduling.",
+        });
+      } else {
+        toast({
+          title: "Schedule Cleared (Frontend Only)",
+          description: "Frontend cleared successfully. Database cleanup may need manual attention.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error clearing database schedule:', error);
+      toast({
+        title: "Schedule Cleared (Frontend Only)", 
+        description: "Frontend cleared successfully. Database cleanup failed.",
+        variant: "destructive"
+      });
+    }
   }, []);
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
   // Week-specific lock state instead of global lock
@@ -2055,21 +2081,13 @@ export default function LayupScheduler() {
         return; // Exit early, let it re-run with clean state
       }
 
-      // Auto-trigger if we have many unscheduled orders (threshold: 10+ orders for testing)
-      if (unscheduledOrderCount > 10 || (orders.length > 100 && scheduledOrderCount < orders.length * 0.3)) {
-        console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders...');
-        console.log('🏭 Production queue:', orders.length, 'total orders,', scheduledOrderCount, 'already scheduled');
-        console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
-
-        // Auto-trigger the algorithmic scheduler to process the production queue
-        console.log('🤖 PRODUCTION FLOW: Auto-triggering algorithmic schedule...');
-        setTimeout(() => {
-          console.log('🤖 PRODUCTION FLOW: Generating layup schedule from production queue...');
-          generateAlgorithmicSchedule();
-        }, 1000);
-      } else {
-        console.log('🏭 PRODUCTION FLOW: Schedule looks complete -', scheduledOrderCount, 'scheduled,', unscheduledOrderCount, 'remaining');
-      }
+      // AUTO-TRIGGER DISABLED: User must manually click Auto Schedule button
+      console.log('📊 SCHEDULE STATUS (auto-trigger disabled):', {
+        totalOrders: orders.length,
+        scheduledOrders: scheduledOrderCount,
+        unscheduledOrders: unscheduledOrderCount,
+        message: 'Ready for manual scheduling - click Auto Schedule button'
+      });
     } else {
       console.log('❌ PRODUCTION FLOW: Missing resources for scheduling:', {
         orders: orders.length,

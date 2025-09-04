@@ -405,9 +405,6 @@ export default function FinishQCPage() {
         </CardContent>
       </Card>
 
-      {/* Facebook Number Search */}
-      <FBNumberSearch onOrderFound={handleOrderFound} />
-
       {technicians.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">

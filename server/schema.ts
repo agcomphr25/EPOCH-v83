@@ -598,9 +598,9 @@ export const evaluations = pgTable("evaluations", {
 // User Sessions for Authentication
 export const userSessions = pgTable("user_sessions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id).notNull(),
+  userId: integer("user_id").notNull(),
   sessionToken: text("session_token").notNull().unique(),
-  employeeId: integer("employee_id").references(() => employees.id),
+  employeeId: integer("employee_id"),
   userType: text("user_type").notNull(), // ADMIN, EMPLOYEE, MANAGER
   expiresAt: timestamp("expires_at").notNull(),
   ipAddress: text("ip_address"),

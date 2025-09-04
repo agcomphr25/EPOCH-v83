@@ -392,26 +392,39 @@ export function registerRoutes(app: Express): Server {
     return 50; // Further out
   }
 
-  // Helper function to automatically move orders with invalid stock models
+  // Helper function to automatically handle orders that need attention or movement
   async function autoMoveInvalidStockModelOrders(storage: any) {
     try {
       const allOrders = await storage.getAllOrders();
-      const ordersToMove = allOrders.filter((order: any) => {
+      
+      // Split orders into two categories: those to move to Shipping QC vs those needing attention
+      const ordersToMoveToShipping = [];
+      const ordersNeedingAttention = [];
+      
+      for (const order of allOrders) {
         const currentDept = order.currentDepartment;
         const stockModel = order.stockModelId || order.modelId;
+        const features = order.features || {};
         
         // Only check orders in P1 Production Queue
         if (currentDept !== 'P1 Production Queue') {
-          return false;
+          continue;
         }
         
-        // Orders with no stock model, "None", or "no_stock" need to be moved
-        return !stockModel || stockModel === '' || stockModel.toLowerCase() === 'none' || stockModel.toLowerCase() === 'no_stock';
-      });
+        // Orders with "no_stock" or "None" go directly to Shipping QC
+        if (stockModel && (stockModel.toLowerCase() === 'no_stock' || stockModel.toLowerCase() === 'none')) {
+          ordersToMoveToShipping.push(order);
+        }
+        // Orders with missing stock model or missing action_length need attention
+        else if (!stockModel || stockModel === '' || !features.action_length || features.action_length === '') {
+          ordersNeedingAttention.push(order);
+        }
+      }
 
-      console.log(`🧹 Found ${ordersToMove.length} orders with invalid stock models to move`);
+      console.log(`🧹 Found ${ordersToMoveToShipping.length} orders to move to Shipping QC and ${ordersNeedingAttention.length} orders needing attention`);
       
-      for (const order of ordersToMove) {
+      // Move orders with "no_stock"/"None" to Shipping QC
+      for (const order of ordersToMoveToShipping) {
         const stockModel = order.stockModelId || order.modelId || 'empty';
         console.log(`🚀 AUTO-MOVING: Order ${order.orderId} (stock model: "${stockModel}") from P1 Production Queue → Shipping QC`);
         
@@ -426,8 +439,55 @@ export function registerRoutes(app: Express): Server {
         }
       }
       
-      if (ordersToMove.length > 0) {
-        console.log(`🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMove.length} orders with invalid stock models to Shipping QC`);
+      // Create kickbacks for orders needing attention
+      for (const order of ordersNeedingAttention) {
+        const stockModel = order.stockModelId || order.modelId || 'empty';
+        const features = order.features || {};
+        const missingItems = [];
+        
+        if (!stockModel || stockModel === '') {
+          missingItems.push('stock model');
+        }
+        if (!features.action_length || features.action_length === '') {
+          missingItems.push('action length');
+        }
+        
+        const reasonText = `Order needs attention: Missing ${missingItems.join(' and ')}. Cannot proceed to production until resolved.`;
+        
+        console.log(`⚠️ CREATING KICKBACK: Order ${order.orderId} needs attention (missing: ${missingItems.join(', ')})`);
+        
+        try {
+          // Check if a kickback already exists for this order
+          const existingKickbacks = await storage.getKickbacksByOrderId(order.orderId);
+          const hasOpenKickback = existingKickbacks.some((kb: any) => kb.status === 'OPEN' || kb.status === 'IN_PROGRESS');
+          
+          if (!hasOpenKickback) {
+            const kickbackData = {
+              orderId: order.orderId,
+              kickbackDept: 'CNC', // Using CNC as default department for configuration issues
+              reasonCode: 'DESIGN_ISSUE',
+              reasonText: reasonText,
+              kickbackDate: new Date(),
+              reportedBy: 'SYSTEM_AUTO_CLEANUP',
+              status: 'OPEN',
+              priority: 'MEDIUM',
+              impactedDepartments: ['P1 Production Queue'],
+              rootCause: `Missing required configuration: ${missingItems.join(', ')}`,
+              correctiveAction: null
+            };
+            
+            await storage.createKickback(kickbackData);
+            console.log(`✅ Created kickback for order ${order.orderId} - now in "Orders That Need Attention"`);
+          } else {
+            console.log(`ℹ️ Order ${order.orderId} already has an open kickback - skipping`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to create kickback for order ${order.orderId}:`, error);
+        }
+      }
+      
+      if (ordersToMoveToShipping.length > 0 || ordersNeedingAttention.length > 0) {
+        console.log(`🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMoveToShipping.length} orders to Shipping QC, created kickbacks for ${ordersNeedingAttention.length} orders needing attention`);
       }
     } catch (error) {
       console.error('❌ Error in autoMoveInvalidStockModelOrders:', error);

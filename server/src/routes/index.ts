@@ -215,12 +215,31 @@ export function registerRoutes(app: Express): Server {
       console.log('🧹 CLEANUP: Removing orphaned layup schedule entries...');
       await cleanupOrphanedLayupScheduleEntries(storage);
       
+      // AUTOMATIC CLEANUP: Move orders with no stock model or "None" to appropriate departments
+      console.log('🧹 CLEANUP: Moving orders with no stock model to Shipping QC...');
+      await autoMoveInvalidStockModelOrders(storage);
+      
       // Get all orders that haven't entered production yet (P1 Production Queue)
       // Include both finalized orders and active production orders
+      // EXCLUDE orders with no stock model or stock model "None" - they should be handled elsewhere
       const allOrders = await storage.getAllOrders();
-      const unscheduledOrders = allOrders.filter(order => 
-        (order as any).currentDepartment === 'P1 Production Queue'
-      );
+      const unscheduledOrders = allOrders.filter(order => {
+        const currentDept = (order as any).currentDepartment;
+        const stockModel = (order as any).stockModelId || (order as any).modelId;
+        
+        // Only include orders in P1 Production Queue
+        if (currentDept !== 'P1 Production Queue') {
+          return false;
+        }
+        
+        // EXCLUDE orders with no stock model - they need attention or should go to shipping
+        if (!stockModel || stockModel === '' || stockModel.toLowerCase() === 'none') {
+          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no valid stock model (${stockModel}) - should be handled in "Orders That Need Attention"`);
+          return false;
+        }
+        
+        return true;
+      });
       
       // Also get active orders from the orders table (for P1 PO production orders)
       const { pool } = await import('../../db');
@@ -364,6 +383,48 @@ export function registerRoutes(app: Express): Server {
     if (daysUntilDue <= 7) return 10; // Due within week
     if (daysUntilDue <= 30) return 30; // Due within month
     return 50; // Further out
+  }
+
+  // Helper function to automatically move orders with invalid stock models
+  async function autoMoveInvalidStockModelOrders(storage: any) {
+    try {
+      const allOrders = await storage.getAllOrders();
+      const ordersToMove = allOrders.filter((order: any) => {
+        const currentDept = order.currentDepartment;
+        const stockModel = order.stockModelId || order.modelId;
+        
+        // Only check orders in P1 Production Queue
+        if (currentDept !== 'P1 Production Queue') {
+          return false;
+        }
+        
+        // Orders with no stock model or "None" need to be moved
+        return !stockModel || stockModel === '' || stockModel.toLowerCase() === 'none';
+      });
+
+      console.log(`🧹 Found ${ordersToMove.length} orders with invalid stock models to move`);
+      
+      for (const order of ordersToMove) {
+        const stockModel = order.stockModelId || order.modelId || 'empty';
+        console.log(`🚀 AUTO-MOVING: Order ${order.orderId} (stock model: "${stockModel}") from P1 Production Queue → Shipping QC`);
+        
+        try {
+          await storage.updateFinalizedOrder(order.orderId, {
+            currentDepartment: 'Shipping QC',
+            updatedAt: new Date()
+          });
+          console.log(`✅ Successfully moved order ${order.orderId} to Shipping QC`);
+        } catch (error) {
+          console.error(`❌ Failed to move order ${order.orderId}:`, error);
+        }
+      }
+      
+      if (ordersToMove.length > 0) {
+        console.log(`🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMove.length} orders with invalid stock models to Shipping QC`);
+      }
+    } catch (error) {
+      console.error('❌ Error in autoMoveInvalidStockModelOrders:', error);
+    }
   }
 
   // Helper function to clean up orphaned layup schedule entries

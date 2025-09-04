@@ -7,9 +7,8 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Check if running on deployed domains (.replit.app or .repl.co)
-  const hostname = window.location.hostname;
-  return hostname.includes('.replit.app') || hostname.includes('.repl.co');
+  // Check if running in a Replit deployment (covers all deployed domains including custom domains)
+  return import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

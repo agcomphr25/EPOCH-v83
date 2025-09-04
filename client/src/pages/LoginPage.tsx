@@ -64,11 +64,18 @@ export default function LoginPage() {
       }, 500);
     },
     onError: (error: Error) => {
+      console.error('Login error:', error);
       
-      // Enhanced error message handling
+      // Enhanced error message handling with timeout detection
       let errorMessage = error.message;
       if (errorMessage === 'Account is deactivated') {
         errorMessage = 'Your account has been deactivated. Please contact an administrator.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        errorMessage = 'Login is taking too long. There may be connectivity issues. Please try again.';
+      } else if (errorMessage.includes('fetch') || error.name === 'AbortError') {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      } else if (!errorMessage || errorMessage === 'Failed to fetch') {
+        errorMessage = 'Login failed. Please check your credentials and try again.';
       }
       
       toast({

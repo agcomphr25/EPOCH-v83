@@ -21,17 +21,61 @@ router.get('/test', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/auth/login
-router.post('/login', async (req: Request, res: Response) => {
+// GET /api/auth/health - Database health check
+router.get('/health', async (req: Request, res: Response) => {
+  const healthTimeout = setTimeout(() => {
+    console.error('🚨 HEALTH CHECK TIMEOUT: Database health check took longer than 5 seconds');
+    if (!res.headersSent) {
+      res.status(408).json({ 
+        healthy: false, 
+        error: "Database health check timeout",
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, 5000);
+
   try {
-    console.log('Login attempt with body:', req.body);
+    const { testDatabaseConnection } = await import('../../db');
+    const isHealthy = await testDatabaseConnection();
+    
+    clearTimeout(healthTimeout);
+    res.json({
+      healthy: isHealthy,
+      database: isHealthy ? "connected" : "disconnected",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    clearTimeout(healthTimeout);
+    res.status(500).json({ 
+      healthy: false, 
+      error: "Health check failed",
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /api/auth/login (with aggressive timeout protection)
+router.post('/login', async (req: Request, res: Response) => {
+  // Add aggressive timeout wrapper around entire login process
+  const loginTimeout = setTimeout(() => {
+    console.error('🚨 LOGIN TIMEOUT: Login process took longer than 10 seconds');
+    if (!res.headersSent) {
+      res.status(408).json({ error: "Login request timed out - possible database connectivity issues" });
+    }
+  }, 10000); // 10 second absolute timeout
+
+  try {
+    console.log('🔐 LOGIN START: Login attempt with username:', req.body?.username);
     
     // Basic validation first
     if (!req.body || typeof req.body !== 'object') {
+      clearTimeout(loginTimeout);
       return res.status(400).json({ error: "Invalid request body" });
     }
 
     if (!req.body.username || !req.body.password) {
+      clearTimeout(loginTimeout);
       return res.status(400).json({ error: "Username and password are required" });
     }
 
@@ -39,23 +83,36 @@ router.post('/login', async (req: Request, res: Response) => {
     const password = String(req.body.password);
 
     if (!username || !password) {
+      clearTimeout(loginTimeout);
       return res.status(400).json({ error: "Username and password cannot be empty" });
     }
 
-    console.log('Attempting to authenticate user:', username);
+    console.log('🔍 LOGIN STEP 1: Basic validation passed for user:', username);
     
     const ipAddress = req.ip || req.connection.remoteAddress || null;
     const userAgent = req.get('User-Agent') || null;
     
+    console.log('🔍 LOGIN STEP 2: About to call AuthService.authenticate...');
+    
     try {
-      const result = await AuthService.authenticate(username, password, ipAddress, userAgent);
+      // Add timeout wrapper around authentication
+      const authPromise = AuthService.authenticate(username, password, ipAddress, userAgent);
+      const authTimeoutPromise = new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), 8000); // 8 second auth timeout
+      });
+
+      const result = await Promise.race([authPromise, authTimeoutPromise]) as { user: any; sessionToken: string } | null;
+      
+      console.log('🔍 LOGIN STEP 3: AuthService.authenticate completed');
       
       if (!result) {
-        console.log('Authentication failed for user:', username);
+        console.log('❌ LOGIN FAILED: Authentication failed for user:', username);
+        clearTimeout(loginTimeout);
         return res.status(401).json({ error: "Invalid username or password" });
       }
 
-      console.log('Authentication successful for user:', username);
+      console.log('✅ LOGIN STEP 4: Authentication successful for user:', username);
+      console.log('🔍 LOGIN STEP 5: About to set cookie and send response...');
 
       // Set secure cookie with enhanced security
       res.cookie('sessionToken', result.sessionToken, {
@@ -66,17 +123,28 @@ router.post('/login', async (req: Request, res: Response) => {
         path: '/', // Explicit path
       });
 
-      res.json({
+      console.log('🔍 LOGIN STEP 6: Cookie set, about to send JSON response...');
+
+      const responseData = {
         success: true,
         user: result.user,
         sessionToken: result.sessionToken,
         token: result.sessionToken // Use session token for client-side storage
-      });
-    } catch (authError) {
-      console.error('AuthService.authenticate error:', authError);
+      };
+
+      console.log('✅ LOGIN COMPLETE: Sending successful response for user:', username);
+      clearTimeout(loginTimeout);
+      res.json(responseData);
+      
+    } catch (authError: any) {
+      console.error('💥 LOGIN ERROR: AuthService.authenticate error:', authError);
+      clearTimeout(loginTimeout);
       
       // Handle specific auth errors
       if (authError instanceof Error) {
+        if (authError.message === 'Authentication timeout') {
+          return res.status(408).json({ error: "Authentication timed out - possible database issues" });
+        }
         if (authError.message.includes('locked') || authError.message.includes('deactivated')) {
           return res.status(401).json({ error: authError.message });
         }
@@ -87,7 +155,8 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Authentication service error" });
     }
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('💥 LOGIN OUTER ERROR:', error);
+    clearTimeout(loginTimeout);
     if (error instanceof Error) {
       console.log('Error message:', error.message);
       return res.status(400).json({ error: error.message });

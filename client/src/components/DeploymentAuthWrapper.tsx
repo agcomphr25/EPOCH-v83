@@ -11,20 +11,18 @@ function isDeploymentEnvironment(): boolean {
   const hostname = window.location.hostname;
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
   const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
-  const isReplitDomain = hostname.includes('.replit.app') || hostname.includes('.repl.co');
   
-  // Development overrides
+  // Development overrides - only skip auth for actual development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('.replit.dev');
+  const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
   
-  
-  // Skip auth for development environments
+  // Skip auth for development environments only
   if (isLocalhost || isReplitEditor) {
     return false;
   }
   
-  // Require auth for any deployed environment
-  return viteDeployment || nodeEnv || isReplitDomain || (!isLocalhost && !isReplitEditor);
+  // Require auth for any deployed environment including .replit.app, .repl.co, and deployed .replit.dev domains
+  return viteDeployment || nodeEnv || hostname.includes('.replit.app') || hostname.includes('.repl.co') || hostname.includes('.replit.dev');
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

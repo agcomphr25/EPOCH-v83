@@ -19,9 +19,6 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: typeof formData) => {
-      console.log('Login Debug - Starting login request for:', credentials.username);
-      console.log('Login Debug - Current hostname:', window.location.hostname);
-      
       try {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
@@ -31,56 +28,42 @@ export default function LoginPage() {
           body: JSON.stringify(credentials),
         });
         
-        console.log('Login Debug - Response status:', response.status);
-        console.log('Login Debug - Response headers:', Object.fromEntries(response.headers.entries()));
+        // Response received
         
         if (!response.ok) {
           const error = await response.json();
-          console.log('Login Debug - Error response:', error);
-          
           // Ensure error message is properly extracted
           const errorMessage = error.error || error.message || 'Login failed';
-          console.log('Login Debug - Throwing error:', errorMessage);
           throw new Error(errorMessage);
         }
         
         const data = await response.json();
-        console.log('Login Debug - Success response:', data);
+        // Login successful
         return data;
       } catch (error) {
-        console.log('Login Debug - Network error:', error);
+        // Network error occurred
         throw error;
       }
     },
     onSuccess: (data) => {
-      console.log('Login Debug - onSuccess called with data:', data);
-      
       // Store both session token and JWT token
       if (data.sessionToken) {
-        console.log('Login Debug - Storing session token:', data.sessionToken.substring(0, 10) + '...');
         localStorage.setItem('sessionToken', data.sessionToken);
       }
       if (data.token) {
-        console.log('Login Debug - Storing JWT token:', data.token.substring(0, 10) + '...');
         localStorage.setItem('jwtToken', data.token);
       }
-      
-      console.log('Login Debug - Tokens stored, showing success toast');
       toast({
         title: "Login Successful",
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      console.log('Login Debug - Preparing redirect to:', data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard');
-      
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
-        console.log('Login Debug - Executing redirect');
         window.location.href = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
       }, 500);
     },
     onError: (error: Error) => {
-      console.log('Login Debug - onError called with:', error);
       
       // Enhanced error message handling
       let errorMessage = error.message;

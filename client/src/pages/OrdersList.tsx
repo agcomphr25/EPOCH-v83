@@ -137,6 +137,10 @@ export default function OrdersList() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
 
+  // PDF modal state
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [currentPdfUrl, setCurrentPdfUrl] = useState<string>('');
+
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
     resolver: zodResolver(kickbackFormSchema),
@@ -339,9 +343,10 @@ export default function OrdersList() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order view - opens PDF in new window
+  // Function to handle sales order view - opens PDF in modal
   const handleSalesOrderView = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+    setCurrentPdfUrl(`/api/shipping-pdf/sales-order/${orderId}`);
+    setIsPdfModalOpen(true);
   };
 
   const handleCancelOrder = (orderId: string) => {
@@ -1364,6 +1369,27 @@ export default function OrdersList() {
           orderId={communicationModal.orderId}
         />
       )}
+
+      {/* Sales Order PDF Modal */}
+      <Dialog open={isPdfModalOpen} onOpenChange={setIsPdfModalOpen}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full h-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Sales Order PDF
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 w-full h-[80vh]">
+            {currentPdfUrl && (
+              <iframe
+                src={currentPdfUrl}
+                className="w-full h-full border-0 rounded"
+                title="Sales Order PDF"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

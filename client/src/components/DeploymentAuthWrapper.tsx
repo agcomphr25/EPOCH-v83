@@ -58,7 +58,7 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     const checkAuth = async () => {
       try {
         // Wait a moment for tokens to be written to localStorage after redirect
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
         

@@ -128,7 +128,6 @@ export function generateLayupSchedule(
   const dateMoldUsage: Record<string, Record<string, number> & { totalUsed: number }> = {};
   const dateEmployeeUsage: Record<string, Record<string, number>> = {};
   const weeklyDistribution: Record<string, number> = {}; // Track orders per week
-  const mesaUniversalDailyCount: Record<string, number> = {}; // Track Mesa Universal orders per day (max 8)
 
   // Helper to format date key
   const toKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -183,18 +182,6 @@ export function generateLayupSchedule(
       }
       if (!(weekKey in weeklyDistribution)) {
         weeklyDistribution[weekKey] = 0;
-      }
-      if (!mesaUniversalDailyCount[dateKey]) {
-        mesaUniversalDailyCount[dateKey] = 0;
-      }
-
-      // Check Mesa Universal daily limit (8 per day)
-      const isMesaUniversal = (order.stockModelId === 'mesa_universal' || order.product === 'Mesa - Universal');
-      if (isMesaUniversal && mesaUniversalDailyCount[dateKey] >= 8) {
-        console.log(`⏸️ Mesa Universal capacity reached for ${dateKey}: ${mesaUniversalDailyCount[dateKey]}/8`);
-        attemptDate = getNextWorkDay(attemptDate);
-        maxAttempts--;
-        continue;
       }
 
       // Check if this day has capacity - find compatible molds based on stock model
@@ -287,12 +274,6 @@ export function generateLayupSchedule(
         dateMoldUsage[dateKey][moldSlot.moldId]++;
         dateMoldUsage[dateKey].totalUsed++;
         weeklyDistribution[weekKey]++;
-
-        // Increment Mesa Universal counter if applicable
-        if (isMesaUniversal) {
-          mesaUniversalDailyCount[dateKey]++;
-          console.log(`📊 Mesa Universal scheduled on ${dateKey}: ${mesaUniversalDailyCount[dateKey]}/8`);
-        }
 
         // Debug logging for successful assignment
         console.log(`✅ Assigned ${order.orderId} to mold ${moldSlot.moldId} on ${dateKey} (now ${dateMoldUsage[dateKey][moldSlot.moldId]}/${moldSlot.multiplier})`);

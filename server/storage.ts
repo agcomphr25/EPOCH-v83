@@ -3558,11 +3558,26 @@ export class DatabaseStorage implements IStorage {
 
     // Check if employee exists first
     const existing = await this.getEmployeeLayupSettings(employeeId);
+    
     if (!existing) {
-      console.log(`❌ Employee "${employeeId}" not found in layup settings`);
-      throw new Error(`Employee "${employeeId}" not found in layup settings`);
+      console.log(`➕ Employee "${employeeId}" not found in layup settings, creating new entry`);
+      // Create new employee layup settings entry
+      const newSettings = {
+        employeeId,
+        rate: data.rate || 1.25,
+        hours: data.hours || 8,
+        department: data.department || 'Layup',
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const [result] = await db.insert(employeeLayupSettings).values(newSettings).returning();
+      console.log(`✅ Storage: Created new employee settings for "${employeeId}":`, result);
+      return result;
     }
 
+    // Update existing employee
     const [result] = await db
       .update(employeeLayupSettings)
       .set({ ...data, updatedAt: new Date() })

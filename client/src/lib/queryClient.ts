@@ -31,6 +31,16 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
 
+  // Check if we're on a deployment site for ultra-aggressive timeouts
+  const isDeployment = window.location.hostname.includes('.replit.app') || 
+                      window.location.hostname.includes('.repl.co') ||
+                      window.location.hostname.includes('agcompepoch.xyz');
+  
+  // Use much shorter timeout for deployments with database issues
+  const timeoutDuration = isDeployment ? 6000 : 30000; // 6 seconds for deployment, 30 for dev
+  
+  console.log(`🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`);
+
   // Get tokens from localStorage (prefer JWT token for API requests)
   const jwtToken = localStorage.getItem('jwtToken') || '';
   const sessionToken = localStorage.getItem('sessionToken') || '';
@@ -42,10 +52,18 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     ...options.headers,
   };
 
+  // Add timeout protection
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.error(`🚨 API TIMEOUT: ${url} took longer than ${timeoutDuration}ms`);
+    controller.abort();
+  }, timeoutDuration);
+
   const config: RequestInit = {
     ...options,
     headers: defaultHeaders,
     credentials: 'include', // Include cookies for session-based auth
+    signal: controller.signal,
   };
 
   if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData) && !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')) {
@@ -54,37 +72,61 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     config.body = options.body;
   }
 
-  const response = await fetch(fullUrl, config);
+  try {
+    const response = await fetch(fullUrl, config);
+    clearTimeout(timeoutId);
+    console.log(`✅ API Response from ${url}: ${response.status}`);
 
-  if (!response.ok) {
-    let errorMessage = `HTTP error! status: ${response.status}`;
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.error || errorMessage;
-    } catch {
-      // If JSON parsing fails, use text
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
       try {
-        const text = await response.text();
-        errorMessage = text || errorMessage;
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
       } catch {
-        // Keep the default error message
+        // If JSON parsing fails, use text
+        try {
+          const text = await response.text();
+          errorMessage = text || errorMessage;
+        } catch {
+          // Keep the default error message
+        }
+      }
+      
+      // Special handling for deployment database timeouts
+      if (response.status === 408 || errorMessage.includes('timeout')) {
+        throw new Error('Request timed out - possible database connectivity issues. Please try again.');
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    // Handle empty responses (like 204 No Content)
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    }
+
+    // For non-JSON responses, return text
+    return response.text();
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.error(`💥 API Request failed for ${url}:`, error);
+    
+    // Enhanced error handling for deployments
+    if (error.name === 'AbortError') {
+      if (isDeployment) {
+        throw new Error('Request timed out after 6 seconds. There may be database connectivity issues on the deployed site. Please try again.');
+      } else {
+        throw new Error('Request timed out. Please check your connection and try again.');
       }
     }
-    throw new Error(errorMessage);
+    
+    throw error;
   }
-
-  // Handle empty responses (like 204 No Content)
-  if (response.status === 204 || response.headers.get('content-length') === '0') {
-    return null;
-  }
-
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return response.json();
-  }
-
-  // For non-JSON responses, return text
-  return response.text();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -103,9 +145,19 @@ export const getQueryFn: <T>(options: {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Add timeout to prevent hanging
+    // Deployment-aware timeout to prevent hanging
+    const isDeployment = typeof window !== 'undefined' && (
+      window.location.hostname.includes('.replit.app') || 
+      window.location.hostname.includes('.repl.co') ||
+      window.location.hostname.includes('agcompepoch.xyz')
+    );
+    const timeoutDuration = isDeployment ? 6000 : 8000; // 6 seconds for deployment, 8 for dev
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    const timeoutId = setTimeout(() => {
+      console.error(`🚨 QUERY TIMEOUT: ${queryKey.join('/')} took longer than ${timeoutDuration}ms`);
+      controller.abort();
+    }, timeoutDuration);
     
     try {
       const res = await fetch(queryKey.join("/") as string, {

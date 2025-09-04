@@ -19,6 +19,22 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: typeof formData) => {
+      console.log('🔐 Starting login attempt for:', credentials.username);
+      
+      // Ultra-aggressive timeout for deployment environments
+      const isDeployment = window.location.hostname.includes('.replit.app') || 
+                          window.location.hostname.includes('.repl.co') ||
+                          window.location.hostname.includes('agcompepoch.xyz');
+      
+      const timeoutDuration = isDeployment ? 6000 : 30000; // 6 seconds for deployment
+      console.log(`🌐 Login timeout set to ${timeoutDuration}ms (deployment: ${isDeployment})`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('🚨 LOGIN TIMEOUT: Request cancelled after', timeoutDuration, 'ms');
+        controller.abort();
+      }, timeoutDuration);
+
       try {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
@@ -26,22 +42,34 @@ export default function LoginPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(credentials),
+          signal: controller.signal,
         });
-        
-        // Response received
-        
+
+        clearTimeout(timeoutId);
+        console.log('✅ Login response received:', response.status);
+
         if (!response.ok) {
           const error = await response.json();
+          console.error('❌ Login failed:', error);
           // Ensure error message is properly extracted
           const errorMessage = error.error || error.message || 'Login failed';
           throw new Error(errorMessage);
         }
         
         const data = await response.json();
-        // Login successful
+        console.log('✅ Login successful for user:', data.user?.username);
         return data;
-      } catch (error) {
-        // Network error occurred
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        console.error('💥 Login error:', error);
+        
+        if (error.name === 'AbortError') {
+          throw new Error(isDeployment 
+            ? 'Login timed out after 6 seconds. There may be database connectivity issues on the deployed site.' 
+            : 'Login request timed out. Please try again.'
+          );
+        }
+        
         throw error;
       }
     },

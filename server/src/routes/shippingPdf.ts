@@ -870,7 +870,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
     
     // Payment Status - positioned outside the order box (below it)
-    const paymentStatusY = orderBoxY - 25; // Position 25 pixels below the order box
+    const paymentStatusY = orderBoxY - 29; // Position 29 pixels below the order box (moved down 4 points)
     page.drawText('Payment:', {
       x: orderBoxX + 5,
       y: paymentStatusY,

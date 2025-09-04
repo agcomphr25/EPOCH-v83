@@ -403,7 +403,7 @@ export default function CNCQueuePage() {
     progressToFinish.mutate(Array.from(selectedFinishOrders));
   };
 
-  // Auto-select order when scanned - Show order summary modal
+  // Auto-select order when scanned - Select the order card
   const handleOrderScanned = useCallback((orderId: string) => {
     // Prevent any navigation by maintaining current URL
     window.history.pushState(null, '', window.location.href);
@@ -412,14 +412,17 @@ export default function CNCQueuePage() {
     const orderExists = cncOrders.some((order: any) => order.orderId === orderId);
     
     if (orderExists) {
-      // Show the order summary modal instead of just selecting the order
-      setSelectedOrderId(orderId);
-      setSalesOrderModalOpen(true);
-      
-      toast({
-        title: "Order Scanned",
-        description: `Order ${orderId} details displayed`,
-      });
+      // Find the order and determine which queue it's in (gunsmith or finish)
+      const orderInQueue = cncOrders.find((o: any) => o.orderId === orderId);
+      if (orderInQueue) {
+        // Select the order card instead of showing modal
+        toggleOrderSelection(orderInQueue.orderId, orderInQueue.departmentType);
+        
+        toast({
+          title: "Order Selected",
+          description: `Order ${orderId} has been selected and ready for progression`,
+        });
+      }
     } else {
       toast({
         title: "Order Not Found",

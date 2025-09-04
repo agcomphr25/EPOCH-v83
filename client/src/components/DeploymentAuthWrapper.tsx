@@ -7,8 +7,33 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Check if running in a Replit deployment (covers all deployed domains including custom domains)
-  return import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
+  // Multiple methods to detect deployment environment
+  const hostname = window.location.hostname;
+  const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
+  const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
+  const isReplitDomain = hostname.includes('.replit.app') || hostname.includes('.repl.co');
+  
+  // Development overrides
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitEditor = hostname.includes('.replit.dev');
+  
+  console.log('🔐 Auth environment check:', {
+    hostname,
+    viteDeployment,
+    nodeEnv,
+    isReplitDomain,
+    isLocalhost,
+    isReplitEditor,
+    env: import.meta.env
+  });
+  
+  // Skip auth for development environments
+  if (isLocalhost || isReplitEditor) {
+    return false;
+  }
+  
+  // Require auth for any deployed environment
+  return viteDeployment || nodeEnv || isReplitDomain || (!isLocalhost && !isReplitEditor);
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

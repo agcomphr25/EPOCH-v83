@@ -631,6 +631,12 @@ export default function LayupScheduler() {
   const [editingMoldName, setEditingMoldName] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
+  
+  // Apply button state management
+  const [pendingWorkDays, setPendingWorkDays] = useState<number[]>([1, 2, 3, 4]);
+  const [pendingEmployeeChanges, setPendingEmployeeChanges] = useState<{[key: string]: {rate: number, dailyCapacity: number, hours: number}}>({});
+  const [pendingMoldChanges, setPendingMoldChanges] = useState<{[key: string]: {enabled: boolean, multiplier: number}}>({});
+  const [isApplyingChanges, setIsApplyingChanges] = useState(false);
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
@@ -642,6 +648,172 @@ export default function LayupScheduler() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Apply functions for settings
+  const applyWorkDayChanges = () => {
+    setIsApplyingChanges(true);
+    
+    // Handle capacity redistribution logic (same as before)
+    const removedDays = selectedWorkDays.filter(day => !pendingWorkDays.includes(day));
+    
+    if (removedDays.length > 0) {
+      removedDays.forEach(day => {
+        const ordersOnRemovedDay = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+          const assignmentDate = new Date(assignment.date);
+          return assignmentDate.getDay() === day;
+        });
+        
+        if (ordersOnRemovedDay.length > 0) {
+          console.log(`🔄 Handling capacity reduction: ${ordersOnRemovedDay.length} orders affected by removing work day ${day}`);
+          
+          const newWorkDays = pendingWorkDays;
+          const dailyCapacity = 20;
+          const newTotalCapacity = newWorkDays.length * dailyCapacity * 4;
+          
+          const allAssignedOrders = Object.entries(orderAssignments)
+            .filter(([orderId, assignment]) => {
+              const assignmentDate = new Date(assignment.date);
+              return newWorkDays.includes(assignmentDate.getDay());
+            })
+            .map(([orderId, assignment]) => {
+              const orderData = orders.find((o: any) => o.orderId === orderId);
+              return {
+                orderId,
+                assignment,
+                priorityScore: orderData?.priorityScore || 99,
+                source: orderData?.source || 'regular'
+              };
+            });
+          
+          const ordersFromRemovedDay = ordersOnRemovedDay.map(([orderId]) => {
+            const orderData = orders.find((o: any) => o.orderId === orderId);
+            return {
+              orderId,
+              assignment: null,
+              priorityScore: orderData?.priorityScore || 99,
+              source: orderData?.source || 'regular'
+            };
+          });
+          
+          const allOrdersByPriority = [...allAssignedOrders, ...ordersFromRemovedDay]
+            .sort((a, b) => {
+              const aIsP1PO = a.source === 'p1_purchase_order';
+              const bIsP1PO = b.source === 'p1_purchase_order';
+              if (aIsP1PO && !bIsP1PO) return -1;
+              if (!aIsP1PO && bIsP1PO) return 1;
+              return a.priorityScore - b.priorityScore;
+            });
+          
+          const ordersToKeep = allOrdersByPriority.slice(0, Math.floor(newTotalCapacity * 0.8));
+          const ordersToRemove = allOrdersByPriority.slice(Math.floor(newTotalCapacity * 0.8));
+          
+          const updatedAssignments = { ...orderAssignments };
+          
+          ordersOnRemovedDay.forEach(([orderId]) => {
+            delete updatedAssignments[orderId];
+          });
+          
+          ordersToRemove.forEach(order => {
+            if (order.assignment) {
+              delete updatedAssignments[order.orderId];
+            }
+          });
+          
+          setOrderAssignments(updatedAssignments);
+          setHasUnsavedChanges(true);
+          
+          const removedCount = ordersOnRemovedDay.length + ordersToRemove.filter(o => o.assignment).length;
+          toast({
+            title: "Work Day Removed",
+            description: `Redistributed schedule: ${ordersToKeep.filter(o => !o.assignment).length} orders kept, ${removedCount} lowest priority orders moved to production queue`,
+          });
+        }
+      });
+    }
+    
+    setSelectedWorkDays(pendingWorkDays);
+    setIsApplyingChanges(false);
+    
+    toast({
+      title: "Work Days Updated",
+      description: `Work days set to: ${pendingWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}`,
+    });
+  };
+  
+  const applyEmployeeChanges = async () => {
+    setIsApplyingChanges(true);
+    
+    try {
+      const updates = Object.entries(pendingEmployeeChanges);
+      
+      for (const [employeeId, changes] of updates) {
+        // Convert moldsPerHour to rate for API compatibility
+        const apiPayload = {
+          rate: changes.moldsPerHour || 1.25,
+          hours: changes.hours || 8,
+          dailyCapacity: changes.dailyCapacity || Math.floor((changes.hours || 8) * (changes.moldsPerHour || 1.25))
+        };
+        
+        const response = await fetch(`/api/layup-employee-settings/${employeeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiPayload)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to update employee ${employeeId}`);
+        }
+      }
+      
+      setPendingEmployeeChanges({});
+      
+      toast({
+        title: "Employee Settings Updated",
+        description: `Updated ${updates.length} employee(s) successfully`,
+      });
+      
+      // Refresh data
+      window.location.reload();
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update employee settings",
+        variant: "destructive"
+      });
+    } finally {
+      setIsApplyingChanges(false);
+    }
+  };
+  
+  const applyMoldChanges = async () => {
+    setIsApplyingChanges(true);
+    
+    try {
+      const updates = Object.entries(pendingMoldChanges);
+      
+      for (const [moldId, changes] of updates) {
+        const mold = molds.find(m => m.moldId === moldId);
+        if (mold) {
+          await saveMold({ ...mold, ...changes });
+        }
+      }
+      
+      setPendingMoldChanges({});
+      
+      toast({
+        title: "Mold Settings Updated",
+        description: `Updated ${updates.length} mold(s) successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update mold settings",
+        variant: "destructive"
+      });
+    } finally {
+      setIsApplyingChanges(false);
+    }
+  };
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -3227,98 +3399,12 @@ export default function LayupScheduler() {
                           <div key={day} className="flex items-center space-x-2">
                             <Checkbox
                               id={`day-${day}`}
-                              checked={selectedWorkDays.includes(day)}
+                              checked={pendingWorkDays.includes(day)}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  setSelectedWorkDays(prev => [...prev, day].sort());
+                                  setPendingWorkDays(prev => [...prev, day].sort());
                                 } else {
-                                  // When removing a work day, handle capacity redistribution with priority-based scheduling
-                                  const newWorkDays = selectedWorkDays.filter(d => d !== day);
-                                  setSelectedWorkDays(newWorkDays);
-                                  
-                                  // Find orders assigned to the removed day
-                                  const ordersOnRemovedDay = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-                                    const assignmentDate = new Date(assignment.date);
-                                    return assignmentDate.getDay() === day;
-                                  });
-                                  
-                                  if (ordersOnRemovedDay.length > 0) {
-                                    console.log(`🔄 Handling capacity reduction: ${ordersOnRemovedDay.length} orders affected by removing work day ${day}`);
-                                    
-                                    // Calculate new total capacity with reduced work days
-                                    const dailyCapacity = 20; // Based on algorithm logs
-                                    const newTotalCapacity = newWorkDays.length * dailyCapacity * 4; // 4 weeks shown typically
-                                    
-                                    // Get all currently assigned orders with their priority data
-                                    const allAssignedOrders = Object.entries(orderAssignments)
-                                      .filter(([orderId, assignment]) => {
-                                        const assignmentDate = new Date(assignment.date);
-                                        return newWorkDays.includes(assignmentDate.getDay()); // Only count orders on remaining work days
-                                      })
-                                      .map(([orderId, assignment]) => {
-                                        const orderData = orders.find((o: any) => o.orderId === orderId);
-                                        return {
-                                          orderId,
-                                          assignment,
-                                          priorityScore: orderData?.priorityScore || 99,
-                                          source: orderData?.source || 'regular'
-                                        };
-                                      });
-                                    
-                                    // Include orders from the removed day in the redistribution pool
-                                    const ordersFromRemovedDay = ordersOnRemovedDay.map(([orderId]) => {
-                                      const orderData = orders.find((o: any) => o.orderId === orderId);
-                                      return {
-                                        orderId,
-                                        assignment: null, // Will need new assignment
-                                        priorityScore: orderData?.priorityScore || 99,
-                                        source: orderData?.source || 'regular'
-                                      };
-                                    });
-                                    
-                                    // Combine and sort by priority (P1 PO first, then by priority score)
-                                    const allOrdersByPriority = [...allAssignedOrders, ...ordersFromRemovedDay]
-                                      .sort((a, b) => {
-                                        // P1 Purchase Orders get highest priority
-                                        const aIsP1PO = a.source === 'p1_purchase_order';
-                                        const bIsP1PO = b.source === 'p1_purchase_order';
-                                        if (aIsP1PO && !bIsP1PO) return -1;
-                                        if (!aIsP1PO && bIsP1PO) return 1;
-                                        
-                                        // Then by priority score (lower = higher priority)
-                                        return a.priorityScore - b.priorityScore;
-                                      });
-                                    
-                                    // Keep only the highest priority orders that fit in new capacity
-                                    const ordersToKeep = allOrdersByPriority.slice(0, Math.floor(newTotalCapacity * 0.8)); // Use 80% of capacity to avoid overcrowding
-                                    const ordersToRemove = allOrdersByPriority.slice(Math.floor(newTotalCapacity * 0.8));
-                                    
-                                    // Create new assignments keeping only the highest priority orders
-                                    const updatedAssignments = { ...orderAssignments };
-                                    
-                                    // Remove all orders from the eliminated day first
-                                    ordersOnRemovedDay.forEach(([orderId]) => {
-                                      delete updatedAssignments[orderId];
-                                    });
-                                    
-                                    // Remove lowest priority orders that exceed new capacity
-                                    ordersToRemove.forEach(order => {
-                                      if (order.assignment) { // Only remove if it was previously assigned to a valid day
-                                        delete updatedAssignments[order.orderId];
-                                      }
-                                    });
-                                    
-                                    // Update assignments
-                                    setOrderAssignments(updatedAssignments);
-                                    setHasUnsavedScheduleChanges(true);
-                                    
-                                    // Show notification about redistribution
-                                    const removedCount = ordersOnRemovedDay.length + ordersToRemove.filter(o => o.assignment).length;
-                                    toast({
-                                      title: "Work Day Removed",
-                                      description: `Redistributed schedule: ${ordersToKeep.filter(o => !o.assignment).length} orders kept, ${removedCount} lowest priority orders moved to production queue`,
-                                    });
-                                  }
+                                  setPendingWorkDays(prev => prev.filter(d => d !== day));
                                 }
                               }}
                             />
@@ -3336,10 +3422,37 @@ export default function LayupScheduler() {
                       </div>
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          <strong>Selected days:</strong> {selectedWorkDays.length === 0 ? 'None selected' :
+                          <strong>Current days:</strong> {selectedWorkDays.length === 0 ? 'None selected' :
                             selectedWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
                         </p>
+                        {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            <strong>Pending changes:</strong> {pendingWorkDays.length === 0 ? 'None selected' :
+                              pendingWorkDays.map(d => ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][d]).join(', ')}
+                          </p>
+                        )}
                       </div>
+                      
+                      {/* Apply button */}
+                      {JSON.stringify(pendingWorkDays) !== JSON.stringify(selectedWorkDays) && (
+                        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPendingWorkDays(selectedWorkDays)}
+                            disabled={isApplyingChanges}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={applyWorkDayChanges}
+                            disabled={isApplyingChanges}
+                          >
+                            {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -3488,10 +3601,18 @@ export default function LayupScheduler() {
                     molds.map(mold => (
                       <div key={mold.moldId} className="flex items-center space-x-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
                         <Checkbox
-                          checked={mold.enabled ?? true}
-                          onCheckedChange={(checked) =>
-                            saveMold({ ...mold, enabled: !!checked })
-                          }
+                          checked={pendingMoldChanges[mold.moldId]?.enabled ?? (mold.enabled ?? true)}
+                          onCheckedChange={(checked) => {
+                            const currentChanges = pendingMoldChanges[mold.moldId] || {};
+                            setPendingMoldChanges(prev => ({
+                              ...prev,
+                              [mold.moldId]: {
+                                ...currentChanges,
+                                enabled: !!checked,
+                                multiplier: currentChanges.multiplier ?? mold.multiplier
+                              }
+                            }));
+                          }}
                         />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-1">
@@ -3620,11 +3741,19 @@ export default function LayupScheduler() {
                           <label className="text-sm font-medium">Daily Capacity:</label>
                           <Input
                             type="number"
-                            value={mold.multiplier}
+                            value={pendingMoldChanges[mold.moldId]?.multiplier ?? mold.multiplier}
                             min={1}
-                            onChange={(e) =>
-                              saveMold({ ...mold, multiplier: +e.target.value })
-                            }
+                            onChange={(e) => {
+                              const currentChanges = pendingMoldChanges[mold.moldId] || {};
+                              setPendingMoldChanges(prev => ({
+                                ...prev,
+                                [mold.moldId]: {
+                                  ...currentChanges,
+                                  enabled: currentChanges.enabled ?? (mold.enabled ?? true),
+                                  multiplier: +e.target.value
+                                }
+                              }));
+                            }}
                             className="w-24"
                           />
                           <span className="text-sm text-gray-600">units/day</span>
@@ -3663,10 +3792,31 @@ export default function LayupScheduler() {
                     {molds.length > 0 && (
                       <p className="text-sm text-blue-700 dark:text-blue-300 mt-3">
                         <strong>Tip:</strong> Enable/disable molds to control which ones appear in the scheduler.
-                        Adjust daily capacity to reflect each mold's production capability.
+                        Adjust daily capacity to reflect each mold's production capability. Click Apply to save changes.
                       </p>
                     )}
                   </div>
+                  
+                  {/* Apply button */}
+                  {Object.keys(pendingMoldChanges).length > 0 && (
+                    <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingMoldChanges({})}
+                        disabled={isApplyingChanges}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={applyMoldChanges}
+                        disabled={isApplyingChanges}
+                      >
+                        {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
                   </DialogContent>
                 </Dialog>
@@ -3703,101 +3853,78 @@ export default function LayupScheduler() {
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                                    Daily Capacity
+                                    Hours per Day
                                   </label>
                                   <div className="flex items-center space-x-2">
                                     <Input
                                       type="number"
-                                      value={employee.dailyCapacity || 10}
+                                      value={pendingEmployeeChanges[employee.id]?.hours ?? (employee.hours || 8)}
                                       min={1}
-                                      max={50}
-                                      onChange={async (e) => {
-                                        const newCapacity = parseInt(e.target.value) || 10;
-                                        try {
-                                          const response = await fetch(`/api/layup-employee-settings/${employee.id}`, {
-                                            method: 'PUT',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                              rate: employee.rate || 2.00,
-                                              dailyCapacity: newCapacity,
-                                              hours: employee.hours || 8
-                                            })
-                                          });
-                                          if (response.ok) {
-                                            toast({
-                                              title: "Settings Updated",
-                                              description: `${employee.name}'s capacity updated to ${newCapacity} units/day`,
-                                            });
-                                            // Refresh data
-                                            window.location.reload();
+                                      max={12}
+                                      step="0.5"
+                                      onChange={(e) => {
+                                        const newHours = parseFloat(e.target.value) || 8;
+                                        const currentChanges = pendingEmployeeChanges[employee.id] || {};
+                                        const moldsPerHour = currentChanges.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                        setPendingEmployeeChanges(prev => ({
+                                          ...prev,
+                                          [employee.id]: {
+                                            ...currentChanges,
+                                            hours: newHours,
+                                            moldsPerHour,
+                                            dailyCapacity: Math.floor(newHours * moldsPerHour)
                                           }
-                                        } catch (error) {
-                                          toast({
-                                            title: "Update Failed",
-                                            description: "Failed to update employee capacity",
-                                            variant: "destructive"
-                                          });
-                                        }
+                                        }));
                                       }}
                                       className="w-20 text-sm"
                                     />
-                                    <span className="text-xs text-gray-500">units/day</span>
+                                    <span className="text-xs text-gray-500">hours/day</span>
                                   </div>
                                 </div>
                                 
                                 <div>
                                   <label className="text-xs font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                                    Production Rate
+                                    Molds per Hour
                                   </label>
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-xs text-gray-500">$</span>
                                     <Input
                                       type="number"
-                                      step="0.01"
-                                      value={employee.rate || 2.00}
-                                      min={0}
-                                      max={100}
-                                      onChange={async (e) => {
-                                        const newRate = parseFloat(e.target.value) || 2.00;
-                                        try {
-                                          const response = await fetch(`/api/layup-employee-settings/${employee.id}`, {
-                                            method: 'PUT',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                              rate: newRate,
-                                              dailyCapacity: employee.dailyCapacity || 10,
-                                              hours: employee.hours || 8
-                                            })
-                                          });
-                                          if (response.ok) {
-                                            toast({
-                                              title: "Settings Updated",
-                                              description: `${employee.name}'s production rate updated to $${newRate.toFixed(2)}/hour`,
-                                            });
-                                            // Refresh data
-                                            window.location.reload();
+                                      step="0.25"
+                                      value={pendingEmployeeChanges[employee.id]?.moldsPerHour ?? (employee.moldsPerHour || 1.25)}
+                                      min={0.25}
+                                      max={5}
+                                      onChange={(e) => {
+                                        const newMoldsPerHour = parseFloat(e.target.value) || 1.25;
+                                        const currentChanges = pendingEmployeeChanges[employee.id] || {};
+                                        const hours = currentChanges.hours ?? (employee.hours || 8);
+                                        setPendingEmployeeChanges(prev => ({
+                                          ...prev,
+                                          [employee.id]: {
+                                            ...currentChanges,
+                                            hours,
+                                            moldsPerHour: newMoldsPerHour,
+                                            dailyCapacity: Math.floor(hours * newMoldsPerHour)
                                           }
-                                        } catch (error) {
-                                          toast({
-                                            title: "Update Failed",
-                                            description: "Failed to update production rate",
-                                            variant: "destructive"
-                                          });
-                                        }
+                                        }));
                                       }}
                                       className="w-20 text-sm"
                                     />
-                                    <span className="text-xs text-gray-500">/hour</span>
+                                    <span className="text-xs text-gray-500">molds/hour</span>
                                   </div>
                                 </div>
                               </div>
                               
                               <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
                                 <div className="text-xs text-gray-500">
-                                  Production Hours: {employee.hours || 8}h/day
+                                  Calculated Daily Capacity:
                                 </div>
-                                <div className="text-xs font-medium text-green-600 dark:text-green-400">
-                                  ${((employee.rate || 2.00) * (employee.hours || 8)).toFixed(2)}/day production cost
+                                <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                  {(() => {
+                                    const changes = pendingEmployeeChanges[employee.id];
+                                    const hours = changes?.hours ?? (employee.hours || 8);
+                                    const moldsPerHour = changes?.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                    return Math.floor(hours * moldsPerHour);
+                                  })()} molds/day
                                 </div>
                               </div>
                             </div>
@@ -3806,11 +3933,32 @@ export default function LayupScheduler() {
                       </div>
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                          <strong>How to use:</strong> Modify capacity and production rate values directly. 
-                          Changes are saved automatically and will update production scheduling calculations.
-                          The daily cost calculation shows total mold production costs per employee per day.
+                          <strong>How to use:</strong> Set hours per day and molds per hour for each employee. 
+                          Daily capacity is calculated automatically (hours × molds/hour).
+                          Click Apply to save changes to the scheduling system.
                         </p>
                       </div>
+                      
+                      {/* Apply button */}
+                      {Object.keys(pendingEmployeeChanges).length > 0 && (
+                        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPendingEmployeeChanges({})}
+                            disabled={isApplyingChanges}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={applyEmployeeChanges}
+                            disabled={isApplyingChanges}
+                          >
+                            {isApplyingChanges ? 'Applying...' : 'Apply Changes'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </DialogContent>
                 </Dialog>

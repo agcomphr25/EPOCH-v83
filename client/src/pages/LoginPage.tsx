@@ -48,12 +48,10 @@ export default function LoginPage() {
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      // Redirect based on role
-      if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
-        setLocation('/employee');
-      } else {
-        setLocation('/dashboard');
-      }
+      // Force page reload to trigger authentication re-check
+      setTimeout(() => {
+        window.location.href = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
+      }, 500);
     },
     onError: (error: Error) => {
       toast({

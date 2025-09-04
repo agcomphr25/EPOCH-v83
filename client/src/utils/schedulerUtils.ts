@@ -250,20 +250,16 @@ export function generateLayupSchedule(
 
       const hasMoldCapacity = dateMoldUsage[dateKey].totalUsed < totalDailyMoldCapacity && !!moldSlot;
       const currentEmployeeUsage = Object.values(dateEmployeeUsage[dateKey]).reduce((a, b) => a + b, 0);
-      // Set realistic daily targets: 12-15 orders per day
-      const targetMinOrders = 12;
-      const targetMaxOrders = 15;
-      const currentDailyLoad = currentEmployeeUsage;
 
-      // Allow scheduling up to target max, but still respect employee individual capacity
-      const hasEmpCapacity = currentEmployeeUsage < Math.min(totalDailyEmployeeCapacity, targetMaxOrders);
-      const dayNotOverloaded = currentDailyLoad < targetMaxOrders;
+      // Use actual employee capacity instead of artificial targets
+      const hasEmpCapacity = currentEmployeeUsage < totalDailyEmployeeCapacity;
 
-      // More aggressive even distribution: check if we should skip to next day for better balance
+      // Load balancing: check if we should distribute to a lighter day in the same week
       let shouldScheduleHere = true;
 
-      // If this day is getting heavily loaded, try to find a lighter day in the same week
-      if (currentDailyLoad >= targetMaxOrders - 2) { // When approaching max capacity
+      // If this day is approaching 80% of employee capacity, try to find a lighter day
+      const capacityThreshold = Math.floor(totalDailyEmployeeCapacity * 0.8);
+      if (currentEmployeeUsage >= capacityThreshold) {
         const currentWorkWeekDays = getWorkDaysInWeek(attemptDate);
         const weekDayLoads = currentWorkWeekDays.map(day => {
           const dayKey = toKey(day);
@@ -276,15 +272,17 @@ export function generateLayupSchedule(
           current.load < min.load ? current : min
         );
 
-        // If there's a much lighter day available, skip to it
-        if (lightestDay.load < currentDailyLoad - 3) {
+        // If there's a significantly lighter day available (at least 25% less load), skip to it
+        const loadDifference = currentEmployeeUsage - lightestDay.load;
+        const significantDifference = Math.floor(totalDailyEmployeeCapacity * 0.25);
+        if (loadDifference >= significantDifference) {
           shouldScheduleHere = false;
           attemptDate = new Date(lightestDay.date);
           continue; // Skip to next iteration with the lighter day
         }
       }
 
-      if (hasMoldCapacity && hasEmpCapacity && moldSlot && dayNotOverloaded && shouldScheduleHere) {
+      if (hasMoldCapacity && hasEmpCapacity && moldSlot && shouldScheduleHere) {
         // Assign to mold slot - increment usage for this specific day only
         dateMoldUsage[dateKey][moldSlot.moldId]++;
         dateMoldUsage[dateKey].totalUsed++;

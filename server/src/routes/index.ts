@@ -1095,13 +1095,29 @@ export function registerRoutes(app: Express): Server {
 
       const { storage } = await import('../../storage');
       const { id } = req.params;
-      const { rate, dailyCapacity, hours } = req.body;
+      const { rate, moldsPerHour, dailyCapacity, hours } = req.body;
 
-      // Update employee settings
-      const updatedEmployee = await storage.updateEmployeeLayupSettings(id, {
-        rate: parseFloat(rate),
-        hours: parseInt(hours) || 8
-      } as any);
+      // First, get the employee to find their employeeId string
+      const employees = await storage.getAllEmployeeLayupSettings();
+      const employee = employees.find(emp => emp.id === parseInt(id));
+      
+      if (!employee) {
+        console.error(`❌ Employee with ID ${id} not found`);
+        return res.status(404).json({ error: "Employee not found" });
+      }
+
+      const employeeIdString = employee.employeeId || employee.name || `employee-${id}`;
+      console.log(`🔍 Using employeeId string: "${employeeIdString}" for database ID: ${id}`);
+
+      // Update employee settings - use moldsPerHour as rate and calculate dailyCapacity
+      const updateData = {
+        rate: parseFloat(moldsPerHour || rate) || 1.25, // Store moldsPerHour as rate
+        hours: parseFloat(hours) || 8,
+        department: 'Layup',
+        isActive: true
+      };
+
+      const updatedEmployee = await storage.updateEmployeeLayupSettings(employeeIdString, updateData);
 
       console.log('🔧 Updated employee:', updatedEmployee);
       res.json(updatedEmployee);

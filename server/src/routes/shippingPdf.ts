@@ -745,7 +745,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     // Get related data
     const model = stockModels.find(m => m.id === order.modelId);
     const customer = customers.find(c => c.id?.toString() === (order as any).customerId?.toString());
-    const customerAddresses = addresses.filter(a => a.customerId === (order as any).customerId);
+    const customerAddresses = addresses.filter(a => a.customerId?.toString() === (order as any).customerId?.toString());
 
     // Create a new PDF document optimized for sales orders
     const pdfDoc = await PDFDocument.create();
@@ -1065,8 +1065,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         }
       }
     } else if (customerAddresses.length > 0) {
-      // Use regular customer shipping address
-      const primaryAddress = customerAddresses[0];
+      // Use regular customer shipping address - find shipping address or default address
+      const shippingAddress = customerAddresses.find(addr => addr.type === 'shipping' || addr.type === 'both') || customerAddresses[0];
       
       // Ship to name (wrapped) - ensure it stays within box
       const shipToName = customer?.name || 'N/A';
@@ -1084,8 +1084,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       shipCurrentY -= wrappedShipToName.length * 13;
 
       // Street address (wrapped) - ensure it stays within box
-      if (primaryAddress.street && shipCurrentY > customerBoxY + 15) {
-        const wrappedStreet = wrapText(primaryAddress.street, 250, 9, font);
+      if (shippingAddress.street && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet = wrapText(shippingAddress.street, 250, 9, font);
         wrappedStreet.forEach((line, index) => {
           if (shipCurrentY - (index * 11) > customerBoxY + 8) {
             page.drawText(line, {
@@ -1100,8 +1100,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
 
       // Street2 (suite, apt, etc.) (wrapped) - ensure it stays within box
-      if (primaryAddress.street2 && shipCurrentY > customerBoxY + 15) {
-        const wrappedStreet2 = wrapText(primaryAddress.street2, 250, 9, font);
+      if (shippingAddress.street2 && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet2 = wrapText(shippingAddress.street2, 250, 9, font);
         wrappedStreet2.forEach((line, index) => {
           if (shipCurrentY - (index * 11) > customerBoxY + 8) {
             page.drawText(line, {
@@ -1117,7 +1117,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
       // City, State, ZIP - ensure it stays within box
       if (shipCurrentY > customerBoxY + 15) {
-        const cityStateZip = `${primaryAddress.city || ''}, ${primaryAddress.state || ''} ${primaryAddress.zipCode || ''}`.trim();
+        const cityStateZip = `${shippingAddress.city || ''}, ${shippingAddress.state || ''} ${shippingAddress.zipCode || ''}`.trim();
         if (cityStateZip !== ', ') {
           page.drawText(cityStateZip, {
             x: shipToX,

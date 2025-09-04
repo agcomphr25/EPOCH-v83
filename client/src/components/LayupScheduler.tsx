@@ -559,10 +559,10 @@ function DroppableCell({
   const isWorkDay = selectedWorkDays.includes(dayOfWeek);
   const hasOrders = orders.length > 0;
 
-  // NEW LOGIC: Hide cells for non-work days (unless Friday for visibility), hide empty cells when week is locked
+  // FIXED LOGIC: Never hide cells that have orders, always show work days, show Friday for manual adjustments
   const weekIsLocked = isWeekLocked(date);
-  const shouldHideCell = isNonWorkDay && !isFriday; // Hide all non-work days except Friday
-  const shouldHideEmptyCell = weekIsLocked ? !hasOrders : (!hasOrders && !isFriday && isWorkDay);
+  const shouldHideCell = false; // Never hide cells with orders - this was causing Monday to disappear
+  const shouldHideEmptyCell = !hasOrders && !isWorkDay && !isFriday; // Only hide empty non-work, non-Friday cells
 
   return (
     <div

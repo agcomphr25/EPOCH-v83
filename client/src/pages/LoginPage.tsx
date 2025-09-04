@@ -75,40 +75,28 @@ export default function LoginPage() {
       }
     },
     onSuccess: (data) => {
-      console.log('🎉 LOGIN SUCCESS CALLBACK TRIGGERED');
-      console.log('🔍 Success data:', data);
-      
       // Store both session token and JWT token
       if (data.sessionToken) {
-        console.log('💾 Storing sessionToken');
         localStorage.setItem('sessionToken', data.sessionToken);
       }
       if (data.token) {
-        console.log('💾 Storing jwtToken');
         localStorage.setItem('jwtToken', data.token);
       }
-      
-      console.log('🔍 User role:', data.user?.role);
-      const redirectUrl = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
-      console.log('🔍 Redirect URL determined:', redirectUrl);
       
       toast({
         title: "Login Successful",
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      console.log('⏱️ Setting redirect timeout for 750ms...');
+      const redirectUrl = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/';
+      
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
-        console.log('🚀 Executing redirect to:', redirectUrl);
-        console.log('🔍 Final token check before redirect:');
-        console.log('  sessionToken exists:', !!localStorage.getItem('sessionToken'));
-        console.log('  jwtToken exists:', !!localStorage.getItem('jwtToken'));
         window.location.href = redirectUrl;
-      }, 750);
+      }, 500);
     },
     onError: (error: Error) => {
-      console.error('💥 LOGIN ERROR CALLBACK TRIGGERED:', error);
+      console.error('Login error:', error);
       
       // Enhanced error message handling with timeout detection
       let errorMessage = error.message;
@@ -132,7 +120,6 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('📝 FORM SUBMITTED');
     
     if (!formData.username || !formData.password) {
       toast({
@@ -143,7 +130,6 @@ export default function LoginPage() {
       return;
     }
 
-    console.log('🚀 TRIGGERING LOGIN MUTATION');
     loginMutation.mutate(formData);
   };
 

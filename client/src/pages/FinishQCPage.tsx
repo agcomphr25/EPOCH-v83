@@ -6,20 +6,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'react-hot-toast';
 import { format, isAfter } from 'date-fns';
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { AlertTriangle, FileText, Eye, TrendingDown } from 'lucide-react';
+import { AlertTriangle, FileText, Eye, TrendingDown, Search } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import { getDisplayOrderId } from '@/lib/orderUtils';
+import FBNumberSearch from '@/components/FBNumberSearch';
 
 export default function FinishQCPage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAllByTechnician, setSelectAllByTechnician] = useState<Record<string, boolean>>({});
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -73,9 +78,60 @@ export default function FinishQCPage() {
     setSalesOrderModalOpen(true);
   };
 
+  // Filter orders based on search query
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery.trim()) return orders;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return orders.filter((order: any) => {
+      const orderId = order.orderId?.toLowerCase() || '';
+      const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
+      const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
+      
+      return orderId.includes(query) || 
+             fbNumber.includes(query) || 
+             displayOrderId.includes(query);
+    });
+  }, [orders, searchQuery]);
+
+  // Handle order found via Facebook number search
+  const handleOrderFound = (orderId: string) => {
+    // Check if the order exists in the current Finish QC queue
+    const orderExists = filteredOrders.some((order: any) => order.orderId === orderId);
+    if (orderExists) {
+      // Select the found order
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast.success(`Order ${orderId} found and selected in Finish QC department`);
+    } else {
+      // Find the order in all orders to show current department
+      const allOrder = orders.find((order: any) => order.orderId === orderId);
+      if (allOrder) {
+        toast.error(`Order ${orderId} is currently in Finish QC department but doesn't match current filters`);
+      } else {
+        toast.error(`Order ${orderId} not found in Finish QC department`);
+      }
+    }
+  };
+
+  // Handle search with auto-selection
+  const handleSearchWithSelection = (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.trim()) {
+      // Auto-select matching orders after a short delay
+      setTimeout(() => {
+        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+        if (matchingOrderIds.length > 0) {
+          setSelectedOrders(new Set(matchingOrderIds));
+          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+        }
+      }, 300);
+    }
+  };
+
   // Group orders by technician and sort (memoized to prevent re-renders)
   const ordersByTechnician = useMemo(() => {
-    const grouped = orders.reduce((acc: Record<string, any[]>, order: any) => {
+    const grouped = filteredOrders.reduce((acc: Record<string, any[]>, order: any) => {
       // Use the assigned technician from the database, or default to 'Unassigned' if empty
       const technician = order.assignedTechnician || 'Unassigned';
       if (!acc[technician]) {
@@ -298,6 +354,59 @@ export default function FinishQCPage() {
 
       {/* Barcode Scanner */}
       <BarcodeScanner />
+
+      {/* Search Box */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Search Orders
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="search-input">Search by Order ID or FishBowl Number</Label>
+            <div className="flex gap-2">
+              <Input
+                id="search-input"
+                type="text"
+                placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
+                value={searchQuery}
+                onChange={(e) => handleSearchWithSelection(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (searchQuery.trim()) {
+                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+                    setSelectedOrders(new Set(matchingOrderIds));
+                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+                  }
+                }}
+                disabled={!searchQuery.trim() || filteredOrders.length === 0}
+              >
+                Select Matches
+              </Button>
+            </div>
+            {searchQuery && (
+              <div className="flex gap-2 text-sm text-gray-600">
+                <Badge variant="secondary">
+                  {filteredOrders.length} of {orders.length} orders shown
+                </Badge>
+                {selectedOrders.size > 0 && (
+                  <Badge variant="default" className="bg-blue-600">
+                    {selectedOrders.size} Selected
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Facebook Number Search */}
+      <FBNumberSearch onOrderFound={handleOrderFound} />
 
       {technicians.length === 0 ? (
         <Card>

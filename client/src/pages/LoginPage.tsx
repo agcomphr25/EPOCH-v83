@@ -76,12 +76,20 @@ export default function LoginPage() {
     },
     onSuccess: (data) => {
       // Store both session token and JWT token
+      console.log('💾 LOGIN: Storing tokens...');
       if (data.sessionToken) {
         localStorage.setItem('sessionToken', data.sessionToken);
+        console.log('💾 LOGIN: sessionToken stored, length:', data.sessionToken.length);
       }
       if (data.token) {
         localStorage.setItem('jwtToken', data.token);
+        console.log('💾 LOGIN: jwtToken stored, length:', data.token.length);
       }
+      
+      // Verify tokens were stored
+      console.log('🔍 LOGIN: Verification after storage:');
+      console.log('  sessionToken exists:', !!localStorage.getItem('sessionToken'));
+      console.log('  jwtToken exists:', !!localStorage.getItem('jwtToken'));
       
       toast({
         title: "Login Successful",

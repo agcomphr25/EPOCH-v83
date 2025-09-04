@@ -60,7 +60,15 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
         // Wait a moment for tokens to be written to localStorage after redirect
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+        // Detailed localStorage debugging
+        const sessionToken = localStorage.getItem('sessionToken');
+        const jwtToken = localStorage.getItem('jwtToken');
+        console.log('🔍 AUTH WRAPPER: Detailed token check:');
+        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
+        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
+        console.log('  localStorage keys:', Object.keys(localStorage));
+        
+        const token = sessionToken || jwtToken;
         console.log('🔍 AUTH WRAPPER: Token found after redirect:', !!token);
         
         if (token) {

@@ -497,6 +497,7 @@ export default function OrdersList() {
 
   // Filter and sort orders based on search term, department filter, and sort options
   const filteredOrders = useMemo(() => {
+    console.log('🔍 useMemo RUNNING - Search term:', searchTerm, 'Orders available:', !!orders);
     if (!orders) return [];
 
     let filtered = [...orders];
@@ -782,7 +783,10 @@ export default function OrdersList() {
                 type="text"
                 placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  console.log('🔍 Search term changing to:', e.target.value);
+                  setSearchTerm(e.target.value);
+                }}
                 className="pl-10"
               />
             </div>

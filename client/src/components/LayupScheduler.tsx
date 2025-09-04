@@ -649,16 +649,17 @@ export default function LayupScheduler() {
       // Clear frontend state
       setOrderAssignments({});
       
-      // Clear database schedule entries
+      // Clear database schedule entries and remove any Friday assignments
       const response = await fetch('/api/layup-schedule', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cleanupFridays: true })
       });
       
       if (response.ok) {
         toast({
           title: "Schedule Cleared",
-          description: "All order assignments and database schedule cleared. Ready for fresh scheduling.",
+          description: "All assignments cleared and Friday assignments removed. Ready for fresh scheduling.",
         });
       } else {
         toast({
@@ -4413,10 +4414,10 @@ export default function LayupScheduler() {
                                   console.log(`✅ Monday assignment found: ${orderId} → ${assignment.moldId} on ${cellDateStr}`);
                                 }
 
-                                // FRIDAY HANDLING: Show Friday assignments for manual drops
-                                if (cellDate.getDay() === 5) {
-                                  console.log(`📅 Friday assignment found: ${orderId} on ${cellDate.toDateString()}`);
-                                  // Allow Friday assignments to be shown
+                                // FRIDAY HANDLING: Remove Friday assignments (should not exist)
+                                if (cellDate.getDay() === 5 && isMatch) {
+                                  console.warn(`⚠️ Friday assignment detected and will be filtered out: ${orderId} on ${cellDate.toDateString()}`);
+                                  return false; // Exclude Friday assignments
                                 }
 
                                 // DEBUG: Specific check for AI141 and AG822 (AI266)

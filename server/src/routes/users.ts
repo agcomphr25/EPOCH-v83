@@ -18,7 +18,7 @@ const updateUserSchema = z.object({
   username: z.string().min(1).optional(),
   password: z.string().min(4).optional(),
   role: z.string().optional(),
-  employeeId: z.number().optional(),
+  employeeId: z.number().optional().nullable(),
   canOverridePrices: z.boolean().optional(),
   isActive: z.boolean().optional()
 });

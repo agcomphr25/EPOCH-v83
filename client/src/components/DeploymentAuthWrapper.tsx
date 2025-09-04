@@ -46,25 +46,40 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
       try {
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
         if (token) {
-          const response = await fetch('/api/auth/session', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
+          // Add timeout to prevent hanging
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
           
-          if (response.ok) {
-            const userData = await response.json();
-            // Check if user is actually authenticated (not anonymous)
-            if (userData.username !== 'anonymous' && userData.id > 0) {
-              setIsAuthenticated(true);
+          try {
+            const response = await fetch('/api/auth/session', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              const userData = await response.json();
+              // Check if user is actually authenticated (not anonymous)
+              if (userData.username !== 'anonymous' && userData.id > 0) {
+                setIsAuthenticated(true);
+              } else {
+                // Clear invalid tokens
+                localStorage.removeItem('sessionToken');
+                localStorage.removeItem('jwtToken');
+                setIsAuthenticated(false);
+              }
             } else {
               // Clear invalid tokens
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
               setIsAuthenticated(false);
             }
-          } else {
-            // Clear invalid tokens
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            console.error('Session fetch failed:', fetchError);
+            // Clear invalid tokens on timeout/error
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('jwtToken');
             setIsAuthenticated(false);

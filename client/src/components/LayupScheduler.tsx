@@ -1445,20 +1445,12 @@ export default function LayupScheduler() {
     }, {} as {[key: string]: number});
     console.log('🏭 LayupScheduler: Filtered orders by source:', sourceCounts);
 
-    // Log when auto-schedule should run
+    // DISABLED AUTO-SCHEDULE: Prevent automatic scheduling to stop continuous reloading
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log('🚀 LayupScheduler: All data loaded, auto-schedule should run');
-
-      // Auto-triggering scheduling if no assignments exist yet
-      const hasAssignments = Object.keys(orderAssignments).length > 0;
-      if (!hasAssignments && orders.length > 0) {
-        console.log('🎯 Auto-scheduling triggered for:', orders.length, 'orders');
-        setTimeout(() => {
-          handleAutoSchedule();
-        }, 1500); // Increased delay to ensure component is fully loaded
-      }
+      console.log('🚀 LayupScheduler: All data loaded - AUTO-SCHEDULE DISABLED to prevent reloading');
+      console.log('💡 Use the "Auto Schedule" button to manually trigger scheduling');
     } else {
-      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
+      console.log('❌ LayupScheduler: Missing data for scheduling:', {
         orders: orders.length,
         molds: molds.length,
         employees: employees.length
@@ -1880,46 +1872,17 @@ export default function LayupScheduler() {
     setHasUnsavedScheduleChanges(true);
   }, [orders, molds, employees, currentDate]);
 
-  // Auto-advance to next week when current week is finished
+  // AUTO-ADVANCE DISABLED: Prevent automatic date advancement to stop reloading
   useEffect(() => {
+    // DISABLED: Auto-advance was causing continuous reloading
+    console.log('📅 AUTO-ADVANCE: DISABLED to prevent continuous reloading');
+    console.log('💡 Use navigation buttons to manually change weeks');
+    
     // Only check if we're not loading and have data
     if (ordersLoading || isLoadingSchedule) {
       return;
     }
-
-    // Get orders for the current week
-    const currentWeekOrders = getOrdersForCurrentWeek();
-    
-    // AUTO-ADVANCE LOGIC: Move to current week if viewing old completed weeks
-    const today = new Date();
-    const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-    
-    // ENHANCED: Always advance to current week if we're viewing a past week
-    if (currentWeekStart.getTime() < todayWeekStart.getTime()) {
-      console.log(`📅 AUTO-ADVANCE: Viewing past week (${currentWeekStart.toDateString()}), advancing to current week (${todayWeekStart.toDateString()})`);
-      setCurrentDate(todayWeekStart);
-      
-      // Show notification
-      toast({
-        title: "Advanced to Current Week",
-        description: `Moved from ${format(currentWeekStart, 'MMM d')} to current week of ${format(todayWeekStart, 'MMM d')}`,
-      });
-      return; // Exit early since we're changing currentDate
-    }
-    
-    // FALLBACK: Original logic - advance if current week is empty and not in future
-    if (currentWeekOrders.length === 0 && orders.length > 0 && currentWeekStart.getTime() <= todayWeekStart.getTime()) {
-      console.log('📅 AUTO-ADVANCE: Current week has no orders, advancing to next week');
-      const nextWeekStart = startOfWeek(addDays(currentDate, 7), { weekStartsOn: 1 });
-      setCurrentDate(nextWeekStart);
-      
-      toast({
-        title: "Week Advanced",
-        description: `Advanced to next week - current week completed`,
-      });
-    }
-  }, [orders, orderAssignments, currentDate, ordersLoading, isLoadingSchedule, getOrdersForCurrentWeek, toast]);
+  }, [ordersLoading, isLoadingSchedule]);
 
   // Function to generate algorithmic schedule automatically
   const generateAlgorithmicSchedule = useCallback(async () => {

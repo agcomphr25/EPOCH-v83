@@ -1904,7 +1904,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 21;
 
     // Subtotal
     const calculatedSubtotal = basePrice + actionLengthPrice + actionInletPrice + bottomMetalPrice + barrelInletPrice + qdPrice + lopPrice + railsPrice + texturePrice + swivelPrice + otherOptionsPrice + paintPrice;
@@ -1922,7 +1922,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: boldFont,
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 21;
 
     // Shipping
     if (order.shipping && order.shipping > 0) {
@@ -1940,7 +1940,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         font: boldFont,
       });
 
-      summaryLineY -= 15;
+      summaryLineY -= 21;
     }
 
     // Final separator line
@@ -1951,7 +1951,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       color: rgb(0, 0, 0),
     });
 
-    summaryLineY -= 15;
+    summaryLineY -= 21;
 
     // Total
     const finalTotal = calculatedSubtotal + (order.shipping || 0);

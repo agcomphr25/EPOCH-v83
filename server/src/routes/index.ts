@@ -216,8 +216,8 @@ export function registerRoutes(app: Express): Server {
       await cleanupOrphanedLayupScheduleEntries(storage);
       
       // AUTOMATIC CLEANUP: Move orders with no stock model or "None" to appropriate departments
-      console.log('🧹 CLEANUP: Moving orders with no stock model to Shipping QC...');
-      await autoMoveInvalidStockModelOrders(storage);
+      // Note: Full cleanup is now handled in productionQueue.ts endpoint
+      console.log('🧹 CLEANUP: Basic cleanup for layup scheduler...');
       
       // Get all orders that haven't entered production yet (P1 Production Queue)
       // Include both finalized orders and active production orders

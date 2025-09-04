@@ -75,9 +75,9 @@ export function useUnifiedLayupOrders() {
     retry: 3,
     staleTime: 5000,
     cacheTime: 60000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // DISABLED: Prevent auto-refresh when window focus changes  
     refetchOnMount: true,
-    refetchInterval: 30000
+    refetchInterval: false // DISABLED: Stop 30-second auto-refresh to prevent continuous reloading
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {

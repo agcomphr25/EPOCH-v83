@@ -697,7 +697,7 @@ export default function Navigation() {
                 )}
                 onClick={() => toggleDropdown('inventory', inventoryExpanded, setInventoryExpanded)}
               >
-                <Package className="h-4 w-4" />
+                <Warehouse className="h-4 w-4" />
                 Inventory
                 {inventoryExpanded ? (
                   <ChevronDown className="h-4 w-4" />
@@ -841,50 +841,6 @@ export default function Navigation() {
               {financeExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                   {financeItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.path;
-
-                    return (
-                      <Link key={item.path} href={item.path}>
-                        <button
-                          className={cn(
-                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
-                            isActive && "bg-primary text-white hover:bg-primary"
-                          )}
-                          onClick={closeAllDropdowns}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Test Dashboards Dropdown */}
-            <div className="relative">
-              <Button
-                variant={isTestDashboardsActive ? "default" : "ghost"}
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isTestDashboardsActive && "bg-primary text-white"
-                )}
-                onClick={() => toggleDropdown('testDashboards', testDashboardsExpanded, setTestDashboardsExpanded)}
-              >
-                <TestTube className="h-4 w-4" />
-                Test Dashboards
-                {testDashboardsExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-
-              {testDashboardsExpanded && (
-                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
-                  {testDashboardsItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

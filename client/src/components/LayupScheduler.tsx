@@ -1938,7 +1938,7 @@ export default function LayupScheduler() {
         },
         body: JSON.stringify({
           maxOrdersPerDay: Math.floor(employees.reduce((total, emp) => total + (emp.rate || 1.5) * (emp.hours || 8), 0)) || 21, // Use actual employee capacity settings
-          scheduleDays: 60,    // Extended schedule for next 60 work days
+          scheduleDays: 10,    // Limit schedule to next 2 weeks (10 work days)
           priorityWeighting: 'urgent', // Prioritize by due date and priority score
           workDays: selectedWorkDays, // Pass current work day settings
           employees: employees, // Pass employee settings
@@ -2082,12 +2082,7 @@ export default function LayupScheduler() {
       }
 
       // AUTO-TRIGGER DISABLED: User must manually click Auto Schedule button
-      console.log('📊 SCHEDULE STATUS (auto-trigger disabled):', {
-        totalOrders: orders.length,
-        scheduledOrders: scheduledOrderCount,
-        unscheduledOrders: unscheduledOrderCount,
-        message: 'Ready for manual scheduling - click Auto Schedule button'
-      });
+      console.log('📊 SCHEDULE STATUS: Ready for manual scheduling (2-week limit) -', unscheduledOrderCount, 'unscheduled orders');
     } else {
       console.log('❌ PRODUCTION FLOW: Missing resources for scheduling:', {
         orders: orders.length,

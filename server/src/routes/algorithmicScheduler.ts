@@ -6,7 +6,8 @@ const router = Router();
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
     // Use work days from frontend settings (respecting user configuration)
-    const { scheduleDays = 60, workDays = [1, 2, 3, 4], maxOrdersPerDay = 21, employees = [], molds = [] } = req.body;
+    // Default to 2 weeks (10 work days) instead of 60 days
+    const { scheduleDays = 10, workDays = [1, 2, 3, 4], maxOrdersPerDay = 21, employees = [], molds = [] } = req.body;
     
     // Use the work days passed from the frontend settings
     const enforcedWorkDays = workDays; // Respect user's work day configuration
@@ -372,7 +373,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       }
       
       if (!scheduled) {
-        console.log(`❌ Could not allocate order ${order.orderId} - no mold capacity available in ${scheduleDays} work days`);
+        console.log(`❌ Could not allocate order ${order.orderId} - no mold capacity available in ${scheduleDays} work days (2 weeks limit)`);
       }
     }
 

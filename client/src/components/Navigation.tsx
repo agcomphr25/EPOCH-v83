@@ -30,7 +30,8 @@ export default function Navigation() {
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
-    window.location.reload();
+    // Redirect to login page instead of just reloading
+    window.location.href = '/login';
   };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);

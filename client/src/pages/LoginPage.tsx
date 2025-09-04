@@ -88,7 +88,52 @@ export default function LoginPage() {
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      const redirectUrl = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/';
+      // Determine redirect URL based on user role and username
+      let redirectUrl = '/';
+      
+      if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
+        redirectUrl = '/employee';
+      } else {
+        // Redirect to user-specific dashboard based on username
+        const username = data.user?.username?.toLowerCase();
+        switch (username) {
+          case 'agtest':
+            redirectUrl = '/agtest-dashboard';
+            break;
+          case 'glenn':
+          case 'admin':
+            redirectUrl = '/admintest-dashboard';
+            break;
+          case 'johnl':
+            redirectUrl = '/johnltest-dashboard';
+            break;
+          case 'jens':
+            redirectUrl = '/jenstest-dashboard';
+            break;
+          case 'staciw':
+            redirectUrl = '/staciwtest-dashboard';
+            break;
+          case 'darleneb':
+            redirectUrl = '/darlenebtest-dashboard';
+            break;
+          case 'tims':
+            redirectUrl = '/timstest-dashboard';
+            break;
+          case 'bradw':
+            redirectUrl = '/bradwtest-dashboard';
+            break;
+          case 'faleeshah':
+            redirectUrl = '/faleeshahtest-dashboard';
+            break;
+          case 'joeyb':
+            redirectUrl = '/joeybtest-dashboard';
+            break;
+          default:
+            // Fall back to main dashboard for users without specific dashboards
+            redirectUrl = '/';
+            break;
+        }
+      }
       
       // Force page reload to trigger authentication re-check
       setTimeout(() => {

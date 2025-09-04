@@ -842,15 +842,6 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       font: font,
     });
 
-    // Payment Status
-    currentY -= 15;
-    page.drawText('Payment:', {
-      x: orderBoxX + 5,
-      y: currentY,
-      size: 10,
-      font: boldFont,
-    });
-
     // Calculate payment status using the same logic as the enhanced calculation
     const paymentTotal = payments.reduce((sum, payment) => sum + (payment.paymentAmount || 0), 0);
     
@@ -878,9 +869,18 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const paymentStatus = isFullyPaid ? 'PAID' : 'PENDING';
     const paymentColor = isFullyPaid ? rgb(0, 0.6, 0) : rgb(0.8, 0.4, 0);
     
+    // Payment Status - positioned outside the order box (below it)
+    const paymentStatusY = orderBoxY - 25; // Position 25 pixels below the order box
+    page.drawText('Payment:', {
+      x: orderBoxX + 5,
+      y: paymentStatusY,
+      size: 10,
+      font: boldFont,
+    });
+    
     page.drawText(paymentStatus, {
       x: orderBoxX + 90,
-      y: currentY,
+      y: paymentStatusY,
       size: 10,
       font: boldFont,
       color: paymentColor,

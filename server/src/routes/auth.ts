@@ -113,16 +113,18 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
   }
 });
 
-// GET /api/auth/session - Check current session (no auth required for manufacturing system)
+// GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {
-  // Add timeout to prevent hanging
+  // Reduced timeout to 3 seconds to prevent hanging
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Session check timeout')), 5000); // 5 second timeout
+    setTimeout(() => reject(new Error('Session check timeout')), 3000); // 3 second timeout
   });
 
   try {
     await Promise.race([
       (async () => {
+        console.log('Session check starting...');
+        
         // Try to get authenticated user first
         const authHeader = req.headers['authorization'];
         const bearerToken = authHeader && authHeader.split(' ')[1];
@@ -133,11 +135,13 @@ router.get('/session', async (req: Request, res: Response) => {
           try {
             let user = null;
             
+            console.log('Attempting session-based auth...');
             // Try session-based authentication first (session tokens from login)
             user = await AuthService.getUserBySession(token);
             
             // Fallback to JWT authentication if session fails
             if (!user && bearerToken) {
+              console.log('Session auth failed, trying JWT fallback...');
               try {
                 const jwtPayload = AuthService.verifyJWT(bearerToken);
                 if (jwtPayload) {
@@ -152,6 +156,7 @@ router.get('/session', async (req: Request, res: Response) => {
             }
 
             if (user) {
+              console.log('Session check successful for user:', user.username);
               return res.json({
                 id: user.id,
                 username: user.username,
@@ -166,6 +171,7 @@ router.get('/session', async (req: Request, res: Response) => {
           }
         }
 
+        console.log('No valid authentication found, returning 401');
         // Return 401 for unauthenticated users in deployment
         return res.status(401).json({ error: "Authentication required" });
       })(),
@@ -174,6 +180,7 @@ router.get('/session', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Session check error:', error);
     if (error instanceof Error && error.message === 'Session check timeout') {
+      console.error('Session validation timed out - this indicates database connectivity issues');
       return res.status(408).json({ error: "Session validation timeout" });
     }
     res.status(500).json({ error: "Session check failed" });

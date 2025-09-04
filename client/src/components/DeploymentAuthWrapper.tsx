@@ -35,11 +35,16 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     const hostname = window.location.hostname;
     const isDeployment = isDeploymentEnvironment();
     
-    // Failsafe: Always stop loading after 12 seconds maximum
+    // Failsafe: Reduced timeout for better UX during database issues
     const maxLoadingTimeout = setTimeout(() => {
       console.warn('Authentication check took too long, stopping loading state');
+      console.warn('This likely indicates database connectivity issues on the deployed site');
       setIsLoading(false);
-    }, 12000); // 12 second absolute maximum
+      // Clear any stale tokens that might be causing issues
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('jwtToken');
+      setIsAuthenticated(false);
+    }, 8000); // 8 second absolute maximum (reduced from 12)
     
     // Skip authentication in development
     if (!isDeployment) {
@@ -49,14 +54,19 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
       return;
     }
 
-    // Check for existing session
+    // Check for existing session with enhanced error handling
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
         if (token) {
-          // Add timeout to prevent hanging
+          console.log('Checking authentication for deployment...');
+          
+          // Reduced timeout to fail faster and provide better UX
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+          const timeoutId = setTimeout(() => {
+            console.log('Authentication check timed out after 5 seconds');
+            controller.abort();
+          }, 5000); // 5 second timeout
           
           try {
             const response = await fetch('/api/auth/session', {
@@ -67,32 +77,52 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
             });
             clearTimeout(timeoutId);
             
+            console.log('Authentication response status:', response.status);
+            
             if (response.ok) {
               const userData = await response.json();
+              console.log('Authentication successful for user:', userData.username);
               // Check if user is actually authenticated (not anonymous)
               if (userData.username !== 'anonymous' && userData.id > 0) {
                 setIsAuthenticated(true);
               } else {
+                console.log('Invalid user data, clearing tokens');
                 // Clear invalid tokens
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('jwtToken');
                 setIsAuthenticated(false);
               }
+            } else if (response.status === 408) {
+              // Database timeout - clear tokens and show login
+              console.error('Database timeout detected, clearing authentication tokens');
+              localStorage.removeItem('sessionToken');
+              localStorage.removeItem('jwtToken');
+              setIsAuthenticated(false);
             } else {
+              console.log('Authentication failed with status:', response.status);
               // Clear invalid tokens
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
               setIsAuthenticated(false);
             }
-          } catch (fetchError) {
+          } catch (fetchError: any) {
             clearTimeout(timeoutId);
             console.error('Session fetch failed:', fetchError);
+            
+            // Enhanced error handling for specific scenarios
+            if (fetchError.name === 'AbortError') {
+              console.error('Authentication request timed out - possible database connectivity issue');
+            } else if (fetchError.message?.includes('fetch')) {
+              console.error('Network error during authentication - check server connectivity');
+            }
+            
             // Clear invalid tokens on timeout/error
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('jwtToken');
             setIsAuthenticated(false);
           }
         } else {
+          console.log('No authentication tokens found');
           setIsAuthenticated(false);
         }
       } catch (error) {

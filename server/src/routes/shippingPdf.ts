@@ -999,7 +999,72 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     shipCurrentY -= 15;
-    if (customerAddresses.length > 0) {
+
+    // Check if order has alternate shipping address
+    if ((order as any).hasAltShipTo && (order as any).altShipToAddress) {
+      const altAddress = (order as any).altShipToAddress;
+      
+      // Use alternate shipping name or fallback to alt_ship_to_name
+      const shipToName = (order as any).altShipToName || customer?.name || 'N/A';
+      const wrappedShipToName = wrapText(shipToName, 250, 10, font);
+      wrappedShipToName.forEach((line, index) => {
+        if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+          page.drawText(line, {
+            x: shipToX,
+            y: shipCurrentY - (index * 13),
+            size: 10,
+            font: font,
+          });
+        }
+      });
+      shipCurrentY -= wrappedShipToName.length * 13;
+
+      // Alternate street address (wrapped) - ensure it stays within box
+      if (altAddress.street && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet = wrapText(altAddress.street, 250, 9, font);
+        wrappedStreet.forEach((line, index) => {
+          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: shipToX,
+              y: shipCurrentY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
+        });
+        shipCurrentY -= wrappedStreet.length * 11;
+      }
+
+      // Alternate street2 (suite, apt, etc.) (wrapped) - ensure it stays within box
+      if (altAddress.street2 && shipCurrentY > customerBoxY + 15) {
+        const wrappedStreet2 = wrapText(altAddress.street2, 250, 9, font);
+        wrappedStreet2.forEach((line, index) => {
+          if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: shipToX,
+              y: shipCurrentY - (index * 11),
+              size: 9,
+              font: font,
+            });
+          }
+        });
+        shipCurrentY -= wrappedStreet2.length * 11;
+      }
+
+      // Alternate city, State, ZIP - ensure it stays within box
+      if (shipCurrentY > customerBoxY + 15) {
+        const cityStateZip = `${altAddress.city || ''}, ${altAddress.state || ''} ${altAddress.zipCode || ''}`.trim();
+        if (cityStateZip !== ', ') {
+          page.drawText(cityStateZip, {
+            x: shipToX,
+            y: shipCurrentY,
+            size: 9,
+            font: font,
+          });
+        }
+      }
+    } else if (customerAddresses.length > 0) {
+      // Use regular customer shipping address
       const primaryAddress = customerAddresses[0];
       
       // Ship to name (wrapped) - ensure it stays within box

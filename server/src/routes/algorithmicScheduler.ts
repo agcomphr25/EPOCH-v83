@@ -334,6 +334,12 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           continue;
         }
         
+        // FRIDAY PREVENTION: Extra validation to ensure Friday is never scheduled
+        if (dayOfWeek === 5) {
+          console.error(`🚨 FRIDAY PREVENTION: Attempted to schedule on Friday ${workDate.toDateString()} - BLOCKED!`);
+          continue;
+        }
+        
         console.log(`🎯 ATTEMPTING: ${workDate.toDateString()} (${dayName}, Day ${dayOfWeek}) - Current count: ${currentDailyCount}/${actualDailyCapacity}`);
         
         // STRICT CAPACITY CHECK: Never exceed daily capacity

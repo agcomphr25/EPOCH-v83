@@ -58,7 +58,16 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
           });
           
           if (response.ok) {
-            setIsAuthenticated(true);
+            const userData = await response.json();
+            // Check if user is actually authenticated (not anonymous)
+            if (userData.username !== 'anonymous' && userData.id > 0) {
+              setIsAuthenticated(true);
+            } else {
+              // Clear invalid tokens
+              localStorage.removeItem('sessionToken');
+              localStorage.removeItem('jwtToken');
+              setIsAuthenticated(false);
+            }
           } else {
             // Clear invalid tokens
             localStorage.removeItem('sessionToken');

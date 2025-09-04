@@ -1680,7 +1680,8 @@ export class DatabaseStorage implements IStorage {
         and(
           sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
           sql`${allOrders.orderId} NOT LIKE 'PO%'`,
-          sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
+          // TEMPORARILY COMMENTED OUT: This was hiding orders like AG137
+          // sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
           sql`${allOrders.orderId} != 'AG1'`,
           sql`${allOrders.orderId} NOT LIKE '%PO%'`
         )

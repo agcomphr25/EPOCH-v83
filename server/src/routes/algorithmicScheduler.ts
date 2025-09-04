@@ -220,9 +220,22 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       return workDates;
     };
 
-    // For scheduling week 9/1-9/4, start from Monday September 1, 2025
-    const startDate = new Date('2025-09-01'); // Start from the specific Monday
+    // For scheduling, start from current date or next Monday
+    const today = new Date();
+    const startDate = new Date(today);
+    // If today is not a work day, advance to next work day
+    while (!enforcedWorkDays.includes(startDate.getDay())) {
+      startDate.setDate(startDate.getDate() + 1);
+    }
+    
+    console.log(`📅 SCHEDULING WINDOW: Starting from ${startDate.toDateString()}, generating ${scheduleDays} work days`);
     const workDates = generateWorkDates(startDate, scheduleDays, enforcedWorkDays);
+    
+    console.log(`📅 FINAL WORK DATES (${workDates.length} days):`);
+    workDates.forEach((date, index) => {
+      const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
+      console.log(`   ${index + 1}. ${date.toDateString()} (${dayName})`);
+    });
     const allocations: any[] = [];
     const dailyMoldUsage = new Map<string, number>();
     const dailyAllocationCount = new Map<string, number>();
@@ -323,19 +336,32 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         
         console.log(`🎯 ATTEMPTING: ${workDate.toDateString()} (${dayName}, Day ${dayOfWeek}) - Current count: ${currentDailyCount}/${actualDailyCapacity}`);
         
-        // Check daily capacity based on actual employee production rates
+        // STRICT CAPACITY CHECK: Never exceed daily capacity
         if (currentDailyCount >= actualDailyCapacity) {
-          console.log(`⏸️ CAPACITY FULL: ${dayName} already has ${currentDailyCount}/${actualDailyCapacity} orders`);
+          console.log(`⏸️ CAPACITY FULL: ${dayName} already has ${currentDailyCount}/${actualDailyCapacity} orders - STRICT LIMIT ENFORCED`);
+          continue;
+        }
+        
+        // Additional safety check: ensure we don't go over even with mold multipliers
+        if ((currentDailyCount + 1) > actualDailyCapacity) {
+          console.log(`⏸️ SAFETY CHECK: Adding this order would exceed capacity (${currentDailyCount + 1} > ${actualDailyCapacity})`);
           continue;
         }
 
-        // Try each compatible mold
+        // Try each compatible mold with STRICT capacity limits
         for (const mold of compatibleMolds) {
           const moldKey = `${dailyKey}-${mold.mold_id}`;
           const currentUsage = dailyMoldUsage.get(moldKey) || 0;
-          const moldCapacity = mold.multiplier || 1; // Use realistic mold capacity per day
+          // LIMIT MOLD MULTIPLIER: Cap at 3 to prevent over-scheduling
+          const moldCapacity = Math.min(mold.multiplier || 1, 3);
 
           if (currentUsage < moldCapacity) {
+            // FINAL CAPACITY CHECK: Ensure this assignment won't exceed daily limit
+            const finalDailyCheck = (dailyAllocationCount.get(dailyKey) || 0) + 1;
+            if (finalDailyCheck > actualDailyCapacity) {
+              console.log(`🚫 FINAL CAPACITY CHECK FAILED: Would exceed daily limit (${finalDailyCheck} > ${actualDailyCapacity})`);
+              continue;
+            }
             // CRITICAL VALIDATION: Never allow assignments on non-work days
             const scheduleDate = new Date(workDate);
             const scheduleDayOfWeek = scheduleDate.getDay();
@@ -382,6 +408,13 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     const totalScheduled = allocations.length;
     const successRate = totalProcessed > 0 ? (totalScheduled / totalProcessed) * 100 : 0;
     
+    // CAPACITY VALIDATION: Verify we didn't exceed limits
+    const dailyBreakdown = new Map<string, number>();
+    allocations.forEach(allocation => {
+      const dateKey = new Date(allocation.scheduledDate).toISOString().split('T')[0];
+      dailyBreakdown.set(dateKey, (dailyBreakdown.get(dateKey) || 0) + 1);
+    });
+    
     console.log(`📊 ALGORITHMIC SCHEDULING RESULTS:`);
     console.log(`📈 Total orders processed: ${totalProcessed}`);
     console.log(`✅ Successfully scheduled: ${totalScheduled}`);
@@ -389,6 +422,27 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     console.log(`📊 Success rate: ${successRate.toFixed(1)}%`);
     console.log(`🏗️ Work days in schedule: ${workDates.length}`);
     console.log(`👥 Employee daily capacity: ${actualDailyCapacity} orders/day (based on employee rates)`);
+    
+    console.log(`📅 DAILY CAPACITY VALIDATION:`);
+    let totalCapacityViolations = 0;
+    dailyBreakdown.forEach((count, dateKey) => {
+      const date = new Date(dateKey);
+      const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
+      const isOverCapacity = count > actualDailyCapacity;
+      if (isOverCapacity) totalCapacityViolations++;
+      console.log(`   ${date.toDateString()} (${dayName}): ${count}/${actualDailyCapacity} orders ${isOverCapacity ? '⚠️ OVER CAPACITY!' : '✅'}`);
+    });
+    
+    if (totalCapacityViolations > 0) {
+      console.error(`🚨 CAPACITY VIOLATIONS DETECTED: ${totalCapacityViolations} days exceed daily capacity of ${actualDailyCapacity} orders/day`);
+    }
+    
+    const theoreticalMaxOrders = workDates.length * actualDailyCapacity;
+    console.log(`🧮 CAPACITY MATH CHECK: ${workDates.length} work days × ${actualDailyCapacity} capacity = ${theoreticalMaxOrders} max possible orders`);
+    
+    if (totalScheduled > theoreticalMaxOrders) {
+      console.error(`🚨 IMPOSSIBLE SCHEDULE DETECTED: Scheduled ${totalScheduled} orders but theoretical max is ${theoreticalMaxOrders}`);
+    }
 
     // Analyze failed orders
     const unscheduledOrders = prioritizedOrders.slice(totalScheduled);
@@ -412,9 +466,10 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     // Save the algorithmic schedule results to the layup_schedule table
     if (allocations.length > 0) {
       try {
-        // Clear existing schedule for the target week to replace with new algorithmic schedule
-        const targetWeekStart = new Date('2025-09-01'); // Start of week 9/1-9/4
-        const targetWeekEnd = new Date('2025-09-07'); // End of week to clear
+        // Clear existing schedule for the scheduling window to replace with new algorithmic schedule
+        const targetWeekStart = new Date(startDate); // Start of scheduling window
+        const targetWeekEnd = new Date(workDates[workDates.length - 1]); // End of last work date
+        targetWeekEnd.setDate(targetWeekEnd.getDate() + 1); // Include the last day
         
         console.log(`🗑️ Clearing existing schedule from ${targetWeekStart.toISOString()} to ${targetWeekEnd.toISOString()}`);
         

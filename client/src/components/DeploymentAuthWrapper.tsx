@@ -16,25 +16,26 @@ function isDeploymentEnvironment(): boolean {
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
   
+  console.log('DEPLOYMENT DEBUG - hostname:', hostname);
+  console.log('DEPLOYMENT DEBUG - viteDeployment:', viteDeployment);
+  console.log('DEPLOYMENT DEBUG - nodeEnv:', nodeEnv);
+  console.log('DEPLOYMENT DEBUG - isLocalhost:', isLocalhost);
+  console.log('DEPLOYMENT DEBUG - isReplitEditor:', isReplitEditor);
+  
   // Skip auth ONLY for localhost and Replit editor (not deployed)
   if (isLocalhost || isReplitEditor) {
+    console.log('DEPLOYMENT DEBUG - Skipping auth for development');
     return false;
   }
   
-  // Require auth for ALL other environments (deployed Replit domains AND custom domains)
+  // For custom domains like agcompepoch.xyz, ALWAYS require auth
+  console.log('DEPLOYMENT DEBUG - Requiring auth for deployment environment');
   return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Check authentication status
-  const { data: sessionData } = useQuery({
-    queryKey: ['/api/auth/session'],
-    retry: false,
-    enabled: isDeploymentEnvironment(),
-  });
 
   useEffect(() => {
     const hostname = window.location.hostname;

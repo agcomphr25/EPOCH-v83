@@ -47,6 +47,26 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
   }
 });
 
+// Get paginated orders with payment status for improved performance
+router.get('/with-payment-status/paginated', async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+    
+    // Add basic caching headers
+    res.set({
+      'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
+      'ETag': `"orders-paginated-${page}-${limit}-${Date.now()}"`
+    });
+    
+    const result = await storage.getAllOrdersWithPaymentStatusPaginated(page, limit);
+    res.json(result);
+  } catch (error) {
+    console.error('Error retrieving paginated orders with payment status:', error);
+    res.status(500).json({ error: "Failed to fetch paginated orders with payment status", details: (error as any).message });
+  }
+});
+
 // Get unpaid/partially paid orders for batch payment processing
 router.get('/unpaid', async (req: Request, res: Response) => {
   try {

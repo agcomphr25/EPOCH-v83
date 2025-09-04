@@ -185,6 +185,13 @@ export interface IStorage {
   getAllOrders(): Promise<AllOrder[]>;
   getCancelledOrders(): Promise<AllOrder[]>; // Returns finalized orders from allOrders table
   getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]>; // Returns finalized orders with payment status
+  getAllOrdersWithPaymentStatusPaginated(page: number, limit: number): Promise<{ 
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
+    total: number, 
+    page: number, 
+    limit: number, 
+    totalPages: number 
+  }>; // Returns paginated finalized orders with payment status
   getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
@@ -1731,6 +1738,121 @@ export class DatabaseStorage implements IStorage {
     }));
 
     return ordersWithPaymentInfo;
+  }
+
+  // Get all finalized orders with payment status - PAGINATED
+  async getAllOrdersWithPaymentStatusPaginated(page: number = 1, limit: number = 50): Promise<{ 
+    orders: (AllOrder & { paymentTotal: number; isFullyPaid: boolean })[], 
+    total: number, 
+    page: number, 
+    limit: number, 
+    totalPages: number 
+  }> {
+    // First, get the total count for pagination
+    const totalCountResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(allOrders)
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      );
+    
+    const total = totalCountResult[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+
+    // Use the same field selection as the original method but with pagination
+    const ordersWithCustomers = await db
+      .select({
+        // Order fields - using the same selection as original method
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        currentDepartment: allOrders.currentDepartment,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
+        paymentAmount: allOrders.paymentAmount,
+        isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
+        // Customer name
+        customerName: customers.name,
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      )
+      .orderBy(desc(allOrders.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Get all payments aggregated by order ID in parallel
+    const paymentTotals = await db
+      .select({
+        orderId: payments.orderId,
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+      })
+      .from(payments)
+      .groupBy(payments.orderId);
+
+    // Create payment map for fast lookup
+    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+
+    // Process orders with payment info (same logic as original method)
+    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      const orderTotal = order.paymentAmount || 0;
+
+      // Simplified payment status logic - avoid expensive calculations
+      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
+                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
+
+      return {
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        paymentTotal,
+        isFullyPaid
+      } as any; // Type assertion to avoid complex type errors
+    });
+
+    return {
+      orders: ordersWithPaymentInfo,
+      total,
+      page,
+      limit,
+      totalPages
+    };
   }
 
   async getOrdersByDepartment(department: string): Promise<AllOrder[]> {

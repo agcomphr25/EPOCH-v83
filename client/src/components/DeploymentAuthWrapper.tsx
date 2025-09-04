@@ -34,8 +34,16 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
   useEffect(() => {
     const hostname = window.location.hostname;
     const isDeployment = isDeploymentEnvironment();
+    
+    // Failsafe: Always stop loading after 12 seconds maximum
+    const maxLoadingTimeout = setTimeout(() => {
+      console.warn('Authentication check took too long, stopping loading state');
+      setIsLoading(false);
+    }, 12000); // 12 second absolute maximum
+    
     // Skip authentication in development
     if (!isDeployment) {
+      clearTimeout(maxLoadingTimeout);
       setIsAuthenticated(true);
       setIsLoading(false);
       return;
@@ -91,6 +99,7 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
         console.error('Auth check failed:', error);
         setIsAuthenticated(false);
       } finally {
+        clearTimeout(maxLoadingTimeout);
         setIsLoading(false);
       }
     };

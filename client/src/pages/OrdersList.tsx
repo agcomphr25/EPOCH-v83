@@ -339,43 +339,9 @@ export default function OrdersList() {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order view - downloads PDF
-  const handleSalesOrderView = async (orderId: string) => {
-    try {
-      const response = await fetch(`/api/shipping-pdf/sales-order/${orderId}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to generate sales order PDF');
-      }
-
-      // Get the PDF blob
-      const blob = await response.blob();
-
-      // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob);
-
-      // Create a link and trigger download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Sales-Order-${orderId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-
-      // Clean up
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      showToast({
-        title: "Success",
-        description: "Sales order PDF downloaded successfully",
-      });
-    } catch (error) {
-      showToast({
-        title: "Error",
-        description: "Failed to download sales order PDF",
-        variant: "destructive",
-      });
-    }
+  // Function to handle sales order view - opens PDF in new window
+  const handleSalesOrderView = (orderId: string) => {
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
   const handleCancelOrder = (orderId: string) => {

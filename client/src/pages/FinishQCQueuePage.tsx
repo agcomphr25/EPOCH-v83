@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OrderTooltip } from '@/components/OrderTooltip';
-import { Shield, ArrowLeft, ArrowRight, Search } from 'lucide-react';
+import { Shield, ArrowLeft, ArrowRight, Search, CheckSquare, Square } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -14,6 +16,8 @@ import { toast } from 'react-hot-toast';
 
 export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -71,7 +75,9 @@ export default function FinishQCQueuePage() {
     // Check if the order exists in the current Finish QC queue
     const orderExists = finishQCOrders.some((order: any) => order.orderId === orderId);
     if (orderExists) {
-      toast.success(`Order ${orderId} found in Finish QC department`);
+      // Select the found order
+      setSelectedOrders(prev => new Set([...prev, orderId]));
+      toast.success(`Order ${orderId} found and selected in Finish QC department`);
     } else {
       // Find the order in all orders to show current department
       const allOrder = (allOrders as any[]).find((order: any) => order.orderId === orderId);
@@ -82,6 +88,49 @@ export default function FinishQCQueuePage() {
       }
     }
   };
+
+  // Handle individual order selection
+  const handleOrderSelect = (orderId: string, isSelected: boolean) => {
+    const newSelected = new Set(selectedOrders);
+    if (isSelected) {
+      newSelected.add(orderId);
+    } else {
+      newSelected.delete(orderId);
+    }
+    setSelectedOrders(newSelected);
+    setSelectAll(newSelected.size === filteredOrders.length && filteredOrders.length > 0);
+  };
+
+  // Handle select all toggle
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(filteredOrders.map((order: any) => order.orderId)));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Handle search with auto-selection
+  const handleSearchWithSelection = (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.trim()) {
+      // Auto-select matching orders after a short delay
+      setTimeout(() => {
+        const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+        if (matchingOrderIds.length > 0) {
+          setSelectedOrders(new Set(matchingOrderIds));
+          toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+        }
+      }, 300);
+    }
+  };
+
+  // Update select all state when filtered orders change
+  React.useEffect(() => {
+    setSelectAll(selectedOrders.size === filteredOrders.length && filteredOrders.length > 0);
+  }, [selectedOrders.size, filteredOrders.length]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -104,14 +153,29 @@ export default function FinishQCQueuePage() {
         <CardContent>
           <div className="space-y-2">
             <Label htmlFor="search-input">Search by Order ID or FishBowl Number</Label>
-            <Input
-              id="search-input"
-              type="text"
-              placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="search-input"
+                type="text"
+                placeholder="Enter Order ID (e.g., AG123) or FB Number (e.g., AK072)..."
+                value={searchQuery}
+                onChange={(e) => handleSearchWithSelection(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (searchQuery.trim()) {
+                    const matchingOrderIds = filteredOrders.map((order: any) => order.orderId);
+                    setSelectedOrders(new Set(matchingOrderIds));
+                    toast.success(`${matchingOrderIds.length} matching order(s) selected`);
+                  }
+                }}
+                disabled={!searchQuery.trim() || filteredOrders.length === 0}
+              >
+                Select Matches
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -162,11 +226,30 @@ export default function FinishQCQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Finish QC Department Manager</span>
+            <div className="flex items-center gap-4">
+              <span>Finish QC Department Manager</span>
+              {filteredOrders.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectAll}
+                    onCheckedChange={handleSelectAll}
+                    data-testid="checkbox-select-all"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Select All ({selectedOrders.size} selected)
+                  </span>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               {searchQuery && (
                 <Badge variant="secondary" className="ml-2">
                   {filteredOrders.length} of {finishQCOrders.length} shown
+                </Badge>
+              )}
+              {selectedOrders.size > 0 && (
+                <Badge variant="default" className="bg-blue-600">
+                  {selectedOrders.size} Selected
                 </Badge>
               )}
               <Badge variant="outline" className="ml-2">
@@ -182,9 +265,36 @@ export default function FinishQCQueuePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredOrders.map((order: any) => (
-                <OrderTooltip key={order.orderId} order={order} stockModels={stockModels} className="border-l-purple-500" />
-              ))}
+              {filteredOrders.map((order: any) => {
+                const isSelected = selectedOrders.has(order.orderId);
+                return (
+                  <div key={order.orderId} className="relative">
+                    <div 
+                      className={`transition-all duration-200 ${
+                        isSelected 
+                          ? 'ring-2 ring-blue-500 ring-offset-2 bg-blue-50 dark:bg-blue-900/20' 
+                          : 'hover:ring-1 hover:ring-gray-300'
+                      }`}
+                    >
+                      <OrderTooltip 
+                        order={order} 
+                        stockModels={stockModels} 
+                        className={`border-l-purple-500 cursor-pointer ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                      />
+                    </div>
+                    <div className="absolute top-2 right-2">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleOrderSelect(order.orderId, checked as boolean)}
+                        data-testid={`checkbox-order-${order.orderId}`}
+                        className="bg-white dark:bg-gray-800 border-2"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

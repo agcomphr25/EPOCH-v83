@@ -256,7 +256,14 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     const invalidOrders: any[] = [];
     
     prioritizedOrders.forEach((order: any) => {
-      const stockModelId = order.stockModelId || order.modelId || 'unknown';
+      let stockModelId = order.stockModelId || order.modelId || 'unknown';
+      
+      // CRITICAL FIX: Convert numeric model IDs to proper stock model names
+      if (stockModelId === '1') {
+        stockModelId = 'mesa_universal';
+        console.log(`🔧 STOCK MODEL CONVERSION: Order ${order.orderId} model_id '1' → 'mesa_universal'`);
+      }
+      
       const compatibleMolds = findExactMatchingMolds(stockModelId);
       
       if (compatibleMolds.length === 0) {
@@ -279,7 +286,13 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
 
     // Process each order (now prioritized by score and due date)
     for (const order of prioritizedOrders) {
-      const stockModelId = order.stockModelId || order.modelId || 'unknown';
+      let stockModelId = order.stockModelId || order.modelId || 'unknown';
+      
+      // CRITICAL FIX: Convert numeric model IDs to proper stock model names  
+      if (stockModelId === '1') {
+        stockModelId = 'mesa_universal';
+        console.log(`🔧 STOCK MODEL CONVERSION: Order ${order.orderId} model_id '1' → 'mesa_universal'`);
+      }
       
       // Extract material prefix (CF/FG)
       const materialPrefix = stockModelId.toLowerCase().startsWith('cf_') ? 'cf' : 

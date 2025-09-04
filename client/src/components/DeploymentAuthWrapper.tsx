@@ -17,15 +17,6 @@ function isDeploymentEnvironment(): boolean {
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('.replit.dev');
   
-  console.log('🔐 Auth environment check:', {
-    hostname,
-    viteDeployment,
-    nodeEnv,
-    isReplitDomain,
-    isLocalhost,
-    isReplitEditor,
-    env: import.meta.env
-  });
   
   // Skip auth for development environments
   if (isLocalhost || isReplitEditor) {

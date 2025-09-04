@@ -75,9 +75,12 @@ export class LayupSchedulerService {
         return false;
       }
 
-      // Only include orders in departments that need layup scheduling
+      // Include orders in departments that need layup scheduling, or orders without department set
       const validDepartments = ['P1 Production Queue', 'Layup', 'Plugging'];
-      return validDepartments.includes(order.currentDepartment || '');
+      const currentDept = order.currentDepartment || '';
+      
+      // Include if in valid department OR if no department is set (likely unprocessed orders)
+      return validDepartments.includes(currentDept) || currentDept === '';
     });
   }
 

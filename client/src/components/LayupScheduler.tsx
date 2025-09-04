@@ -1505,8 +1505,7 @@ export default function LayupScheduler() {
     const cellAssignments = new Set<string>(); // Format: `${moldId}-${dateKey}`
     const newAssignments: { [orderId: string]: { moldId: string, date: string } } = {};
 
-    // Track Mesa Universal orders per day (8 maximum)
-    const mesaUniversalDailyCount: Record<string, number> = {};
+    // Track daily assignments for logging
 
     console.log('🎯 Starting single-card-per-cell assignment algorithm with Mesa Universal constraints');
     console.log(`📦 Processing ${orders.length} orders with ${molds.filter(m => m.enabled).length} enabled molds`);
@@ -1627,25 +1626,8 @@ export default function LayupScheduler() {
         const dateKey = targetDate.toISOString().split('T')[0];
         const cellKey = `${bestMold.moldId}-${dateKey}`;
 
-        // Check Mesa Universal daily limit (8 per day maximum)
+        // Mesa Universal orders are now limited only by P1 purchase order selection and mold capacity
         const isMesaUniversal = (order.stockModelId === 'mesa_universal' || order.product === 'Mesa - Universal');
-        const currentMesaCount = mesaUniversalDailyCount[dateKey] || 0;
-
-        if (isMesaUniversal && currentMesaCount >= 8) {
-          console.log(`⏸️ Mesa Universal limit reached for ${dateKey}: ${currentMesaCount}/8 - skipping to next day`);
-          // Find next day with Mesa Universal capacity
-          let nextDayIndex = bestDateIndex + 1;
-          while (nextDayIndex < allWorkDays.length) {
-            const nextDate = allWorkDays[nextDayIndex];
-            const nextDateKey = nextDate.toISOString().split('T')[0];
-            const nextDayMesaCount = mesaUniversalDailyCount[nextDateKey] || 0;
-            if (nextDayMesaCount < 8) break;
-            nextDayIndex++;
-          }
-          // Don't assign this order - it will be retried in next loop iteration
-          assigned = false;
-          return;
-        }
 
         // Assign order to this cell
         newAssignments[order.orderId] = {
@@ -1658,16 +1640,11 @@ export default function LayupScheduler() {
         dailyAssignments[dateKey] = (dailyAssignments[dateKey] || 0) + 1;
         moldNextDate[bestMold.moldId] = bestDateIndex + 1;
 
-        // Track Mesa Universal orders
-        if (isMesaUniversal) {
-          mesaUniversalDailyCount[dateKey] = (mesaUniversalDailyCount[dateKey] || 0) + 1;
-        }
 
         assigned = true;
         const logPrefix = isMesaUniversal ? '🏔️ MESA UNIVERSAL ASSIGNED:' :
                          order.source === 'production_order' ? '🏭 PRODUCTION ORDER ASSIGNED:' : '✅ Assigned';
-        const mesaStatus = isMesaUniversal ? ` (Mesa: ${mesaUniversalDailyCount[dateKey]}/8)` : '';
-        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)${mesaStatus}`);
+        console.log(`${logPrefix} ${order.orderId} to ${bestMold.moldId} on ${format(targetDate, 'MM/dd')} (${dailyAssignments[dateKey]}/${maxOrdersPerDay} daily capacity)`);
       }
 
       if (!assigned) {
@@ -1687,11 +1664,6 @@ export default function LayupScheduler() {
       `${format(new Date(date), 'MM/dd')}: ${count}/${maxOrdersPerDay} orders`
     ).slice(0, 8));
 
-    // Show Mesa Universal daily distribution
-    console.log('🏔️ Mesa Universal daily distribution:');
-    Object.entries(mesaUniversalDailyCount).forEach(([date, count]) => {
-      console.log(`  ${format(new Date(date), 'MM/dd')}: ${count}/8 Mesa Universal orders`);
-    });
 
     // Apply Friday validation before setting smart assignments
     const validatedSmartAssignments = validateNoFridayAssignments(newAssignments);

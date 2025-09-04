@@ -2535,6 +2535,23 @@ export default function LayupScheduler() {
                 page-break-inside: avoid !important;
                 table-layout: fixed !important;
               }
+              /* Daily section with better page break handling */
+              .daily-section {
+                page-break-inside: avoid !important;
+                margin-bottom: 30px !important;
+              }
+              .day-header {
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+              }
+              .mold-section {
+                page-break-inside: avoid !important;
+                margin-bottom: 15px !important;
+              }
+              .order-item {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
               .schedule-table th {
                 padding: 4px 2px !important;
                 font-size: 9px !important;
@@ -2573,6 +2590,7 @@ export default function LayupScheduler() {
                 line-height: 1.1 !important;
                 display: block !important;
                 break-inside: avoid !important;
+                page-break-inside: avoid !important;
               }
               .order-id {
                 font-size: 8px !important;
@@ -2634,6 +2652,14 @@ export default function LayupScheduler() {
               }
               .no-break {
                 page-break-inside: avoid !important;
+              }
+              /* Ensure headers don't get orphaned */
+              .mold-title {
+                page-break-after: avoid !important;
+              }
+              /* Add margin for better spacing on page breaks */
+              .daily-section:not(:first-child) {
+                margin-top: 20px !important;
               }
             }
           </style>

@@ -500,6 +500,7 @@ export default function OrdersList() {
     if (!orders) return [];
 
     let filtered = [...orders];
+    console.log('🔍 Filtering orders. Search term:', searchTerm, 'Total orders:', orders.length);
 
     // Exclude cancelled orders from main list
     filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
@@ -583,6 +584,7 @@ export default function OrdersList() {
       return 0;
     });
 
+    console.log('🔍 Filtered orders result:', filtered.length, 'orders');
     return filtered;
   }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
 
@@ -931,7 +933,7 @@ export default function OrdersList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.map((order) => (
+                {console.log('🔍 Rendering table with orders:', filteredOrders.length) || filteredOrders.map((order) => (
                   <TableRow 
                     key={order.id}
                     className={cn(

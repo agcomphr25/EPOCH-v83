@@ -1901,10 +1901,12 @@ export default function LayupScheduler() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          maxOrdersPerDay: 50, // Increased daily capacity to handle all orders
+          maxOrdersPerDay: Math.floor(employees.reduce((total, emp) => total + (emp.rate || 1.5) * (emp.hours || 8), 0)) || 21, // Use actual employee capacity settings
           scheduleDays: 60,    // Extended schedule for next 60 work days
           priorityWeighting: 'urgent', // Prioritize by due date and priority score
-          workDays: selectedWorkDays // Pass current work day settings
+          workDays: selectedWorkDays, // Pass current work day settings
+          employees: employees, // Pass employee settings
+          molds: molds.filter(m => m.enabled) // Pass enabled molds only
         }),
       });
 

@@ -58,13 +58,31 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     // Check for existing session with enhanced error handling
     const checkAuth = async () => {
       try {
-        // Wait a moment for tokens to be written to localStorage after redirect
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Detailed localStorage monitoring at multiple intervals
+        console.log('🕐 AUTH WRAPPER: Starting token monitoring...');
         
-        // Detailed localStorage debugging
-        const sessionToken = localStorage.getItem('sessionToken');
-        const jwtToken = localStorage.getItem('jwtToken');
-        console.log('🔍 AUTH WRAPPER: Detailed token check:');
+        // Check immediately
+        let sessionToken = localStorage.getItem('sessionToken');
+        let jwtToken = localStorage.getItem('jwtToken');
+        console.log('⏰ IMMEDIATE CHECK:');
+        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
+        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
+        console.log('  localStorage keys:', Object.keys(localStorage));
+        
+        // Check after 100ms
+        await new Promise(resolve => setTimeout(resolve, 100));
+        sessionToken = localStorage.getItem('sessionToken');
+        jwtToken = localStorage.getItem('jwtToken');
+        console.log('⏰ 100ms CHECK:');
+        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
+        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
+        console.log('  localStorage keys:', Object.keys(localStorage));
+        
+        // Check after 300ms
+        await new Promise(resolve => setTimeout(resolve, 200));
+        sessionToken = localStorage.getItem('sessionToken');
+        jwtToken = localStorage.getItem('jwtToken');
+        console.log('⏰ 300ms CHECK (FINAL):');
         console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
         console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
         console.log('  localStorage keys:', Object.keys(localStorage));

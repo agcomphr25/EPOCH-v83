@@ -61,9 +61,10 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
         await new Promise(resolve => setTimeout(resolve, 300));
         
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+        console.log('🔍 AUTH WRAPPER: Token found after redirect:', !!token);
         
         if (token) {
-          console.log('Checking authentication for deployment...');
+          console.log('🔐 AUTH WRAPPER: Checking authentication for deployment...');
           
           // Reduced timeout to fail faster and provide better UX
           const controller = new AbortController();
@@ -85,12 +86,14 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
             
             if (response.ok) {
               const userData = await response.json();
-              console.log('Authentication successful for user:', userData.username);
+              console.log('✅ AUTH WRAPPER: Authentication successful for user:', userData.username);
               // Check if user is actually authenticated (not anonymous)
               if (userData.username !== 'anonymous' && userData.id > 0) {
+                console.log('👤 AUTH WRAPPER: Setting authenticated state');
                 setIsAuthenticated(true);
+                console.log('🎉 AUTH WRAPPER: Authentication process completed successfully!');
               } else {
-                console.log('Invalid user data, clearing tokens');
+                console.log('⚠️ AUTH WRAPPER: Invalid user data, clearing tokens');
                 // Clear invalid tokens
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('jwtToken');

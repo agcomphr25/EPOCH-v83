@@ -135,8 +135,11 @@ export default function LoginPage() {
         }
       }
       
+      console.log('🎯 About to redirect to:', redirectUrl);
+      
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
+        console.log('🚀 EXECUTING REDIRECT NOW to:', redirectUrl);
         window.location.href = redirectUrl;
       }, 1000);
     },

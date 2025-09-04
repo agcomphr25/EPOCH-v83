@@ -138,7 +138,7 @@ export default function LoginPage() {
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
         window.location.href = redirectUrl;
-      }, 500);
+      }, 1000);
     },
     onError: (error: Error) => {
       console.error('Login error:', error);

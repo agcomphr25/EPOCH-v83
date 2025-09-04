@@ -172,12 +172,7 @@ export default function AllOrdersPage() {
   };
 
   const handleViewSalesOrder = (orderId: string) => {
-    const link = document.createElement('a');
-    link.href = `/api/shipping-pdf/sales-order/${orderId}`;
-    link.download = `Sales-Order-${orderId}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
   const confirmCancel = () => {

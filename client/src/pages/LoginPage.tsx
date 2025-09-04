@@ -58,6 +58,7 @@ export default function LoginPage() {
         
         const data = await response.json();
         console.log('✅ Login successful for user:', data.user?.username);
+        console.log('🔍 Login response data:', data);
         return data;
       } catch (error: any) {
         clearTimeout(timeoutId);
@@ -74,25 +75,37 @@ export default function LoginPage() {
       }
     },
     onSuccess: (data) => {
+      console.log('🎉 LOGIN SUCCESS CALLBACK TRIGGERED');
+      console.log('🔍 Success data:', data);
+      
       // Store both session token and JWT token
       if (data.sessionToken) {
+        console.log('💾 Storing sessionToken');
         localStorage.setItem('sessionToken', data.sessionToken);
       }
       if (data.token) {
+        console.log('💾 Storing jwtToken');
         localStorage.setItem('jwtToken', data.token);
       }
+      
+      console.log('🔍 User role:', data.user?.role);
+      const redirectUrl = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
+      console.log('🔍 Redirect URL determined:', redirectUrl);
+      
       toast({
         title: "Login Successful",
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
+      console.log('⏱️ Setting redirect timeout for 500ms...');
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
-        window.location.href = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
+        console.log('🚀 Executing redirect to:', redirectUrl);
+        window.location.href = redirectUrl;
       }, 500);
     },
     onError: (error: Error) => {
-      console.error('Login error:', error);
+      console.error('💥 LOGIN ERROR CALLBACK TRIGGERED:', error);
       
       // Enhanced error message handling with timeout detection
       let errorMessage = error.message;
@@ -116,6 +129,7 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('📝 FORM SUBMITTED');
     
     if (!formData.username || !formData.password) {
       toast({
@@ -126,6 +140,7 @@ export default function LoginPage() {
       return;
     }
 
+    console.log('🚀 TRIGGERING LOGIN MUTATION');
     loginMutation.mutate(formData);
   };
 

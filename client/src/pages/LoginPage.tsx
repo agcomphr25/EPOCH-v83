@@ -37,7 +37,11 @@ export default function LoginPage() {
         if (!response.ok) {
           const error = await response.json();
           console.log('Login Debug - Error response:', error);
-          throw new Error(error.message || 'Login failed');
+          
+          // Ensure error message is properly extracted
+          const errorMessage = error.error || error.message || 'Login failed';
+          console.log('Login Debug - Throwing error:', errorMessage);
+          throw new Error(errorMessage);
         }
         
         const data = await response.json();
@@ -77,9 +81,16 @@ export default function LoginPage() {
     },
     onError: (error: Error) => {
       console.log('Login Debug - onError called with:', error);
+      
+      // Enhanced error message handling
+      let errorMessage = error.message;
+      if (errorMessage === 'Account is deactivated') {
+        errorMessage = 'Your account has been deactivated. Please contact an administrator.';
+      }
+      
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     },

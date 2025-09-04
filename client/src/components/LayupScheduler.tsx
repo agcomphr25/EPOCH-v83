@@ -2025,13 +2025,14 @@ export default function LayupScheduler() {
       const filteredOrders = orders;
       const hasAssignments = Object.keys(orderAssignments).length > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
-      const scheduledOrderCount = generatedSchedule ? generatedSchedule.length : 0;
-      const unscheduledOrderCount = filteredOrders.length - scheduledOrderCount;
+      const scheduledOrderCount = Object.keys(orderAssignments).length; // Use actual assignments, not generatedSchedule
+      const unscheduledOrderCount = Math.max(0, orders.length - scheduledOrderCount); // Prevent negative numbers
 
       console.log('📊 SCHEDULE ANALYSIS:', {
         totalOrders: orders.length,
         scheduledOrders: scheduledOrderCount,
         unscheduledOrders: unscheduledOrderCount,
+        assignmentKeys: Object.keys(orderAssignments).length,
         needsScheduling: unscheduledOrderCount > 50
       });
 
@@ -4369,27 +4370,7 @@ export default function LayupScheduler() {
 
                                 // Debug Monday assignments specifically
                                 if (cellDate.getDay() === 1 && isMatch) {
-                                  console.log(`✅ MONDAY MATCH: ${orderId} → ${assignment.moldId} on ${cellDateStr}`);
-                                }
-
-                                // AGGRESSIVE DEBUG: Log every match attempt for problematic orders
-                                if (orderId === 'AI141' || orderId === 'AH005' || orderId === 'AG822') {
-                                  console.error(`🔍 MATCH DEBUG for ${orderId}:`);
-                                  console.error(`   Cell Date: ${cellDate.toDateString()} (day ${cellDate.getDay()})`);
-                                  console.error(`   Assignment Date: ${assignmentDate.toDateString()} (day ${assignmentDate.getDay()})`);
-                                  console.error(`   Assignment Raw: ${assignment.date}`);
-                                  console.error(`   Cell Raw: ${dateString}`);
-                                  console.error(`   Assignment UTC: ${assignmentDateStr}`);
-                                  console.error(`   Cell UTC: ${cellDateStr}`);
-                                  console.error(`   Mold match: ${assignment.moldId} === ${mold.moldId} = ${assignment.moldId === mold.moldId}`);
-                                  console.error(`   Date match: ${assignmentDateStr} === ${cellDateStr} = ${assignmentDateStr === cellDateStr}`);
-                                  console.error(`   Final match: ${isMatch}`);
-
-                                  if (isMatch && cellDate.getDay() === 5) {
-                                    console.error(`💥 FRIDAY MATCH DETECTED FOR ${orderId}!`);
-                                    console.error(`💥 THIS SHOULD NEVER HAPPEN - CLEARING STATE`);
-                                    setTimeout(() => setOrderAssignments({}), 5);
-                                  }
+                                  console.log(`✅ Monday assignment found: ${orderId} → ${assignment.moldId} on ${cellDateStr}`);
                                 }
 
                                 // FRIDAY HANDLING: Show Friday assignments for manual drops

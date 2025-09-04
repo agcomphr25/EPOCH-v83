@@ -72,11 +72,12 @@ export function useUnifiedLayupOrders() {
       }
       return data;
     },
-    retry: 1,
-    refetchInterval: false, // Disable automatic refetching for debugging
-    staleTime: 0, // Always consider data stale for debugging
-    refetchOnWindowFocus: false,
-    refetchOnMount: true
+    retry: 3,
+    staleTime: 5000,
+    cacheTime: 60000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchInterval: 30000
   });
 
   console.log('🔧 useUnifiedLayupOrders hook state:', {
@@ -103,9 +104,18 @@ export function useUnifiedLayupOrders() {
     // This will be handled by React Query's refetch functionality
   };
 
+  // More detailed logging for debugging data issues
+  console.log('🔧 Final hook return:', {
+    ordersReturned: combinedOrders.length,
+    isLoading: loading,
+    hasError: !!error,
+    firstOrderId: combinedOrders[0]?.orderId
+  });
+
   return {
     orders: combinedOrders,
     loading,
-    reloadOrders
+    reloadOrders,
+    error
   };
 }

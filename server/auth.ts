@@ -91,54 +91,91 @@ export class AuthService {
   }
 
   static async validateSession(sessionToken: string): Promise<SessionData | null> {
+    // Add timeout wrapper for database operations
+    const timeoutPromise = new Promise<null>((_, reject) => {
+      setTimeout(() => reject(new Error('Database operation timeout')), 2500); // 2.5 second timeout
+    });
+
     try {
-      const [session] = await db
-        .select()
-        .from(userSessions)
-        .where(
-          and(
-            eq(userSessions.sessionToken, sessionToken),
-            eq(userSessions.isActive, true),
-            gt(userSessions.expiresAt, new Date())
-          )
-        );
-      
-      if (!session) {
-        return null;
-      }
+      const result = await Promise.race([
+        (async () => {
+          const [session] = await db
+            .select({
+              id: userSessions.id,
+              userId: userSessions.userId,
+              sessionToken: userSessions.sessionToken,
+              userType: userSessions.userType,
+              employeeId: userSessions.employeeId,
+              expiresAt: userSessions.expiresAt,
+              createdAt: userSessions.createdAt
+            })
+            .from(userSessions)
+            .where(
+              and(
+                eq(userSessions.sessionToken, sessionToken),
+                eq(userSessions.isActive, true),
+                gt(userSessions.expiresAt, new Date())
+              )
+            )
+            .limit(1);
+          
+          if (!session) {
+            return null;
+          }
 
-      // Check for inactivity timeout using createdAt as fallback for lastActivityAt
-      const lastActivity = session.createdAt ? new Date(session.createdAt) : new Date();
-      const inactivityDeadline = new Date(Date.now() - INACTIVITY_TIMEOUT);
-      
-      if (lastActivity < inactivityDeadline) {
-        // Session expired due to inactivity
-        await db
-          .update(userSessions)
-          .set({ isActive: false })
-          .where(eq(userSessions.id, session.id));
-        return null;
-      }
+          // Check for inactivity timeout using createdAt as fallback for lastActivityAt
+          const lastActivity = session.createdAt ? new Date(session.createdAt) : new Date();
+          const inactivityDeadline = new Date(Date.now() - INACTIVITY_TIMEOUT);
+          
+          if (lastActivity < inactivityDeadline) {
+            // Session expired due to inactivity - use timeout for update too
+            try {
+              await Promise.race([
+                db.update(userSessions)
+                  .set({ isActive: false })
+                  .where(eq(userSessions.id, session.id)),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 1000))
+              ]);
+            } catch (updateError) {
+              console.warn('Failed to update session status:', updateError);
+            }
+            return null;
+          }
 
-      // Extend session (update lastActivityAt only if column exists)
-      const newExpiresAt = new Date(Date.now() + SESSION_TIMEOUT);
-      
-      await db
-        .update(userSessions)
-        .set({ expiresAt: newExpiresAt })
-        .where(eq(userSessions.id, session.id));
+          // Extend session (update lastActivityAt only if column exists)
+          const newExpiresAt = new Date(Date.now() + SESSION_TIMEOUT);
+          
+          try {
+            await Promise.race([
+              db.update(userSessions)
+                .set({ expiresAt: newExpiresAt })
+                .where(eq(userSessions.id, session.id)),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 1000))
+            ]);
+          } catch (updateError) {
+            console.warn('Failed to extend session:', updateError);
+            // Still return the session even if update fails
+          }
 
-      return {
-        userId: session.userId,
-        sessionToken: session.sessionToken,
-        userType: session.userType,
-        employeeId: session.employeeId,
-        expiresAt: newExpiresAt,
-      };
+          return {
+            userId: session.userId,
+            sessionToken: session.sessionToken,
+            userType: session.userType,
+            employeeId: session.employeeId,
+            expiresAt: newExpiresAt,
+          };
+        })(),
+        timeoutPromise
+      ]);
+
+      return result;
     } catch (error: any) {
-      // During deployment, userSessions table might not exist yet
-      // In this case, we'll validate using JWT only
-      console.warn('Session validation failed, falling back to JWT:', error?.message || error);
+      // Enhanced error logging for debugging
+      console.warn('Session validation failed:', {
+        error: error?.message || error,
+        timeout: error?.message === 'Database operation timeout',
+        sessionToken: sessionToken?.substring(0, 8) + '...' // Log partial token for debugging
+      });
       return null;
     }
   }
@@ -288,23 +325,51 @@ export class AuthService {
   }
 
   static async getUserById(userId: number): Promise<AuthUser | null> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId));
+    const timeoutPromise = new Promise<null>((_, reject) => {
+      setTimeout(() => reject(new Error('Database operation timeout')), 2000); // 2 second timeout
+    });
 
-    if (!user || !user.isActive) {
+    try {
+      const result = await Promise.race([
+        (async () => {
+          const [user] = await db
+            .select({
+              id: users.id,
+              username: users.username,
+              role: users.role,
+              employeeId: users.employeeId,
+              canOverridePrices: users.canOverridePrices,
+              isActive: users.isActive
+            })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+
+          if (!user || !user.isActive) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            employeeId: user.employeeId,
+            canOverridePrices: user.canOverridePrices || false,
+            isActive: user.isActive,
+          };
+        })(),
+        timeoutPromise
+      ]);
+
+      return result;
+    } catch (error: any) {
+      console.warn('getUserById failed:', {
+        error: error?.message || error,
+        userId,
+        timeout: error?.message === 'Database operation timeout'
+      });
       return null;
     }
-
-    return {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      employeeId: user.employeeId,
-      canOverridePrices: user.canOverridePrices || false,
-      isActive: user.isActive,
-    };
   }
 
   static async getUserBySession(sessionToken: string): Promise<AuthUser | null> {

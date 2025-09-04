@@ -1296,7 +1296,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     // Features and Customizations Section - ORDER SUMMARY PRICING (moved higher)
-    currentY -= 50;
+    currentY -= 54;
     page.drawText('FEATURES & CUSTOMIZATIONS', {
       x: margin,
       y: currentY,

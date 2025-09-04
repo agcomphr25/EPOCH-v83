@@ -821,6 +821,15 @@ export default function OrderEntry() {
         // Set ONLY the features object - all form controls now read from this
         setFeatures(featuresObj);
 
+        // Load miscellaneous items from features object
+        if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
+          setMiscItems(featuresObj.miscItems);
+          console.log('✅ Loading miscellaneous items:', featuresObj.miscItems);
+        } else {
+          setMiscItems([]);
+          console.log('✅ No miscellaneous items found in order data');
+        }
+
         // Force component re-render by incrementing render key
         setRenderKey(prev => prev + 1);
 
@@ -1330,7 +1339,8 @@ export default function OrderEntry() {
       // No need to merge separate state variables since handedness, action_inlet, etc. 
       // are directly updated in features by their respective form controls
       const completeFeatures = {
-        ...features
+        ...features,
+        miscItems: miscItems  // Include miscellaneous items for persistence
       };
 
       console.log('Complete features being saved:', completeFeatures);

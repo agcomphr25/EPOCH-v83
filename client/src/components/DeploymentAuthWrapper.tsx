@@ -16,13 +16,13 @@ function isDeploymentEnvironment(): boolean {
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
   
-  // Skip auth for development environments only
+  // Skip auth ONLY for localhost and Replit editor (not deployed)
   if (isLocalhost || isReplitEditor) {
     return false;
   }
   
-  // Require auth for any deployed environment including .replit.app, .repl.co, and deployed .replit.dev domains
-  return viteDeployment || nodeEnv || hostname.includes('.replit.app') || hostname.includes('.repl.co') || hostname.includes('.replit.dev');
+  // Require auth for ALL other environments (deployed Replit domains AND custom domains)
+  return true;
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {
@@ -37,17 +37,26 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
   });
 
   useEffect(() => {
+    const hostname = window.location.hostname;
+    const isDeployment = isDeploymentEnvironment();
+    console.log('Auth Debug - Hostname:', hostname, 'Is Deployment:', isDeployment);
+    
     // Skip authentication in development
-    if (!isDeploymentEnvironment()) {
+    if (!isDeployment) {
+      console.log('Auth Debug - Skipping auth for development environment');
       setIsAuthenticated(true);
       setIsLoading(false);
       return;
     }
 
+    console.log('Auth Debug - Running auth check for deployment environment');
+
     // Check for existing session
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+        console.log('Auth Debug - Found token:', token ? token.substring(0, 10) + '...' : 'None');
+        
         if (token) {
           const response = await fetch('/api/auth/session', {
             headers: {
@@ -55,24 +64,31 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
             }
           });
           
+          console.log('Auth Debug - Session response status:', response.status);
+          
           if (response.ok) {
             const userData = await response.json();
+            console.log('Auth Debug - User data:', userData);
             // Check if user is actually authenticated (not anonymous)
             if (userData.username !== 'anonymous' && userData.id > 0) {
+              console.log('Auth Debug - Authentication successful');
               setIsAuthenticated(true);
             } else {
+              console.log('Auth Debug - Anonymous user, clearing tokens');
               // Clear invalid tokens
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
               setIsAuthenticated(false);
             }
           } else {
+            console.log('Auth Debug - Session check failed, clearing tokens');
             // Clear invalid tokens
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('jwtToken');
             setIsAuthenticated(false);
           }
         } else {
+          console.log('Auth Debug - No token found, requiring login');
           setIsAuthenticated(false);
         }
       } catch (error) {

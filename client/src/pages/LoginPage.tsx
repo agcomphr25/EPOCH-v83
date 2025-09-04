@@ -97,12 +97,15 @@ export default function LoginPage() {
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
-      console.log('⏱️ Setting redirect timeout for 500ms...');
+      console.log('⏱️ Setting redirect timeout for 750ms...');
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
         console.log('🚀 Executing redirect to:', redirectUrl);
+        console.log('🔍 Final token check before redirect:');
+        console.log('  sessionToken exists:', !!localStorage.getItem('sessionToken'));
+        console.log('  jwtToken exists:', !!localStorage.getItem('jwtToken'));
         window.location.href = redirectUrl;
-      }, 500);
+      }, 750);
     },
     onError: (error: Error) => {
       console.error('💥 LOGIN ERROR CALLBACK TRIGGERED:', error);

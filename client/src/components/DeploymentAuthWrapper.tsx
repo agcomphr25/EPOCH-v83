@@ -7,8 +7,9 @@ interface DeploymentAuthWrapperProps {
 }
 
 function isDeploymentEnvironment(): boolean {
-  // Authentication disabled for all environments
-  return false;
+  // Check if running on deployed domains (.replit.app or .repl.co)
+  const hostname = window.location.hostname;
+  return hostname.includes('.replit.app') || hostname.includes('.repl.co');
 }
 
 export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrapperProps) {

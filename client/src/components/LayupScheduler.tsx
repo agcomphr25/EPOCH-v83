@@ -640,6 +640,16 @@ export default function LayupScheduler() {
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
+
+  // Clear schedule function for testing
+  const clearSchedule = useCallback(() => {
+    console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS');
+    setOrderAssignments({});
+    toast({
+      title: "Schedule Cleared",
+      description: "All order assignments have been cleared. Ready for fresh scheduling.",
+    });
+  }, []);
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
   // Week-specific lock state instead of global lock
   const [lockedWeeks, setLockedWeeks] = useState<{[weekKey: string]: boolean}>({
@@ -2033,11 +2043,20 @@ export default function LayupScheduler() {
         scheduledOrders: scheduledOrderCount,
         unscheduledOrders: unscheduledOrderCount,
         assignmentKeys: Object.keys(orderAssignments).length,
-        needsScheduling: unscheduledOrderCount > 50
+        hasTooManyAssignments: scheduledOrderCount > orders.length * 0.8,
+        needsScheduling: unscheduledOrderCount > 10
       });
 
-      // Auto-trigger if we have many unscheduled orders (threshold: 50+ orders)
-      if (unscheduledOrderCount > 50) {
+      // Clear stale assignments if we have way too many (indicates old/stale data)
+      if (scheduledOrderCount > orders.length * 0.8 && orders.length > 100) {
+        console.log('🧹 DETECTED STALE ASSIGNMENTS: Clearing old schedule data');
+        console.log(`   Had ${scheduledOrderCount} assignments for ${orders.length} orders - clearing stale data`);
+        setOrderAssignments({});
+        return; // Exit early, let it re-run with clean state
+      }
+
+      // Auto-trigger if we have many unscheduled orders (threshold: 10+ orders for testing)
+      if (unscheduledOrderCount > 10 || (orders.length > 100 && scheduledOrderCount < orders.length * 0.3)) {
         console.log('🏭 PRODUCTION FLOW: Auto-triggering algorithmic schedule for', unscheduledOrderCount, 'unscheduled orders...');
         console.log('🏭 Production queue:', orders.length, 'total orders,', scheduledOrderCount, 'already scheduled');
         console.log('🏭 Available resources:', molds.length, 'molds,', employees.length, 'employees');
@@ -4163,6 +4182,14 @@ export default function LayupScheduler() {
                       >
                         <Zap className="w-4 h-4 mr-1" />
                         Auto Schedule ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
+                      </Button>
+                      <Button
+                        onClick={clearSchedule}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                        size="sm"
+                      >
+                        Clear Schedule
                       </Button>
                       {Object.keys(orderAssignments).length > 0 && (
                         <>

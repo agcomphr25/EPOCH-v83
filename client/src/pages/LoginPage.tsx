@@ -19,41 +19,64 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: typeof formData) => {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
+      console.log('Login Debug - Starting login request for:', credentials.username);
+      console.log('Login Debug - Current hostname:', window.location.hostname);
       
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Login failed');
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(credentials),
+        });
+        
+        console.log('Login Debug - Response status:', response.status);
+        console.log('Login Debug - Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        if (!response.ok) {
+          const error = await response.json();
+          console.log('Login Debug - Error response:', error);
+          throw new Error(error.message || 'Login failed');
+        }
+        
+        const data = await response.json();
+        console.log('Login Debug - Success response:', data);
+        return data;
+      } catch (error) {
+        console.log('Login Debug - Network error:', error);
+        throw error;
       }
-      
-      return response.json();
     },
     onSuccess: (data) => {
+      console.log('Login Debug - onSuccess called with data:', data);
+      
       // Store both session token and JWT token
       if (data.sessionToken) {
+        console.log('Login Debug - Storing session token:', data.sessionToken.substring(0, 10) + '...');
         localStorage.setItem('sessionToken', data.sessionToken);
       }
       if (data.token) {
+        console.log('Login Debug - Storing JWT token:', data.token.substring(0, 10) + '...');
         localStorage.setItem('jwtToken', data.token);
       }
       
+      console.log('Login Debug - Tokens stored, showing success toast');
       toast({
         title: "Login Successful",
         description: `Welcome back, ${data.user?.username || 'User'}!`,
       });
       
+      console.log('Login Debug - Preparing redirect to:', data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard');
+      
       // Force page reload to trigger authentication re-check
       setTimeout(() => {
+        console.log('Login Debug - Executing redirect');
         window.location.href = data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager' ? '/employee' : '/dashboard';
       }, 500);
     },
     onError: (error: Error) => {
+      console.log('Login Debug - onError called with:', error);
       toast({
         title: "Login Failed",
         description: error.message,

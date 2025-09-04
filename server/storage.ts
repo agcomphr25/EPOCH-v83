@@ -1488,6 +1488,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Add miscellaneous items (stored in features.miscItems from OrderEntry fix)
+    if (order.features && typeof order.features === 'object') {
+      const features = order.features as any;
+      if (features.miscItems && Array.isArray(features.miscItems)) {
+        features.miscItems.forEach((item: any) => {
+          if (item.price && typeof item.price === 'number') {
+            total += item.price * (item.quantity || 1);
+          }
+        });
+      }
+    }
+
     // Add shipping
     total += order.shipping || 0;
 
@@ -1700,14 +1712,15 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info (much faster without async calculateOrderTotal calls)
-    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+    // Process orders with payment info (using proper order total calculation)
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
-      const orderTotal = order.paymentAmount || 0;
+      
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
 
-      // Simplified payment status logic - avoid expensive calculations
-      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
-                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
         ...order,
@@ -1715,7 +1728,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       };
-    });
+    }));
 
     return ordersWithPaymentInfo;
   }

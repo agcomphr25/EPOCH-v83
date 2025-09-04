@@ -4,6 +4,7 @@ import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePen
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
+import { useQuery } from '@tanstack/react-query';
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -25,6 +26,37 @@ export default function Navigation() {
     const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
     return !isLocalhost && !isReplitEditor;
   };
+  
+  // Fetch current user data
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+      if (!token || !isDeploymentEnvironment()) {
+        return null;
+      }
+      
+      try {
+        const response = await fetch('/api/auth/session', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          return userData;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    enabled: isDeploymentEnvironment(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false
+  });
   
   // Logout function
   const handleLogout = () => {
@@ -1057,6 +1089,11 @@ export default function Navigation() {
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
             <span className="text-sm text-gray-600">Manufacturing ERP System</span>
+            {isDeploymentEnvironment() && currentUser?.username && (
+              <span className="text-sm font-medium text-gray-700" data-testid="text-username">
+                {currentUser.username}
+              </span>
+            )}
             {isDeploymentEnvironment() && (
               <Button
                 variant="outline"

@@ -87,14 +87,11 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           });
         }
         
-        // For all other orders, use STRICT exact matching OR universal molds
+        // For all other orders, use STRICT exact matching ONLY
+        // REMOVED: Universal mold logic that was causing Mesa Universal to accept all orders
         const hasMatch = moldStockModels.some((moldModel: string) => {
           const normalizedMoldModel = moldModel.toLowerCase().replace(/[\s\-]/g, '_');
-          // Universal molds work with any stock model
-          if (normalizedMoldModel === 'universal') {
-            return true;
-          }
-          // Otherwise require exact match
+          // Require exact match only - no universal matching for non-Mesa orders
           return normalizedMoldModel === normalizedStockModel;
         });
         

@@ -1,0 +1,21 @@
+📅 Friday assignment found: AG1613 on Fri Sep 12 2025
+LayupScheduler.tsx:4418 📅 Friday assignment found: AG1614 on Fri Sep 12 2025
+LayupScheduler.tsx:4418 📅 Friday assignment found: AG1615 on Fri Sep 12 2025
+LayupScheduler.tsx:4418 📅 Friday assignment found: AG1616 on Fri Sep 12 2025
+LayupScheduler.tsx:4418 📅 Friday assignment found: EH213 on Fri Sep 12 2025
+LayupScheduler.tsx:4418 📅 Friday assignment found: AG004 on Fri Sep 12 2025
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:538:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=2R3uDsnvMb6lD-arV3qT5:122:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)

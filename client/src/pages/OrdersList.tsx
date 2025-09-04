@@ -412,6 +412,29 @@ export default function OrdersList() {
     }
   };
 
+  const handleExportAllCSV = async () => {
+    try {
+      const response = await fetch('/api/orders/export/csv-all');
+      if (!response.ok) {
+        throw new Error('Failed to export all orders CSV');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `all_orders_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Full CSV export error:', error);
+      alert('Failed to export all orders CSV. Please try again.');
+    }
+  };
+
   try {
     const { data: orders, isLoading, error } = useQuery<Order[]>({
       queryKey: ['/api/orders/with-payment-status', 'v2'],
@@ -728,7 +751,16 @@ export default function OrdersList() {
               data-testid="export-csv-button"
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              Export CSV (Active)
+            </Button>
+            <Button 
+              onClick={handleExportAllCSV}
+              variant="outline" 
+              className="flex items-center gap-2"
+              data-testid="export-all-csv-button"
+            >
+              <Download className="h-4 w-4" />
+              Export All CSV
             </Button>
             <Link href="/order-entry">
               <Button className="flex items-center gap-2" data-testid="create-order-button">

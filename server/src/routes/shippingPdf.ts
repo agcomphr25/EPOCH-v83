@@ -1000,8 +1000,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     shipCurrentY -= 15;
 
-    // Check if order has alternate shipping address
-    if ((order as any).hasAltShipTo && (order as any).altShipToAddress) {
+    // Check if order has alternate shipping address with actual data
+    if ((order as any).hasAltShipTo && (order as any).altShipToAddress && 
+        (order as any).altShipToAddress.street) {
       const altAddress = (order as any).altShipToAddress;
       
       // Use alternate shipping name or fallback to alt_ship_to_name
@@ -1127,12 +1128,64 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         }
       }
     } else {
-      page.drawText('Same as billing address', {
-        x: shipToX,
-        y: shipCurrentY,
-        size: 9,
-        font: font,
-      });
+      // If no customer addresses available, try to use customer contact info
+      if (customer) {
+        // Show customer name
+        const shipToName = customer.name || 'N/A';
+        const wrappedShipToName = wrapText(shipToName, 250, 10, font);
+        wrappedShipToName.forEach((line, index) => {
+          if (shipCurrentY - (index * 13) > customerBoxY + 8) {
+            page.drawText(line, {
+              x: shipToX,
+              y: shipCurrentY - (index * 13),
+              size: 10,
+              font: font,
+            });
+          }
+        });
+        shipCurrentY -= wrappedShipToName.length * 13;
+
+        // Show available contact info as address fallback
+        const contactInfo = [];
+        if (customer.email) contactInfo.push(customer.email);
+        if (customer.phone) contactInfo.push(customer.phone);
+        
+        if (contactInfo.length > 0 && shipCurrentY > customerBoxY + 15) {
+          const contactText = contactInfo.join(' | ');
+          const wrappedContact = wrapText(contactText, 250, 9, font);
+          wrappedContact.forEach((line, index) => {
+            if (shipCurrentY - (index * 11) > customerBoxY + 8) {
+              page.drawText(line, {
+                x: shipToX,
+                y: shipCurrentY - (index * 11),
+                size: 9,
+                font: font,
+                color: rgb(0.5, 0.5, 0.5)
+              });
+            }
+          });
+          shipCurrentY -= wrappedContact.length * 11;
+        }
+        
+        // Note about missing address
+        if (shipCurrentY > customerBoxY + 15) {
+          page.drawText('(Address not on file)', {
+            x: shipToX,
+            y: shipCurrentY,
+            size: 8,
+            font: font,
+            color: rgb(0.6, 0.6, 0.6)
+          });
+        }
+      } else {
+        page.drawText('Customer information not available', {
+          x: shipToX,
+          y: shipCurrentY,
+          size: 9,
+          font: font,
+          color: rgb(0.6, 0.6, 0.6)
+        });
+      }
     }
 
     // Order Details Section - Position properly after customer box

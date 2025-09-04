@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { generateLayupSchedule } from '../utils/schedulerUtils';
 import { scheduleLOPAdjustments, identifyLOPOrders, getLOPStatus } from '../utils/lopScheduler';
 import useMoldSettings from '../hooks/useMoldSettings';
@@ -649,6 +649,9 @@ export default function LayupScheduler() {
       // Clear frontend state
       setOrderAssignments({});
       
+      // Reset auto-schedule trigger so it can run again
+      hasTriggeredAutoSchedule.current = false;
+      
       // Clear database schedule entries and remove any Friday assignments
       const response = await fetch('/api/layup-schedule', {
         method: 'DELETE',
@@ -659,7 +662,7 @@ export default function LayupScheduler() {
       if (response.ok) {
         toast({
           title: "Schedule Cleared",
-          description: "All assignments cleared and Friday assignments removed. Ready for fresh scheduling.",
+          description: "All assignments cleared and auto-schedule reset. Ready for fresh scheduling.",
         });
       } else {
         toast({
@@ -678,6 +681,7 @@ export default function LayupScheduler() {
     }
   }, []);
   const [initialFridayCleanup, setInitialFridayCleanup] = useState(false);
+  const hasTriggeredAutoSchedule = useRef(false);
   // Week-specific lock state instead of global lock
   const [lockedWeeks, setLockedWeeks] = useState<{[weekKey: string]: boolean}>({
     '2025-08-18': true, // Week of 8/18-8/22 is locked
@@ -1445,12 +1449,26 @@ export default function LayupScheduler() {
     }, {} as {[key: string]: number});
     console.log('🏭 LayupScheduler: Filtered orders by source:', sourceCounts);
 
-    // DISABLED AUTO-SCHEDULE: Prevent automatic scheduling to stop continuous reloading
+    // CONTROLLED AUTO-SCHEDULE: Only trigger once when data is loaded and no assignments exist
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
-      console.log('🚀 LayupScheduler: All data loaded - AUTO-SCHEDULE DISABLED to prevent reloading');
-      console.log('💡 Use the "Auto Schedule" button to manually trigger scheduling');
+      console.log('🚀 LayupScheduler: All data loaded, checking if auto-schedule needed');
+
+      // Only auto-schedule if no assignments exist yet
+      const hasAssignments = Object.keys(orderAssignments).length > 0;
+      if (!hasAssignments && orders.length > 0) {
+        console.log('🎯 One-time auto-scheduling triggered for:', orders.length, 'orders');
+        // Use a ref to ensure this only runs once
+        if (!hasTriggeredAutoSchedule.current) {
+          hasTriggeredAutoSchedule.current = true;
+          setTimeout(() => {
+            handleAutoSchedule();
+          }, 1000);
+        }
+      } else {
+        console.log('📋 Assignments already exist, skipping auto-schedule');
+      }
     } else {
-      console.log('❌ LayupScheduler: Missing data for scheduling:', {
+      console.log('❌ LayupScheduler: Missing data for auto-schedule:', {
         orders: orders.length,
         molds: molds.length,
         employees: employees.length

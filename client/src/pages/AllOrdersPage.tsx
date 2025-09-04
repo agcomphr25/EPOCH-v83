@@ -33,7 +33,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit } from 'lucide-react';
+import { Search, X, Download, MoreHorizontal, XCircle, ArrowRight, AlertTriangle, Edit, FileText } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -169,6 +169,10 @@ export default function AllOrdersPage() {
   const handleCancelOrder = (orderId: string) => {
     setOrderToCancel(orderId);
     setIsDialogOpen(true);
+  };
+
+  const handleViewSalesOrder = (orderId: string) => {
+    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
   const confirmCancel = () => {
@@ -490,6 +494,12 @@ export default function AllOrdersPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => handleViewSalesOrder(order.orderId)}
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Sales Order PDF
+                                </DropdownMenuItem>
                                 {!order.isCancelled && (
                                   <DropdownMenuItem 
                                     onClick={() => handleCancelOrder(order.orderId)}

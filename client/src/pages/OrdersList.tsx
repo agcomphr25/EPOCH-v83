@@ -497,11 +497,9 @@ export default function OrdersList() {
 
   // Filter and sort orders based on search term, department filter, and sort options
   const filteredOrders = useMemo(() => {
-    console.log('🔍 useMemo RUNNING - Search term:', searchTerm, 'Orders available:', !!orders);
     if (!orders) return [];
 
     let filtered = [...orders];
-    console.log('🔍 Filtering orders. Search term:', searchTerm, 'Total orders:', orders.length);
 
     // Exclude cancelled orders from main list
     filtered = filtered.filter((order) => !order.isCancelled && order.status !== 'CANCELLED');
@@ -585,7 +583,6 @@ export default function OrdersList() {
       return 0;
     });
 
-    console.log('🔍 Filtered orders result:', filtered.length, 'orders');
     return filtered;
   }, [orders, customers, searchTerm, departmentFilter, sortBy, sortOrder]);
 
@@ -783,10 +780,7 @@ export default function OrdersList() {
                 type="text"
                 placeholder="Search by Order ID, Customer Name, Phone, or FB Order #..."
                 value={searchTerm}
-                onChange={(e) => {
-                  console.log('🔍 Search term changing to:', e.target.value);
-                  setSearchTerm(e.target.value);
-                }}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -923,7 +917,7 @@ export default function OrdersList() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table key={`table-${filteredOrders.length}-${searchTerm}`}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
@@ -937,9 +931,9 @@ export default function OrdersList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {console.log('🔍 Rendering table with orders:', filteredOrders.length) || filteredOrders.map((order) => (
+                {filteredOrders.map((order) => (
                   <TableRow 
-                    key={order.id}
+                    key={`${order.id}-${order.orderId}`}
                     className={cn(
                       order.isCustomOrder === 'yes' ? 'bg-pink-50 hover:bg-pink-100' : '',
                       order.isVerified ? 'bg-green-50 hover:bg-green-100' : ''

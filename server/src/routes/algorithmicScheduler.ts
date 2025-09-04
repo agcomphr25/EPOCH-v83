@@ -5,15 +5,13 @@ const router = Router();
 
 router.post('/generate-algorithmic-schedule', async (req, res) => {
   try {
-    // FIXED: Force correct work days and realistic capacity
-    const { scheduleDays = 60, workDays = [1, 2, 3, 4] } = req.body;
+    // Use work days from frontend settings (respecting user configuration)
+    const { scheduleDays = 60, workDays = [1, 2, 3, 4], maxOrdersPerDay = 21, employees = [], molds = [] } = req.body;
     
-    // CRITICAL: Force Monday-Thursday only scheduling
-    const MANDATORY_WORK_DAYS = [1, 2, 3, 4]; // Monday-Thursday ONLY
-    if (JSON.stringify(workDays) !== JSON.stringify(MANDATORY_WORK_DAYS)) {
-      console.log(`⚠️ OVERRIDING work days from ${workDays} to mandatory Monday-Thursday: ${MANDATORY_WORK_DAYS}`);
-    }
-    const enforcedWorkDays = MANDATORY_WORK_DAYS;
+    // Use the work days passed from the frontend settings
+    const enforcedWorkDays = workDays; // Respect user's work day configuration
+    console.log(`✅ Using work days from frontend settings: ${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}`);
+    console.log(`✅ Using daily capacity from frontend: ${maxOrdersPerDay} orders/day`);
     
     console.log(`🚀 Starting algorithmic scheduler over ${scheduleDays} days`);
     console.log(`📅 Work days ENFORCED: ${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')} (${enforcedWorkDays.join(', ')})`);
@@ -43,20 +41,20 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     `);
 
     // Calculate actual daily employee capacity
-    const employees = employeeResult || [];
-    const totalDailyCapacity = employees.reduce((total: number, emp: any) => {
+    const dbEmployees = employeeResult || [];
+    const totalDailyCapacity = dbEmployees.reduce((total: number, emp: any) => {
       return total + (emp.rate * emp.hours);
     }, 0);
     
-    console.log(`👥 Found ${employees.length} layup employees with total capacity: ${totalDailyCapacity} parts/day`);
-    employees.forEach((emp: any) => {
+    console.log(`👥 Found ${dbEmployees.length} layup employees with total capacity: ${totalDailyCapacity} parts/day`);
+    dbEmployees.forEach((emp: any) => {
       const dailyCapacity = emp.rate * emp.hours;
       console.log(`  ${emp.employee_id}: ${emp.rate} parts/hr × ${emp.hours} hrs = ${dailyCapacity} parts/day`);
     });
 
-    // Use actual employee capacity - sum of all employee daily rates
-    const actualDailyCapacity = Math.floor(totalDailyCapacity) || 20;
-    console.log(`🎯 Using employee-based daily capacity: ${actualDailyCapacity} orders/day (calculated from employee rates: ${totalDailyCapacity})`);
+    // Use capacity from frontend settings (calculated from UI employee settings)
+    const actualDailyCapacity = maxOrdersPerDay || Math.floor(totalDailyCapacity) || 21;
+    console.log(`🎯 Using frontend daily capacity: ${actualDailyCapacity} orders/day (passed from UI settings)`);
 
     // Fetch active molds with capacity and stock models
     const moldsResult = await pool.query(`

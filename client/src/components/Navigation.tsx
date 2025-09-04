@@ -1056,7 +1056,6 @@ export default function Navigation() {
 
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <InstallPWAButton />
-            <span className="text-sm text-gray-600">Manufacturing ERP System</span>
             {isDeploymentEnvironment() && (
               <Button
                 variant="outline"

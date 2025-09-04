@@ -76,20 +76,12 @@ export default function LoginPage() {
     },
     onSuccess: (data) => {
       // Store both session token and JWT token
-      console.log('💾 LOGIN: Storing tokens...');
       if (data.sessionToken) {
         localStorage.setItem('sessionToken', data.sessionToken);
-        console.log('💾 LOGIN: sessionToken stored, length:', data.sessionToken.length);
       }
       if (data.token) {
         localStorage.setItem('jwtToken', data.token);
-        console.log('💾 LOGIN: jwtToken stored, length:', data.token.length);
       }
-      
-      // Verify tokens were stored
-      console.log('🔍 LOGIN: Verification after storage:');
-      console.log('  sessionToken exists:', !!localStorage.getItem('sessionToken'));
-      console.log('  jwtToken exists:', !!localStorage.getItem('jwtToken'));
       
       toast({
         title: "Login Successful",
@@ -102,7 +94,11 @@ export default function LoginPage() {
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
         redirectUrl = '/employee';
       } else {
-        // Redirect to user-specific dashboard based on username
+        // Temporary fix: Redirect all users to root dashboard
+        // User-specific dashboards disabled until localStorage clearing issue is resolved
+        redirectUrl = '/';
+        
+        /* DISABLED - User-specific dashboard routing
         const username = data.user?.username?.toLowerCase();
         switch (username) {
           case 'agtest':
@@ -137,10 +133,10 @@ export default function LoginPage() {
             redirectUrl = '/joeybtest-dashboard';
             break;
           default:
-            // Fall back to main dashboard for users without specific dashboards
             redirectUrl = '/';
             break;
         }
+        */
       }
       
       console.log('🎯 About to redirect to:', redirectUrl);

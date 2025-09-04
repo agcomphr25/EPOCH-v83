@@ -58,36 +58,10 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     // Check for existing session with enhanced error handling
     const checkAuth = async () => {
       try {
-        // Detailed localStorage monitoring at multiple intervals
-        console.log('🕐 AUTH WRAPPER: Starting token monitoring...');
+        // Wait a moment for tokens to be written to localStorage after redirect
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Check immediately
-        let sessionToken = localStorage.getItem('sessionToken');
-        let jwtToken = localStorage.getItem('jwtToken');
-        console.log('⏰ IMMEDIATE CHECK:');
-        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
-        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
-        console.log('  localStorage keys:', Object.keys(localStorage));
-        
-        // Check after 100ms
-        await new Promise(resolve => setTimeout(resolve, 100));
-        sessionToken = localStorage.getItem('sessionToken');
-        jwtToken = localStorage.getItem('jwtToken');
-        console.log('⏰ 100ms CHECK:');
-        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
-        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
-        console.log('  localStorage keys:', Object.keys(localStorage));
-        
-        // Check after 300ms
-        await new Promise(resolve => setTimeout(resolve, 200));
-        sessionToken = localStorage.getItem('sessionToken');
-        jwtToken = localStorage.getItem('jwtToken');
-        console.log('⏰ 300ms CHECK (FINAL):');
-        console.log('  sessionToken:', sessionToken ? 'EXISTS' : 'MISSING');
-        console.log('  jwtToken:', jwtToken ? 'EXISTS' : 'MISSING');
-        console.log('  localStorage keys:', Object.keys(localStorage));
-        
-        const token = sessionToken || jwtToken;
+        const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
         console.log('🔍 AUTH WRAPPER: Token found after redirect:', !!token);
         
         if (token) {

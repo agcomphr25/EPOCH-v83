@@ -232,9 +232,16 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
         
-        // EXCLUDE orders with no stock model - they need attention or should go to shipping
-        if (!stockModel || stockModel === '' || stockModel.toLowerCase() === 'none') {
-          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no valid stock model (${stockModel}) - should be handled in "Orders That Need Attention"`);
+        // EXCLUDE orders with no stock model or invalid stock models - they need attention or should go to shipping
+        if (!stockModel || stockModel === '' || stockModel.toLowerCase() === 'none' || stockModel.toLowerCase() === 'no_stock') {
+          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no valid stock model (${stockModel}) - should be handled elsewhere`);
+          return false;
+        }
+        
+        // EXCLUDE orders without action_length - they need attention
+        const features = (order as any).features || {};
+        if (!features.action_length || features.action_length === '') {
+          console.log(`⚠️ FILTERING OUT: Order ${(order as any).orderId} has no action_length selected - needs attention`);
           return false;
         }
         
@@ -398,8 +405,8 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
         
-        // Orders with no stock model or "None" need to be moved
-        return !stockModel || stockModel === '' || stockModel.toLowerCase() === 'none';
+        // Orders with no stock model, "None", or "no_stock" need to be moved
+        return !stockModel || stockModel === '' || stockModel.toLowerCase() === 'none' || stockModel.toLowerCase() === 'no_stock';
       });
 
       console.log(`🧹 Found ${ordersToMove.length} orders with invalid stock models to move`);

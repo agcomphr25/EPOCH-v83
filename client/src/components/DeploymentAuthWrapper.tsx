@@ -57,7 +57,14 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     // Check for existing session with enhanced error handling
     const checkAuth = async () => {
       try {
+        // Wait a moment for tokens to be written to localStorage after redirect
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+        console.log('🔍 AUTH CHECK: sessionToken exists:', !!localStorage.getItem('sessionToken'));
+        console.log('🔍 AUTH CHECK: jwtToken exists:', !!localStorage.getItem('jwtToken'));
+        console.log('🔍 AUTH CHECK: using token:', !!token);
+        
         if (token) {
           console.log('Checking authentication for deployment...');
           

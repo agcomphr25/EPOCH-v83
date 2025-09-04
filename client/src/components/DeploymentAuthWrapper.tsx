@@ -37,8 +37,9 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
     
     // Failsafe: Reduced timeout for better UX during database issues
     const maxLoadingTimeout = setTimeout(() => {
-      console.warn('Authentication check took too long, stopping loading state');
+      console.warn('⚠️ TIMEOUT FAILSAFE TRIGGERED: Authentication check took too long, stopping loading state');
       console.warn('This likely indicates database connectivity issues on the deployed site');
+      console.warn('🗑️ TIMEOUT: Clearing localStorage tokens due to timeout');
       setIsLoading(false);
       // Clear any stale tokens that might be causing issues
       localStorage.removeItem('sessionToken');
@@ -102,6 +103,7 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
                 console.log('🎉 AUTH WRAPPER: Authentication process completed successfully!');
               } else {
                 console.log('⚠️ AUTH WRAPPER: Invalid user data, clearing tokens');
+                console.log('🗑️ INVALID USER: Clearing localStorage tokens due to invalid user data');
                 // Clear invalid tokens
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('jwtToken');
@@ -110,11 +112,13 @@ export default function DeploymentAuthWrapper({ children }: DeploymentAuthWrappe
             } else if (response.status === 408) {
               // Database timeout - clear tokens and show login
               console.error('Database timeout detected, clearing authentication tokens');
+              console.log('🗑️ DB TIMEOUT: Clearing localStorage tokens due to database timeout');
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');
               setIsAuthenticated(false);
             } else {
               console.log('Authentication failed with status:', response.status);
+              console.log('🗑️ AUTH FAILED: Clearing localStorage tokens due to auth failure, status:', response.status);
               // Clear invalid tokens
               localStorage.removeItem('sessionToken');
               localStorage.removeItem('jwtToken');

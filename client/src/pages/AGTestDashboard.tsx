@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink } from 'lucide-react';
+import { BarChart3, Calendar, List, Maximize2, Minimize2, Search, ArrowRight, Edit, QrCode, Users, ExternalLink, LogOut } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -19,6 +19,15 @@ export default function AGTestDashboard() {
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const handleLogout = () => {
+    // Clear authentication tokens
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('jwtToken');
+    
+    // Redirect to login page
+    window.location.href = '/login';
   };
 
   // Get all orders with payment status
@@ -65,8 +74,19 @@ export default function AGTestDashboard() {
             Production Pipeline Overview, Order Management & Layup Scheduling
           </p>
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Real-time Manufacturing Control Center
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Real-time Manufacturing Control Center
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
         </div>
       </div>
 

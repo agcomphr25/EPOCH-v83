@@ -899,11 +899,8 @@ router.get('/attention', async (req: Request, res: Response) => {
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND (
-          o.model_id IS NULL OR 
-          o.model_id = '' OR 
-          o.features->>'action_length' IS NULL OR 
-          o.features->>'action_length' = '' OR 
-          o.features->>'action_length' = 'null'
+          (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
+          (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
         )
       ORDER BY 
         o.due_date ASC,

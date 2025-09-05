@@ -158,22 +158,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Refund request not found' });
     }
 
-    // Find the original payment transaction for this order
-    const originalPayments = await db
-      .select()
-      .from(creditCardTransactions)
-      .where(eq(creditCardTransactions.orderId, refundRequest.orderId))
-      .orderBy(desc(creditCardTransactions.createdAt));
-
-    if (originalPayments.length === 0) {
-      console.error(`❌ No credit card transactions found for order ${refundRequest.orderId}`);
-      return res.status(400).json({ 
-        error: 'No original payment transaction found for this order. Refunds can only be processed for credit card payments.' 
-      });
-    }
-
-    // Use the most recent successful payment transaction
-    const originalPayment = originalPayments[0];
+    // REMOVED: Credit card transaction check since manual processing handles all payment types
     
     // For now, we'll use a hardcoded manager. In production, this would come from auth
     const approvedBy = 'MANAGER'; // TODO: Get from authentication context

@@ -117,8 +117,13 @@ interface StockModel {
 
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
+  
+  // Read search parameter from URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialSearchTerm = searchParams.get('search') || '';
+  
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{orderId: string, barcode: string} | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(initialSearchTerm);
   const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');

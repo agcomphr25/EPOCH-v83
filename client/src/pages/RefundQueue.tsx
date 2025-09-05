@@ -243,7 +243,7 @@ export default function RefundQueue() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <Link 
-                          href="/orders" 
+                          href={`/orders?search=${request.orderId}`}
                           className="font-medium text-lg text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                           data-testid={`request-order-${request.id}`}
                         >
@@ -335,7 +335,7 @@ export default function RefundQueue() {
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <Link 
-                        href="/orders" 
+                        href={`/orders?search=${request.orderId}`}
                         className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                         data-testid={`processed-order-${request.id}`}
                       >

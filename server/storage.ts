@@ -1451,6 +1451,8 @@ export class DatabaseStorage implements IStorage {
 
   // Helper function to calculate order total from features and pricing
   private async calculateOrderTotal(order: AllOrder): Promise<number> {
+    console.log(`🔍 DEBUG ${order.orderId} - calculateOrderTotal called`);
+    console.log(`🔍 DEBUG ${order.orderId} - discountCode: "${order.discountCode}"`);
     let total = 0;
 
     // Add base stock model price (use override if set, otherwise use standard price)
@@ -1506,6 +1508,47 @@ export class DatabaseStorage implements IStorage {
           }
         }
       });
+    }
+
+    // Apply persistent discount if present (CRITICAL FIX: Add missing discount logic)
+    if (order.discountCode && order.discountCode !== 'none') {
+      console.log(`🔍 DEBUG ${order.orderId} - Discount code: "${order.discountCode}"`);
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+      console.log(`🔍 DEBUG ${order.orderId} - Available discounts:`, persistentDiscounts.length);
+      
+      // Handle both "persistent_2" format and direct name lookup
+      let discount = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        console.log(`🔍 DEBUG ${order.orderId} - Looking for discount ID: ${discountId}`);
+        discount = persistentDiscounts.find(d => d.id === discountId);
+      } else {
+        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      console.log(`🔍 DEBUG ${order.orderId} - Found discount:`, discount ? `${discount.name} (${discount.percent}%)` : 'null');
+      
+      if (discount && discount.isActive) {
+        if (discount.appliesTo === 'stock_model') {
+          // Apply discount only to the base model price
+          if (order.modelId) {
+            const stockModels = await this.getAllStockModels();
+            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            if (selectedModel) {
+              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
+              const discountAmount = discount.percent > 0 
+                ? (basePrice * discount.percent / 100)
+                : Number(discount.fixedAmount || 0);
+              total -= discountAmount;
+            }
+          }
+        } else if (discount.appliesTo === 'total_order') {
+          // Apply discount to entire order total
+          const discountAmount = discount.percent > 0 
+            ? (total * discount.percent / 100)
+            : Number(discount.fixedAmount || 0);
+          total -= discountAmount;
+        }
+      }
     }
 
     // Apply custom discount if present

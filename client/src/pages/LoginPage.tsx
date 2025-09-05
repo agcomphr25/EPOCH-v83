@@ -94,19 +94,8 @@ export default function LoginPage() {
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
         redirectUrl = '/employee';
       } else {
-        // Check for specific user redirects
-        const username = data.user?.username?.toLowerCase();
-        
-        if (username === 'darleneb') {
-          redirectUrl = '/darleneb-dashboard';
-        } else if (username === 'agrace') {
-          redirectUrl = '/ag-dashboard';
-        } else if (username === 'staciw') {
-          redirectUrl = '/staciw-dashboard';
-        } else {
-          // Default redirect for all other users
-          redirectUrl = '/';
-        }
+        // All other users go to root dashboard
+        redirectUrl = '/';
       }
       
       console.log('🎯 About to redirect to:', redirectUrl);

@@ -450,21 +450,26 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
 export const refundRequests = pgTable("refund_requests", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull(), // Reference to order
-  customerId: text("customer_id").notNull(), // Reference to customer
-  requestedBy: text("requested_by").notNull(), // CSR username who requested refund
-  refundAmount: real("refund_amount").notNull(), // Amount to be refunded
+  refundType: text("refund_type"), // ORDER_TIME or POST_DELIVERY
+  amount: real("amount"), // Alternative amount field
   reason: text("reason").notNull(), // Free-form reason for refund
+  notes: text("notes"), // Additional notes
   status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED, PROCESSED
+  requestedBy: text("requested_by").notNull(), // CSR username who requested refund
+  requestedAt: timestamp("requested_at").defaultNow(), // When request was made
   approvedBy: text("approved_by"), // Manager username who approved/rejected
   approvedAt: timestamp("approved_at"), // When approved/rejected
+  processedBy: text("processed_by"), // Who processed the refund
   processedAt: timestamp("processed_at"), // When refund was processed
+  transactionId: text("transaction_id"), // Transaction ID
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
+  refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
   authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
   authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
-  notes: text("notes"), // Additional notes
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const forms = pgTable("forms", {

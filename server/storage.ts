@@ -21,6 +21,8 @@ import {
   // Gateway reports table - temporarily removed
   // PO Products table
   poProducts,
+  // Refund requests table
+  refundRequests,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -90,6 +92,8 @@ import {
   // Gateway reports types - temporarily removed
   // PO Products types
   type POProduct, type InsertPOProduct,
+  // Refund request types
+  type RefundRequest, type InsertRefundRequest,
 
 
 } from "./schema";

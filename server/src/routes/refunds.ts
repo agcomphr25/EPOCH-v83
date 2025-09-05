@@ -103,27 +103,8 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('🔍 Getting all refund requests');
     
     const requests = await db
-      .select({
-        id: refundRequests.id,
-        orderId: refundRequests.orderId,
-        customerId: refundRequests.customerId,
-        requestedBy: refundRequests.requestedBy,
-        refundAmount: refundRequests.refundAmount,
-        reason: refundRequests.reason,
-        status: refundRequests.status,
-        approvedBy: refundRequests.approvedBy,
-        approvedAt: refundRequests.approvedAt,
-        processedAt: refundRequests.processedAt,
-        rejectionReason: refundRequests.rejectionReason,
-        notes: refundRequests.notes,
-        createdAt: refundRequests.createdAt,
-        updatedAt: refundRequests.updatedAt,
-        // Join order data
-        orderDate: allOrders.orderDate,
-        paymentTotal: allOrders.paymentAmount,
-      })
+      .select()
       .from(refundRequests)
-      .leftJoin(allOrders, eq(refundRequests.orderId, allOrders.orderId))
       .orderBy(desc(refundRequests.createdAt));
 
     console.log(`✅ Found ${requests.length} refund requests`);

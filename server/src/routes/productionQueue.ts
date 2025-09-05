@@ -893,9 +893,11 @@ router.get('/attention', async (req: Request, res: Response) => {
         o.customer_id as customerId,
         o.features,
         o.created_at as createdAt,
-        c.name as customerName
+        c.name as customerName,
+        poi.specifications as poItemSpecs
       FROM all_orders o
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+      LEFT JOIN purchase_order_items poi ON o.order_id = poi.item_id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND (
@@ -903,6 +905,8 @@ router.get('/attention', async (req: Request, res: Response) => {
           (
             (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null') 
             AND NOT (o.features->>'action_inlet' LIKE '%flattop%')
+            AND (poi.specifications IS NULL OR poi.specifications->>'actionLength' IS NULL OR poi.specifications->>'actionLength' = '')
+            AND NOT (poi.specifications->>'flatTop' = 'true')
           )
         )
       ORDER BY 

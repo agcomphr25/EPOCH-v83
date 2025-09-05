@@ -232,8 +232,7 @@ export default function RefundRequest() {
                               {formatCurrency(order.paymentTotal)}
                             </div>
                             <Badge
-                              variant={order.isFullyPaid ? 'default' : 'secondary'}
-                              className="text-xs"
+                              className={order.isFullyPaid ? "bg-green-500 hover:bg-green-600 text-white text-xs" : "bg-red-500 hover:bg-red-600 text-white text-xs"}
                               data-testid={`payment-status-${order.orderId}`}
                             >
                               {order.isFullyPaid ? 'PAID' : 'NOT PAID'}

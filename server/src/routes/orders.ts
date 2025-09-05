@@ -95,6 +95,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
   try {
     const { customerId } = req.params;
     console.log(`🔍 Getting all orders for customer ${customerId}`);
+    console.log(`🔍 TEST - Debug logging is working at API start`);
     
     // Get orders from allOrders table with payment information
     const orders = await db.select({
@@ -110,6 +111,12 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       paymentAmount: allOrders.paymentAmount,
       isPaid: allOrders.isPaid,
       customerPO: allOrders.customerPO,
+      discountCode: allOrders.discountCode,
+      features: allOrders.features,
+      priceOverride: allOrders.priceOverride,
+      showCustomDiscount: allOrders.showCustomDiscount,
+      customDiscountValue: allOrders.customDiscountValue,
+      customDiscountType: allOrders.customDiscountType,
     })
     .from(allOrders)
     .where(eq(allOrders.customerId, customerId));
@@ -127,9 +134,12 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
         // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+        console.log(`🔍 DEBUG ${order.orderId} - About to call calculateOrderTotal`);
+        console.log(`🔍 DEBUG ${order.orderId} - Order discountCode: "${order.discountCode}"`);
         let actualOrderTotal;
         try {
           actualOrderTotal = await storage.calculateOrderTotal(order);
+          console.log(`🔍 DEBUG ${order.orderId} - calculateOrderTotal returned: ${actualOrderTotal}`);
           // Fallback to shipping cost if calculation fails
           if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
             actualOrderTotal = Number(order.shipping) || 0;

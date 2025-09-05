@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, Clock, DollarSign, User, Calendar, FileText, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, DollarSign, User, Calendar, FileText, AlertCircle, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -241,9 +242,14 @@ export default function RefundQueue() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-lg" data-testid={`request-order-${request.id}`}>
+                        <Link 
+                          href="/orders" 
+                          className="font-medium text-lg text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                          data-testid={`request-order-${request.id}`}
+                        >
                           {request.orderId}
-                        </span>
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
                         {getStatusBadge(request.status)}
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
@@ -328,9 +334,14 @@ export default function RefundQueue() {
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                      <span className="font-medium" data-testid={`processed-order-${request.id}`}>
+                      <Link 
+                        href="/orders" 
+                        className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                        data-testid={`processed-order-${request.id}`}
+                      >
                         {request.orderId}
-                      </span>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
                       {getStatusBadge(request.status)}
                       <span className="text-sm text-gray-600" data-testid={`processed-amount-${request.id}`}>
                         {formatCurrency(request.refundAmount)}

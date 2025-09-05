@@ -1833,14 +1833,15 @@ export class DatabaseStorage implements IStorage {
     // Create payment map for fast lookup
     const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
 
-    // Process orders with payment info (same logic as original method)
-    const ordersWithPaymentInfo = ordersWithCustomers.map(order => {
+    // Process orders with payment info using CORRECTED payment logic
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
       const paymentTotal = paymentMap.get(order.orderId) || 0;
-      const orderTotal = order.paymentAmount || 0;
+      
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
 
-      // Simplified payment status logic - avoid expensive calculations
-      const isFullyPaid = (paymentTotal >= orderTotal && orderTotal > 0) || 
-                         (orderTotal === 0 && paymentTotal > (order.shipping || 0));
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
 
       return {
         ...order,
@@ -1848,7 +1849,7 @@ export class DatabaseStorage implements IStorage {
         paymentTotal,
         isFullyPaid
       } as any; // Type assertion to avoid complex type errors
-    });
+    }));
 
     return {
       orders: ordersWithPaymentInfo,

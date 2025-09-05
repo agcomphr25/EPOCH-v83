@@ -118,14 +118,11 @@ router.get('/', async (req: Request, res: Response) => {
         notes: refundRequests.notes,
         createdAt: refundRequests.createdAt,
         updatedAt: refundRequests.updatedAt,
-        // Join customer data
-        customerName: customers.name,
         // Join order data
         orderDate: allOrders.orderDate,
         paymentTotal: allOrders.paymentAmount,
       })
       .from(refundRequests)
-      .leftJoin(customers, sql`${refundRequests.customerId}::text = ${customers.id}::text`)
       .leftJoin(allOrders, eq(refundRequests.orderId, allOrders.orderId))
       .orderBy(desc(refundRequests.createdAt));
 

@@ -133,21 +133,28 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // FIXED: Use stored order total from when order was finalized (matches Order Summary)
-        // This ensures refund amounts match exactly what's shown in Order Summary
-        console.log(`🔍 DEBUG ${order.orderId} - Using stored order total (matches Order Summary)`);
+        // FIXED: Use the exact same order data that Order Summary uses
+        // Call the same getOrderById that the OrderSummaryModal uses for consistency
+        console.log(`🔍 DEBUG ${order.orderId} - Getting order data same as Order Summary`);
         let actualOrderTotal;
         try {
-          // Use the same calculation as Order Summary: get the total from when order was finalized
-          // This avoids recalculation discrepancies and matches the user expectation
-          actualOrderTotal = await storage.getStoredOrderTotal(order.orderId);
-          console.log(`🔍 DEBUG ${order.orderId} - Stored order total: ${actualOrderTotal}`);
-          // Fallback to shipping cost if no stored total found
+          // Use the exact same data source as Order Summary: /api/orders/:id endpoint
+          const orderSummaryData = await storage.getOrderById(order.orderId);
+          if (orderSummaryData && orderSummaryData.totalAmount) {
+            actualOrderTotal = Number(orderSummaryData.totalAmount);
+            console.log(`🔍 DEBUG ${order.orderId} - Order Summary total: ${actualOrderTotal}`);
+          } else {
+            // Fallback: calculate same as Order Summary if no totalAmount field
+            actualOrderTotal = await storage.calculateOrderTotal(order);
+            console.log(`🔍 DEBUG ${order.orderId} - Calculated total: ${actualOrderTotal}`);
+          }
+          
+          // Fallback to shipping cost if calculation fails
           if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
             actualOrderTotal = Number(order.shipping) || 0;
           }
         } catch (error) {
-          console.error(`❌ Error getting stored order total for ${order.orderId}:`, error);
+          console.error(`❌ Error getting Order Summary data for ${order.orderId}:`, error);
           actualOrderTotal = Number(order.shipping) || 0;
         }
         const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route, Router, Link } from "wouter";
+import { Switch, Route, Router, Link, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -106,6 +106,14 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 
 
+// Component to conditionally render Navigation
+function ConditionalNavigation() {
+  const [location] = useLocation();
+  const hideNavigation = location === '/darlenebtest-dashboard';
+  
+  return hideNavigation ? null : <Navigation />;
+}
+
 function App() {
   console.log("App component is rendering...");
   console.log("Environment:", import.meta.env.MODE);
@@ -163,7 +171,7 @@ function App() {
         <DeploymentAuthWrapper>
           <Router>
             <div className="min-h-screen bg-gray-50">
-              <Navigation />
+              <ConditionalNavigation />
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
                   <Switch>

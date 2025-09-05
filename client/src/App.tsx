@@ -96,6 +96,8 @@ import PurchaseReviewChecklist from "./pages/PurchaseReviewChecklist";
 import PurchaseReviewSubmissions from "./pages/PurchaseReviewSubmissions";
 import ManufacturersCertificate from "./pages/ManufacturersCertificate";
 import PaymentManagement from "./pages/PaymentManagement";
+import RefundRequest from "./pages/RefundRequest";
+import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
@@ -248,6 +250,10 @@ function App() {
 
                   {/* Payment Processing Routes */}
                   <Route path="/payment-management" component={PaymentManagement} />
+
+                  {/* Refund Management Routes */}
+                  <Route path="/refund-request" component={RefundRequest} />
+                  <Route path="/refund-queue" component={RefundQueue} />
 
                   {/* Forms and Reports Routes */}
                   <Route path="/forms" component={AdminFormsPage} />

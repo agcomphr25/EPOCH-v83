@@ -314,6 +314,18 @@ export default function Navigation() {
       description: 'Process credit card payments and view transaction history'
     },
     {
+      path: '/refund-request',
+      label: 'Refund Request',
+      icon: TrendingDown,
+      description: 'Submit refund requests for customer orders'
+    },
+    {
+      path: '/refund-queue',
+      label: 'Refund Queue',
+      icon: List,
+      description: 'Review and approve pending refund requests'
+    },
+    {
       path: '/finance/ap',
       label: 'AP Journal',
       icon: Receipt,

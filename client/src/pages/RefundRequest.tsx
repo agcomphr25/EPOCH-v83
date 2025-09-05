@@ -26,6 +26,8 @@ interface Order {
   paymentAmount?: number;
   isPaid: boolean;
   paymentTotal: number;
+  orderTotal?: number;
+  balanceDue?: number;
   isFullyPaid: boolean;
   customerPO?: string;
 }
@@ -90,8 +92,8 @@ export default function RefundRequest() {
 
   const handleOrderSelect = (order: Order) => {
     setSelectedOrder(order);
-    // Set max refund amount to the payment total
-    setRefundAmount(order.paymentTotal.toString());
+    // Set max refund amount to the order total (matches what's shown in Order Summary)
+    setRefundAmount((order.orderTotal || 0).toString());
   };
 
   const handleSubmitRefund = () => {
@@ -299,14 +301,14 @@ export default function RefundRequest() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedOrder.paymentTotal}
+                    max={selectedOrder.orderTotal || 0}
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     placeholder="0.00"
                     data-testid="refund-amount-input"
                   />
                   <div className="text-xs text-gray-500" data-testid="max-refund-note">
-                    Maximum refund: {formatCurrency(selectedOrder.paymentTotal)}
+                    Maximum refund: {formatCurrency(selectedOrder.orderTotal || 0)}
                   </div>
                 </div>
 

@@ -72,7 +72,7 @@ export default function Navigation() {
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
-  const [testDashboardsExpanded, setTestDashboardsExpanded] = useState(false);
+  const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
@@ -84,7 +84,7 @@ export default function Navigation() {
     setQcMaintenanceExpanded(false);
     setEmployeesExpanded(false);
     setFinanceExpanded(false);
-    setTestDashboardsExpanded(false);
+    setUserDashboardsExpanded(false);
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
@@ -102,7 +102,7 @@ export default function Navigation() {
       if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
       if (dropdownName !== 'employees') setEmployeesExpanded(false);
       if (dropdownName !== 'finance') setFinanceExpanded(false);
-      if (dropdownName !== 'testDashboards') setTestDashboardsExpanded(false);
+      if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
@@ -345,63 +345,63 @@ export default function Navigation() {
     }
   ];
 
-  const testDashboardsItems = [
+  const userDashboardsItems = [
     {
-      path: '/agtest-dashboard',
-      label: 'AGTEST Dashboard',
+      path: '/ag-dashboard',
+      label: 'AG Dashboard',
       icon: BarChart,
       description: 'Unified dashboard with Pipeline Overview, All Orders, and Layup Scheduler'
     },
     {
-      path: '/admintest-dashboard',
-      label: 'ADMINTEST Dashboard',
+      path: '/admin-dashboard',
+      label: 'ADMIN Dashboard',
       icon: Factory,
       description: 'Complete navigation dashboard for all system sections'
     },
     {
-      path: '/johnltest-dashboard',
+      path: '/johnl-dashboard',
       label: 'JOHNL Dashboard',
       icon: Settings,
       description: 'CNC Operations dashboard with queue, orders, and employee portal'
     },
     {
-      path: '/jenstest-dashboard',
+      path: '/jens-dashboard',
       label: 'JENS Dashboard',
       icon: Shield,
       description: 'Quality Control dashboard with Finish QC queue, orders, and employee portal'
     },
     {
-      path: '/staciwtest-dashboard',
+      path: '/staciw-dashboard',
       label: 'STACIW Dashboard',
       icon: Factory,
       description: 'Comprehensive order and production management dashboard'
     },
     {
-      path: '/darlenebtest-dashboard',
+      path: '/darleneb-dashboard',
       label: 'DARLENEB Dashboard',
       icon: Users,
       description: 'Order management and customer relations dashboard'
     },
     {
-      path: '/timstest-dashboard',
+      path: '/tims-dashboard',
       label: 'TIMS Dashboard',
       icon: Cog,
       description: 'CNC operations and maintenance management dashboard'
     },
     {
-      path: '/bradwtest-dashboard',
+      path: '/bradw-dashboard',
       label: 'BRADW Dashboard',
       icon: Users,
       description: 'Gunsmith queue, orders, and employee portal dashboard'
     },
     {
-      path: '/faleeshahtest-dashboard',
+      path: '/faleeshah-dashboard',
       label: 'FALEESHAH Dashboard',
       icon: Shield,
       description: 'Quality Control, Shipping & Customer Management dashboard'
     },
     {
-      path: '/joeybtest-dashboard',
+      path: '/joeyb-dashboard',
       label: 'JOEYB Dashboard',
       icon: Settings,
       description: 'Cutting Table, CNC & Gunsmith Operations dashboard'
@@ -564,7 +564,7 @@ export default function Navigation() {
   const isQcMaintenanceActive = qcMaintenanceItems.some(item => location === item.path);
   const isEmployeesActive = employeesItems.some(item => location === item.path);
   const isFinanceActive = financeItems.some(item => location === item.path);
-  const isTestDashboardsActive = testDashboardsItems.some(item => location === item.path);
+  const isUserDashboardsActive = userDashboardsItems.some(item => location === item.path);
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
@@ -595,8 +595,8 @@ export default function Navigation() {
       if (isFinanceActive) {
         setFinanceExpanded(true);
       }
-      if (isTestDashboardsActive) {
-        setTestDashboardsExpanded(true);
+      if (isUserDashboardsActive) {
+        setUserDashboardsExpanded(true);
       }
       if (isPurchaseOrdersActive) {
         setPurchaseOrdersExpanded(true);
@@ -610,7 +610,7 @@ export default function Navigation() {
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isTestDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">

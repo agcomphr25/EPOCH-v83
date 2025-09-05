@@ -33,6 +33,7 @@ interface Order {
 interface RefundRequestData {
   orderId: string;
   customerId: string;
+  requestedBy: string;
   refundAmount: number;
   reason: string;
   originalTransactionId?: string;
@@ -124,6 +125,7 @@ export default function RefundRequest() {
     const requestData: RefundRequestData = {
       orderId: selectedOrder.orderId,
       customerId: selectedCustomer.id.toString(),
+      requestedBy: 'CSR', // TODO: Get from authentication context in production
       refundAmount: parseFloat(refundAmount),
       reason: reason.trim(),
       notes: notes.trim() || undefined,

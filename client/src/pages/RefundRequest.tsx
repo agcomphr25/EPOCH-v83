@@ -236,7 +236,7 @@ export default function RefundRequest() {
                               className="text-xs"
                               data-testid={`payment-status-${order.orderId}`}
                             >
-                              {order.isFullyPaid ? 'Paid' : 'Unpaid'}
+                              {order.isFullyPaid ? 'PAID' : 'NOT PAID'}
                             </Badge>
                           </div>
                         </div>

@@ -26,7 +26,7 @@ export default function LoginPage() {
                           window.location.hostname.includes('.repl.co') ||
                           window.location.hostname.includes('agcompepoch.xyz');
       
-      const timeoutDuration = isDeployment ? 6000 : 30000; // 6 seconds for deployment
+      const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment
       console.log(`🌐 Login timeout set to ${timeoutDuration}ms (deployment: ${isDeployment})`);
       
       const controller = new AbortController();

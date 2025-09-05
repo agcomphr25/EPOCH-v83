@@ -6369,16 +6369,10 @@ export class DatabaseStorage implements IStorage {
   // Helper method to send fulfillment notifications
   private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
     try {
-      // Determine base URL for API calls - check multiple indicators for production
-      const isProduction = process.env.REPL_SLUG || 
-                          process.env.REPLIT_DOMAINS ||
-                          (typeof process.env.REPL_ID !== 'undefined');
+      // Always use the local server for API calls since we're making internal requests
+      const baseUrl = 'http://localhost:5000';
       
-      const baseUrl = isProduction 
-        ? `https://${process.env.REPL_SLUG || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost'}.replit.app`
-        : 'http://localhost:5000';
-      
-      console.log(`🌐 Notification base URL: ${baseUrl} (production: ${isProduction})`);
+      console.log(`🌐 Notification base URL: ${baseUrl} (internal API calls)`);
 
       // Get the updated order to check for tracking information
       const [updatedOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));

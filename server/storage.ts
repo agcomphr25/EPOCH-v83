@@ -1458,8 +1458,18 @@ export class DatabaseStorage implements IStorage {
       const stockModels = await this.getAllStockModels();
       const selectedModel = stockModels.find(model => model.id === order.modelId);
       if (selectedModel) {
-        const basePrice = order.priceOverride !== null ? order.priceOverride : (selectedModel.price || 0);
-        total += basePrice;
+        // CRITICAL FIX: Ensure all values are proper numbers to prevent NaN
+        const rawPrice = selectedModel.price;
+        const modelPrice = (rawPrice === null || rawPrice === undefined || isNaN(Number(rawPrice))) ? 0 : Number(rawPrice);
+        const priceOverride = order.priceOverride;
+        const basePrice = (priceOverride !== null && priceOverride !== undefined && !isNaN(Number(priceOverride))) 
+                          ? Number(priceOverride) 
+                          : modelPrice;
+        
+        // Ensure we're adding a valid number
+        if (!isNaN(basePrice)) {
+          total += basePrice;
+        }
       }
     }
 
@@ -1475,16 +1485,24 @@ export class DatabaseStorage implements IStorage {
               value.forEach(optionValue => {
                 const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
                 if (option?.price) {
-                  total += option.price;
+                  const featurePrice = Number(option.price);
+                  if (!isNaN(featurePrice)) {
+                    total += featurePrice;
+                  }
                 }
               });
             } else {
               // Handle single-select features
               const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
               if (option?.price) {
-                total += option.price;
+                const featurePrice = Number(option.price);
+                if (!isNaN(featurePrice)) {
+                  total += featurePrice;
+                }
               }
             }
+          } else if (order.orderId === 'EH219') {
+            console.log(`🔍 DEBUG EH219 - Feature ${featureId}: no options found`);
           }
         }
       });
@@ -1492,10 +1510,13 @@ export class DatabaseStorage implements IStorage {
 
     // Apply custom discount if present
     if (order.showCustomDiscount && order.customDiscountValue) {
-      if (order.customDiscountType === 'percent') {
-        total = total * (1 - (order.customDiscountValue / 100));
-      } else {
-        total = Math.max(0, total - order.customDiscountValue);
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        if (order.customDiscountType === 'percent') {
+          total = total * (1 - (discountValue / 100));
+        } else {
+          total = Math.max(0, total - discountValue);
+        }
       }
     }
 
@@ -1504,17 +1525,23 @@ export class DatabaseStorage implements IStorage {
       const features = order.features as any;
       if (features.miscItems && Array.isArray(features.miscItems)) {
         features.miscItems.forEach((item: any) => {
-          if (item.price && typeof item.price === 'number') {
-            total += item.price * (item.quantity || 1);
+          const itemPrice = Number(item.price || 0);
+          const itemQuantity = Number(item.quantity || 1);
+          if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
+            total += itemPrice * itemQuantity;
           }
         });
       }
     }
 
-    // Add shipping
-    total += order.shipping || 0;
+    // Add shipping - CRITICAL FIX: Ensure shipping is a valid number
+    const shippingCost = Number(order.shipping || 0);
+    if (!isNaN(shippingCost)) {
+      total += shippingCost;
+    }
 
-    return total;
+    // Final safeguard: If total is still NaN, return 0
+    return isNaN(total) ? 0 : total;
   }
 
   // Method to get unpaid orders for batch payment processing

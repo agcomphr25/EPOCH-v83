@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { payments } from '../../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { payments, allOrders } from '../../../shared/schema';
+import { eq, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import { authenticateToken } from '../../middleware/auth';
@@ -87,6 +87,59 @@ router.get('/unpaid/customer/:customerId', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error retrieving unpaid orders by customer:', error);
     res.status(500).json({ error: "Failed to fetch unpaid orders for customer", details: (error as any).message });
+  }
+});
+
+// Get all orders for a specific customer (for refund system)
+router.get('/customer/:customerId', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    console.log(`🔍 Getting all orders for customer ${customerId}`);
+    
+    // Get orders from allOrders table with payment information
+    const orders = await db.select({
+      id: allOrders.id,
+      orderId: allOrders.orderId,
+      orderDate: allOrders.orderDate,
+      dueDate: allOrders.dueDate,
+      fbOrderNumber: allOrders.fbOrderNumber,
+      currentDepartment: allOrders.currentDepartment,
+      status: allOrders.status,
+      modelId: allOrders.modelId,
+      shipping: allOrders.shipping,
+      paymentAmount: allOrders.paymentAmount,
+      isPaid: allOrders.isPaid,
+      customerPO: allOrders.customerPO,
+    })
+    .from(allOrders)
+    .where(eq(allOrders.customerId, customerId));
+
+    // Calculate payment totals for each order
+    const ordersWithPaymentTotals = await Promise.all(
+      orders.map(async (order) => {
+        // Get total payments for this order
+        const paymentResults = await db.select({
+          total: sql`SUM(${payments.paymentAmount})`.as('total')
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId));
+
+        const paymentTotal = Number(paymentResults[0]?.total || 0);
+        const orderTotal = Number(order.paymentAmount || 0);
+        
+        return {
+          ...order,
+          paymentTotal,
+          isFullyPaid: paymentTotal >= orderTotal,
+        };
+      })
+    );
+
+    console.log(`✅ Found ${ordersWithPaymentTotals.length} orders for customer ${customerId}`);
+    res.json(ordersWithPaymentTotals);
+  } catch (error) {
+    console.error('❌ Error retrieving orders by customer:', error);
+    res.status(500).json({ error: "Failed to fetch orders for customer", details: (error as any).message });
   }
 });
 

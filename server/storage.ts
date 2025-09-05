@@ -6311,12 +6311,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
+    console.log(`🚀 FULFILLMENT START: Processing fulfillment for order ${orderId}`);
+    
     // Get the order first to get customer information for notifications
     const [existingOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
     
     if (!existingOrder) {
       throw new Error(`Order with ID ${orderId} not found`);
     }
+
+    console.log(`📋 ORDER FOUND: Order ${orderId} for customer ${existingOrder.customerId}`);
 
     // Update the order to be fulfilled and move to shipping management
     const [order] = await db.update(allOrders)
@@ -6333,20 +6337,29 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Order with ID ${orderId} not found after update`);
     }
 
+    console.log(`✅ ORDER UPDATED: Order ${orderId} status changed to FULFILLED`);
+
     // Get customer information for notifications
     if (existingOrder.customerId) {
       try {
+        console.log(`👤 CUSTOMER LOOKUP: Getting customer ${existingOrder.customerId} for notifications`);
         const [customer] = await db.select().from(customers).where(eq(customers.id, parseInt(existingOrder.customerId)));
         
         if (customer) {
+          console.log(`👤 CUSTOMER FOUND: ${customer.name} (Email: ${customer.email || 'none'}, Phone: ${customer.phone || 'none'})`);
           // Send fulfillment notifications in the background
+          console.log(`📡 STARTING NOTIFICATIONS: Triggering notification process for order ${orderId}`);
           this.sendFulfillmentNotifications(orderId, customer).catch(error => {
-            console.error(`Failed to send fulfillment notifications for order ${orderId}:`, error);
+            console.error(`❌ NOTIFICATION FAILED: Error sending fulfillment notifications for order ${orderId}:`, error);
           });
+        } else {
+          console.log(`❌ CUSTOMER NOT FOUND: No customer found with ID ${existingOrder.customerId}`);
         }
       } catch (error) {
-        console.error(`Error getting customer for notifications (order ${orderId}):`, error);
+        console.error(`❌ CUSTOMER LOOKUP ERROR: Error getting customer for notifications (order ${orderId}):`, error);
       }
+    } else {
+      console.log(`⚠️ NO CUSTOMER ID: Order ${orderId} has no customer ID for notifications`);
     }
 
     console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);

@@ -99,6 +99,8 @@ export default function LoginPage() {
         
         if (username === 'darleneb') {
           redirectUrl = '/darlenebtest-dashboard';
+        } else if (username === 'agrace') {
+          redirectUrl = '/agtest-dashboard';
         } else {
           // Default redirect for all other users
           redirectUrl = '/';

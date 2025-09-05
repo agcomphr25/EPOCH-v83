@@ -504,22 +504,27 @@ router.put('/finalized/:id', async (req: Request, res: Response) => {
 // Fulfill an order (move to shipping management with fulfilled badge)
 router.post('/fulfill', async (req: Request, res: Response) => {
   try {
+    console.log(`🎯 FULFILL ENDPOINT CALLED: Request received`);
     const { orderId } = req.body;
 
     if (!orderId) {
+      console.log(`❌ FULFILL ERROR: No order ID provided in request`);
       return res.status(400).json({ error: "Order ID is required" });
     }
+
+    console.log(`🎯 FULFILL REQUEST: Processing fulfillment for order ${orderId}`);
 
     // Update the order to be fulfilled and move to shipping management
     const updatedOrder = await storage.fulfillOrder(orderId);
     
+    console.log(`✅ FULFILL SUCCESS: Order ${orderId} fulfilled successfully`);
     res.json({ 
       success: true, 
       message: "Order fulfilled successfully",
       order: updatedOrder 
     });
   } catch (error) {
-    console.error('Fulfill order error:', error);
+    console.error('❌ FULFILL ENDPOINT ERROR:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }

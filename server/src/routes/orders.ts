@@ -127,11 +127,24 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
         // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
-        const actualOrderTotal = await storage.calculateOrderTotal(order);
+        let actualOrderTotal;
+        try {
+          actualOrderTotal = await storage.calculateOrderTotal(order);
+          // Fallback to shipping cost if calculation fails
+          if (actualOrderTotal === null || actualOrderTotal === undefined || isNaN(actualOrderTotal)) {
+            actualOrderTotal = Number(order.shipping) || 0;
+          }
+        } catch (error) {
+          console.error(`❌ Error calculating order total for ${order.orderId}:`, error);
+          actualOrderTotal = Number(order.shipping) || 0;
+        }
+        const balanceDue = Math.max(0, actualOrderTotal - paymentTotal);
         
         return {
           ...order,
           paymentTotal,
+          orderTotal: actualOrderTotal,
+          balanceDue,
           isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
         };
       })

@@ -192,77 +192,21 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 
     console.log('✅ Approved refund request:', updatedRequest.id);
 
-    // Process the actual refund through Authorize.Net
-    if (apiLoginId && transactionKey && originalPayment.transactionId) {
-      console.log(`🔄 Processing Authorize.Net refund for transaction ${originalPayment.transactionId}`);
-      
-      const refundResult = await processAuthorizeNetRefund(
-        originalPayment.transactionId, 
-        refundRequest.refundAmount
-      );
-
-      if (refundResult.success) {
-        // Update the refund request with processing details
-        await db
-          .update(refundRequests)
-          .set({
-            status: 'PROCESSED',
-            processedAt: new Date(),
-            notes: `Refund processed successfully. Authorize.Net Transaction ID: ${refundResult.refundTransactionId}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(refundRequests.id, parseInt(id)));
-
-        console.log('✅ Refund processed successfully through Authorize.Net');
-        
-        // Create a negative payment record to track the refund
-        await db.insert(payments).values({
-          orderId: refundRequest.orderId,
-          paymentAmount: -refundRequest.refundAmount, // Negative amount for refund
-          paymentMethod: 'CREDIT_CARD_REFUND',
-          paymentDate: new Date(),
-          notes: `Refund processed via Authorize.Net. Transaction ID: ${refundResult.refundTransactionId}`,
-        });
-
-        res.json({
-          ...updatedRequest,
-          status: 'PROCESSED',
-          processedAt: new Date(),
-          refundTransactionId: refundResult.refundTransactionId,
-        });
-      } else {
-        // Update status to show processing failed
-        await db
-          .update(refundRequests)
-          .set({
-            status: 'APPROVED', // Keep as approved but add failure note
-            notes: `Refund processing failed: ${refundResult.message}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(refundRequests.id, parseInt(id)));
-
-        console.error('❌ Refund processing failed:', refundResult.message);
-        res.status(500).json({ 
-          error: 'Refund approval successful but processing failed',
-          details: refundResult.message,
-          refundRequest: updatedRequest
-        });
-      }
-    } else {
-      console.log('⚠️ Authorize.Net not configured or no transaction ID - refund approved but not processed');
-      await db
-        .update(refundRequests)
-        .set({
-          notes: 'Refund approved but automatic processing unavailable. Manual processing required.',
-          updatedAt: new Date(),
-        })
-        .where(eq(refundRequests.id, parseInt(id)));
-      
-      res.json({
-        ...updatedRequest,
-        message: 'Refund approved successfully. Manual processing may be required.'
-      });
-    }
+    // REMOVED: Automatic Authorize.Net processing 
+    // Refunds are now approved for manual processing outside of Epoch
+    console.log('📝 Refund approved for manual processing outside of Epoch');
+    await db
+      .update(refundRequests)
+      .set({
+        notes: 'Refund approved and recorded for manual processing outside of Epoch system.',
+        updatedAt: new Date(),
+      })
+      .where(eq(refundRequests.id, parseInt(id)));
+    
+    res.json({
+      ...updatedRequest,
+      message: 'Refund approved successfully and recorded for manual processing.'
+    });
     
   } catch (error) {
     console.error('❌ Error approving refund request:', error);

@@ -446,6 +446,27 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Refund requests table for two-tiered refund system
+export const refundRequests = pgTable("refund_requests", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull(), // Reference to order
+  customerId: text("customer_id").notNull(), // Reference to customer
+  requestedBy: text("requested_by").notNull(), // CSR username who requested refund
+  refundAmount: real("refund_amount").notNull(), // Amount to be refunded
+  reason: text("reason").notNull(), // Free-form reason for refund
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED, PROCESSED
+  approvedBy: text("approved_by"), // Manager username who approved/rejected
+  approvedAt: timestamp("approved_at"), // When approved/rejected
+  processedAt: timestamp("processed_at"), // When refund was processed
+  rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
+  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
+  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
+  originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
+  notes: text("notes"), // Additional notes
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -2583,3 +2604,29 @@ export const insertPOProductSchema = createInsertSchema(poProducts).omit({
 // Types for PO Products
 export type InsertPOProduct = z.infer<typeof insertPOProductSchema>;
 export type POProduct = typeof poProducts.$inferSelect;
+
+// Insert schema for Refund Requests
+export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit({
+  id: true,
+  status: true,
+  approvedBy: true,
+  approvedAt: true,
+  processedAt: true,
+  rejectionReason: true,
+  authNetTransactionId: true,
+  authNetRefundId: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  customerId: z.string().min(1, "Customer ID is required"),
+  requestedBy: z.string().min(1, "Requested by is required"),
+  refundAmount: z.number().min(0.01, "Refund amount must be greater than 0"),
+  reason: z.string().min(1, "Reason is required"),
+  originalTransactionId: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+// Types for Refund Requests
+export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
+export type RefundRequest = typeof refundRequests.$inferSelect;

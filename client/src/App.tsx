@@ -109,7 +109,7 @@ import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
-  const hideNavigation = location === '/darlenebtest-dashboard' || location === '/agtest-dashboard';
+  const hideNavigation = location === '/darleneb-dashboard' || location === '/ag-dashboard';
   
   return hideNavigation ? null : <Navigation />;
 }
@@ -231,17 +231,17 @@ function App() {
                   {/* Auth Routes */}
                   <Route path="/login" component={LoginPage} />
 
-                  {/* Test Dashboard Routes */}
-                  <Route path="/agtest-dashboard" component={AGTestDashboard} />
-                  <Route path="/admintest-dashboard" component={ADMINTestDashboard} />
-                  <Route path="/johnltest-dashboard" component={JOHNLTestDashboard} />
-                  <Route path="/jenstest-dashboard" component={JENSTestDashboard} />
-                  <Route path="/staciwtest-dashboard" component={STACIWTestDashboard} />
-                  <Route path="/darlenebtest-dashboard" component={DARLENEBTestDashboard} />
-                  <Route path="/timstest-dashboard" component={TIMSTestDashboard} />
-                  <Route path="/bradwtest-dashboard" component={BRADWTestDashboard} />
-                  <Route path="/faleeshahtest-dashboard" component={FALEESHAHTestDashboard} />
-                  <Route path="/joeybtest-dashboard" component={JOEYBTestDashboard} />
+                  {/* User Dashboard Routes */}
+                  <Route path="/ag-dashboard" component={AGTestDashboard} />
+                  <Route path="/admin-dashboard" component={ADMINTestDashboard} />
+                  <Route path="/johnl-dashboard" component={JOHNLTestDashboard} />
+                  <Route path="/jens-dashboard" component={JENSTestDashboard} />
+                  <Route path="/staciw-dashboard" component={STACIWTestDashboard} />
+                  <Route path="/darleneb-dashboard" component={DARLENEBTestDashboard} />
+                  <Route path="/tims-dashboard" component={TIMSTestDashboard} />
+                  <Route path="/bradw-dashboard" component={BRADWTestDashboard} />
+                  <Route path="/faleeshah-dashboard" component={FALEESHAHTestDashboard} />
+                  <Route path="/joeyb-dashboard" component={JOEYBTestDashboard} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

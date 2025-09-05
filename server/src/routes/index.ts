@@ -29,6 +29,7 @@ import layupScheduleRoutes from './layupSchedule';
 // import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
+import refundRoutes from './refunds';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -113,6 +114,9 @@ export function registerRoutes(app: Express): Server {
 
   // PO Products routes
   app.use('/api/po-products', poProductsRoutes);
+
+  // Refund management routes
+  app.use('/api/refund-requests', refundRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

@@ -900,7 +900,10 @@ router.get('/attention', async (req: Request, res: Response) => {
         AND o.status IN ('FINALIZED', 'Active')
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
-          (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
+          (
+            (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null') 
+            AND NOT (o.features->>'action_inlet' LIKE '%flattop%')
+          )
         )
       ORDER BY 
         o.due_date ASC,

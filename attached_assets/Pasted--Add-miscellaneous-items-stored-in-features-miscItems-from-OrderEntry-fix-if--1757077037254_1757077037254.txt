@@ -1,0 +1,247 @@
+  }
+    }
+
+    // Add miscellaneous items (stored in features.miscItems from OrderEntry fix)
+    if (order.features && typeof order.features === 'object') {
+      const features = order.features as any;
+      if (features.miscItems && Array.isArray(features.miscItems)) {
+        features.miscItems.forEach((item: any) => {
+          if (item.price && typeof item.price === 'number') {
+            total += item.price * (item.quantity || 1);
+          }
+        });
+      }
+    }
+
+    // Add shipping
+    total += order.shipping || 0;
+
+    return total;
+  }
+
+  // Method to get unpaid orders for batch payment processing
+  async getUnpaidOrders() {
+    try {
+      const orders = await db.select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        status: allOrders.status,
+        isPaid: allOrders.isPaid,
+        paymentAmount: allOrders.paymentAmount,
+        customerId: allOrders.customerId,
+      })
+      .from(allOrders)
+      .where(eq(allOrders.isPaid, false))
+      .orderBy(desc(allOrders.orderDate));
+
+      // Get customer info and calculate remaining balances
+      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+        // Get customer info
+        let customerName = '';
+        if (order.customerId) {
+          const customer = await db.select({ name: customers.name })
+            .from(customers)
+            .where(eq(customers.id, parseInt(order.customerId)))
+            .limit(1);
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Get total payments for this order
+        const paymentSums = await db.select({
+          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId))
+        .groupBy(payments.orderId);
+
+        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+        
+        // For now, assume a default order total of $1000 if not specified
+        // TODO: Calculate actual order total from features and pricing
+        const orderTotal = 1000; // This should be calculated from order details
+        const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+        return {
+          id: order.id.toString(),
+          orderId: order.orderId,
+          customerName,
+          orderDate: order.orderDate.toISOString(),
+          dueDate: order.dueDate.toISOString(),
+          status: order.status,
+          totalAmount: orderTotal,
+          paidAmount: totalPaid,
+          remainingBalance,
+        };
+      }));
+
+      // Only return orders with remaining balance > 0
+      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+    } catch (error) {
+      console.error("Error fetching unpaid orders:", error);
+      throw error;
+    }
+  }
+
+  // Method to get unpaid orders for a specific customer
+  async getUnpaidOrdersByCustomer(customerId: string) {
+    try {
+      const orders = await db.select({
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        status: allOrders.status,
+        isPaid: allOrders.isPaid,
+        paymentAmount: allOrders.paymentAmount,
+        customerId: allOrders.customerId,
+      })
+      .from(allOrders)
+      .where(
+        and(
+          eq(allOrders.isPaid, false),
+          eq(allOrders.customerId, customerId)
+        )
+      )
+      .orderBy(desc(allOrders.orderDate));
+
+      // Get customer info and calculate remaining balances
+      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+        // Get customer info
+        let customerName = '';
+        if (order.customerId) {
+          const customer = await db.select({ name: customers.name })
+            .from(customers)
+            .where(eq(customers.id, parseInt(order.customerId)))
+            .limit(1);
+          if (customer.length > 0) {
+            customerName = customer[0].name;
+          }
+        }
+
+        // Get total payments for this order
+        const paymentSums = await db.select({
+          totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.orderId, order.orderId))
+        .groupBy(payments.orderId);
+
+        const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+        
+        // For now, assume a default order total of $1000 if not specified
+        // TODO: Calculate actual order total from features and pricing
+        const orderTotal = 1000; // This should be calculated from order details
+        const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+        return {
+          id: order.id.toString(),
+          orderId: order.orderId,
+          customerName,
+          orderDate: order.orderDate.toISOString(),
+          dueDate: order.dueDate.toISOString(),
+          status: order.status,
+          totalAmount: orderTotal,
+          paidAmount: totalPaid,
+          remainingBalance,
+        };
+      }));
+
+      // Only return orders with remaining balance > 0
+      return ordersWithDetails.filter(order => order.remainingBalance > 0);
+    } catch (error) {
+      console.error("Error fetching unpaid orders by customer:", error);
+      throw error;
+    }
+  }
+
+  // Get all finalized orders with payment status
+  async getAllOrdersWithPaymentStatus(): Promise<(AllOrder & { paymentTotal: number; isFullyPaid: boolean })[]> {
+    // Optimized: Use single query to get orders with customer names and payment totals
+    // Exclude P1 purchase orders from All Orders list
+    const ordersWithCustomers = await db
+      .select({
+        // Order fields
+        id: allOrders.id,
+        orderId: allOrders.orderId,
+        orderDate: allOrders.orderDate,
+        dueDate: allOrders.dueDate,
+        customerId: allOrders.customerId,
+        customerPO: allOrders.customerPO,
+        currentDepartment: allOrders.currentDepartment,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+        shipping: allOrders.shipping,
+        paymentAmount: allOrders.paymentAmount,
+        isPaid: allOrders.isPaid,
+        isVerified: allOrders.isVerified,
+        fbOrderNumber: allOrders.fbOrderNumber,
+        createdAt: allOrders.createdAt,
+        updatedAt: allOrders.updatedAt,
+        isCancelled: allOrders.isCancelled,
+        cancelledAt: allOrders.cancelledAt,
+        cancelReason: allOrders.cancelReason,
+        // Special shipping fields for highlighting in shipping queue
+        specialShippingInternational: allOrders.specialShippingInternational,
+        specialShippingNextDayAir: allOrders.specialShippingNextDayAir,
+        specialShippingBillToReceiver: allOrders.specialShippingBillToReceiver,
+        // Alt Ship To fields
+        hasAltShipTo: allOrders.hasAltShipTo,
+        altShipToCustomerId: allOrders.altShipToCustomerId,
+        altShipToName: allOrders.altShipToName,
+        altShipToCompany: allOrders.altShipToCompany,
+        altShipToEmail: allOrders.altShipToEmail,
+        altShipToPhone: allOrders.altShipToPhone,
+        altShipToAddress: allOrders.altShipToAddress,
+        // Customer name
+        customerName: customers.name,
+      })
+      .from(allOrders)
+      .leftJoin(customers, eq(allOrders.customerId, sql`${customers.id}::text`))
+      .where(
+        and(
+          sql`${allOrders.orderId} NOT LIKE 'P1-%'`,
+          sql`${allOrders.orderId} NOT LIKE 'PO%'`,
+          // TEMPORARILY COMMENTED OUT: This was hiding orders like AG137
+          // sql`${allOrders.orderId} NOT LIKE 'AG1%'`,
+          sql`${allOrders.orderId} != 'AG1'`,
+          sql`${allOrders.orderId} NOT LIKE '%PO%'`
+        )
+      )
+      .orderBy(desc(allOrders.updatedAt));
+
+    // Get all payments aggregated by order ID in parallel
+    const paymentTotals = await db
+      .select({
+        orderId: payments.orderId,
+        totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`
+      })
+      .from(payments)
+      .groupBy(payments.orderId);
+
+    // Create payment map for fast lookup
+    const paymentMap = new Map(paymentTotals.map(p => [p.orderId, p.totalPayments]));
+
+    // Process orders with payment info (using proper order total calculation)
+    const ordersWithPaymentInfo = await Promise.all(ordersWithCustomers.map(async order => {
+      const paymentTotal = paymentMap.get(order.orderId) || 0;
+      
+      // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+      const actualOrderTotal = await this.calculateOrderTotal(order);
+
+      // Fixed payment status logic using real current order total
+      const isFullyPaid = paymentTotal >= actualOrderTotal && actualOrderTotal > 0;
+
+      return {
+        ...order,
+        customer: order.customerName || 'Unknown Customer',
+        paymentTotal,
+        isFullyPaid
+      };
+    }));
+
+    return ordersWithPaymentInfo;
+  }

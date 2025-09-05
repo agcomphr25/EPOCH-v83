@@ -98,9 +98,9 @@ export default function LoginPage() {
         const username = data.user?.username?.toLowerCase();
         
         if (username === 'darleneb') {
-          redirectUrl = '/darlenebtest-dashboard';
+          redirectUrl = '/darleneb-dashboard';
         } else if (username === 'agrace') {
-          redirectUrl = '/agtest-dashboard';
+          redirectUrl = '/ag-dashboard';
         } else {
           // Default redirect for all other users
           redirectUrl = '/';

@@ -94,8 +94,7 @@ router.get('/unpaid/customer/:customerId', async (req: Request, res: Response) =
 router.get('/customer/:customerId', async (req: Request, res: Response) => {
   try {
     const { customerId } = req.params;
-    console.log(`🔍 Getting all orders for customer ${customerId}`);
-    console.log(`🔍 TEST - Debug logging is working at API start`);
+    console.log(`Getting all orders for customer ${customerId}`);
     
     // Get orders from allOrders table with payment information
     const orders = await db.select({
@@ -133,20 +132,17 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
         
-        // FIXED: Use the exact same order data that Order Summary uses
-        // Call the same getOrderById that the OrderSummaryModal uses for consistency
-        console.log(`🔍 DEBUG ${order.orderId} - Getting order data same as Order Summary`);
+        // FIXED: Use the exact same calculation logic as Order Summary
+        // This ensures refund amounts match exactly what's shown in Order Summary
         let actualOrderTotal;
         try {
           // Use the exact same data source as Order Summary: /api/orders/:id endpoint
           const orderSummaryData = await storage.getOrderById(order.orderId);
           if (orderSummaryData && orderSummaryData.totalAmount) {
             actualOrderTotal = Number(orderSummaryData.totalAmount);
-            console.log(`🔍 DEBUG ${order.orderId} - Order Summary total: ${actualOrderTotal}`);
           } else {
-            // Fallback: calculate same as Order Summary if no totalAmount field
+            // Calculate using same logic as Order Summary (includes paint, bottom metal, etc.)
             actualOrderTotal = await storage.calculateOrderTotal(order);
-            console.log(`🔍 DEBUG ${order.orderId} - Calculated total: ${actualOrderTotal}`);
           }
           
           // Fallback to shipping cost if calculation fails
@@ -169,7 +165,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
       })
     );
 
-    console.log(`✅ Found ${ordersWithPaymentTotals.length} orders for customer ${customerId}`);
+    console.log(`Found ${ordersWithPaymentTotals.length} orders for customer ${customerId}`);
     res.json(ordersWithPaymentTotals);
   } catch (error) {
     console.error('❌ Error retrieving orders by customer:', error);

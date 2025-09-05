@@ -1451,8 +1451,6 @@ export class DatabaseStorage implements IStorage {
 
   // Helper function to calculate order total from features and pricing
   private async calculateOrderTotal(order: AllOrder): Promise<number> {
-    console.log(`🔍 DEBUG ${order.orderId} - calculateOrderTotal called`);
-    console.log(`🔍 DEBUG ${order.orderId} - discountCode: "${order.discountCode}"`);
     let total = 0;
 
     // Add base stock model price (use override if set, otherwise use standard price)
@@ -1521,7 +1519,6 @@ export class DatabaseStorage implements IStorage {
       const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
       
       if (currentPaint && currentPaint !== 'none') {
-        console.log(`🔍 DEBUG ${order.orderId} - Paint calculation - current paint:`, currentPaint);
         const features = await this.getAllFeatures();
         const paintFeatures = features.filter(f => 
           f.displayName?.includes('Options') || 
@@ -1538,7 +1535,6 @@ export class DatabaseStorage implements IStorage {
               const paintPrice = Number(option.price);
               if (!isNaN(paintPrice)) {
                 total += paintPrice;
-                console.log(`🔍 DEBUG ${order.orderId} - Paint price added:`, paintPrice);
                 break; // Found the paint option, no need to check other features
               }
             }
@@ -1562,7 +1558,6 @@ export class DatabaseStorage implements IStorage {
             
             if (!isNaN(bottomMetalPrice)) {
               total += bottomMetalPrice;
-              console.log(`🔍 DEBUG ${order.orderId} - Bottom metal price added:`, bottomMetalPrice);
             }
           }
         }
@@ -1579,7 +1574,6 @@ export class DatabaseStorage implements IStorage {
               const railPrice = Number(option.price);
               if (!isNaN(railPrice)) {
                 total += railPrice;
-                console.log(`🔍 DEBUG ${order.orderId} - Rail accessory price added:`, railPrice);
               }
             }
           });
@@ -1597,7 +1591,6 @@ export class DatabaseStorage implements IStorage {
               const optionPrice = Number(option.price);
               if (!isNaN(optionPrice)) {
                 total += optionPrice;
-                console.log(`🔍 DEBUG ${order.orderId} - Other option price added:`, optionPrice);
               }
             }
           });
@@ -1605,22 +1598,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply persistent discount if present (CRITICAL FIX: Add missing discount logic)
+    // Apply persistent discount if present
     if (order.discountCode && order.discountCode !== 'none') {
-      console.log(`🔍 DEBUG ${order.orderId} - Discount code: "${order.discountCode}"`);
       const persistentDiscounts = await this.getAllPersistentDiscounts();
-      console.log(`🔍 DEBUG ${order.orderId} - Available discounts:`, persistentDiscounts.length);
       
       // Handle both "persistent_2" format and direct name lookup
       let discount = null;
       if (order.discountCode.startsWith('persistent_')) {
         const discountId = parseInt(order.discountCode.replace('persistent_', ''));
-        console.log(`🔍 DEBUG ${order.orderId} - Looking for discount ID: ${discountId}`);
         discount = persistentDiscounts.find(d => d.id === discountId);
       } else {
         discount = persistentDiscounts.find(d => d.name === order.discountCode);
       }
-      console.log(`🔍 DEBUG ${order.orderId} - Found discount:`, discount ? `${discount.name} (${discount.percent}%)` : 'null');
       
       if (discount && discount.isActive) {
         if (discount.appliesTo === 'stock_model') {

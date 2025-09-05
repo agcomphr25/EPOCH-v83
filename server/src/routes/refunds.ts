@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { refundRequests, allOrders, customers, payments, creditCardTransactions } from '../../schema';
 import { insertRefundRequestSchema } from '../../schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 // @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
 import AuthorizeNet from 'authorizenet';
@@ -125,7 +125,7 @@ router.get('/', async (req: Request, res: Response) => {
         paymentTotal: allOrders.paymentAmount,
       })
       .from(refundRequests)
-      .leftJoin(customers, eq(refundRequests.customerId, customers.id))
+      .leftJoin(customers, sql`${refundRequests.customerId}::text = ${customers.id}::text`)
       .leftJoin(allOrders, eq(refundRequests.orderId, allOrders.orderId))
       .orderBy(desc(refundRequests.createdAt));
 

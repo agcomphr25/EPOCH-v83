@@ -23,6 +23,8 @@ import communicationsRoutes from './communications';
 import secureVerificationRoutes from './secureVerification';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
+import acceptBluePaymentsRoutes from './acceptBluePayments';
+import unifiedPaymentsRoutes from './unifiedPayments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
@@ -96,6 +98,8 @@ export function registerRoutes(app: Express): Server {
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
+  app.use('/api/accept-blue', acceptBluePaymentsRoutes);
+  app.use('/api/unified-payments', unifiedPaymentsRoutes);
 
   // Algorithmic scheduler routes
   app.use('/api/scheduler', algorithmicSchedulerRoutes);

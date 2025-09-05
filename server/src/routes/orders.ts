@@ -114,7 +114,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
     .from(allOrders)
     .where(eq(allOrders.customerId, customerId));
 
-    // Calculate payment totals for each order
+    // Calculate payment totals for each order using CORRECTED payment logic
     const ordersWithPaymentTotals = await Promise.all(
       orders.map(async (order) => {
         // Get total payments for this order
@@ -125,12 +125,14 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
         .where(eq(payments.orderId, order.orderId));
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
-        const orderTotal = Number(order.paymentAmount || 0);
+        
+        // CRITICAL FIX: Use actual calculated order total, not stale paymentAmount field
+        const actualOrderTotal = await storage.calculateOrderTotal(order);
         
         return {
           ...order,
           paymentTotal,
-          isFullyPaid: paymentTotal >= orderTotal,
+          isFullyPaid: paymentTotal >= actualOrderTotal && actualOrderTotal > 0,
         };
       })
     );

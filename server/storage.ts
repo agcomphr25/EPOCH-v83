@@ -6356,9 +6356,16 @@ export class DatabaseStorage implements IStorage {
   // Helper method to send fulfillment notifications
   private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
     try {
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? `https://${process.env.REPL_SLUG}.replit.app`
+      // Determine base URL for API calls - check multiple indicators for production
+      const isProduction = process.env.REPL_SLUG || 
+                          process.env.REPLIT_DOMAINS ||
+                          (typeof process.env.REPL_ID !== 'undefined');
+      
+      const baseUrl = isProduction 
+        ? `https://${process.env.REPL_SLUG || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost'}.replit.app`
         : 'http://localhost:5000';
+      
+      console.log(`🌐 Notification base URL: ${baseUrl} (production: ${isProduction})`);
 
       // Get the updated order to check for tracking information
       const [updatedOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
@@ -6402,31 +6409,54 @@ AG Composites Team`;
       // Send email notification if customer has email
       if (customer.email && customer.email.trim() !== '') {
         try {
-          await axios.post(`${baseUrl}/api/communications/email`, {
+          console.log(`📧 Attempting to send email notification to ${customer.email} for order ${orderId}`);
+          const emailResponse = await axios.post(`${baseUrl}/api/communications/email`, {
             to: customer.email,
             subject: emailSubject,
             message: emailMessage,
             customerId: customer.id.toString(),
             orderId: orderId
+          }, {
+            timeout: 10000, // 10 second timeout
+            headers: {
+              'Content-Type': 'application/json'
+            }
           });
-          console.log(`📧 Email notification sent to ${customer.email} for fulfilled order ${orderId}`);
-        } catch (emailError) {
-          console.error(`Failed to send email notification for order ${orderId}:`, emailError);
+          console.log(`📧 Email notification sent successfully to ${customer.email} for fulfilled order ${orderId}`);
+        } catch (emailError: any) {
+          console.error(`❌ Failed to send email notification for order ${orderId}:`);
+          if (emailError.response?.data) {
+            console.error(`Email API Error:`, emailError.response.data);
+          } else {
+            console.error(`Email Network Error:`, emailError.message);
+          }
+          // Continue with SMS even if email fails
         }
       }
 
       // Send SMS notification if customer has phone number
       if (customer.phone && customer.phone.trim() !== '') {
         try {
-          await axios.post(`${baseUrl}/api/communications/sms`, {
+          console.log(`📱 Attempting to send SMS notification to ${customer.phone} for order ${orderId}`);
+          const smsResponse = await axios.post(`${baseUrl}/api/communications/sms`, {
             to: customer.phone,
             message: smsMessage,
             customerId: customer.id.toString(),
             orderId: orderId
+          }, {
+            timeout: 10000, // 10 second timeout
+            headers: {
+              'Content-Type': 'application/json'
+            }
           });
-          console.log(`📱 SMS notification sent to ${customer.phone} for fulfilled order ${orderId}`);
-        } catch (smsError) {
-          console.error(`Failed to send SMS notification for order ${orderId}:`, smsError);
+          console.log(`📱 SMS notification sent successfully to ${customer.phone} for fulfilled order ${orderId}`);
+        } catch (smsError: any) {
+          console.error(`❌ Failed to send SMS notification for order ${orderId}:`);
+          if (smsError.response?.data) {
+            console.error(`SMS API Error:`, smsError.response.data);
+          } else {
+            console.error(`SMS Network Error:`, smsError.message);
+          }
         }
       }
 

@@ -65,6 +65,10 @@ app.use((req, res, next) => {
     }
     
     const server = await registerRoutes(app);
+    
+    // Log payment gateway configuration
+    const { logPaymentGatewayConfig } = await import("./src/config/paymentGatewayConfig");
+    logPaymentGatewayConfig();
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

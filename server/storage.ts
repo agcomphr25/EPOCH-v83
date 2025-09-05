@@ -1587,6 +1587,138 @@ export class DatabaseStorage implements IStorage {
     return isNaN(total) ? 0 : total;
   }
 
+  // Get stored order total using Order Summary calculation logic (for refund consistency)
+  async getStoredOrderTotal(orderId: string): Promise<number> {
+    // Get the order data
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    if (!order) {
+      throw new Error(`Order ${orderId} not found`);
+    }
+
+    // Calculate using the same logic as Order Summary frontend:
+    // 1. Calculate subtotal (base model + features)
+    // 2. Apply discounts 
+    // 3. Add shipping
+    // This ensures refund amounts match exactly what users see in Order Summary
+
+    let subtotal = 0;
+
+    // Add base stock model price (use override if set)
+    if (order.modelId) {
+      const stockModels = await this.getAllStockModels();
+      const selectedModel = stockModels.find(model => model.id === order.modelId);
+      if (selectedModel) {
+        const basePrice = order.priceOverride !== null && order.priceOverride !== undefined 
+                          ? Number(order.priceOverride) 
+                          : Number(selectedModel.price || 0);
+        if (!isNaN(basePrice)) {
+          subtotal += basePrice;
+        }
+      }
+    }
+
+    // Add feature prices
+    if (order.features && typeof order.features === 'object') {
+      const features = await this.getAllFeatures();
+      Object.entries(order.features).forEach(([featureId, value]) => {
+        if (value && value !== 'none') {
+          const feature = features.find(f => f.id === featureId);
+          if (feature?.options) {
+            if (Array.isArray(value)) {
+              value.forEach(optionValue => {
+                const option = (feature.options as any[])?.find((opt: any) => opt.value === optionValue);
+                if (option?.price) {
+                  const featurePrice = Number(option.price);
+                  if (!isNaN(featurePrice)) {
+                    subtotal += featurePrice;
+                  }
+                }
+              });
+            } else {
+              const option = (feature.options as any)?.find?.((opt: any) => opt.value === value);
+              if (option?.price) {
+                const featurePrice = Number(option.price);
+                if (!isNaN(featurePrice)) {
+                  subtotal += featurePrice;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Add miscellaneous items
+    if (order.features && typeof order.features === 'object') {
+      const features = order.features as any;
+      if (features.miscItems && Array.isArray(features.miscItems)) {
+        features.miscItems.forEach((item: any) => {
+          const itemPrice = Number(item.price || 0);
+          const itemQuantity = Number(item.quantity || 1);
+          if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
+            subtotal += itemPrice * itemQuantity;
+          }
+        });
+      }
+    }
+
+    // Apply discounts to get totalPrice (before shipping)
+    let totalPrice = subtotal;
+    
+    // Apply persistent discount
+    if (order.discountCode && order.discountCode !== 'none') {
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+      let discount = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        discount = persistentDiscounts.find(d => d.id === discountId);
+      } else {
+        discount = persistentDiscounts.find(d => d.name === order.discountCode);
+      }
+      
+      if (discount && discount.isActive) {
+        if (discount.appliesTo === 'stock_model') {
+          // Apply discount only to the base model price
+          if (order.modelId) {
+            const stockModels = await this.getAllStockModels();
+            const selectedModel = stockModels.find(model => model.id === order.modelId);
+            if (selectedModel) {
+              const basePrice = Number(order.priceOverride || selectedModel.price || 0);
+              const discountAmount = discount.percent > 0 
+                ? (basePrice * discount.percent / 100)
+                : Number(discount.fixedAmount || 0);
+              totalPrice -= discountAmount;
+            }
+          }
+        } else if (discount.appliesTo === 'total_order') {
+          // Apply discount to entire subtotal
+          const discountAmount = discount.percent > 0 
+            ? (subtotal * discount.percent / 100)
+            : Number(discount.fixedAmount || 0);
+          totalPrice -= discountAmount;
+        }
+      }
+    }
+
+    // Apply custom discount
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        if (order.customDiscountType === 'percent') {
+          totalPrice = totalPrice * (1 - (discountValue / 100));
+        } else {
+          totalPrice = Math.max(0, totalPrice - discountValue);
+        }
+      }
+    }
+
+    // Add shipping to match Order Summary display: totalPrice + shipping
+    const shippingCost = Number(order.shipping || 0);
+    const finalTotal = totalPrice + (isNaN(shippingCost) ? 0 : shippingCost);
+
+    return isNaN(finalTotal) ? 0 : finalTotal;
+  }
+
   // Method to get unpaid orders for batch payment processing
   async getUnpaidOrders() {
     try {

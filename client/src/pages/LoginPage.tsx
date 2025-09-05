@@ -101,6 +101,8 @@ export default function LoginPage() {
           redirectUrl = '/darleneb-dashboard';
         } else if (username === 'agrace') {
           redirectUrl = '/ag-dashboard';
+        } else if (username === 'staciw') {
+          redirectUrl = '/staciw-dashboard';
         } else {
           // Default redirect for all other users
           redirectUrl = '/';

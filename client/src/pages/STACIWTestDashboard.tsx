@@ -144,7 +144,10 @@ export default function STACIWTestDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <PipelineVisualization />
+            {/* <PipelineVisualization /> */}
+            <div className="p-8 text-center text-gray-500">
+              Pipeline visualization temporarily disabled for testing
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -26,7 +26,7 @@ export default function LoginPage() {
                           window.location.hostname.includes('.repl.co') ||
                           window.location.hostname.includes('agcompepoch.xyz');
       
-      const timeoutDuration = isDeployment ? 15000 : 30000; // 15 seconds for deployment
+      const timeoutDuration = isDeployment ? 30000 : 30000; // 30 seconds for deployment
       console.log(`🌐 Login timeout set to ${timeoutDuration}ms (deployment: ${isDeployment})`);
       
       const controller = new AbortController();
@@ -66,7 +66,7 @@ export default function LoginPage() {
         
         if (error.name === 'AbortError') {
           throw new Error(isDeployment 
-            ? 'Login timed out after 6 seconds. There may be database connectivity issues on the deployed site.' 
+            ? 'Login timed out after 30 seconds. There may be database connectivity issues on the deployed site.' 
             : 'Login request timed out. Please try again.'
           );
         }

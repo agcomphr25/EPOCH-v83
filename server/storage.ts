@@ -1475,10 +1475,15 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Add feature prices from features object
+    // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
     if (order.features && typeof order.features === 'object') {
       const features = await this.getAllFeatures();
       Object.entries(order.features).forEach(([featureId, value]) => {
+        // Skip features that have separate state variables to avoid double counting (MATCH FRONTEND LOGIC)
+        if (featureId === 'bottom_metal' || featureId === 'paint_options' || featureId === 'rail_accessory' || featureId === 'other_options') {
+          return;
+        }
+
         if (value && value !== 'none') {
           const feature = features.find(f => f.id === featureId);
           if (feature?.options) {
@@ -1508,6 +1513,96 @@ export class DatabaseStorage implements IStorage {
           }
         }
       });
+    }
+
+    // Add paint options price (separately handled like frontend)
+    const orderFeatures = order.features as any;
+    if (orderFeatures) {
+      const currentPaint = orderFeatures.metallic_finishes || orderFeatures.paint_options || orderFeatures.paint_options_combined;
+      
+      if (currentPaint && currentPaint !== 'none') {
+        console.log(`🔍 DEBUG ${order.orderId} - Paint calculation - current paint:`, currentPaint);
+        const features = await this.getAllFeatures();
+        const paintFeatures = features.filter(f => 
+          f.displayName?.includes('Options') || 
+          f.displayName?.includes('Camo') || 
+          f.displayName?.includes('Cerakote') ||
+          f.displayName?.includes('Paint') ||
+          f.category === 'paint'
+        );
+        
+        for (const feature of paintFeatures) {
+          if (feature.options) {
+            const option = (feature.options as any[])?.find((opt: any) => opt.value === currentPaint);
+            if (option?.price) {
+              const paintPrice = Number(option.price);
+              if (!isNaN(paintPrice)) {
+                total += paintPrice;
+                console.log(`🔍 DEBUG ${order.orderId} - Paint price added:`, paintPrice);
+                break; // Found the paint option, no need to check other features
+              }
+            }
+          }
+        }
+      }
+
+      // Add bottom metal price (separately handled like frontend)
+      if (orderFeatures.bottom_metal && orderFeatures.bottom_metal !== 'none') {
+        const features = await this.getAllFeatures();
+        const bottomMetalFeature = features.find(f => f.id === 'bottom_metal');
+        if (bottomMetalFeature?.options) {
+          const option = (bottomMetalFeature.options as any[])?.find((opt: any) => opt.value === orderFeatures.bottom_metal);
+          if (option?.price) {
+            let bottomMetalPrice = Number(option.price);
+            
+            // Special pricing: SepFG10 or SepCF25 seasonal sale + AG bottom metal = $100 instead of $149
+            if ((order.discountCode === 'short_term_3' || order.discountCode === 'short_term_1') && orderFeatures.bottom_metal.includes('ag_') && option.price === 149) {
+              bottomMetalPrice = 100;
+            }
+            
+            if (!isNaN(bottomMetalPrice)) {
+              total += bottomMetalPrice;
+              console.log(`🔍 DEBUG ${order.orderId} - Bottom metal price added:`, bottomMetalPrice);
+            }
+          }
+        }
+      }
+
+      // Add rail accessory price (separately handled like frontend)
+      if (orderFeatures.rail_accessory && Array.isArray(orderFeatures.rail_accessory) && orderFeatures.rail_accessory.length > 0) {
+        const features = await this.getAllFeatures();
+        const railFeature = features.find(f => f.id === 'rail_accessory');
+        if (railFeature?.options) {
+          orderFeatures.rail_accessory.forEach((railValue: string) => {
+            const option = (railFeature.options as any[])?.find((opt: any) => opt.value === railValue);
+            if (option?.price) {
+              const railPrice = Number(option.price);
+              if (!isNaN(railPrice)) {
+                total += railPrice;
+                console.log(`🔍 DEBUG ${order.orderId} - Rail accessory price added:`, railPrice);
+              }
+            }
+          });
+        }
+      }
+
+      // Add other options price (separately handled like frontend)
+      if (orderFeatures.other_options && Array.isArray(orderFeatures.other_options) && orderFeatures.other_options.length > 0) {
+        const features = await this.getAllFeatures();
+        const otherOptionsFeature = features.find(f => f.id === 'other_options');
+        if (otherOptionsFeature?.options) {
+          orderFeatures.other_options.forEach((optionValue: string) => {
+            const option = (otherOptionsFeature.options as any[])?.find((opt: any) => opt.value === optionValue);
+            if (option?.price) {
+              const optionPrice = Number(option.price);
+              if (!isNaN(optionPrice)) {
+                total += optionPrice;
+                console.log(`🔍 DEBUG ${order.orderId} - Other option price added:`, optionPrice);
+              }
+            }
+          });
+        }
+      }
     }
 
     // Apply persistent discount if present (CRITICAL FIX: Add missing discount logic)

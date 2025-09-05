@@ -410,14 +410,15 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Credit card transactions table for Authorize.Net integration
+// Credit card transactions table for payment gateway integration (Authorize.Net and Accept.blue)
 export const creditCardTransactions = pgTable("credit_card_transactions", {
   id: serial("id").primaryKey(),
   paymentId: integer("payment_id").references(() => payments.id).notNull(),
   orderId: text("order_id").notNull(),
-  transactionId: text("transaction_id").notNull().unique(), // Authorize.Net transaction ID
-  authCode: text("auth_code"), // Authorization code from Authorize.Net
-  responseCode: text("response_code"), // 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review (nullable for auth failures)
+  transactionId: text("transaction_id").notNull().unique(), // Gateway transaction ID
+  gateway: text("gateway").notNull().default("authorize_net"), // authorize_net, accept_blue
+  authCode: text("auth_code"), // Authorization code
+  responseCode: text("response_code"), // Gateway response code
   responseReasonCode: text("response_reason_code"), // Detailed reason code
   responseReasonText: text("response_reason_text"), // Human readable response
   avsResult: text("avs_result"), // Address Verification Service result
@@ -436,7 +437,7 @@ export const creditCardTransactions = pgTable("credit_card_transactions", {
   billingZip: text("billing_zip"),
   billingCountry: text("billing_country").default("US"),
   isTest: boolean("is_test").default(false), // Track if this was a test transaction
-  rawResponse: jsonb("raw_response"), // Store full Authorize.Net response for debugging
+  rawResponse: jsonb("raw_response"), // Store full gateway response for debugging
   status: text("status").default("pending"), // pending, completed, failed, refunded, voided
   refundedAmount: real("refunded_amount").default(0),
   voidedAt: timestamp("voided_at"),
@@ -467,8 +468,9 @@ export const refundRequests = pgTable("refund_requests", {
   customerId: text("customer_id"), // Reference to customer (nullable for compatibility)
   refundAmount: real("refund_amount"), // Amount to be refunded
   rejectionReason: text("rejection_reason"), // Reason for rejection if applicable
-  authNetTransactionId: text("auth_net_transaction_id"), // Authorize.Net refund transaction ID
-  authNetRefundId: text("auth_net_refund_id"), // Authorize.Net refund reference
+  gatewayTransactionId: text("gateway_transaction_id"), // Gateway refund transaction ID
+  gatewayRefundId: text("gateway_refund_id"), // Gateway refund reference
+  gateway: text("gateway").default("authorize_net"), // authorize_net, accept_blue
   originalTransactionId: text("original_transaction_id"), // Original transaction being refunded
 });
 

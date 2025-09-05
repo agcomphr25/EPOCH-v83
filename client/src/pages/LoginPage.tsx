@@ -94,49 +94,15 @@ export default function LoginPage() {
       if (data.user?.role === 'ADMIN' || data.user?.role === 'HR Manager') {
         redirectUrl = '/employee';
       } else {
-        // Temporary fix: Redirect all users to root dashboard
-        // User-specific dashboards disabled until localStorage clearing issue is resolved
-        redirectUrl = '/';
-        
-        /* DISABLED - User-specific dashboard routing
+        // Check for specific user redirects
         const username = data.user?.username?.toLowerCase();
-        switch (username) {
-          case 'agtest':
-            redirectUrl = '/agtest-dashboard';
-            break;
-          case 'glenn':
-          case 'admin':
-            redirectUrl = '/admintest-dashboard';
-            break;
-          case 'johnl':
-            redirectUrl = '/johnltest-dashboard';
-            break;
-          case 'jens':
-            redirectUrl = '/jenstest-dashboard';
-            break;
-          case 'staciw':
-            redirectUrl = '/staciwtest-dashboard';
-            break;
-          case 'darleneb':
-            redirectUrl = '/darlenebtest-dashboard';
-            break;
-          case 'tims':
-            redirectUrl = '/timstest-dashboard';
-            break;
-          case 'bradw':
-            redirectUrl = '/bradwtest-dashboard';
-            break;
-          case 'faleeshah':
-            redirectUrl = '/faleeshahtest-dashboard';
-            break;
-          case 'joeyb':
-            redirectUrl = '/joeybtest-dashboard';
-            break;
-          default:
-            redirectUrl = '/';
-            break;
+        
+        if (username === 'darleneb') {
+          redirectUrl = '/darlenebtest-dashboard';
+        } else {
+          // Default redirect for all other users
+          redirectUrl = '/';
         }
-        */
       }
       
       console.log('🎯 About to redirect to:', redirectUrl);

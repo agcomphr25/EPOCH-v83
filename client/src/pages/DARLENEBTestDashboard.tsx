@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory } from 'lucide-react';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, User, Factory, RefreshCw } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
@@ -68,6 +68,16 @@ export default function DARLENEBTestDashboard() {
               <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Management</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage customers</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/refund-request">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <RefreshCw className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Request Refund</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Process refunds</p>
             </CardContent>
           </Card>
         </Link>

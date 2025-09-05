@@ -101,6 +101,7 @@ import { db } from "./db";
 import { eq, desc, asc, and, or, ilike, isNull, sql, ne, like, lt, gt, gte, lte, inArray, getTableColumns, count, sum, max, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from 'bcrypt';
+import axios from 'axios';
 import { generateP1OrderId, getCurrentYearMonthPrefix, parseOrderId, formatOrderId } from "./utils/orderIdGenerator";
 
 // modify the interface with any CRUD methods
@@ -6310,6 +6311,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async fulfillOrder(orderId: string): Promise<AllOrder> {
+    // Get the order first to get customer information for notifications
+    const [existingOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+    
+    if (!existingOrder) {
+      throw new Error(`Order with ID ${orderId} not found`);
+    }
+
     // Update the order to be fulfilled and move to shipping management
     const [order] = await db.update(allOrders)
       .set({ 
@@ -6322,11 +6330,113 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     if (!order) {
-      throw new Error(`Order with ID ${orderId} not found`);
+      throw new Error(`Order with ID ${orderId} not found after update`);
+    }
+
+    // Get customer information for notifications
+    if (existingOrder.customerId) {
+      try {
+        const [customer] = await db.select().from(customers).where(eq(customers.id, parseInt(existingOrder.customerId)));
+        
+        if (customer) {
+          // Send fulfillment notifications in the background
+          this.sendFulfillmentNotifications(orderId, customer).catch(error => {
+            console.error(`Failed to send fulfillment notifications for order ${orderId}:`, error);
+          });
+        }
+      } catch (error) {
+        console.error(`Error getting customer for notifications (order ${orderId}):`, error);
+      }
     }
 
     console.log(`✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`);
     return order;
+  }
+
+  // Helper method to send fulfillment notifications
+  private async sendFulfillmentNotifications(orderId: string, customer: Customer): Promise<void> {
+    try {
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? `https://${process.env.REPL_SLUG}.replit.app`
+        : 'http://localhost:5000';
+
+      // Get the updated order to check for tracking information
+      const [updatedOrder] = await db.select().from(allOrders).where(eq(allOrders.orderId, orderId));
+      
+      // Prepare notification messages with conditional tracking info
+      const emailSubject = `Your Order ${orderId} Has Been Fulfilled!`;
+      let emailMessage = `Dear ${customer.name},
+
+Great news! Your order ${orderId} has been fulfilled and is ready for shipping.`;
+
+      let smsMessage = `Hi ${customer.name}! Your order ${orderId} has been fulfilled and is ready for shipping.`;
+
+      // Add tracking information if available
+      if (updatedOrder?.trackingNumber && updatedOrder.trackingNumber.trim() !== '') {
+        const trackingInfo = `
+
+📦 Tracking Information:
+Tracking Number: ${updatedOrder.trackingNumber}
+Carrier: ${updatedOrder.shippingCarrier || 'UPS'}
+
+You can track your package at: https://www.ups.com/track?tracknum=${updatedOrder.trackingNumber}`;
+
+        emailMessage += trackingInfo;
+        smsMessage += ` Tracking: ${updatedOrder.trackingNumber}`;
+      } else {
+        emailMessage += `
+
+You should receive tracking information shortly once your package is picked up by the carrier.`;
+        smsMessage += ` You'll receive tracking info soon.`;
+      }
+
+      emailMessage += `
+
+Thank you for your business!
+
+Best regards,
+AG Composites Team`;
+
+      smsMessage += ` Thanks! - AG Composites`;
+
+      // Send email notification if customer has email
+      if (customer.email && customer.email.trim() !== '') {
+        try {
+          await axios.post(`${baseUrl}/api/communications/email`, {
+            to: customer.email,
+            subject: emailSubject,
+            message: emailMessage,
+            customerId: customer.id.toString(),
+            orderId: orderId
+          });
+          console.log(`📧 Email notification sent to ${customer.email} for fulfilled order ${orderId}`);
+        } catch (emailError) {
+          console.error(`Failed to send email notification for order ${orderId}:`, emailError);
+        }
+      }
+
+      // Send SMS notification if customer has phone number
+      if (customer.phone && customer.phone.trim() !== '') {
+        try {
+          await axios.post(`${baseUrl}/api/communications/sms`, {
+            to: customer.phone,
+            message: smsMessage,
+            customerId: customer.id.toString(),
+            orderId: orderId
+          });
+          console.log(`📱 SMS notification sent to ${customer.phone} for fulfilled order ${orderId}`);
+        } catch (smsError) {
+          console.error(`Failed to send SMS notification for order ${orderId}:`, smsError);
+        }
+      }
+
+      if (!customer.email && !customer.phone) {
+        console.log(`⚠️ No contact information available for customer ${customer.name} (order ${orderId}) - notifications skipped`);
+      }
+
+    } catch (error) {
+      console.error(`Error sending fulfillment notifications for order ${orderId}:`, error);
+    }
   }
 
   // Sync verification status between draft and finalized orders  

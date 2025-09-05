@@ -1,10 +1,20 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, FileText, FilePenLine, XCircle, Users, Wrench, Shield, User, Factory } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, FileText, FilePenLine, XCircle, Users, Wrench, Shield, User, Factory, RefreshCw, LogOut } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 
 export default function STACIWTestDashboard() {
+  const handleLogout = () => {
+    // Clear authentication tokens
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('jwtToken');
+    
+    // Redirect to login page
+    window.location.href = '/login';
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
       {/* Header */}
@@ -15,8 +25,19 @@ export default function STACIWTestDashboard() {
             Comprehensive Order & Production Management
           </p>
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          EPOCH v8 Manufacturing ERP
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            EPOCH v8 Manufacturing ERP
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
         </div>
       </div>
 
@@ -68,6 +89,16 @@ export default function STACIWTestDashboard() {
               <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Management</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage customers</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/refund-request">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <RefreshCw className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Request Refund</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Process refunds</p>
             </CardContent>
           </Card>
         </Link>

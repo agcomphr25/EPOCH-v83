@@ -781,9 +781,10 @@ export default function LayupScheduler() {
         title: "Order Returned",
         description: `Order ${orderId} moved back to Production Queue`,
       });
-      // Refresh data 
+      // Refresh data to remove order from scheduler
       queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule'] });
     },
     onError: (error, orderId) => {
       console.error('❌ Failed to move order back to Production Queue:', { orderId, error });

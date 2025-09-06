@@ -549,7 +549,9 @@ function DroppableCell({
   features,
   processedOrders,
   selectedWorkDays = [1, 2, 3, 4], // Default Mon-Thu
-  isWeekLocked
+  isWeekLocked,
+  moveToBarcodeMutation,
+  moveToProductionQueueMutation
 }: {
   moldId: string;
   date: Date;
@@ -561,6 +563,8 @@ function DroppableCell({
   processedOrders?: any[];
   selectedWorkDays?: number[];
   isWeekLocked: (date: Date) => boolean;
+  moveToBarcodeMutation?: any;
+  moveToProductionQueueMutation?: any;
 }) {
   // Responsive cell height based on order count
   const getCellHeight = (orderCount: number) => {
@@ -4652,6 +4656,8 @@ export default function LayupScheduler() {
                                 processedOrders={processedOrders}
                                 selectedWorkDays={selectedWorkDays}
                                 isWeekLocked={isWeekLocked}
+                                moveToBarcodeMutation={moveToBarcodeMutation}
+                                moveToProductionQueueMutation={moveToProductionQueueMutation}
                               />
                             );
                           });

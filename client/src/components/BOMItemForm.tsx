@@ -250,7 +250,15 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                     min="1"
                     placeholder="1"
                     {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || value === '0') {
+                        field.onChange(1);
+                      } else {
+                        const parsed = parseInt(value);
+                        field.onChange(isNaN(parsed) ? 1 : Math.max(1, parsed));
+                      }
+                    }}
                   />
                 </FormControl>
                 <FormDescription>
@@ -274,7 +282,15 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                     min="0.001"
                     placeholder="1.00"
                     {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '') {
+                        field.onChange(1);
+                      } else {
+                        const parsed = parseFloat(value);
+                        field.onChange(isNaN(parsed) ? 1 : Math.max(0.001, parsed));
+                      }
+                    }}
                   />
                 </FormControl>
                 <FormDescription>

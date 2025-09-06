@@ -419,6 +419,7 @@ export interface IStorage {
 
   // P2 Purchase Order Items CRUD
   getP2PurchaseOrderItems(poId: number): Promise<P2PurchaseOrderItem[]>;
+  getAllP2PurchaseOrderItems(): Promise<P2PurchaseOrderItem[]>;
   createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem>;
   updateP2PurchaseOrderItem(id: number, data: Partial<InsertP2PurchaseOrderItem>): Promise<P2PurchaseOrderItem>;
   deleteP2PurchaseOrderItem(id: number): Promise<void>;
@@ -5067,6 +5068,13 @@ export class DatabaseStorage implements IStorage {
       .from(p2PurchaseOrderItems)
       .where(eq(p2PurchaseOrderItems.poId, poId))
       .orderBy(p2PurchaseOrderItems.createdAt);
+  }
+
+  async getAllP2PurchaseOrderItems(): Promise<P2PurchaseOrderItem[]> {
+    return await db
+      .select()
+      .from(p2PurchaseOrderItems)
+      .orderBy(p2PurchaseOrderItems.poId, p2PurchaseOrderItems.createdAt);
   }
 
   async createP2PurchaseOrderItem(data: InsertP2PurchaseOrderItem): Promise<P2PurchaseOrderItem> {

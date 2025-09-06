@@ -3133,6 +3133,24 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get all P2 purchase order items (for quantity calculations)
+  app.get('/api/p2-purchase-order-items-all', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      
+      console.log('📋 Get all P2 purchase order items endpoint called');
+      
+      // Get all P2 purchase order items across all purchase orders
+      const allItems = await storage.getAllP2PurchaseOrderItems();
+      
+      console.log(`✅ Retrieved ${allItems.length} P2 purchase order items`);
+      res.json(allItems);
+    } catch (error) {
+      console.error('Get all P2 purchase order items error:', error);
+      res.status(500).json({ error: 'Failed to get P2 purchase order items' });
+    }
+  });
+
   // P2 Production Orders generation endpoint
   app.post('/api/p2/purchase-orders/:poId/generate-production-orders', async (req, res) => {
     try {

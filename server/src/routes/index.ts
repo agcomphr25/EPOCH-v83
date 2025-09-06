@@ -1410,6 +1410,55 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Move single order to different department (for layup scheduler action buttons)
+  app.post('/api/move-order-department', async (req, res) => {
+    try {
+      console.log('🏭 SINGLE ORDER MOVE: Move order department API called');
+      const { orderId, department, status } = req.body;
+      
+      if (!orderId || !department || !status) {
+        return res.status(400).json({ 
+          error: "orderId, department, and status are required", 
+          success: false 
+        });
+      }
+
+      console.log(`🏭 SINGLE ORDER MOVE: Moving order ${orderId} to ${department} with status ${status}`);
+      const { storage } = await import('../../storage');
+      
+      // Update order status and department
+      const updateResult = await storage.updateOrderDepartment(orderId, department, status);
+      
+      if (updateResult.success) {
+        console.log(`✅ SINGLE ORDER MOVE: Order ${orderId} moved to ${department} department`);
+        
+        const result = {
+          success: true,
+          message: `Successfully moved order ${orderId} to ${department} department`,
+          orderId,
+          department,
+          status
+        };
+
+        res.json(result);
+      } else {
+        console.warn(`⚠️ SINGLE ORDER MOVE: Failed to update order ${orderId}: ${updateResult.message}`);
+        res.status(400).json({
+          error: updateResult.message,
+          success: false,
+          orderId
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ SINGLE ORDER MOVE: Move order department error:', error);
+      res.status(500).json({ 
+        error: "Failed to move order to new department",
+        success: false 
+      });
+    }
+  });
+
   app.get('/api/production-queue/unified', async (req, res) => {
     try {
       console.log('🏭 Unified Production Queue API called');

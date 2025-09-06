@@ -974,7 +974,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Manager
+                P1 Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (

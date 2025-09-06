@@ -76,6 +76,7 @@ export default function Navigation() {
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+  const [p2DepartmentQueueExpanded, setP2DepartmentQueueExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -88,6 +89,7 @@ export default function Navigation() {
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
+    setP2DepartmentQueueExpanded(false);
     setVerifiedModulesExpanded(false);
   }, []);
 
@@ -106,6 +108,7 @@ export default function Navigation() {
       if (dropdownName !== 'purchaseOrders') setPurchaseOrdersExpanded(false);
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
+      if (dropdownName !== 'p2DepartmentQueue') setP2DepartmentQueueExpanded(false);
       if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
   }, []);
@@ -558,6 +561,69 @@ export default function Navigation() {
     }
   ];
 
+  const p2DepartmentQueueItems = [
+    {
+      path: '/p2-department-queue/production-queue',
+      label: 'P2 Production Queue',
+      icon: List,
+      description: 'Production queue P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/layup-plugging',
+      label: 'P2 Layup/Plugging',
+      icon: Factory,
+      description: 'Layup and plugging P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/barcode',
+      label: 'P2 Barcode',
+      icon: Scan,
+      description: 'Barcode processing P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/cnc',
+      label: 'P2 CNC',
+      icon: Settings,
+      description: 'CNC machining P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/gunsmith',
+      label: 'P2 Gunsmith',
+      icon: Wrench,
+      description: 'Gunsmith P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/finish',
+      label: 'P2 Finish',
+      icon: CheckSquare,
+      description: 'Finish assignment P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/finish-qc',
+      label: 'P2 Finish QC',
+      icon: Shield,
+      description: 'Finish quality control P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/paint',
+      label: 'P2 Paint',
+      icon: Package,
+      description: 'Paint P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/qc-shipping',
+      label: 'P2 Shipping QC',
+      icon: TrendingUp,
+      description: 'Shipping quality control P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/shipping',
+      label: 'P2 Shipping',
+      icon: Package,
+      description: 'Shipping P2 department manager'
+    }
+  ];
+
   const isVerifiedModulesActive = verifiedModulesItems.some(item => location === item.path);
   const isFormsReportsActive = formsReportsItems.some(item => location === item.path);
   const isInventoryActive = inventoryItems.some(item => location === item.path);
@@ -568,6 +634,7 @@ export default function Navigation() {
   const isPurchaseOrdersActive = purchaseOrdersItems.some(item => location === item.path);
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
+  const isP2DepartmentQueueActive = p2DepartmentQueueItems.some(item => location === item.path);
 
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
@@ -607,10 +674,13 @@ export default function Navigation() {
       if (isDepartmentQueueActive) {
         setDepartmentQueueExpanded(true);
       }
+      if (isP2DepartmentQueueActive) {
+        setP2DepartmentQueueExpanded(true);
+      }
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive, isP2DepartmentQueueActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -985,6 +1055,50 @@ export default function Navigation() {
               {departmentQueueExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
                   {departmentQueueItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={closeAllDropdowns}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* P2 Department Manager Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isP2DepartmentQueueActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isP2DepartmentQueueActive && "bg-primary text-white"
+                )}
+                onClick={() => toggleDropdown('p2DepartmentQueue', p2DepartmentQueueExpanded, setP2DepartmentQueueExpanded)}
+              >
+                <Factory className="h-4 w-4" />
+                P2 Department Manager
+                {p2DepartmentQueueExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+
+              {p2DepartmentQueueExpanded && (
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                  {p2DepartmentQueueItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

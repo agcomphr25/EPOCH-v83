@@ -91,9 +91,14 @@ export class AuthService {
   }
 
   static async validateSession(sessionToken: string): Promise<SessionData | null> {
-    // Add timeout wrapper for database operations
+    // Add timeout wrapper for database operations (longer for deployment)
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                        process.env.REPLIT_DEPLOYMENT === 'true' ||
+                        process.env.REPL_OWNER;
+    const timeoutDuration = isProduction ? 10000 : 2500; // 10s for deployment, 2.5s for dev
+    
     const timeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Database operation timeout')), 2500); // 2.5 second timeout
+      setTimeout(() => reject(new Error('Database operation timeout')), timeoutDuration);
     });
 
     try {
@@ -207,9 +212,14 @@ export class AuthService {
   static async authenticate(username: string, password: string, ipAddress: string | null, userAgent: string | null): Promise<{ user: AuthUser; sessionToken: string } | null> {
     console.log('🔐 AUTH START: Looking up user in database...');
     
-    // Add timeout wrapper around database operations
+    // Add timeout wrapper around database operations (longer for deployment)
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                        process.env.REPLIT_DEPLOYMENT === 'true' ||
+                        process.env.REPL_OWNER;
+    const dbTimeoutDuration = isProduction ? 20000 : 5000; // 20s for deployment, 5s for dev
+    
     const dbTimeoutPromise = new Promise<null>((_, reject) => {
-      setTimeout(() => reject(new Error('Database operation timeout in authenticate')), 5000);
+      setTimeout(() => reject(new Error('Database operation timeout in authenticate')), dbTimeoutDuration);
     });
 
     try {
@@ -254,11 +264,12 @@ export class AuthService {
 
       console.log('🔍 AUTH: Verifying password...');
       
-      // Verify password with timeout
+      // Verify password with timeout (longer for deployment)
+      const passwordTimeoutDuration = isProduction ? 15000 : 3000; // 15s for deployment, 3s for dev
       const passwordResult = await Promise.race([
         this.verifyPassword(password, userResult.passwordHash || ''),
         new Promise<boolean>((_, reject) => {
-          setTimeout(() => reject(new Error('Password verification timeout')), 3000);
+          setTimeout(() => reject(new Error('Password verification timeout')), passwordTimeoutDuration);
         })
       ]);
 

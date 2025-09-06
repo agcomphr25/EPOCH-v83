@@ -94,13 +94,35 @@ router.post('/:id/items', async (req, res) => {
     const { id } = req.params;
     const { purchasingUnitConversion, ...restData } = req.body;
     
+    console.log('🔧 Adding BOM item with data:', { ...restData, purchasingUnitConversion });
+    
+    // Ensure quantity is at least 1 and is a valid number
+    const quantity = Number(restData.quantity);
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ 
+        error: "Invalid quantity", 
+        details: "Quantity must be at least 1" 
+      });
+    }
+    
+    // Ensure purchasing unit conversion is valid
+    const conversionValue = Number(purchasingUnitConversion) || 1;
+    if (conversionValue <= 0) {
+      return res.status(400).json({ 
+        error: "Invalid purchasing unit conversion", 
+        details: "Purchasing unit conversion must be greater than 0" 
+      });
+    }
+    
     // Map purchasingUnitConversion to quantityMultiplier for database
     const itemData = insertBomItemSchema.omit({ bomId: true }).parse({
       ...restData,
-      quantityMultiplier: purchasingUnitConversion || 1,
+      quantity: quantity,
+      quantityMultiplier: conversionValue,
     });
     
     const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
+    console.log('✅ Successfully added BOM item:', item.id);
     res.status(201).json(item);
   } catch (error) {
     console.error("Add BOM item error:", error);

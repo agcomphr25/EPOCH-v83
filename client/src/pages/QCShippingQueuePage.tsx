@@ -627,7 +627,7 @@ export default function QCShippingQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <TrendingUp className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">Shipping QC Department Manager</h1>
+        <h1 className="text-3xl font-bold">Shipping QC P1 Department Manager</h1>
       </div>
 
       {/* Barcode Scanner at top */}
@@ -679,7 +679,7 @@ export default function QCShippingQueuePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Shipping QC Department Manager</span>
+            <span>Shipping QC P1 Department Manager</span>
             <div className="flex items-center gap-2">
               {qcShippingOrders.length > 0 && (
                 <Button

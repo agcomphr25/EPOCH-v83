@@ -88,9 +88,19 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Test endpoint to verify our changes are loaded
+router.get('/:id/test', async (req, res) => {
+  console.log('🔧 TEST ENDPOINT HIT - BOM routes are working');
+  res.json({ message: 'BOM routes are loaded and working', timestamp: new Date().toISOString() });
+});
+
 // Add BOM item
 router.post('/:id/items', async (req, res) => {
   try {
+    console.log('🚨 BOM ITEM ENDPOINT HIT - Start of function');
+    console.log('🚨 Request params:', req.params);
+    console.log('🚨 Request body:', req.body);
+    
     const { id } = req.params;
     const { purchasingUnitConversion, ...restData } = req.body;
     
@@ -137,12 +147,20 @@ router.post('/:id/items', async (req, res) => {
 
     console.log('🔧 Clean data for validation:', cleanData);
     
-    // Map purchasingUnitConversion to quantityMultiplier for database
-    const itemData = insertBomItemSchema.omit({ bomId: true }).parse(cleanData);
+    console.log('🔧 About to validate with Zod schema');
     
-    const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
-    console.log('✅ Successfully added BOM item:', item.id);
-    res.status(201).json(item);
+    // Map purchasingUnitConversion to quantityMultiplier for database
+    try {
+      const itemData = insertBomItemSchema.omit({ bomId: true }).parse(cleanData);
+      console.log('✅ Zod validation successful:', itemData);
+      
+      const item = await storage.addBOMItem(parseInt(id), { ...itemData, bomId: parseInt(id) });
+      console.log('✅ Successfully added BOM item:', item.id);
+      res.status(201).json(item);
+    } catch (zodError) {
+      console.error('❌ Zod validation failed:', zodError);
+      throw zodError; // Re-throw to be caught by outer catch
+    }
   } catch (error) {
     console.error("Add BOM item error:", error);
     if (error instanceof z.ZodError) {

@@ -179,7 +179,7 @@ export default function P2ProductionQueuePage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-              {barcodeCount + cncCount}
+              {barcodeCount + layupCount + assemblyCount + finishCount}
             </div>
             <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
               P2 orders in various departments

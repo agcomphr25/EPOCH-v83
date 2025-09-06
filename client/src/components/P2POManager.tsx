@@ -65,6 +65,16 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     queryKey: ["/api/p2-customers-bypass"],
   });
 
+  // Fetch all P2 purchase order items to calculate quantities
+  const { data: allPOItems = [] } = useQuery({
+    queryKey: ["/api/p2-purchase-order-items-all"],
+    queryFn: async () => {
+      const response = await fetch("/api/p2-purchase-order-items-all");
+      if (!response.ok) throw new Error("Failed to fetch P2 purchase order items");
+      return response.json();
+    },
+  });
+
   const form = useForm<P2PurchaseOrderForm>({
     resolver: zodResolver(p2PurchaseOrderSchema),
     defaultValues: {
@@ -178,6 +188,18 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       default:
         return "outline";
     }
+  };
+
+  // Helper function to calculate total quantity for a purchase order
+  const getTotalQuantity = (poId: number) => {
+    const poItems = allPOItems.filter((item: any) => item.poId === poId);
+    return poItems.reduce((total: number, item: any) => total + (item.quantity || 0), 0);
+  };
+
+  // Helper function to get item count for a purchase order
+  const getItemCount = (poId: number) => {
+    const poItems = allPOItems.filter((item: any) => item.poId === poId);
+    return poItems.length;
   };
 
   if (isLoading) {
@@ -365,7 +387,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span>PO Date: {format(new Date(po.poDate), 'MMM d, yyyy')}</span>
@@ -377,6 +399,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-muted-foreground" />
                     <span>Customer ID: {po.customerId}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-blue-600">
+                      {getItemCount(po.id)} items • {getTotalQuantity(po.id)} total qty
+                    </span>
                   </div>
                 </div>
                 {po.notes && (

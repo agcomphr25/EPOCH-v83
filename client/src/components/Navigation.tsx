@@ -569,58 +569,46 @@ export default function Navigation() {
       description: 'Production queue P2 department manager'
     },
     {
-      path: '/p2-department-queue/layup-plugging',
-      label: 'P2 Layup/Plugging',
-      icon: Factory,
-      description: 'Layup and plugging P2 department manager'
-    },
-    {
       path: '/p2-department-queue/barcode',
       label: 'P2 Barcode',
       icon: Scan,
       description: 'Barcode processing P2 department manager'
     },
     {
-      path: '/p2-department-queue/cnc',
-      label: 'P2 CNC',
-      icon: Settings,
-      description: 'CNC machining P2 department manager'
+      path: '/p2-department-queue/layup',
+      label: 'P2 Layup',
+      icon: Factory,
+      description: 'Layup P2 department manager'
     },
     {
-      path: '/p2-department-queue/gunsmith',
-      label: 'P2 Gunsmith',
-      icon: Wrench,
-      description: 'Gunsmith P2 department manager'
+      path: '/p2-department-queue/assembly-disassembly',
+      label: 'P2 Assembly/Disassembly',
+      icon: Settings,
+      description: 'Assembly/Disassembly P2 department manager'
     },
     {
       path: '/p2-department-queue/finish',
       label: 'P2 Finish',
       icon: CheckSquare,
-      description: 'Finish assignment P2 department manager'
+      description: 'Finish P2 department manager'
     },
     {
-      path: '/p2-department-queue/finish-qc',
-      label: 'P2 Finish QC',
+      path: '/p2-department-queue/quality-control',
+      label: 'P2 Quality Control',
       icon: Shield,
-      description: 'Finish quality control P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/paint',
-      label: 'P2 Paint',
-      icon: Package,
-      description: 'Paint P2 department manager'
-    },
-    {
-      path: '/p2-department-queue/qc-shipping',
-      label: 'P2 Shipping QC',
-      icon: TrendingUp,
-      description: 'Shipping quality control P2 department manager'
+      description: 'Quality Control P2 department manager'
     },
     {
       path: '/p2-department-queue/shipping',
       label: 'P2 Shipping',
       icon: Package,
       description: 'Shipping P2 department manager'
+    },
+    {
+      path: '/p2-department-queue/fulfilled',
+      label: 'P2 Fulfilled',
+      icon: Truck,
+      description: 'Fulfilled P2 orders'
     }
   ];
 

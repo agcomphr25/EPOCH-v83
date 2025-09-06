@@ -1398,6 +1398,61 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Department progression endpoint - move P2 orders to Barcode
+  app.post('/api/p2-department/progress-to-barcode', async (req, res) => {
+    try {
+      console.log('🏭 P2 DEPARTMENT: Progress to Barcode API called');
+      const { orderIds } = req.body;
+      
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ 
+          error: "orderIds array is required", 
+          success: false 
+        });
+      }
+
+      console.log(`🏭 P2 DEPARTMENT: Processing ${orderIds.length} P2 orders for Barcode progression`);
+      const { storage } = await import('../../storage');
+      
+      // Update P2 orders to move them to Barcode department
+      const updatedOrders = [];
+      
+      for (const orderId of orderIds) {
+        try {
+          // For P2 orders, move from Production Queue to Barcode department
+          const updateResult = await storage.updateOrderDepartment(orderId, 'Barcode', 'IN_PROGRESS');
+          
+          if (updateResult.success) {
+            updatedOrders.push(orderId);
+            console.log(`✅ P2 DEPARTMENT: P2 Order ${orderId} moved to Barcode department`);
+          } else {
+            console.warn(`⚠️ P2 DEPARTMENT: Failed to update P2 order ${orderId}: ${updateResult.message}`);
+          }
+        } catch (orderError) {
+          console.error(`❌ P2 DEPARTMENT: Error updating P2 order ${orderId}:`, orderError);
+        }
+      }
+
+      const result = {
+        success: true,
+        message: `Successfully moved ${updatedOrders.length} of ${orderIds.length} P2 orders to Barcode department`,
+        updatedOrders,
+        totalRequested: orderIds.length,
+        totalUpdated: updatedOrders.length
+      };
+
+      console.log('🏭 P2 DEPARTMENT: Barcode progression result:', result);
+      res.json(result);
+      
+    } catch (error) {
+      console.error('❌ P2 DEPARTMENT: Progress to Barcode error:', error);
+      res.status(500).json({ 
+        error: "Failed to progress P2 orders to Barcode department",
+        success: false 
+      });
+    }
+  });
+
   // P1 Integration endpoints for production queue database system
   app.post('/api/production-queue/sync-p1-orders', async (req, res) => {
     try {

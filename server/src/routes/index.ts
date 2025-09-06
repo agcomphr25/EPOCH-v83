@@ -3015,6 +3015,38 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Production Orders generation endpoint
+  app.post('/api/p2/purchase-orders/:poId/generate-production-orders', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      console.log('🏭 Generate P2 Production Orders endpoint called for PO:', poId);
+      
+      // Check if production orders already exist for this P2 PO
+      const existingOrders = await storage.getP2ProductionOrdersByPoId(parseInt(poId));
+      if (existingOrders.length > 0) {
+        return res.status(409).json({ 
+          error: `P2 production orders already exist for this PO (${existingOrders.length} orders found). Cannot generate duplicates.`,
+          existingCount: existingOrders.length
+        });
+      }
+      
+      const productionOrders = await storage.generateP2ProductionOrders(parseInt(poId));
+      
+      console.log(`✅ Generated ${productionOrders.length} P2 production orders for PO ${poId}`);
+      res.status(201).json({ 
+        success: true,
+        message: `Generated ${productionOrders.length} P2 production orders`,
+        productionOrders: productionOrders.length,
+        orders: productionOrders
+      });
+    } catch (error) {
+      console.error('Generate P2 production orders error:', error);
+      res.status(500).json({ error: 'Failed to generate P2 production orders' });
+    }
+  });
+
   // Create and return HTTP server
   return createServer(app);
 }

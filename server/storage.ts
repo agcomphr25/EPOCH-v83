@@ -5150,6 +5150,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`No items found for P2 Purchase Order ${poId}`);
     }
 
+    // Get the customer information to generate proper order IDs
+    const customer = await this.getP2Customer(po.customerId);
+    if (!customer) {
+      throw new Error(`P2 Customer ${po.customerId} not found`);
+    }
+
+    // Get all existing P2 production order IDs for uniqueness check
+    const existingP2Orders = await db.select({ orderId: p2ProductionOrders.orderId }).from(p2ProductionOrders);
+    const existingOrderIds = existingP2Orders.map(order => order.orderId);
+
     const productionOrders: P2ProductionOrder[] = [];
 
     // Process each PO item
@@ -5190,10 +5200,12 @@ export class DatabaseStorage implements IStorage {
 
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-          // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
-          const orderIdSuffix = String(i + 1).padStart(3, '0');
-          const unitSuffix = String(unitIndex).padStart(3, '0');
-          const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}-${unitSuffix}`;
+          // Generate unique order ID using customer name + year + sequential format
+          const { generateP2OrderId } = await import('../utils/orderIdGenerator');
+          const orderId = generateP2OrderId(customer.customerName, existingOrderIds);
+          
+          // Add this new order ID to the existing list to ensure uniqueness for subsequent orders
+          existingOrderIds.push(orderId);
 
           const productionOrderData: InsertP2ProductionOrder = {
             orderId,

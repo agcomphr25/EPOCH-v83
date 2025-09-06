@@ -1357,7 +1357,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Push orders to Layup/Plugging Department Manager workflow
+  // Push orders to Layup/Plugging P1 Department Manager workflow
   app.post('/api/push-to-layup-plugging', async (req, res) => {
     try {
       console.log('🏭 PRODUCTION FLOW: Push to Layup/Plugging API called');

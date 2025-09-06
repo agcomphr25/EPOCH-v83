@@ -1136,7 +1136,7 @@ export default function LayupScheduler() {
       console.log('🏭 PRODUCTION FLOW: Step 1 - Saving layup schedule to database...');
       await saveScheduleMutation.mutateAsync(orderAssignments);
 
-      // Step 2: Push ALL scheduled orders to Layup/Plugging Department Manager (not just current week)
+      // Step 2: Push ALL scheduled orders to Layup/Plugging P1 Department Manager (not just current week)
       console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing ALL scheduled orders to department manager...');
       const allScheduledOrders = getAllScheduledOrders();
 
@@ -1147,7 +1147,7 @@ export default function LayupScheduler() {
         await pushToLayupPluggingMutation.mutateAsync(scheduledOrderIds);
 
         console.log('✅ PRODUCTION FLOW: Complete workflow finished successfully!');
-        console.log('✅ PRODUCTION FLOW: All scheduled orders are now available in Layup/Plugging Department Manager');
+        console.log('✅ PRODUCTION FLOW: All scheduled orders are now available in Layup/Plugging P1 Department Manager');
 
         toast({
           title: "Production Flow Complete",

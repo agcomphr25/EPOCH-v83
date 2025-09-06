@@ -494,61 +494,61 @@ export default function Navigation() {
       path: '/department-queue/production-queue',
       label: 'Production Queue',
       icon: List,
-      description: 'Production queue department manager'
+      description: 'Production queue P1 department manager'
     },
     {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,
-      description: 'Layup and plugging department manager'
+      description: 'Layup and plugging P1 department manager'
     },
     {
       path: '/department-queue/barcode',
       label: 'Barcode',
       icon: Scan,
-      description: 'Barcode processing department manager'
+      description: 'Barcode processing P1 department manager'
     },
     {
       path: '/department-queue/cnc',
       label: 'CNC',
       icon: Settings,
-      description: 'CNC machining department manager'
+      description: 'CNC machining P1 department manager'
     },
     {
       path: '/department-queue/gunsmith',
       label: 'Gunsmith',
       icon: Wrench,
-      description: 'Gunsmith department manager'
+      description: 'Gunsmith P1 department manager'
     },
     {
       path: '/department-queue/finish',
       label: 'Finish',
       icon: CheckSquare,
-      description: 'Finish assignment department manager'
+      description: 'Finish assignment P1 department manager'
     },
     {
       path: '/department-queue/finish-qc',
       label: 'Finish QC',
       icon: Shield,
-      description: 'Finish quality control department manager'
+      description: 'Finish quality control P1 department manager'
     },
     {
       path: '/department-queue/paint',
       label: 'Paint',
       icon: Package,
-      description: 'Paint department manager'
+      description: 'Paint P1 department manager'
     },
     {
       path: '/department-queue/qc-shipping',
       label: 'Shipping QC',
       icon: TrendingUp,
-      description: 'Shipping quality control department manager'
+      description: 'Shipping quality control P1 department manager'
     },
     {
       path: '/department-queue/shipping',
       label: 'Shipping',
       icon: Package,
-      description: 'Shipping department manager'
+      description: 'Shipping P1 department manager'
     },
     {
       path: '/shipping-management',
@@ -974,7 +974,7 @@ export default function Navigation() {
                 onClick={() => toggleDropdown('departmentQueue', departmentQueueExpanded, setDepartmentQueueExpanded)}
               >
                 <Factory className="h-4 w-4" />
-                Department Manager
+                P1 Department Manager
                 {departmentQueueExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (

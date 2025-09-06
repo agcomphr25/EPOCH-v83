@@ -416,7 +416,7 @@ export default function BarcodeQueuePage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Scan className="h-6 w-6" />
-          <h1 className="text-3xl font-bold">Barcode Department Manager</h1>
+          <h1 className="text-3xl font-bold">Barcode P1 Department Manager</h1>
         </div>
 
         {/* Multi-Select Actions */}

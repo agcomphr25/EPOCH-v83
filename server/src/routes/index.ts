@@ -1432,6 +1432,17 @@ export function registerRoutes(app: Express): Server {
       if (updateResult.success) {
         console.log(`✅ SINGLE ORDER MOVE: Order ${orderId} moved to ${department} department`);
         
+        // If moving back to Production Queue, also remove from layup schedule
+        if (department === 'P1 Production Queue') {
+          try {
+            await storage.deleteLayupScheduleByOrder(orderId);
+            console.log(`🗑️ SINGLE ORDER MOVE: Removed ${orderId} from layup schedule`);
+          } catch (scheduleError) {
+            console.warn(`⚠️ SINGLE ORDER MOVE: Could not remove ${orderId} from schedule:`, scheduleError);
+            // Don't fail the whole operation if schedule cleanup fails
+          }
+        }
+        
         const result = {
           success: true,
           message: `Successfully moved order ${orderId} to ${department} department`,

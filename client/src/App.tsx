@@ -99,6 +99,7 @@ import PaymentManagement from "./pages/PaymentManagement";
 import RefundRequest from "./pages/RefundRequest";
 import RefundQueue from "./pages/RefundQueue";
 import ProductionQueuePage from "./pages/ProductionQueuePage";
+import P2ProductionQueuePage from "./pages/P2ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
 
@@ -310,6 +311,9 @@ function App() {
                   <Route path="/department-queue/paint" component={PaintQueuePage} />
                   <Route path="/department-queue/qc-shipping" component={QCShippingQueuePage} />
                   <Route path="/department-queue/shipping" component={ShippingQueuePage} />
+
+                  {/* P2 Department Manager Routes */}
+                  <Route path="/p2-department-queue/production-queue" component={P2ProductionQueuePage} />
                   
                   {/* Shipping Label Route */}
                   <Route path="/shipping/label/:orderId" component={ShippingLabelPage} />

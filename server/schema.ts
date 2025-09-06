@@ -1894,7 +1894,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice
   dueDate: date('due_date'), // Due date for this item
-  p2ProductId: integer('p2_product_id').references(() => p2POProducts.id), // Optional P2 product reference
+  p2ProductId: integer('p2_product_id').references(() => poProducts.id), // Optional P2 product reference
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),

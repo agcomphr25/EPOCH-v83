@@ -1018,6 +1018,40 @@ export default function LayupScheduler() {
       return;
     }
 
+    // FRIDAY VALIDATION: Check if trying to drop on Friday when not allowed
+    const dayOfWeek = targetDate.getDay();
+    if (dayOfWeek === 5 && !selectedWorkDays.includes(5)) {
+      console.log('❌ Cannot drop to Friday - not in selected work days');
+      toast({
+        title: "Friday Not Allowed",
+        description: "Friday scheduling is disabled in current work day settings",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // MOLD CAPACITY VALIDATION: Check if mold is already at capacity for this date
+    const targetDateStr = targetDate.toISOString().split('T')[0];
+    const existingOrdersForMoldDate = Object.entries(orderAssignments).filter(([existingOrderId, assignment]) => {
+      if (existingOrderId === orderId) return false; // Don't count the order being moved
+      const assignmentDateStr = new Date(assignment.date).toISOString().split('T')[0];
+      return assignment.moldId === moldId && assignmentDateStr === targetDateStr;
+    });
+
+    // Get mold capacity from molds data
+    const mold = molds.find(m => m.moldId === moldId);
+    const moldCapacity = mold?.multiplier || 1;
+    
+    if (existingOrdersForMoldDate.length >= moldCapacity) {
+      console.log(`❌ Cannot drop - mold ${moldId} is at capacity (${existingOrdersForMoldDate.length}/${moldCapacity}) on ${targetDateStr}`);
+      toast({
+        title: "Mold At Capacity",
+        description: `${moldId} is already at capacity (${moldCapacity}) for ${format(targetDate, 'MMM dd')}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to mold ${moldId} on ${date}`);
 
     // Update order assignments immediately for UI responsiveness
@@ -1162,14 +1196,19 @@ export default function LayupScheduler() {
         else if (dayOfWeek === 5) fridayCount++;
 
         // ALWAYS load assignments regardless of selectedWorkDays to show existing schedule
-        // BUT skip recently removed orders
-        if (!recentlyRemovedOrders.has(entry.orderId)) {
+        // BUT skip recently removed orders AND skip Friday assignments if Friday not allowed
+        const assignmentDate = new Date(entry.scheduledDate);
+        const assignmentDayOfWeek = assignmentDate.getDay();
+        
+        if (recentlyRemovedOrders.has(entry.orderId)) {
+          console.log(`🚫 Skipping recently removed order: ${entry.orderId}`);
+        } else if (assignmentDayOfWeek === 5 && !selectedWorkDays.includes(5)) {
+          console.log(`🚫 FRIDAY FILTER: Skipping Friday assignment ${entry.orderId} on ${assignmentDate.toDateString()} - Friday not in work days`);
+        } else {
           assignments[entry.orderId] = {
             moldId: entry.moldId,
             date: entry.scheduledDate
           };
-        } else {
-          console.log(`🚫 Skipping recently removed order: ${entry.orderId}`);
         }
 
         // Log Monday orders specifically
@@ -2157,7 +2196,10 @@ export default function LayupScheduler() {
   const dates = useMemo(() => {
     if (viewType === 'week') {
       const startDate = startOfWeek(currentDate, { weekStartsOn: 1 }); // Start on Monday
-      return Array.from({ length: 5 }, (_, i) => addDays(startDate, i)); // Monday to Friday
+      const allDays = Array.from({ length: 5 }, (_, i) => addDays(startDate, i)); // Monday to Friday
+      
+      // Filter to only show selected work days to prevent Friday columns when Friday is disabled
+      return allDays.filter(date => selectedWorkDays.includes(date.getDay()));
     } else if (viewType === 'day') {
       return [currentDate];
     } else {
@@ -2167,7 +2209,7 @@ export default function LayupScheduler() {
         end: endOfMonth(currentDate)
       });
     }
-  }, [viewType, currentDate]);
+  }, [viewType, currentDate, selectedWorkDays]);
 
   // Auto-trigger algorithmic scheduling when production queue has orders
   useEffect(() => {

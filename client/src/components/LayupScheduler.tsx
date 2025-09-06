@@ -37,7 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid3X3, Calendar1, Settings, Users, Plus, Zap, Printer, ArrowRight, Save, Package, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 
 
 // Draggable Order Item Component with responsive sizing - memoized for performance
-const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean }) => {
+const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, moldInfo, getModelDisplayName, features, processedOrders, isLocked, moveToBarcodeMutation, moveToProductionQueueMutation }: { order: any, priority: number, totalOrdersInCell?: number, moldInfo?: { moldId: string, instanceNumber?: number }, getModelDisplayName?: (modelId: string) => string, features?: any[], processedOrders?: any[], isLocked?: boolean, moveToBarcodeMutation?: any, moveToProductionQueueMutation?: any }) => {
   const {
     attributes,
     listeners,
@@ -499,6 +499,40 @@ const DraggableOrderItem = React.memo(({ order, priority, totalOrdersInCell, mol
             Due: {format(new Date(order.dueDate), 'MM/dd')}
           </div>
         )}
+
+        {/* Action Buttons - Only show when not locked */}
+        {!isLocked && (
+          <div className="flex justify-center space-x-1 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 w-6 p-0 border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Call mutation to move order to Barcode department
+                moveToBarcodeMutation.mutate(order.orderId);
+              }}
+              disabled={moveToBarcodeMutation.isPending}
+              title="Move to Barcode (Inventory Available)"
+            >
+              <Package className="h-3 w-3 text-green-600" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline" 
+              className="h-6 w-6 p-0 border-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Call mutation to move order back to Production Queue
+                moveToProductionQueueMutation.mutate(order.orderId);
+              }}
+              disabled={moveToProductionQueueMutation.isPending}
+              title="Move back to Production Queue"
+            >
+              <X className="h-3 w-3 text-red-600" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -596,6 +630,8 @@ function DroppableCell({
                 features={features}
                 processedOrders={processedOrders}
                 isLocked={weekIsLocked}
+                moveToBarcodeMutation={moveToBarcodeMutation}
+                moveToProductionQueueMutation={moveToProductionQueueMutation}
               />
             );
           })}
@@ -1304,6 +1340,72 @@ export default function LayupScheduler() {
       toast({
         title: "Generation Failed",
         description: "Failed to generate layup schedule from production queue",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Move order to Barcode department (inventory available)
+  const moveToBarcodeMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/move-order-department', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId, 
+          department: 'Barcode',
+          status: 'IN_PROGRESS' 
+        })
+      });
+    },
+    onSuccess: (result, orderId) => {
+      console.log('✅ Order moved to Barcode:', { orderId, result });
+      toast({
+        title: "Order Moved",
+        description: `Order ${orderId} moved to Barcode (inventory available)`,
+      });
+      // Refresh data to remove order from layup scheduler
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error, orderId) => {
+      console.error('❌ Failed to move order to Barcode:', { orderId, error });
+      toast({
+        title: "Error",
+        description: `Failed to move order ${orderId} to Barcode`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Move order back to Production Queue
+  const moveToProductionQueueMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/move-order-department', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId, 
+          department: 'P1 Production Queue',
+          status: 'FINALIZED' 
+        })
+      });
+    },
+    onSuccess: (result, orderId) => {
+      console.log('✅ Order moved back to Production Queue:', { orderId, result });
+      toast({
+        title: "Order Returned",
+        description: `Order ${orderId} moved back to Production Queue`,
+      });
+      // Refresh data 
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error, orderId) => {
+      console.error('❌ Failed to move order back to Production Queue:', { orderId, error });
+      toast({
+        title: "Error", 
+        description: `Failed to move order ${orderId} back to Production Queue`,
         variant: "destructive"
       });
     }

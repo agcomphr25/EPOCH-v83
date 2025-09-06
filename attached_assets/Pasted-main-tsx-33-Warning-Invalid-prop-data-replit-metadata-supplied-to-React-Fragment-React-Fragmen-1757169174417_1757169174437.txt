@@ -1,0 +1,715 @@
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG011 → Alpine Hunter Adjustable-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-7-3 → Alpine Hunter-14 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-8-2 → Privateer-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-8-1 → Privateer-2 on 2025-09-08
+2main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG509 → Alpine Hunter Adjustable-2 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-7-2 → Alpine Hunter-13 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-7-1 → Alpine Hunter-7 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG164 → Chalk Branch-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-6-1 → Mesa Universal-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-6-2 → Mesa Universal-3 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG478 → Visigoth-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG641 → Alpine Hunter-4 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: EH055 → Alpine Hunter-5 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG122 → Alpine Hunter-6 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG457 → APR-1 on 2025-09-08
+2main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: EH223 → Gladius Adjustable-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: EH093 → Gladius-1 on 2025-09-08
+main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: EH160 → K2-3 on 2025-09-08
+11main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: AG013 → Adj K2-3 on 2025-09-08
+5main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+console.error @ main.tsx:33
+printWarning @ react_jsx-dev-runtime.js?v=85170350:64
+error @ react_jsx-dev-runtime.js?v=85170350:48
+validateFragmentProps @ react_jsx-dev-runtime.js?v=85170350:796
+jsxWithValidation @ react_jsx-dev-runtime.js?v=85170350:874
+(anonymous) @ LayupScheduler.tsx:4519
+(anonymous) @ LayupScheduler.tsx:4518
+LayupScheduler @ LayupScheduler.tsx:4677
+renderWithHooks @ chunk-276SZO74.js?v=85170350:11548
+updateFunctionComponent @ chunk-276SZO74.js?v=85170350:14587
+beginWork @ chunk-276SZO74.js?v=85170350:15924
+beginWork$1 @ chunk-276SZO74.js?v=85170350:19753
+performUnitOfWork @ chunk-276SZO74.js?v=85170350:19198
+workLoopSync @ chunk-276SZO74.js?v=85170350:19137
+renderRootSync @ chunk-276SZO74.js?v=85170350:19116
+performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=85170350:18678
+workLoop @ chunk-276SZO74.js?v=85170350:197
+flushWork @ chunk-276SZO74.js?v=85170350:176
+performWorkUntilDeadline @ chunk-276SZO74.js?v=85170350:384Understand this error
+LayupScheduler.tsx:4540 ✅ Monday assignment found: PO-P18918-8-3 → Sportsman-4 on 2025-09-08
+2main.tsx:33 Warning: Invalid prop `data-replit-metadata` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.
+    at LayupScheduler (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/LayupScheduler.tsx:606:35)
+    at div
+    at LayupSchedulerPage
+    at Route (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:280:16)
+    at Switch (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:336:17)
+    at main
+    at div
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=85170350:235:17)
+    at DeploymentAuthWrapper (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/components/DeploymentAuthWrapper.tsx:31:49)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)
+    at App (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/src/App.tsx?v=UTpl1xq3vk_jQQYoB8xH3:138:35)
+    at Router (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:6332:13)
+    at BrowserRouter (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=85170350:9416:3)
+    at QueryClientProvider (https://f6b73d24-245c-4100-84b6-aeea66a0f94c-00-3e6u43xkwvgbw.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-65LAIXSP.js?v=85170350:2934:3)

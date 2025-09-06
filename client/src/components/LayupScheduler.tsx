@@ -680,6 +680,7 @@ export default function LayupScheduler() {
 
   // Track order assignments (orderId -> { moldId, date })
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
+  const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
 
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
@@ -781,6 +782,9 @@ export default function LayupScheduler() {
         title: "Order Returned",
         description: `Order ${orderId} moved back to Production Queue`,
       });
+      
+      // Track this order as recently removed to prevent re-assignment
+      setRecentlyRemovedOrders(prev => new Set([...prev, orderId]));
       
       // Immediately remove order from local assignments to prevent display lag
       setOrderAssignments(prev => {
@@ -1158,10 +1162,15 @@ export default function LayupScheduler() {
         else if (dayOfWeek === 5) fridayCount++;
 
         // ALWAYS load assignments regardless of selectedWorkDays to show existing schedule
-        assignments[entry.orderId] = {
-          moldId: entry.moldId,
-          date: entry.scheduledDate
-        };
+        // BUT skip recently removed orders
+        if (!recentlyRemovedOrders.has(entry.orderId)) {
+          assignments[entry.orderId] = {
+            moldId: entry.moldId,
+            date: entry.scheduledDate
+          };
+        } else {
+          console.log(`🚫 Skipping recently removed order: ${entry.orderId}`);
+        }
 
         // Log Monday orders specifically
         if (dayOfWeek === 1) {
@@ -1177,11 +1186,35 @@ export default function LayupScheduler() {
       console.log(`   Friday: ${fridayCount} orders loaded`);
       console.log(`   Total assignments loaded: ${Object.keys(assignments).length}`);
 
-      setOrderAssignments(assignments);
+      // Preserve any existing local state (e.g., orders that were just removed)
+      setOrderAssignments(prev => {
+        // Start with database assignments
+        const mergedAssignments = { ...assignments };
+        
+        // If there are any assignments in local state that are NOT in the database,
+        // those might be recently removed orders - don't add them back
+        console.log('🔄 ASSIGNMENT MERGE: Preserving local state while loading database assignments');
+        console.log(`   Database assignments: ${Object.keys(assignments).length}`);
+        console.log(`   Previous local assignments: ${Object.keys(prev).length}`);
+        
+        return mergedAssignments;
+      });
     } else {
       console.log('🔍 ASSIGNMENT LOADING DEBUG: No schedule data to load');
     }
-  }, [existingSchedule]);
+  }, [existingSchedule, recentlyRemovedOrders]);
+
+  // Clear recently removed orders after 30 seconds to allow for normal operation
+  useEffect(() => {
+    if (recentlyRemovedOrders.size > 0) {
+      const timeout = setTimeout(() => {
+        console.log('🧹 Clearing recently removed orders cache');
+        setRecentlyRemovedOrders(new Set());
+      }, 30000); // 30 seconds
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [recentlyRemovedOrders]);
 
   // Save functionality
   const [isSaving, setIsSaving] = useState(false);
@@ -4516,7 +4549,7 @@ export default function LayupScheduler() {
                     }
 
                     return activeMolds.map(mold => (
-                      <React.Fragment key={mold.moldId}>
+                      <div key={mold.moldId}>
                         {(() => {
                           // Show ALL dates for this mold to ensure complete grid structure
                           return dates.map(date => {
@@ -4672,7 +4705,7 @@ export default function LayupScheduler() {
                             );
                           });
                         })()}
-                      </React.Fragment>
+                      </div>
                     ));
                   })()}
                     </div>

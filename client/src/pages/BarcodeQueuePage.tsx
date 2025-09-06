@@ -431,28 +431,6 @@ export default function BarcodeQueuePage() {
               Select All ({selectedOrders.size}/{barcodeOrders.length})
             </label>
           </div>
-
-          {selectedOrders.size > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleCreateBarcodes}
-                disabled={createBarcodeLabels.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <QrCode className="h-4 w-4 mr-2" />
-                Create Avery Labels ({selectedOrders.size})
-              </Button>
-              <Button
-                onClick={handleProgressToCNC}
-                disabled={progressToCNC.isPending}
-                variant="outline"
-                className="border-green-500 text-green-700 hover:bg-green-50"
-              >
-                <ArrowRight className="h-4 w-4 mr-2" />
-                Progress to CNC ({selectedOrders.size})
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 

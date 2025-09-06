@@ -1,0 +1,116 @@
+**Module 9: Finance & Reporting**
+
+Generate a React + Tailwind + plain-JS solution with these files:
+
+---
+
+### 1. `src/utils/financeUtils.js`
+- **Export**:
+  - `async function fetchAPTransactions({ dateFrom, dateTo }): Promise<APTx[]>`  
+    • GET `/api/finance/ap?dateFrom={dateFrom}&dateTo={dateTo}`  
+    • Returns array of `{ id, poNumber, vendorName, amount, date, status }`
+  - `async function fetchARTransactions({ dateFrom, dateTo }): Promise<ARTx[]>`  
+    • GET `/api/finance/ar?dateFrom={dateFrom}&dateTo={dateTo}`  
+    • Returns array of `{ id, orderId, customerName, amount, date, terms, status }`
+  - `async function fetchCOGS({ dateFrom, dateTo }): Promise<COGSData>`  
+    • GET `/api/finance/cogs?dateFrom={dateFrom}&dateTo={dateTo}`  
+    • Returns `{ standardCost: number, actualCost: number, breakdown: Array<{ category, standard, actual }> }`
+- **Comments**: explain each fetch and data shape.
+
+---
+
+### 2. `src/hooks/useTransactions.js`
+- **Export**:
+  - `function useAPTransactions(dateRange): { data, loading, error, refresh }`
+  - `function useARTransactions(dateRange): { data, loading, error, refresh }`
+  - `function useCOGS(dateRange): { data, loading, error, refresh }`
+- **Behavior**: fetch on mount and whenever `dateRange` changes using `financeUtils`; returns loading state and `refresh()`.
+
+---
+
+### 3. `src/components/APJournal.jsx`
+- **Props**: `dateFrom`, `dateTo`
+- **Uses**: `useAPTransactions({ dateFrom, dateTo })`
+- **Renders**: Tailwind table with columns: PO #, Vendor, Amount, Date, Status
+- **Features**:
+  - Date-range picker (two `<input type="date">`)
+  - “Refresh” button
+  - Drill-down: clicking a row opens modal or navigates to `/ap/{id}`
+
+---
+
+### 4. `src/components/ARJournal.jsx`
+- **Props**: `dateFrom`, `dateTo`
+- **Uses**: `useARTransactions({ dateFrom, dateTo })`
+- **Renders**: Tailwind table with columns: Order ID, Customer, Amount, Date, Terms, Status
+- **Features**:
+  - Date-range picker
+  - Filter by `terms` (prepaid vs Net 30)
+  - Drill-down links to `/ar/{id}`
+
+---
+
+### 5. `src/components/COGSReport.jsx`
+- **Props**: `dateFrom`, `dateTo`
+- **Uses**: `useCOGS({ dateFrom, dateTo })`
+- **Renders**:
+  - Summary cards for Standard vs Actual COGS
+  - Breakdown chart using `recharts` (e.g. BarChart of categories with standard vs actual)
+  - Detailed table of `breakdown` rows
+
+---
+
+### 6. `src/components/FinanceDashboard.jsx`
+- **Purpose**: aggregate high-level KPIs
+- **Uses**: all three hooks (`useAPTransactions`, `useARTransactions`, `useCOGS`) for “today” or custom range
+- **Displays**:
+  - KPI cards: total AP, total AR, AR aging buckets, WIP value, scrap %, utilization %
+  - Line chart of revenue vs target over time (use `recharts`)
+  - Table of top 5 slowest‐moving orders
+
+---
+
+### 7. Styling & Comments
+- Use Tailwind (`p-4`, `space-y-4`, `table-auto`, `border`, `rounded`, `grid`, etc.).
+- Add inline comments explaining data fetching, state, and chart configs.
+
+---
+
+### 8. Dependencies
+```bash
+npm install axios react-hot-toast recharts date-fns
+9. Usage Snippets
+AP Journal Page (src/pages/APJournalPage.jsx):
+
+jsx
+Copy
+Edit
+import React, { useState } from 'react';
+import APJournal from '../components/APJournal';
+
+export default function APJournalPage() {
+  const [range, setRange] = useState({ dateFrom: '2025-01-01', dateTo: '2025-12-31' });
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">AP Transactions</h1>
+      <APJournal {...range} />
+    </div>
+  );
+}
+Finance Dashboard Page (src/pages/FinanceDashboardPage.jsx):
+
+jsx
+Copy
+Edit
+import React from 'react';
+import FinanceDashboard from '../components/FinanceDashboard';
+
+export default function FinanceDashboardPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Finance Dashboard</h1>
+      <FinanceDashboard />
+    </div>
+  );
+}
+Paste the above block into your code-gen model to scaffold Module 9, then wire the generated utils, hooks, and components into your Replit project with routes like /finance/ap, /finance/ar, /finance/cogs, and /dashboard/finance.

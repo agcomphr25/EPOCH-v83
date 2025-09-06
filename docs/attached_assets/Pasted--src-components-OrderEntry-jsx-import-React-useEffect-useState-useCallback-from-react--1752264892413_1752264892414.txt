@@ -1,0 +1,326 @@
+// src/components/OrderEntry.jsx
+import React, { useEffect, useState, useCallback } from 'react';
+import axios from 'axios';
+import { Tab } from '@headlessui/react';
+import { Combobox } from '@headlessui/react';
+import { generateP1OrderId } from '../utils/orderUtils';
+import CsvDataImporter from './CsvDataImporter';
+import debounce from 'lodash.debounce';
+
+export default function OrderEntry() {
+  const [tabIndex, setTabIndex] = useState(0);
+
+  // --- Single entry state/hook
+  const [customer, setCustomer] = useState(null);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerOptions, setCustomerOptions] = useState([]);
+
+  const [modelOptions, setModelOptions] = useState([]);
+  const [modelId, setModelId] = useState('');
+  const [featureDefs, setFeatureDefs] = useState([]);
+  const [features, setFeatures] = useState({});
+  const [rushLevel, setRushLevel] = useState('none');
+  const [orderDate, setOrderDate] = useState(new Date());
+  const [lastOrderId, setLastOrderId] = useState(null);
+  const [orderId, setOrderId] = useState('');
+  const [errors, setErrors] = useState({});
+
+  // --- Bulk upload state
+  const [bulkData, setBulkData] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState(null);
+
+  // On mount: fetch last orderId & stock models
+  useEffect(() => {
+    axios.get('/api/orders/last-id?p1=true').then(res => {
+      setLastOrderId(res.data.lastOrderId);
+    });
+    axios.get('/api/stock-models').then(res => {
+      setModelOptions(res.data);
+    });
+    setOrderDate(new Date());
+  }, []);
+
+  // Compute orderId on date or lastOrderId change
+  useEffect(() => {
+    if (orderDate && lastOrderId != null) {
+      setOrderId(generateP1OrderId(orderDate, lastOrderId));
+    }
+  }, [orderDate, lastOrderId]);
+
+  // Fetch features when model changes
+  useEffect(() => {
+    if (!modelId) return;
+    axios.get(`/api/stock-models/${modelId}/features`).then(res => {
+      setFeatureDefs(res.data);
+      setFeatures({});
+    });
+  }, [modelId]);
+
+  // Debounced fetch for customer search
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const doCustomerSearch = useCallback(
+    debounce(q => {
+      axios.get(`/api/customers?search=${encodeURIComponent(q)}`)
+        .then(res => setCustomerOptions(res.data));
+    }, 300),
+    []
+  );
+
+  useEffect(() => {
+    if (customerQuery.trim()) doCustomerSearch(customerQuery);
+  }, [customerQuery, doCustomerSearch]);
+
+  const onSingleSubmit = async () => {
+    setErrors({});
+    try {
+      await axios.post('/api/orders', {
+        orderId,
+        orderDate: orderDate.toISOString(),
+        customerId: customer?.id,
+        modelId,
+        features,
+        rushLevel,
+      });
+      setLastOrderId(prev => prev + 1);
+      alert(`✅ Order ${orderId} created!`);
+    } catch (e) {
+      if (e.response?.data?.errors) {
+        setErrors(e.response.data.errors);
+      } else {
+        alert('Error creating order');
+      }
+    }
+  };
+
+  // Bulk upload handler
+  const handleBulkParsed = rows => {
+    let currLast = lastOrderId || 0;
+    const mapped = rows.map((r, idx) => {
+      const dt = new Date();
+      currLast += 1;
+      return {
+        ...r,
+        orderId: generateP1OrderId(dt, currLast),
+        orderDate: dt.toISOString(),
+        status: 'pending',
+      };
+    });
+    setBulkData(mapped);
+    setLastOrderId(currLast);
+  };
+
+  const uploadBulk = async () => {
+    try {
+      const payload = bulkData.map(r => ({
+        orderId: r.orderId,
+        orderDate: r.orderDate,
+        customerId: r.customerId,
+        modelId: r.modelId,
+        features: r.features,
+        rushLevel: r.rushLevel,
+      }));
+      const res = await axios.post('/api/orders/bulk', payload);
+      setBulkStatus({ success: true, summary: res.data });
+    } catch (e) {
+      setBulkStatus({ success: false, error: e.message });
+    }
+  };
+
+  return (
+    <div className="p-4">
+      <Tab.Group selectedIndex={tabIndex} onChange={setTabIndex}>
+        <Tab.List className="flex border-b mb-4">
+          {['Single Entry', 'Bulk Upload'].map((t, i) => (
+            <Tab key={t}
+              className={({ selected }) =>
+                `px-4 py-2 -mb-px ${selected ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`
+              }>
+              {t}
+            </Tab>
+          ))}
+        </Tab.List>
+
+        <Tab.Panels>
+          {/* Single Entry */}
+          <Tab.Panel>
+            <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4">
+              <div>
+                <label>Customer</label>
+                <Combobox value={customer} onChange={setCustomer}>
+                  <div className="relative">
+                    <Combobox.Input
+                      onChange={e => setCustomerQuery(e.target.value)}
+                      className="w-full border rounded px-2 py-1"
+                      placeholder="Search customer..." />
+                    <Combobox.Options className="absolute w-full bg-white border rounded mt-1 z-10">
+                      {customerOptions.map(c => (
+                        <Combobox.Option key={c.id} value={c}>
+                          {c.name}
+                        </Combobox.Option>
+                      ))}
+                    </Combobox.Options>
+                  </div>
+                </Combobox>
+                {errors.customerId && <p className="text-red-500">{errors.customerId}</p>}
+              </div>
+
+              <div>
+                <label>Model</label>
+                <select
+                  className="w-full border rounded px-2 py-1"
+                  value={modelId}
+                  onChange={e => setModelId(e.target.value)}
+                >
+                  <option value="">Select model...</option>
+                  {modelOptions.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                {errors.modelId && <p className="text-red-500">{errors.modelId}</p>}
+              </div>
+
+              {/* Dynamic feature inputs */}
+              {featureDefs.map(fd => (
+                <div key={fd.id}>
+                  <label className="capitalize">{fd.name}</label>
+                  {fd.type === 'dropdown' && (
+                    <select
+                      className="w-full border rounded px-2 py-1"
+                      value={features[fd.id] || ''}
+                      onChange={e =>
+                        setFeatures(s => ({ ...s, [fd.id]: e.target.value }))
+                      }
+                    >
+                      <option value="">Select...</option>
+                      {fd.options?.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  )}
+                  {fd.type === 'search' && (
+                    <Combobox
+                      value={features[fd.id] || null}
+                      onChange={val =>
+                        setFeatures(s => ({ ...s, [fd.id]: val }))
+                      }
+                    >
+                      <Combobox.Input
+                        className="w-full border rounded px-2 py-1"
+                        onChange={e => {
+                          // perform async search endpoint
+                          axios.get(`/api/features/${fd.id}/search?query=${e.target.value}`)
+                            .then(r => fd.options = r.data);
+                        }}
+                      />
+                      <Combobox.Options className="z-10 bg-white border rounded mt-1">
+                        {fd.options?.map(opt => (
+                          <Combobox.Option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </Combobox.Option>
+                        ))}
+                      </Combobox.Options>
+                    </Combobox>
+                  )}
+                  {errors[`features.${fd.id}`] && <p className="text-red-500">{errors[`features.${fd.id}`]}</p>}
+                </div>
+              ))}
+
+              <div>
+                <label>Rush Option</label>
+                <select
+                  value={rushLevel}
+                  onChange={e => setRushLevel(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  <option value="none">None</option>
+                  <option value="4wk">4 wk (+$200)</option>
+                  <option value="6wk">6 wk (+$250)</option>
+                </select>
+              </div>
+
+              <div>
+                <label>Order Date</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-2 py-1"
+                  value={orderDate.toISOString().substr(0, 10)}
+                  onChange={e => setOrderDate(new Date(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <label>Order ID</label>
+                <input
+                  type="text"
+                  readOnly
+                  className="w-full border rounded px-2 py-1 bg-gray-100"
+                  value={orderId}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  onClick={onSingleSubmit}
+                >
+                  Submit Order
+                </button>
+              </div>
+            </div>
+          </Tab.Panel>
+
+          {/* Bulk Upload */}
+          <Tab.Panel>
+            <CsvDataImporter onDataParsed={handleBulkParsed} />
+
+            {bulkData.length > 0 && (
+              <div className="mt-4">
+                <table className="table-auto w-full border">
+                  <thead>
+                    <tr className="bg-gray-200">
+                      <th className="px-2 py-1">Order ID</th>
+                      <th>Customer</th>
+                      <th>Model</th>
+                      <th>Rush</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkData.map((r, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-2 py-1">{r.orderId}</td>
+                        <td>{r.customerName || r.customerId}</td>
+                        <td>{r.modelId}</td>
+                        <td>{r.rushLevel}</td>
+                        <td>{r.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <button
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  onClick={uploadBulk}
+                >
+                  Upload All
+                </button>
+
+                {bulkStatus && (
+                  <div className={`mt-2 p-2 rounded ${bulkStatus.success ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {bulkStatus.success
+                      ? `Uploaded ${bulkStatus.summary.count} orders successfully.`
+                      : `Error uploading bulk: ${bulkStatus.error}`}
+                  </div>
+                )}
+              </div>
+            )}
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
+    </div>
+  );
+}
+
+/*
+  // Requires: npm install @headlessui/react axios lodash.debounce
+*/

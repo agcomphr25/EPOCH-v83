@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct React Test</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        // Test React directly from CDN
+        const { createElement } = React;
+        const { createRoot } = ReactDOM;
+        
+        function TestApp() {
+            return createElement('div', {
+                style: {
+                    padding: '20px',
+                    backgroundColor: '#f0f0f0',
+                    border: '2px solid #333',
+                    fontFamily: 'Arial, sans-serif'
+                }
+            }, [
+                createElement('h1', {
+                    key: 'title',
+                    style: { color: '#333' }
+                }, 'EPOCH v8 - Manufacturing ERP'),
+                createElement('h2', {
+                    key: 'subtitle',
+                    style: { color: '#666' }
+                }, 'Direct CDN React Test'),
+                createElement('p', {
+                    key: 'description'
+                }, 'Testing React directly from CDN to verify it works.'),
+                createElement('div', {
+                    key: 'status',
+                    style: { marginTop: '20px', padding: '15px', backgroundColor: '#e8f5e8', border: '1px solid #4caf50' }
+                }, [
+                    createElement('h3', { key: 'status-title' }, 'CDN Test Status:'),
+                    createElement('ul', { key: 'status-list' }, [
+                        createElement('li', { key: 'status-1' }, '✅ React loaded from CDN'),
+                        createElement('li', { key: 'status-2' }, '✅ ReactDOM loaded from CDN'),
+                        createElement('li', { key: 'status-3' }, '✅ Component rendering test')
+                    ])
+                ])
+            ]);
+        }
+        
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            console.log('Creating React app from CDN...');
+            const root = createRoot(rootElement);
+            root.render(createElement(TestApp));
+            console.log('CDN React app rendered successfully');
+        } else {
+            console.error('Root element not found');
+        }
+    </script>
+</body>
+</html>

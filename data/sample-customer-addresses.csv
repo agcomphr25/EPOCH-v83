@@ -1,0 +1,11 @@
+customer_id,street,city,state,zip_code,country,type,is_default
+11,"123 Main Street","Anytown","NY","12345","United States","both","true"
+12,"456 Oak Avenue","Springfield","IL","62701","United States","both","true"
+18,"789 Pine Road","Denver","CO","80202","United States","both","true"
+19,"321 Elm Street","Austin","TX","78701","United States","both","true"
+20,"654 Maple Drive","Seattle","WA","98101","United States","both","true"
+21,"987 Cedar Lane","Portland","OR","97201","United States","both","true"
+22,"147 Birch Boulevard","Phoenix","AZ","85001","United States","both","true"
+23,"258 Willow Way","Miami","FL","33101","United States","both","true"
+24,"369 Spruce Street","Atlanta","GA","30301","United States","both","true"
+25,"741 Aspen Avenue","Nashville","TN","37201","United States","both","true"

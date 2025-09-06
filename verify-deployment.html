@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPOCH v8 - Deployment Verification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .test-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        .test-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .test-button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        .test-button:hover {
+            background: #2980b9;
+        }
+        .test-button.success {
+            background: #27ae60;
+        }
+        .test-button.error {
+            background: #e74c3c;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-ok { background: #27ae60; }
+        .status-warning { background: #f39c12; }
+        .status-error { background: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏭 EPOCH v8 - Deployment Verification</h1>
+            <p>Comprehensive deployment testing and troubleshooting tool</p>
+        </div>
+        
+        <div class="content">
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>🔧 Server Health</h3>
+                    <button class="test-button" onclick="testServerHealth()">Test Server Health</button>
+                    <div id="server-health-result"></div>
+                </div>
+                
+                <div class="test-card">
+                    <h3>🗄️ Database Connection</h3>
+                    <button class="test-button" onclick="testDatabase()">Test Database</button>
+                    <div id="database-result"></div>
+                </div>
+                
+                <div class="test-card">
+                    <h3>📦 Static Assets</h3>
+                    <button class="test-button" onclick="testAssets()">Test Assets</button>
+                    <div id="assets-result"></div>
+                </div>
+                
+                <div class="test-card">
+                    <h3>🔗 API Endpoints</h3>
+                    <button class="test-button" onclick="testAPIEndpoints()">Test APIs</button>
+                    <div id="api-result"></div>
+                </div>
+                
+                <div class="test-card">
+                    <h3>⚛️ React Application</h3>
+                    <button class="test-button" onclick="testReactApp()">Test React App</button>
+                    <div id="react-result"></div>
+                </div>
+                
+                <div class="test-card">
+                    <h3>🌐 Environment Info</h3>
+                    <button class="test-button" onclick="showEnvironment()">Show Environment</button>
+                    <div id="env-result"></div>
+                </div>
+            </div>
+            
+            <div class="test-card">
+                <h3>🚀 Quick Actions</h3>
+                <button class="test-button" onclick="runAllTests()">Run All Tests</button>
+                <button class="test-button" onclick="location.href='/'">Go to Main App</button>
+                <button class="test-button" onclick="location.href='/health.html'">Basic Health Check</button>
+                <button class="test-button" onclick="location.href='/debug.html'">Debug Tools</button>
+                <button class="test-button" onclick="location.reload()">Reload Page</button>
+            </div>
+            
+            <div id="all-results" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = {};
+        
+        async function testServerHealth() {
+            const resultDiv = document.getElementById('server-health-result');
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                testResults.serverHealth = { status: 'success', data };
+                
+                resultDiv.innerHTML = `
+                    <div class="result success">
+                        <span class="status-indicator status-ok"></span>
+                        Server Health: ${data.status}
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                testResults.serverHealth = { status: 'error', error: error.message };
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <span class="status-indicator status-error"></span>
+                        Server Health Failed: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        async function testDatabase() {
+            const resultDiv = document.getElementById('database-result');
+            try {
+                const response = await fetch('/api/stock-models');
+                const data = await response.json();
+                testResults.database = { status: 'success', count: data.length };
+                
+                resultDiv.innerHTML = `
+                    <div class="result success">
+                        <span class="status-indicator status-ok"></span>
+                        Database Connected: ${data.length} stock models found
+                    </div>
+                `;
+            } catch (error) {
+                testResults.database = { status: 'error', error: error.message };
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <span class="status-indicator status-error"></span>
+                        Database Failed: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        async function testAssets() {
+            const resultDiv = document.getElementById('assets-result');
+            const assetsToTest = [
+                '/assets/index-CfVXLL-U.css',
+                '/assets/index-nRlJwdoK.js',
+                '/manifest.json'
+            ];
+            
+            let successCount = 0;
+            let results = [];
+            
+            for (const asset of assetsToTest) {
+                try {
+                    const response = await fetch(asset, { method: 'HEAD' });
+                    if (response.ok) {
+                        successCount++;
+                        results.push(`✅ ${asset}`);
+                    } else {
+                        results.push(`❌ ${asset} (${response.status})`);
+                    }
+                } catch (error) {
+                    results.push(`❌ ${asset} (${error.message})`);
+                }
+            }
+            
+            testResults.assets = { status: successCount === assetsToTest.length ? 'success' : 'partial', successCount, total: assetsToTest.length };
+            
+            const statusClass = successCount === assetsToTest.length ? 'success' : (successCount > 0 ? 'warning' : 'error');
+            const statusIndicator = successCount === assetsToTest.length ? 'status-ok' : (successCount > 0 ? 'status-warning' : 'status-error');
+            
+            resultDiv.innerHTML = `
+                <div class="result ${statusClass}">
+                    <span class="status-indicator ${statusIndicator}"></span>
+                    Assets: ${successCount}/${assetsToTest.length} loaded
+                    <pre>${results.join('\\n')}</pre>
+                </div>
+            `;
+        }
+        
+        async function testAPIEndpoints() {
+            const resultDiv = document.getElementById('api-result');
+            const endpoints = [
+                '/api/health',
+                '/api/stock-models',
+                '/api/features',
+                '/api/customers',
+                '/api/orders/all'
+            ];
+            
+            let successCount = 0;
+            let results = [];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint);
+                    if (response.ok) {
+                        successCount++;
+                        results.push(`✅ ${endpoint} (${response.status})`);
+                    } else {
+                        results.push(`❌ ${endpoint} (${response.status})`);
+                    }
+                } catch (error) {
+                    results.push(`❌ ${endpoint} (${error.message})`);
+                }
+            }
+            
+            testResults.api = { status: successCount === endpoints.length ? 'success' : 'partial', successCount, total: endpoints.length };
+            
+            const statusClass = successCount === endpoints.length ? 'success' : (successCount > 0 ? 'warning' : 'error');
+            const statusIndicator = successCount === endpoints.length ? 'status-ok' : (successCount > 0 ? 'status-warning' : 'status-error');
+            
+            resultDiv.innerHTML = `
+                <div class="result ${statusClass}">
+                    <span class="status-indicator ${statusIndicator}"></span>
+                    API Endpoints: ${successCount}/${endpoints.length} working
+                    <pre>${results.join('\\n')}</pre>
+                </div>
+            `;
+        }
+        
+        async function testReactApp() {
+            const resultDiv = document.getElementById('react-result');
+            
+            // Test if React is loaded
+            const reactLoaded = typeof window.React !== 'undefined';
+            const reactDOMLoaded = typeof window.ReactDOM !== 'undefined';
+            const globalErrors = window.getGlobalErrors ? window.getGlobalErrors() : [];
+            
+            const status = reactLoaded ? 'success' : 'error';
+            testResults.react = { status, reactLoaded, reactDOMLoaded, errorCount: globalErrors.length };
+            
+            resultDiv.innerHTML = `
+                <div class="result ${status}">
+                    <span class="status-indicator ${status === 'success' ? 'status-ok' : 'status-error'}"></span>
+                    React Status: ${reactLoaded ? 'Loaded' : 'Not Loaded'}
+                    <br>Global Errors: ${globalErrors.length}
+                    ${globalErrors.length > 0 ? '<pre>' + globalErrors.map(e => e.message).join('\\n') + '</pre>' : ''}
+                </div>
+            `;
+        }
+        
+        function showEnvironment() {
+            const resultDiv = document.getElementById('env-result');
+            
+            const envInfo = {
+                url: window.location.href,
+                origin: window.location.origin,
+                userAgent: navigator.userAgent,
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+                online: navigator.onLine,
+                language: navigator.language,
+                platform: navigator.platform,
+                cookiesEnabled: navigator.cookieEnabled,
+                localStorage: typeof localStorage !== 'undefined',
+                sessionStorage: typeof sessionStorage !== 'undefined'
+            };
+            
+            testResults.environment = { status: 'info', data: envInfo };
+            
+            resultDiv.innerHTML = `
+                <div class="result info">
+                    <span class="status-indicator status-ok"></span>
+                    Environment Information
+                    <pre>${JSON.stringify(envInfo, null, 2)}</pre>
+                </div>
+            `;
+        }
+        
+        async function runAllTests() {
+            const allResultsDiv = document.getElementById('all-results');
+            allResultsDiv.innerHTML = '<h3>🔄 Running All Tests...</h3>';
+            
+            await testServerHealth();
+            await testDatabase();
+            await testAssets();
+            await testAPIEndpoints();
+            await testReactApp();
+            showEnvironment();
+            
+            // Generate summary
+            const successCount = Object.values(testResults).filter(r => r.status === 'success').length;
+            const totalTests = Object.keys(testResults).length - 1; // Exclude environment
+            const allPassed = successCount === totalTests;
+            
+            allResultsDiv.innerHTML = `
+                <div class="result ${allPassed ? 'success' : 'warning'}">
+                    <h3><span class="status-indicator ${allPassed ? 'status-ok' : 'status-warning'}"></span>
+                    Test Summary: ${successCount}/${totalTests} tests passed</h3>
+                    <p>${allPassed ? 'All systems operational! 🎉' : 'Some issues detected. Check individual test results above.'}</p>
+                </div>
+            `;
+        }
+        
+        // Auto-run basic tests on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testServerHealth();
+                testDatabase();
+            }, 1000);
+        });
+        
+        console.log('Deployment verification tool loaded successfully');
+    </script>
+</body>
+</html>

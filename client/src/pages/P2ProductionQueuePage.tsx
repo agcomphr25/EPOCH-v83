@@ -32,9 +32,10 @@ export default function P2ProductionQueuePage() {
 
   // Filter orders for department counts (P2 orders only)
   const p2Orders = (allOrders as any[]).filter((order: any) => order.isP2Order === true);
-  const layupCount = p2Orders.filter((order: any) => order.currentDepartment === 'Layup').length;
   const barcodeCount = p2Orders.filter((order: any) => order.currentDepartment === 'Barcode').length;
-  const cncCount = p2Orders.filter((order: any) => order.currentDepartment === 'CNC').length;
+  const layupCount = p2Orders.filter((order: any) => order.currentDepartment === 'Layup').length;
+  const assemblyCount = p2Orders.filter((order: any) => order.currentDepartment === 'Assembly').length;
+  const finishCount = p2Orders.filter((order: any) => order.currentDepartment === 'Finish').length;
 
   // Multi-select functions
   const toggleOrderSelection = (orderId: string) => {
@@ -61,7 +62,7 @@ export default function P2ProductionQueuePage() {
   // Mutation for progressing orders to next department
   const progressToNextDepartment = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      const response = await fetch('/api/p2-department/progress-to-layup', {
+      const response = await fetch('/api/p2-department/progress-to-barcode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderIds }),
@@ -76,14 +77,14 @@ export default function P2ProductionQueuePage() {
       setSelectAll(false);
       toast({
         title: "Success",
-        description: `${selectedOrders.size} order(s) moved to P2 Layup/Plugging department`,
+        description: `${selectedOrders.size} order(s) moved to P2 Barcode department`,
       });
     },
     onError: (error) => {
       console.error('Error progressing orders:', error);
       toast({
         title: "Error",
-        description: "Failed to progress orders to next department",
+        description: "Failed to progress orders to P2 Barcode department",
         variant: "destructive"
       });
     }
@@ -215,7 +216,7 @@ export default function P2ProductionQueuePage() {
                   className="bg-green-600 hover:bg-green-700 text-sm"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  Move to P2 Layup ({selectedOrders.size})
+                  Move to P2 Barcode ({selectedOrders.size})
                 </Button>
               </div>
             </div>

@@ -57,13 +57,18 @@ router.get('/health', async (req: Request, res: Response) => {
 
 // POST /api/auth/login (with aggressive timeout protection)
 router.post('/login', async (req: Request, res: Response) => {
-  // Add aggressive timeout wrapper around entire login process
+  // Add timeout wrapper around entire login process (longer for deployment)
+  const isDeployment = req.get('host')?.includes('.replit.app') || 
+                      req.get('host')?.includes('.repl.co') ||
+                      req.get('host')?.includes('agcompepoch.xyz');
+  const loginTimeoutDuration = isDeployment ? 30000 : 10000; // 30s for deployment, 10s for dev
+  
   const loginTimeout = setTimeout(() => {
-    console.error('🚨 LOGIN TIMEOUT: Login process took longer than 10 seconds');
+    console.error(`🚨 LOGIN TIMEOUT: Login process took longer than ${loginTimeoutDuration}ms (deployment: ${isDeployment})`);
     if (!res.headersSent) {
       res.status(408).json({ error: "Login request timed out - possible database connectivity issues" });
     }
-  }, 10000); // 10 second absolute timeout
+  }, loginTimeoutDuration);
 
   try {
     console.log('🔐 LOGIN START: Login attempt with username:', req.body?.username);
@@ -95,10 +100,11 @@ router.post('/login', async (req: Request, res: Response) => {
     console.log('🔍 LOGIN STEP 2: About to call AuthService.authenticate...');
     
     try {
-      // Add timeout wrapper around authentication
+      // Add timeout wrapper around authentication (longer for deployment)
+      const authTimeoutDuration = isDeployment ? 25000 : 8000; // 25s for deployment, 8s for dev
       const authPromise = AuthService.authenticate(username, password, ipAddress, userAgent);
       const authTimeoutPromise = new Promise<null>((_, reject) => {
-        setTimeout(() => reject(new Error('Authentication timeout')), 8000); // 8 second auth timeout
+        setTimeout(() => reject(new Error('Authentication timeout')), authTimeoutDuration);
       });
 
       const result = await Promise.race([authPromise, authTimeoutPromise]) as { user: any; sessionToken: string } | null;
@@ -184,9 +190,14 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
 
 // GET /api/auth/session - Check current session (enhanced timeout handling)
 router.get('/session', async (req: Request, res: Response) => {
-  // Reduced timeout to 3 seconds to prevent hanging
+  // Timeout adjusted for deployment environments
+  const isDeployment = req.get('host')?.includes('.replit.app') || 
+                      req.get('host')?.includes('.repl.co') ||
+                      req.get('host')?.includes('agcompepoch.xyz');
+  const sessionTimeoutDuration = isDeployment ? 15000 : 3000; // 15s for deployment, 3s for dev
+  
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Session check timeout')), 3000); // 3 second timeout
+    setTimeout(() => reject(new Error('Session check timeout')), sessionTimeoutDuration);
   });
 
   try {

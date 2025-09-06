@@ -726,6 +726,71 @@ export default function LayupScheduler() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Action button mutations - defined early for use in DraggableOrderItem
+  const moveToBarcodeMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/move-order-department', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId, 
+          department: 'Barcode',
+          status: 'IN_PROGRESS' 
+        })
+      });
+    },
+    onSuccess: (result, orderId) => {
+      console.log('✅ Order moved to Barcode:', { orderId, result });
+      toast({
+        title: "Order Moved",
+        description: `Order ${orderId} moved to Barcode (inventory available)`,
+      });
+      // Refresh data to remove order from layup scheduler
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error, orderId) => {
+      console.error('❌ Failed to move order to Barcode:', { orderId, error });
+      toast({
+        title: "Error",
+        description: `Failed to move order ${orderId} to Barcode`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const moveToProductionQueueMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/move-order-department', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId, 
+          department: 'P1 Production Queue',
+          status: 'FINALIZED' 
+        })
+      });
+    },
+    onSuccess: (result, orderId) => {
+      console.log('✅ Order moved back to Production Queue:', { orderId, result });
+      toast({
+        title: "Order Returned",
+        description: `Order ${orderId} moved back to Production Queue`,
+      });
+      // Refresh data 
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (error, orderId) => {
+      console.error('❌ Failed to move order back to Production Queue:', { orderId, error });
+      toast({
+        title: "Error", 
+        description: `Failed to move order ${orderId} back to Production Queue`,
+        variant: "destructive"
+      });
+    }
+  });
+
   // Apply functions for settings
   const applyWorkDayChanges = () => {
     setIsApplyingChanges(true);
@@ -1345,71 +1410,6 @@ export default function LayupScheduler() {
     }
   });
 
-  // Move order to Barcode department (inventory available)
-  const moveToBarcodeMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return apiRequest('/api/move-order-department', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          orderId, 
-          department: 'Barcode',
-          status: 'IN_PROGRESS' 
-        })
-      });
-    },
-    onSuccess: (result, orderId) => {
-      console.log('✅ Order moved to Barcode:', { orderId, result });
-      toast({
-        title: "Order Moved",
-        description: `Order ${orderId} moved to Barcode (inventory available)`,
-      });
-      // Refresh data to remove order from layup scheduler
-      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-    },
-    onError: (error, orderId) => {
-      console.error('❌ Failed to move order to Barcode:', { orderId, error });
-      toast({
-        title: "Error",
-        description: `Failed to move order ${orderId} to Barcode`,
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Move order back to Production Queue
-  const moveToProductionQueueMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return apiRequest('/api/move-order-department', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          orderId, 
-          department: 'P1 Production Queue',
-          status: 'FINALIZED' 
-        })
-      });
-    },
-    onSuccess: (result, orderId) => {
-      console.log('✅ Order moved back to Production Queue:', { orderId, result });
-      toast({
-        title: "Order Returned",
-        description: `Order ${orderId} moved back to Production Queue`,
-      });
-      // Refresh data 
-      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-    },
-    onError: (error, orderId) => {
-      console.error('❌ Failed to move order back to Production Queue:', { orderId, error });
-      toast({
-        title: "Error", 
-        description: `Failed to move order ${orderId} back to Production Queue`,
-        variant: "destructive"
-      });
-    }
-  });
 
   const handleGenerateSchedule = async () => {
     await generateLayupScheduleMutation.mutateAsync();

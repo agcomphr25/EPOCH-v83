@@ -426,6 +426,7 @@ export interface IStorage {
 
   // P2 Production Orders CRUD
   getAllP2ProductionOrders(): Promise<P2ProductionOrder[]>;
+  getP2ProductionOrdersWithPurchaseOrderDetails(): Promise<any[]>;
   getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]>;
   getP2ProductionOrder(id: number): Promise<P2ProductionOrder | undefined>;
   createP2ProductionOrder(data: InsertP2ProductionOrder): Promise<P2ProductionOrder>;
@@ -5116,6 +5117,53 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(p2ProductionOrders)
       .orderBy(desc(p2ProductionOrders.createdAt));
+  }
+
+  async getP2ProductionOrdersWithPurchaseOrderDetails(): Promise<any[]> {
+    try {
+      return await db
+        .select({
+          // Production order fields
+          id: p2ProductionOrders.id,
+          orderId: p2ProductionOrders.orderId,
+          p2PoId: p2ProductionOrders.p2PoId,
+          p2PoItemId: p2ProductionOrders.p2PoItemId,
+          bomDefinitionId: p2ProductionOrders.bomDefinitionId,
+          bomItemId: p2ProductionOrders.bomItemId,
+          sku: p2ProductionOrders.sku,
+          partName: p2ProductionOrders.partName,
+          quantity: p2ProductionOrders.quantity,
+          department: p2ProductionOrders.department,
+          status: p2ProductionOrders.status,
+          priority: p2ProductionOrders.priority,
+          dueDate: p2ProductionOrders.dueDate,
+          startedAt: p2ProductionOrders.startedAt,
+          completedAt: p2ProductionOrders.completedAt,
+          notes: p2ProductionOrders.notes,
+          createdAt: p2ProductionOrders.createdAt,
+          updatedAt: p2ProductionOrders.updatedAt,
+          // Purchase order fields
+          poNumber: p2PurchaseOrders.poNumber,
+          customerName: p2PurchaseOrders.customerName,
+          poDate: p2PurchaseOrders.poDate,
+          expectedDelivery: p2PurchaseOrders.expectedDelivery,
+          // Purchase order item fields
+          poItemPartName: p2PurchaseOrderItems.partName,
+          poItemPartNumber: p2PurchaseOrderItems.partNumber,
+          poItemQuantity: p2PurchaseOrderItems.quantity,
+          poItemUnitPrice: p2PurchaseOrderItems.unitPrice,
+          poItemTotalPrice: p2PurchaseOrderItems.totalPrice,
+          poItemDueDate: p2PurchaseOrderItems.dueDate,
+          poItemSpecifications: p2PurchaseOrderItems.specifications,
+        })
+        .from(p2ProductionOrders)
+        .leftJoin(p2PurchaseOrders, eq(p2ProductionOrders.p2PoId, p2PurchaseOrders.id))
+        .leftJoin(p2PurchaseOrderItems, eq(p2ProductionOrders.p2PoItemId, p2PurchaseOrderItems.id))
+        .orderBy(desc(p2ProductionOrders.createdAt));
+    } catch (error) {
+      console.error('Error fetching P2 production orders with PO details:', error);
+      throw error;
+    }
   }
 
   async getP2ProductionOrdersByPoId(poId: number): Promise<P2ProductionOrder[]> {

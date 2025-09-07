@@ -1303,7 +1303,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P2 Production Queue endpoint - handles P2 production orders grouped by original purchase order
+  // P2 Production Queue endpoint - handles individual P2 production orders with serial numbers
   app.get('/api/p2-production-queue', async (req, res) => {
     try {
       console.log('🏭 Starting P2 production queue processing...');
@@ -1312,57 +1312,50 @@ export function registerRoutes(app: Express): Server {
       // Get P2 production orders with purchase order details
       const productionOrdersWithPO = await storage.getP2ProductionOrdersWithPurchaseOrderDetails();
       
-      // Group production orders by original P2 purchase order item
-      const groupedOrders = new Map();
-      
-      for (const po of productionOrdersWithPO) {
-        if (po.status !== 'PENDING') continue;
-        
-        const groupKey = `${po.p2PoId}-${po.p2PoItemId}`;
-        
-        if (!groupedOrders.has(groupKey)) {
+      // Map individual production orders with their serial numbers
+      const individualOrders = productionOrdersWithPO
+        .filter(po => po.status === 'PENDING')
+        .map(po => {
           // Calculate priority score
           const dueDate = new Date(po.poItemDueDate || po.createdAt || new Date());
           const today = new Date();
           const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2)));
 
-          groupedOrders.set(groupKey, {
-            id: `po-${po.p2PoId}-${po.p2PoItemId}`,
-            orderId: `P2-${po.poNumber}-${po.p2PoItemId}`,
+          return {
+            id: `prod-${po.id}`,
+            orderId: po.orderId, // Individual order ID like P2-P2-PO123-1-003-013
+            serialNumber: po.sku, // The designated serial number (SKU)
             orderDate: po.poDate || new Date().toISOString(),
             customerName: po.customerName,
-            stockModel: `${po.poItemQuantity} ${po.poItemPartName}`,
+            stockModel: po.partName, // Individual part name
+            product: `${po.poItemPartName} (${po.poItemPartNumber})`, // Original product from PO
             dueDate: po.poItemDueDate,
-            status: 'PENDING',
-            department: 'Production Queue',
-            currentDepartment: 'Production Queue', 
+            status: po.status,
+            department: po.department || 'Production Queue',
+            currentDepartment: po.department || 'Production Queue',
             priorityScore: priorityScore,
-            source: 'p2_purchase_order' as const,
+            source: 'p2_production_order' as const,
             p2PoId: po.p2PoId,
             p2PoItemId: po.p2PoItemId,
-            productionOrderCount: 1,
+            productionOrderId: po.id,
             specifications: { 
-              partName: po.poItemPartName,
-              partNumber: po.poItemPartNumber,
-              quantity: po.poItemQuantity
+              partName: po.partName,
+              sku: po.sku,
+              quantity: po.quantity,
+              originalProduct: po.poItemPartName,
+              originalPartNumber: po.poItemPartNumber
             },
-            createdAt: po.poDate || new Date().toISOString(),
-            updatedAt: po.poDate || new Date().toISOString()
-          });
-        } else {
-          // Increment production order count for this P2 PO item
-          const existing = groupedOrders.get(groupKey);
-          existing.productionOrderCount += 1;
-        }
-      }
+            createdAt: po.createdAt || new Date().toISOString(),
+            updatedAt: po.updatedAt || po.createdAt || new Date().toISOString()
+          };
+        })
+        .sort((a, b) => a.priorityScore - b.priorityScore);
 
-      const p2LayupOrders = Array.from(groupedOrders.values()).sort((a, b) => a.priorityScore - b.priorityScore);
+      console.log(`🏭 P2 production queue orders count: ${individualOrders.length}`);
+      console.log(`🏭 Individual production orders with serial numbers: ${individualOrders.length}`);
 
-      console.log(`🏭 P2 production queue orders count: ${p2LayupOrders.length}`);
-      console.log(`🏭 Production orders in P2 result: ${p2LayupOrders.length}`);
-
-      res.json(p2LayupOrders);
+      res.json(individualOrders);
     } catch (error) {
       console.error("P2 production queue error:", error);
       res.status(500).json({ error: "Failed to fetch P2 production queue" });

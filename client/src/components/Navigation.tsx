@@ -500,6 +500,12 @@ export default function Navigation() {
       description: 'Production queue P1 department manager'
     },
     {
+      path: '/department-queue/cutting-table',
+      label: 'Cutting Table',
+      icon: Package,
+      description: 'Material cutting and packet preparation P1 department manager'
+    },
+    {
       path: '/department-queue/layup-plugging',
       label: 'Layup/Plugging',
       icon: Factory,

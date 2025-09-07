@@ -344,15 +344,24 @@ router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
       let materialId: number;
 
       // Determine packet type and material based on model ID
-      if (modelId?.startsWith('cf_')) {
-        // Carbon Fiber models
+      const isCarbonFiber = modelId?.startsWith('cf_') || 
+                           modelId?.includes('mesa_universal') || 
+                           modelId?.includes('apr_') ||
+                           modelId?.startsWith('apr_') ||
+                           modelId?.includes('carbon');
+      
+      const isFiberglass = modelId?.startsWith('fg_') || 
+                          modelId?.includes('fiberglass');
+      
+      if (isCarbonFiber) {
+        // Carbon Fiber models (including Mesa Universal, APR, etc.)
         if (modelId.includes('adj') || modelId.includes('adjustable')) {
           packetTypeId = 3; // CF Adjustable Stock Packets
         } else {
           packetTypeId = 1; // CF Standard Stock Packets
         }
         materialId = 2; // Gruit Carbon Fiber (assuming this is ID 2)
-      } else if (modelId?.startsWith('fg_')) {
+      } else if (isFiberglass) {
         // Fiberglass models
         if (modelId.includes('adj') || modelId.includes('adjustable')) {
           packetTypeId = 4; // FG Adjustable Stock Packets
@@ -443,11 +452,20 @@ router.get('/orders-needing-cutting', async (req, res) => {
     const analysis = ordersNeedingCutting.reduce((acc, order) => {
       const modelId = order.modelId || 'unknown';
       if (!acc[modelId]) {
+        const isCarbonFiber = modelId.startsWith('cf_') || 
+                             modelId.includes('mesa_universal') || 
+                             modelId.includes('apr_') ||
+                             modelId.startsWith('apr_') ||
+                             modelId.includes('carbon');
+        
+        const isFiberglass = modelId.startsWith('fg_') || 
+                            modelId.includes('fiberglass');
+
         acc[modelId] = {
           count: 0,
           orders: [],
-          materialType: modelId.startsWith('cf_') ? 'Carbon Fiber' : 
-                       modelId.startsWith('fg_') ? 'Fiberglass' : 'Other',
+          materialType: isCarbonFiber ? 'Carbon Fiber' : 
+                       isFiberglass ? 'Fiberglass' : 'Other',
           stockType: (modelId.includes('adj') || modelId.includes('adjustable')) ? 'Adjustable' : 'Standard'
         };
       }

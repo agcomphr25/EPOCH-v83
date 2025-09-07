@@ -162,8 +162,6 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
       purchasingUnitConversion: typeof data.purchasingUnitConversion === 'string' ? parseFloat(data.purchasingUnitConversion) : data.purchasingUnitConversion,
     };
     
-    // Validate the processed data before sending
-    console.log('Submitting BOM item data:', processedData);
     mutation.mutate(processedData);
   };
 

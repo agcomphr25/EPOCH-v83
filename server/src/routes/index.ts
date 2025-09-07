@@ -31,6 +31,7 @@ import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p2POProductsRoutes from './p2POProducts';
 import refundRoutes from './refunds';
+import cuttingTableRoutes from './cuttingTable';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -119,6 +120,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+  
+  // Cutting table management routes
+  app.use('/api', cuttingTableRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

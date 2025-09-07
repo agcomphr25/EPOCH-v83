@@ -32,6 +32,8 @@ import poProductsRoutes from './poProducts';
 import p2POProductsRoutes from './p2POProducts';
 import refundRoutes from './refunds';
 import cuttingTableRoutes from './cuttingTable';
+import materialInventoryRoutes from './materialInventory';
+import defrostScheduleRoutes from './defrostSchedule';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -123,6 +125,8 @@ export function registerRoutes(app: Express): Server {
   
   // Cutting table management routes
   app.use('/api', cuttingTableRoutes);
+  app.use('/api', materialInventoryRoutes);
+  app.use('/api', defrostScheduleRoutes);
   
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

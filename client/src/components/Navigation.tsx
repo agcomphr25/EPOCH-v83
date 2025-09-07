@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut } from "lucide-react";
+import { Factory, User, FileText, TrendingDown, Plus, Settings, Package, FilePenLine, ClipboardList, BarChart, ChevronDown, ChevronRight, FormInput, PieChart, Scan, Warehouse, Shield, Wrench, Users, TestTube, DollarSign, Receipt, TrendingUp, List, BookOpen, Calendar, CheckSquare, Truck, Mail, MessageSquare, CreditCard, XCircle, Cog, ArrowRight, LogOut, Scissors, MapPin, Snowflake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import InstallPWAButton from "./InstallPWAButton";
@@ -77,6 +77,7 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] = useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
   const [p2DepartmentQueueExpanded, setP2DepartmentQueueExpanded] = useState(false);
+  const [cuttingTableExpanded, setCuttingTableExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -90,6 +91,7 @@ export default function Navigation() {
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
     setP2DepartmentQueueExpanded(false);
+    setCuttingTableExpanded(false);
     setVerifiedModulesExpanded(false);
   }, []);
 
@@ -109,6 +111,7 @@ export default function Navigation() {
       if (dropdownName !== 'productionScheduling') setProductionSchedulingExpanded(false);
       if (dropdownName !== 'departmentQueue') setDepartmentQueueExpanded(false);
       if (dropdownName !== 'p2DepartmentQueue') setP2DepartmentQueueExpanded(false);
+      if (dropdownName !== 'cuttingTable') setCuttingTableExpanded(false);
       if (dropdownName !== 'verifiedModules') setVerifiedModulesExpanded(false);
     }
   }, []);
@@ -567,6 +570,33 @@ export default function Navigation() {
     }
   ];
 
+  const cuttingTableItems = [
+    {
+      path: '/cutting-table/dashboard',
+      label: 'Cutting Table Dashboard',
+      icon: Scissors,
+      description: 'Overview of all cutting table operations and alerts'
+    },
+    {
+      path: '/cutting-table/p1-packets',
+      label: 'P1 Packet Manager',
+      icon: Package,
+      description: 'Manage CF and FG packet cutting for P1 operations'
+    },
+    {
+      path: '/cutting-table/material-tracker',
+      label: 'Material Tracker',
+      icon: MapPin,
+      description: 'Track inventory and location of CF, FG, and other materials'
+    },
+    {
+      path: '/cutting-table/defrost-schedule',
+      label: 'Defrost Schedule',
+      icon: Snowflake,
+      description: 'Schedule and manage defrost cycles for 20 freezer units'
+    }
+  ];
+
   const p2DepartmentQueueItems = [
     {
       path: '/p2-department-queue/production-queue',
@@ -629,6 +659,7 @@ export default function Navigation() {
   const isProductionSchedulingActive = productionSchedulingItems.some(item => location === item.path);
   const isDepartmentQueueActive = departmentQueueItems.some(item => location === item.path);
   const isP2DepartmentQueueActive = p2DepartmentQueueItems.some(item => location === item.path);
+  const isCuttingTableActive = cuttingTableItems.some(item => location === item.path);
 
   // Close all dropdowns when navigating to a new page
   useEffect(() => {
@@ -671,10 +702,13 @@ export default function Navigation() {
       if (isP2DepartmentQueueActive) {
         setP2DepartmentQueueExpanded(true);
       }
+      if (isCuttingTableActive) {
+        setCuttingTableExpanded(true);
+      }
     }, 100); // Small delay to prevent conflicts with manual dropdown closing
 
     return () => clearTimeout(timer);
-  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive, isP2DepartmentQueueActive]);
+  }, [isVerifiedModulesActive, isFormsReportsActive, isInventoryActive, isQcMaintenanceActive, isEmployeesActive, isFinanceActive, isUserDashboardsActive, isPurchaseOrdersActive, isProductionSchedulingActive, isDepartmentQueueActive, isP2DepartmentQueueActive, isCuttingTableActive]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -1093,6 +1127,50 @@ export default function Navigation() {
               {p2DepartmentQueueExpanded && (
                 <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
                   {p2DepartmentQueueItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+
+                    return (
+                      <Link key={item.path} href={item.path}>
+                        <button
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100",
+                            isActive && "bg-primary text-white hover:bg-primary"
+                          )}
+                          onClick={closeAllDropdowns}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Cutting Table Dropdown */}
+            <div className="relative">
+              <Button
+                variant={isCuttingTableActive ? "default" : "ghost"}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isCuttingTableActive && "bg-primary text-white"
+                )}
+                onClick={() => toggleDropdown('cuttingTable', cuttingTableExpanded, setCuttingTableExpanded)}
+              >
+                <Scissors className="h-4 w-4" />
+                Cutting Table
+                {cuttingTableExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+
+              {cuttingTableExpanded && (
+                <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                  {cuttingTableItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location === item.path;
 

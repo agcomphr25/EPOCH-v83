@@ -348,27 +348,23 @@ router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
                            modelId?.includes('mesa_universal') || 
                            modelId?.includes('apr_') ||
                            modelId?.startsWith('apr_') ||
-                           modelId?.includes('carbon');
+                           modelId?.includes('carbon') ||
+                           modelId?.includes('tikka') ||  // Tikka actions are CF
+                           modelId?.includes('m1a_carbon');
       
       const isFiberglass = modelId?.startsWith('fg_') || 
-                          modelId?.includes('fiberglass');
+                          modelId?.includes('fiberglass') ||
+                          modelId?.endsWith('_fg') ||  // Models ending with _fg
+                          modelId === 'fg';  // Handle edge case
       
       if (isCarbonFiber) {
-        // Carbon Fiber models (including Mesa Universal, APR, etc.)
-        if (modelId.includes('adj') || modelId.includes('adjustable')) {
-          packetTypeId = 3; // CF Adjustable Stock Packets
-        } else {
-          packetTypeId = 1; // CF Standard Stock Packets
-        }
-        materialId = 2; // Gruit Carbon Fiber (assuming this is ID 2)
+        // Carbon Fiber models (all use same CF packets)
+        packetTypeId = 1; // CF Packets
+        materialId = 2; // Gruit Carbon Fiber
       } else if (isFiberglass) {
-        // Fiberglass models
-        if (modelId.includes('adj') || modelId.includes('adjustable')) {
-          packetTypeId = 4; // FG Adjustable Stock Packets
-        } else {
-          packetTypeId = 2; // FG Standard Stock Packets
-        }
-        materialId = 1; // Primtex Fiberglass (assuming this is ID 1)
+        // Fiberglass models (all use same FG packets)  
+        packetTypeId = 2; // FG Packets
+        materialId = 1; // Primtex Fiberglass
       } else {
         console.log(`⚠️ Unknown model type: ${modelId}, skipping...`);
         continue;
@@ -456,10 +452,14 @@ router.get('/orders-needing-cutting', async (req, res) => {
                              modelId.includes('mesa_universal') || 
                              modelId.includes('apr_') ||
                              modelId.startsWith('apr_') ||
-                             modelId.includes('carbon');
+                             modelId.includes('carbon') ||
+                             modelId.includes('tikka') ||  // Tikka actions are CF
+                             modelId.includes('m1a_carbon');
         
         const isFiberglass = modelId.startsWith('fg_') || 
-                            modelId.includes('fiberglass');
+                            modelId.includes('fiberglass') ||
+                            modelId.endsWith('_fg') ||  // Models ending with _fg
+                            modelId === 'fg';  // Handle edge case
 
         acc[modelId] = {
           count: 0,

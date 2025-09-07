@@ -2127,7 +2127,7 @@ export const bomItems = pgTable('bom_items', {
   referenceBomId: integer('reference_bom_id').references(() => bomDefinitions.id), // Points to another BOM if this item is a sub-assembly
   assemblyLevel: integer('assembly_level').default(0), // 0=top level, 1=sub-assembly, 2=component, etc.
   // Component Library Support
-  quantityMultiplier: integer('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
+  quantityMultiplier: real('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
   notes: text('notes'), // Manufacturing notes or special instructions
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -2159,7 +2159,7 @@ export const insertBomItemSchema = createInsertSchema(bomItems).omit({
   itemType: z.enum(['manufactured', 'material', 'sub_assembly']).default('manufactured'),
   referenceBomId: z.number().optional(), // Optional reference to another BOM
   assemblyLevel: z.number().default(0),
-  quantityMultiplier: z.number().min(1).default(1),
+  quantityMultiplier: z.number().min(0.001, "Quantity multiplier must be greater than 0").default(1),
   notes: z.string().optional(),
   isActive: z.boolean().default(true),
 });

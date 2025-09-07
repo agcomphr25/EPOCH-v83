@@ -155,7 +155,16 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
   });
 
   const onSubmit = (data: BomItemFormData) => {
-    mutation.mutate(data);
+    // Ensure numeric fields are actually numbers, not strings
+    const processedData = {
+      ...data,
+      quantity: typeof data.quantity === 'string' ? parseInt(data.quantity) : data.quantity,
+      purchasingUnitConversion: typeof data.purchasingUnitConversion === 'string' ? parseFloat(data.purchasingUnitConversion) : data.purchasingUnitConversion,
+    };
+    
+    // Validate the processed data before sending
+    console.log('Submitting BOM item data:', processedData);
+    mutation.mutate(processedData);
   };
 
   return (
@@ -255,10 +264,11 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                       if (value === '' || value === '0') {
                         field.onChange(1);
                       } else {
-                        const parsed = parseInt(value);
+                        const parsed = parseInt(value, 10);
                         field.onChange(isNaN(parsed) ? 1 : Math.max(1, parsed));
                       }
                     }}
+                    value={field.value}
                   />
                 </FormControl>
                 <FormDescription>
@@ -291,6 +301,7 @@ export function BOMItemForm({ bomId, item, onSuccess, onCancel }: BOMItemFormPro
                         field.onChange(isNaN(parsed) ? 1 : Math.max(0.001, parsed));
                       }
                     }}
+                    value={field.value}
                   />
                 </FormControl>
                 <FormDescription>

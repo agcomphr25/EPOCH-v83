@@ -292,7 +292,10 @@ export default function P2ProductionQueuePage() {
                   <CardContent>
                     <div className="space-y-2 text-sm">
                       <div>
-                        <strong>Stock Model:</strong> {order.stockModel || 'N/A'}
+                        <strong>Serial Number:</strong> {order.serialNumber || 'N/A'}
+                      </div>
+                      <div>
+                        <strong>Item Type:</strong> {order.stockModel || 'N/A'}
                       </div>
                       <div>
                         <strong>Due Date:</strong>{' '}

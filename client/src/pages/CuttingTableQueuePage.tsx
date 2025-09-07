@@ -65,6 +65,7 @@ export default function CuttingTableQueuePage() {
   const [assignedEmployee, setAssignedEmployee] = useState<string>('');
   const [completionNotes, setCompletionNotes] = useState<string>('');
   const [showAddRequest, setShowAddRequest] = useState(false);
+  const [packetsMadeInputs, setPacketsMadeInputs] = useState<Record<number, string>>({});
   const [newRequest, setNewRequest] = useState({
     packetTypeId: '',
     materialId: '',
@@ -222,6 +223,60 @@ export default function CuttingTableQueuePage() {
       });
     }
   });
+
+  // Mutation for updating individual packet progress
+  const updatePacketProgress = useMutation({
+    mutationFn: async (data: { taskId: number, packetsMade: number }) => {
+      const response = await fetch(`/api/packet-cutting-queue/${data.taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packetsCut: data.packetsMade
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to update packet progress');
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/packet-cutting-queue'] });
+      // Clear the input for this task
+      setPacketsMadeInputs(prev => ({
+        ...prev,
+        [variables.taskId]: ''
+      }));
+      toast({
+        title: "Success",
+        description: `Updated packet progress`,
+      });
+    },
+    onError: (error) => {
+      console.error('Error updating packet progress:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update packet progress",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleUpdateProgress = (taskId: number) => {
+    const packetsMadeStr = packetsMadeInputs[taskId] || '0';
+    const packetsMade = parseInt(packetsMadeStr);
+    
+    if (isNaN(packetsMade) || packetsMade < 0) {
+      toast({
+        title: "Invalid input",
+        description: "Please enter a valid number of packets made",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    updatePacketProgress.mutate({
+      taskId,
+      packetsMade
+    });
+  };
 
   const handleCompleteSelected = () => {
     if (selectedTasks.size === 0) {
@@ -652,6 +707,31 @@ export default function CuttingTableQueuePage() {
                               style={{ width: `${Math.min(progress, 100)}%` }}
                             ></div>
                           </div>
+                          
+                          {/* Add Packets Made Input */}
+                          {!task.isCompleted && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="Packets made"
+                                className="w-24 h-8 text-sm"
+                                value={packetsMadeInputs[task.id] || ''}
+                                onChange={(e) => setPacketsMadeInputs(prev => ({
+                                  ...prev,
+                                  [task.id]: e.target.value
+                                }))}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleUpdateProgress(task.id)}
+                                disabled={updatePacketProgress.isPending}
+                                className="h-8 px-3 text-xs"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         
                         <div>

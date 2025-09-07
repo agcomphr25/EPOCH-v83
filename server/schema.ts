@@ -2811,3 +2811,100 @@ export type InsertCuttingRequirement = z.infer<typeof insertCuttingRequirementSc
 export type CuttingRequirement = typeof cuttingRequirements.$inferSelect;
 
 export type CuttingProgress = typeof cuttingProgress.$inferSelect;
+
+// ============================================================================
+// PACKET-BASED CUTTING TABLES (New Approach)
+// ============================================================================
+
+// Packet Types - CF Stock Packets, FG Stock Packets, etc.
+export const packetTypes = pgTable("packet_types", {
+  id: serial("id").primaryKey(),
+  packetName: text("packet_name").notNull().unique(),
+  materialType: text("material_type").notNull(), // 'Carbon Fiber', 'Fiberglass', 'Primtex'
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Stock Model to Packet Type Mapping - which stock models need which packets
+export const stockPacketMapping = pgTable("stock_packet_mapping", {
+  id: serial("id").primaryKey(),
+  stockModelPrefix: text("stock_model_prefix").notNull(), // 'cf_', 'fg_', etc.
+  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
+  packetsPerStock: integer("packets_per_stock").default(1), // Usually 1 packet per stock
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Packet Cutting Queue - tracks packet cutting needs
+export const packetCuttingQueue = pgTable("packet_cutting_queue", {
+  id: serial("id").primaryKey(),
+  packetTypeId: integer("packet_type_id").references(() => packetTypes.id),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  packetsNeeded: integer("packets_needed").notNull(),
+  packetsCut: integer("packets_cut").default(0),
+  priorityLevel: integer("priority_level").default(1), // 1-5 priority scale
+  requestedBy: text("requested_by"),
+  assignedTo: text("assigned_to"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  isCompleted: boolean("is_completed").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for packet tables
+export const packetTypesRelations = relations(packetTypes, ({ many }) => ({
+  stockMappings: many(stockPacketMapping),
+  cuttingQueue: many(packetCuttingQueue),
+}));
+
+export const stockPacketMappingRelations = relations(stockPacketMapping, ({ one }) => ({
+  packetType: one(packetTypes, {
+    fields: [stockPacketMapping.packetTypeId],
+    references: [packetTypes.id],
+  }),
+}));
+
+export const packetCuttingQueueRelations = relations(packetCuttingQueue, ({ one }) => ({
+  packetType: one(packetTypes, {
+    fields: [packetCuttingQueue.packetTypeId],
+    references: [packetTypes.id],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [packetCuttingQueue.materialId],
+    references: [cuttingMaterials.id],
+  }),
+}));
+
+// Insert schemas for packet tables
+export const insertPacketTypeSchema = createInsertSchema(packetTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStockPacketMappingSchema = createInsertSchema(stockPacketMapping).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPacketCuttingQueueSchema = createInsertSchema(packetCuttingQueue).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for packet tables
+export type PacketType = typeof packetTypes.$inferSelect;
+export type InsertPacketType = z.infer<typeof insertPacketTypeSchema>;
+
+export type StockPacketMapping = typeof stockPacketMapping.$inferSelect;
+export type InsertStockPacketMapping = z.infer<typeof insertStockPacketMappingSchema>;
+
+export type PacketCuttingQueue = typeof packetCuttingQueue.$inferSelect;
+export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSchema>;

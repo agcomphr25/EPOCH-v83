@@ -379,9 +379,9 @@ export default function P2LayupScheduler() {
   const handleSaveP2Employee = async (employeeData: any) => {
     try {
       if (editingP2Employee) {
-        await saveEmployee(editingP2Employee.employeeId, employeeData);
+        await saveEmployee(employeeData);
       } else {
-        await saveEmployee(employeeData.employeeId, employeeData);
+        await saveEmployee(employeeData);
       }
       setShowP2EmployeeSettings(false);
       setEditingP2Employee(null);
@@ -1055,7 +1055,7 @@ export default function P2LayupScheduler() {
             <div className="mt-4 flex items-center space-x-2">
               <Checkbox
                 checked={newP2Mold.enabled}
-                onCheckedChange={(checked) => setNewP2Mold(prev => ({ ...prev, enabled: checked }))}
+                onCheckedChange={(checked) => setNewP2Mold(prev => ({ ...prev, enabled: !!checked }))}
               />
               <Label>Enabled</Label>
             </div>
@@ -1088,7 +1088,7 @@ export default function P2LayupScheduler() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => toggleMoldStatus(mold.moldId)}
+                      onClick={() => toggleMoldStatus(mold.moldId, !mold.enabled)}
                     >
                       {mold.enabled ? 'Disable' : 'Enable'}
                     </Button>
@@ -1101,9 +1101,9 @@ export default function P2LayupScheduler() {
                           moldId: mold.moldId,
                           modelName: mold.modelName,
                           instanceNumber: mold.instanceNumber,
-                          enabled: mold.enabled,
+                          enabled: !!mold.enabled,
                           multiplier: mold.multiplier,
-                          stockModels: mold.stockModels || []
+                          stockModels: Array.isArray(mold.stockModels) ? mold.stockModels : []
                         });
                       }}
                     >
@@ -1173,7 +1173,7 @@ export default function P2LayupScheduler() {
             <div className="mt-4 flex items-center space-x-2">
               <Checkbox
                 checked={newP2Employee.isActive}
-                onCheckedChange={(checked) => setNewP2Employee(prev => ({ ...prev, isActive: checked }))}
+                onCheckedChange={(checked) => setNewP2Employee(prev => ({ ...prev, isActive: !!checked }))}
               />
               <Label>Active</Label>
             </div>
@@ -1206,7 +1206,7 @@ export default function P2LayupScheduler() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => toggleEmployeeStatus(employee.employeeId)}
+                      onClick={() => toggleEmployeeStatus(employee.employeeId, !employee.isActive)}
                     >
                       {employee.isActive ? 'Deactivate' : 'Activate'}
                     </Button>
@@ -1220,7 +1220,7 @@ export default function P2LayupScheduler() {
                           rate: employee.rate,
                           hours: employee.hours,
                           department: employee.department,
-                          isActive: employee.isActive
+                          isActive: !!employee.isActive
                         });
                       }}
                     >

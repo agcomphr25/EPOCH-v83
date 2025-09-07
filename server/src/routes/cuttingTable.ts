@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { db } from '../../db';
 import { 
-  cuttingRequirements, 
+  packetCuttingQueue, 
   cuttingMaterials, 
-  cuttingComponents,
-  cuttingProductCategories,
-  allOrders,
-  insertCuttingRequirementSchema,
+  packetTypes,
+  stockPacketMapping,
   insertCuttingMaterialSchema
 } from '../../schema';
 import { eq, and, isNull, sql, desc, asc } from 'drizzle-orm';
@@ -15,67 +13,56 @@ import { z } from 'zod';
 const router = Router();
 
 // ============================================================================
-// GET CUTTING REQUIREMENTS WITH JOINED DATA
+// GET PACKET CUTTING QUEUE WITH JOINED DATA
 // ============================================================================
-router.get('/cutting-requirements', async (req, res) => {
+router.get('/packet-cutting-queue', async (req, res) => {
   try {
-    console.log('📋 CUTTING TABLE: Fetching cutting requirements...');
+    console.log('📋 CUTTING TABLE: Fetching packet cutting queue...');
     
-    const requirements = await db
+    const queue = await db
       .select({
-        // Cutting requirement fields
-        id: cuttingRequirements.id,
-        orderId: cuttingRequirements.orderId,
-        materialId: cuttingRequirements.materialId,
-        componentId: cuttingRequirements.componentId,
-        cutsRequired: cuttingRequirements.cutsRequired,
-        cutsCompleted: cuttingRequirements.cutsCompleted,
-        isCompleted: cuttingRequirements.isCompleted,
-        assignedTo: cuttingRequirements.assignedTo,
-        startedAt: cuttingRequirements.startedAt,
-        completedAt: cuttingRequirements.completedAt,
-        notes: cuttingRequirements.notes,
-        createdAt: cuttingRequirements.createdAt,
-        updatedAt: cuttingRequirements.updatedAt,
+        // Queue fields
+        id: packetCuttingQueue.id,
+        packetTypeId: packetCuttingQueue.packetTypeId,
+        materialId: packetCuttingQueue.materialId,
+        packetsNeeded: packetCuttingQueue.packetsNeeded,
+        packetsCut: packetCuttingQueue.packetsCut,
+        priorityLevel: packetCuttingQueue.priorityLevel,
+        requestedBy: packetCuttingQueue.requestedBy,
+        assignedTo: packetCuttingQueue.assignedTo,
+        startedAt: packetCuttingQueue.startedAt,
+        completedAt: packetCuttingQueue.completedAt,
+        notes: packetCuttingQueue.notes,
+        isCompleted: packetCuttingQueue.isCompleted,
+        createdAt: packetCuttingQueue.createdAt,
+        updatedAt: packetCuttingQueue.updatedAt,
+        
+        // Packet type fields
+        packetName: packetTypes.packetName,
+        packetMaterialType: packetTypes.materialType,
+        packetDescription: packetTypes.description,
         
         // Material fields
         materialName: cuttingMaterials.materialName,
         materialType: cuttingMaterials.materialType,
         yieldPerCut: cuttingMaterials.yieldPerCut,
         wasteFactor: cuttingMaterials.wasteFactor,
-        
-        // Component fields
-        componentName: cuttingComponents.componentName,
-        quantityRequired: cuttingComponents.quantityRequired,
-        
-        // Category fields
-        categoryName: cuttingProductCategories.categoryName,
-        isP1: cuttingProductCategories.isP1,
-        
-        // Order fields
-        orderDate: allOrders.orderDate,
-        dueDate: allOrders.dueDate,
-        customerId: allOrders.customerId,
-        modelId: allOrders.modelId,
-        currentDepartment: allOrders.currentDepartment,
       })
-      .from(cuttingRequirements)
-      .leftJoin(cuttingMaterials, eq(cuttingRequirements.materialId, cuttingMaterials.id))
-      .leftJoin(cuttingComponents, eq(cuttingRequirements.componentId, cuttingComponents.id))
-      .leftJoin(cuttingProductCategories, eq(cuttingComponents.productCategoryId, cuttingProductCategories.id))
-      .leftJoin(allOrders, eq(cuttingRequirements.orderId, allOrders.orderId))
+      .from(packetCuttingQueue)
+      .leftJoin(packetTypes, eq(packetCuttingQueue.packetTypeId, packetTypes.id))
+      .leftJoin(cuttingMaterials, eq(packetCuttingQueue.materialId, cuttingMaterials.id))
       .orderBy(
-        asc(cuttingRequirements.isCompleted), // Incomplete first
-        asc(allOrders.dueDate), // Then by due date
-        desc(cuttingRequirements.createdAt) // Then by creation date
+        asc(packetCuttingQueue.isCompleted), // Incomplete first
+        asc(packetCuttingQueue.priorityLevel), // Then by priority
+        desc(packetCuttingQueue.createdAt) // Then by creation date
       );
 
-    console.log(`📋 CUTTING TABLE: Found ${requirements.length} cutting requirements`);
-    res.json(requirements);
+    console.log(`📋 CUTTING TABLE: Found ${queue.length} packet cutting tasks`);
+    res.json(queue);
   } catch (error) {
-    console.error('❌ CUTTING TABLE: Error fetching cutting requirements:', error);
+    console.error('❌ CUTTING TABLE: Error fetching packet cutting queue:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch cutting requirements',
+      error: 'Failed to fetch packet cutting queue',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -106,23 +93,47 @@ router.get('/cutting-materials', async (req, res) => {
 });
 
 // ============================================================================
-// COMPLETE CUTTING REQUIREMENTS
+// GET PACKET TYPES
 // ============================================================================
-const completeCuttingSchema = z.object({
-  requirementIds: z.array(z.number().positive()),
+router.get('/packet-types', async (req, res) => {
+  try {
+    console.log('📦 CUTTING TABLE: Fetching packet types...');
+    
+    const types = await db
+      .select()
+      .from(packetTypes)
+      .where(eq(packetTypes.isActive, true))
+      .orderBy(asc(packetTypes.materialType), asc(packetTypes.packetName));
+
+    console.log(`📦 CUTTING TABLE: Found ${types.length} active packet types`);
+    res.json(types);
+  } catch (error) {
+    console.error('❌ CUTTING TABLE: Error fetching packet types:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch packet types',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// COMPLETE PACKET CUTTING TASKS
+// ============================================================================
+const completePacketCuttingSchema = z.object({
+  queueIds: z.array(z.number().positive()),
   assignedTo: z.string().optional(),
   notes: z.string().optional(),
 });
 
-router.post('/cutting-requirements/complete', async (req, res) => {
+router.post('/packet-cutting-queue/complete', async (req, res) => {
   try {
-    console.log('✅ CUTTING TABLE: Completing cutting requirements...');
+    console.log('✅ CUTTING TABLE: Completing packet cutting tasks...');
     
-    const { requirementIds, assignedTo, notes } = completeCuttingSchema.parse(req.body);
+    const { queueIds, assignedTo, notes } = completePacketCuttingSchema.parse(req.body);
     
-    // Update cutting requirements
+    // Update packet cutting queue items
     const updateData: any = {
-      cutsCompleted: sql`cuts_required`, // Set completed = required
+      packetsCut: sql`packets_needed`, // Set cut = needed
       isCompleted: true,
       completedAt: new Date(),
       updatedAt: new Date(),
@@ -138,227 +149,135 @@ router.post('/cutting-requirements/complete', async (req, res) => {
 
     const results = [];
     
-    for (const requirementId of requirementIds) {
+    for (const queueId of queueIds) {
       const result = await db
-        .update(cuttingRequirements)
+        .update(packetCuttingQueue)
         .set(updateData)
-        .where(eq(cuttingRequirements.id, requirementId))
+        .where(eq(packetCuttingQueue.id, queueId))
         .returning();
       
       results.push(...result);
     }
 
-    console.log(`✅ CUTTING TABLE: Completed ${results.length} cutting requirements`);
+    console.log(`✅ CUTTING TABLE: Completed ${results.length} packet cutting tasks`);
     
     res.json({
       success: true,
-      completedRequirements: results.length,
-      message: `Successfully completed ${results.length} cutting requirement(s)`
+      completedTasks: results.length,
+      message: `Successfully completed ${results.length} packet cutting task(s)`
     });
   } catch (error) {
-    console.error('❌ CUTTING TABLE: Error completing requirements:', error);
+    console.error('❌ CUTTING TABLE: Error completing packet cutting tasks:', error);
     res.status(500).json({ 
-      error: 'Failed to complete cutting requirements',
+      error: 'Failed to complete packet cutting tasks',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
 // ============================================================================
-// PROGRESS ORDERS TO NEXT DEPARTMENT
+// UPDATE PACKET CUTTING PROGRESS
 // ============================================================================
-const progressOrdersSchema = z.object({
-  orderIds: z.array(z.string().min(1)),
+const updatePacketProgressSchema = z.object({
+  queueId: z.number().positive(),
+  packetsCut: z.number().min(0),
+  assignedTo: z.string().optional(),
+  notes: z.string().optional(),
 });
 
-router.post('/cutting-table/progress-orders', async (req, res) => {
+router.patch('/packet-cutting-queue/:id', async (req, res) => {
   try {
-    console.log('🔄 CUTTING TABLE: Progressing orders to next department...');
+    console.log('📝 CUTTING TABLE: Updating packet cutting progress...');
     
-    const { orderIds } = progressOrdersSchema.parse(req.body);
+    const queueId = parseInt(req.params.id);
+    const { packetsCut, assignedTo, notes } = updatePacketProgressSchema.parse(req.body);
     
-    let progressedOrders = 0;
-    
-    for (const orderId of orderIds) {
-      // Check if all cutting requirements for this order are completed
-      const pendingRequirements = await db
-        .select()
-        .from(cuttingRequirements)
-        .where(
-          and(
-            eq(cuttingRequirements.orderId, orderId),
-            eq(cuttingRequirements.isCompleted, false)
-          )
-        );
-      
-      if (pendingRequirements.length === 0) {
-        // All cutting requirements completed, progress to next department
-        // For P1 orders: Cutting Table → Layup/Plugging
-        // For P2 orders: Cutting Table → Barcode
-        
-        // Get order info to determine P1 vs P2
-        const order = await db
-          .select({ 
-            currentDepartment: allOrders.currentDepartment,
-            // Add a field to identify P2 orders if available, otherwise default to P1
-          })
-          .from(allOrders)
-          .where(eq(allOrders.orderId, orderId))
-          .limit(1);
-        
-        if (order.length > 0) {
-          // Default to P1 workflow: Cutting Table → Layup
-          const nextDepartment = 'Layup';
-          
-          await db
-            .update(allOrders)
-            .set({
-              currentDepartment: nextDepartment,
-              updatedAt: new Date(),
-            })
-            .where(eq(allOrders.orderId, orderId));
-          
-          progressedOrders++;
-          console.log(`🔄 CUTTING TABLE: Order ${orderId} progressed to ${nextDepartment}`);
-        }
-      } else {
-        console.log(`⚠️ CUTTING TABLE: Order ${orderId} has ${pendingRequirements.length} pending cutting requirements`);
-      }
-    }
-
-    res.json({
-      success: true,
-      progressedOrders,
-      totalOrders: orderIds.length,
-      message: `Successfully progressed ${progressedOrders} of ${orderIds.length} orders`
-    });
-  } catch (error) {
-    console.error('❌ CUTTING TABLE: Error progressing orders:', error);
-    res.status(500).json({ 
-      error: 'Failed to progress orders',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// ============================================================================
-// CREATE CUTTING REQUIREMENTS FOR ORDER
-// ============================================================================
-const createRequirementsSchema = z.object({
-  orderId: z.string().min(1),
-  materialType: z.enum(['Carbon Fiber', 'Fiberglass', 'Primtex']).optional(),
-  forceCreate: z.boolean().default(false),
-});
-
-router.post('/cutting-requirements/create', async (req, res) => {
-  try {
-    console.log('➕ CUTTING TABLE: Creating cutting requirements for order...');
-    
-    const { orderId, materialType, forceCreate } = createRequirementsSchema.parse(req.body);
-    
-    // Check if requirements already exist for this order
-    const existingRequirements = await db
+    // Get current queue item to check packets needed
+    const currentItem = await db
       .select()
-      .from(cuttingRequirements)
-      .where(eq(cuttingRequirements.orderId, orderId));
-    
-    if (existingRequirements.length > 0 && !forceCreate) {
-      return res.status(400).json({
-        error: 'Cutting requirements already exist for this order',
-        existingCount: existingRequirements.length
-      });
-    }
-    
-    // Get order information
-    const orderInfo = await db
-      .select()
-      .from(allOrders)
-      .where(eq(allOrders.orderId, orderId))
+      .from(packetCuttingQueue)
+      .where(eq(packetCuttingQueue.id, queueId))
       .limit(1);
     
-    if (orderInfo.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+    if (currentItem.length === 0) {
+      return res.status(404).json({ error: 'Packet cutting task not found' });
     }
     
-    const order = orderInfo[0];
+    const item = currentItem[0];
+    const isCompleted = packetsCut >= item.packetsNeeded;
     
-    // Determine which components are needed based on order
-    // This is a simplified example - you'd implement business logic here
-    let targetMaterialType = materialType;
+    const updateData: any = {
+      packetsCut,
+      isCompleted,
+      updatedAt: new Date(),
+    };
     
-    // If no material type specified, infer from stock model or features
-    if (!targetMaterialType) {
-      const modelId = order.modelId?.toLowerCase() || '';
-      if (modelId.includes('carbon') || modelId.includes('cf_')) {
-        targetMaterialType = 'Carbon Fiber';
-      } else if (modelId.includes('fiberglass') || modelId.includes('fg_')) {
-        targetMaterialType = 'Fiberglass';
-      } else {
-        targetMaterialType = 'Fiberglass'; // Default
-      }
+    if (isCompleted) {
+      updateData.completedAt = new Date();
     }
     
-    // Get components for the target material type
-    const components = await db
-      .select({
-        id: cuttingComponents.id,
-        materialId: cuttingComponents.materialId,
-        componentName: cuttingComponents.componentName,
-        quantityRequired: cuttingComponents.quantityRequired,
-        materialType: cuttingMaterials.materialType,
-      })
-      .from(cuttingComponents)
-      .leftJoin(cuttingMaterials, eq(cuttingComponents.materialId, cuttingMaterials.id))
-      .leftJoin(cuttingProductCategories, eq(cuttingComponents.productCategoryId, cuttingProductCategories.id))
-      .where(
-        and(
-          eq(cuttingMaterials.materialType, targetMaterialType),
-          eq(cuttingComponents.isActive, true),
-          eq(cuttingMaterials.isActive, true),
-          eq(cuttingProductCategories.isActive, true)
-        )
-      );
-    
-    if (components.length === 0) {
-      return res.status(400).json({
-        error: `No active components found for material type: ${targetMaterialType}`
-      });
+    if (assignedTo !== undefined) {
+      updateData.assignedTo = assignedTo;
     }
     
-    // Create cutting requirements
-    const newRequirements = [];
-    
-    for (const component of components) {
-      const requirementData = {
-        orderId,
-        materialId: component.materialId,
-        componentId: component.id,
-        cutsRequired: component.quantityRequired, // Default to quantity required
-        cutsCompleted: 0,
-        isCompleted: false,
-      };
-      
-      const requirement = await db
-        .insert(cuttingRequirements)
-        .values(requirementData)
-        .returning();
-      
-      newRequirements.push(...requirement);
+    if (notes !== undefined) {
+      updateData.notes = notes;
     }
-    
-    console.log(`➕ CUTTING TABLE: Created ${newRequirements.length} cutting requirements for order ${orderId}`);
+
+    const result = await db
+      .update(packetCuttingQueue)
+      .set(updateData)
+      .where(eq(packetCuttingQueue.id, queueId))
+      .returning();
+
+    console.log(`📝 CUTTING TABLE: Updated packet cutting progress for task ${queueId}`);
     
     res.json({
       success: true,
-      orderId,
-      materialType: targetMaterialType,
-      requirementsCreated: newRequirements.length,
-      requirements: newRequirements
+      updatedTask: result[0]
     });
   } catch (error) {
-    console.error('❌ CUTTING TABLE: Error creating requirements:', error);
+    console.error('❌ CUTTING TABLE: Error updating packet cutting progress:', error);
     res.status(500).json({ 
-      error: 'Failed to create cutting requirements',
+      error: 'Failed to update packet cutting progress',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// ADD NEW PACKET CUTTING REQUEST
+// ============================================================================
+const addPacketRequestSchema = z.object({
+  packetTypeId: z.number().positive(),
+  materialId: z.number().positive(),
+  packetsNeeded: z.number().positive(),
+  priorityLevel: z.number().min(1).max(5).default(1),
+  requestedBy: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.post('/packet-cutting-queue', async (req, res) => {
+  try {
+    console.log('➕ CUTTING TABLE: Adding new packet cutting request...');
+    
+    const requestData = addPacketRequestSchema.parse(req.body);
+    
+    const newRequest = await db
+      .insert(packetCuttingQueue)
+      .values(requestData)
+      .returning();
+    
+    console.log(`➕ CUTTING TABLE: Created packet cutting request for ${requestData.packetsNeeded} packets`);
+    
+    res.json({
+      success: true,
+      request: newRequest[0]
+    });
+  } catch (error) {
+    console.error('❌ CUTTING TABLE: Error creating packet cutting request:', error);
+    res.status(500).json({ 
+      error: 'Failed to create packet cutting request',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -391,6 +310,14 @@ router.post('/cutting-materials', async (req, res) => {
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+});
+
+// ============================================================================
+// LEGACY ENDPOINTS (for backward compatibility)
+// ============================================================================
+// Redirect old cutting-requirements endpoint to new packet-cutting-queue endpoint
+router.get('/cutting-requirements', (req, res) => {
+  res.redirect('/api/packet-cutting-queue');
 });
 
 export default router;

@@ -319,10 +319,10 @@ router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
   try {
     console.log('🔄 CUTTING TABLE: Auto-populating packet cutting queue from production orders...');
     
-    // Get orders that need cutting (in Cutting Table or Layup/Plugging departments)
+    // Get orders that need cutting (in P1 Production Queue - orders waiting to start manufacturing)
     const ordersNeedingCutting = await db.query.allOrders.findMany({
-      where: (orders, { and, eq, inArray, not }) => and(
-        inArray(orders.currentDepartment, ['Cutting Table', 'Layup/Plugging']),
+      where: (orders, { and, eq, not }) => and(
+        eq(orders.currentDepartment, 'P1 Production Queue'),
         eq(orders.status, 'FINALIZED'),
         eq(orders.isCancelled, false)
       ),
@@ -432,8 +432,8 @@ router.get('/orders-needing-cutting', async (req, res) => {
     console.log('🔍 CUTTING TABLE: Analyzing orders needing cutting...');
     
     const ordersNeedingCutting = await db.query.allOrders.findMany({
-      where: (orders, { and, eq, inArray, not }) => and(
-        inArray(orders.currentDepartment, ['Cutting Table', 'Layup/Plugging']),
+      where: (orders, { and, eq, not }) => and(
+        eq(orders.currentDepartment, 'P1 Production Queue'),
         eq(orders.status, 'FINALIZED'),
         eq(orders.isCancelled, false)
       ),

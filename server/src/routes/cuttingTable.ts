@@ -502,14 +502,16 @@ router.get('/cutting-requirements', (req, res) => {
 router.patch('/packet-cutting-queue/:id', async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    const { packetsCut } = req.body;
+    const { additionalPackets } = req.body;
+
+    console.log(`📦 PATCH request for task ${taskId}:`, req.body);
 
     if (isNaN(taskId)) {
       return res.status(400).json({ error: 'Invalid task ID' });
     }
 
-    if (typeof packetsCut !== 'number' || packetsCut < 0) {
-      return res.status(400).json({ error: 'Invalid packets cut value' });
+    if (typeof additionalPackets !== 'number' || additionalPackets < 0) {
+      return res.status(400).json({ error: 'Invalid additional packets value' });
     }
 
     // Get current task to check if it exists and get current progress
@@ -526,7 +528,7 @@ router.patch('/packet-cutting-queue/:id', async (req, res) => {
     const task = currentTask[0];
 
     // Add the new packets to existing count (cumulative)
-    const newTotalPackets = task.packetsCut + packetsCut;
+    const newTotalPackets = task.packetsCut + additionalPackets;
 
     // Update the task with new progress
     const updatedTask = await db
@@ -538,7 +540,7 @@ router.patch('/packet-cutting-queue/:id', async (req, res) => {
       .where(eq(packetCuttingQueue.id, taskId))
       .returning();
 
-    console.log(`📦 CUTTING TABLE: Updated task ${taskId}: ${task.packetsCut} + ${packetsCut} = ${newTotalPackets} packets`);
+    console.log(`📦 CUTTING TABLE: Updated task ${taskId}: ${task.packetsCut} + ${additionalPackets} = ${newTotalPackets} packets`);
 
     res.json(updatedTask[0]);
   } catch (error) {

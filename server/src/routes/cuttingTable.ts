@@ -498,55 +498,5 @@ router.get('/cutting-requirements', (req, res) => {
   res.redirect('/api/packet-cutting-queue');
 });
 
-// PATCH /api/packet-cutting-queue/:id - Update individual packet progress
-router.patch('/packet-cutting-queue/:id', async (req, res) => {
-  try {
-    const taskId = parseInt(req.params.id);
-    const { additionalPackets } = req.body;
-
-    console.log(`📦 PATCH request for task ${taskId}:`, req.body);
-
-    if (isNaN(taskId)) {
-      return res.status(400).json({ error: 'Invalid task ID' });
-    }
-
-    if (typeof additionalPackets !== 'number' || additionalPackets < 0) {
-      return res.status(400).json({ error: 'Invalid additional packets value' });
-    }
-
-    // Get current task to check if it exists and get current progress
-    const currentTask = await db
-      .select()
-      .from(packetCuttingQueue)
-      .where(eq(packetCuttingQueue.id, taskId))
-      .limit(1);
-
-    if (currentTask.length === 0) {
-      return res.status(404).json({ error: 'Packet cutting task not found' });
-    }
-
-    const task = currentTask[0];
-
-    // Add the new packets to existing count (cumulative)
-    const newTotalPackets = task.packetsCut + additionalPackets;
-
-    // Update the task with new progress
-    const updatedTask = await db
-      .update(packetCuttingQueue)
-      .set({
-        packetsCut: newTotalPackets,
-        updatedAt: new Date()
-      })
-      .where(eq(packetCuttingQueue.id, taskId))
-      .returning();
-
-    console.log(`📦 CUTTING TABLE: Updated task ${taskId}: ${task.packetsCut} + ${additionalPackets} = ${newTotalPackets} packets`);
-
-    res.json(updatedTask[0]);
-  } catch (error) {
-    console.error('❌ Error updating packet progress:', error);
-    res.status(500).json({ error: 'Failed to update packet progress' });
-  }
-});
 
 export default router;

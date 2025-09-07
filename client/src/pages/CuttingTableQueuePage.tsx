@@ -227,14 +227,19 @@ export default function CuttingTableQueuePage() {
   // Mutation for updating individual packet progress
   const updatePacketProgress = useMutation({
     mutationFn: async (data: { taskId: number, packetsMade: number }) => {
+      console.log('Updating packet progress:', data);
       const response = await fetch(`/api/packet-cutting-queue/${data.taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          packetsCut: data.packetsMade
+          additionalPackets: data.packetsMade  // Changed from packetsCut to additionalPackets
         }),
       });
-      if (!response.ok) throw new Error('Failed to update packet progress');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Update failed:', errorText);
+        throw new Error('Failed to update packet progress');
+      }
       return response.json();
     },
     onSuccess: (data, variables) => {

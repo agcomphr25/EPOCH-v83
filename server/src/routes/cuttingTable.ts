@@ -403,7 +403,7 @@ router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
           packetsCut: 0,
           priorityLevel: 2, // Normal priority
           requestedBy: 'Auto-Population System',
-          notes: `Auto-generated from orders: ${req.orders.join(', ')}`,
+          notes: `Auto-generated from ${req.count} production orders`,
           isCompleted: false
         })
         .returning();

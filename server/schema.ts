@@ -2639,3 +2639,175 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
 export type RefundRequest = typeof refundRequests.$inferSelect;
+
+// ============================================================================
+// CUTTING TABLE MANAGEMENT SYSTEM
+// ============================================================================
+
+// Cutting Materials - Different materials used for stock production
+export const cuttingMaterials = pgTable("cutting_materials", {
+  id: serial("id").primaryKey(),
+  materialName: text("material_name").notNull().unique(),
+  materialType: text("material_type").notNull(), // Carbon Fiber, Fiberglass, Primtex
+  yieldPerCut: integer("yield_per_cut").notNull(), // How many pieces per cutting operation
+  wasteFactor: real("waste_factor").notNull(), // Decimal waste factor (e.g., 0.12 = 12%)
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Product Categories for cutting - Fiberglass Stock Packets, Carbon Stock Packets, etc.
+export const cuttingProductCategories = pgTable("cutting_product_categories", {
+  id: serial("id").primaryKey(),
+  categoryName: text("category_name").notNull().unique(),
+  description: text("description"),
+  isP1: boolean("is_p1").default(true), // P1 (regular) or P2 (OEM/supplier)
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Components needed for each product category
+export const cuttingComponents = pgTable("cutting_components", {
+  id: serial("id").primaryKey(),
+  productCategoryId: integer("product_category_id").references(() => cuttingProductCategories.id),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  componentName: text("component_name").notNull(),
+  quantityRequired: integer("quantity_required").notNull(), // Pieces needed per stock packet
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Cutting requirements for specific orders
+export const cuttingRequirements = pgTable("cutting_requirements", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => allOrders.orderId),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  componentId: integer("component_id").references(() => cuttingComponents.id),
+  cutsRequired: integer("cuts_required").notNull(),
+  cutsCompleted: integer("cuts_completed").default(0),
+  isCompleted: boolean("is_completed").default(false),
+  assignedTo: text("assigned_to"), // Employee assigned to cutting task
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Weekly cutting progress summary
+export const cuttingProgress = pgTable("cutting_progress", {
+  id: serial("id").primaryKey(),
+  materialId: integer("material_id").references(() => cuttingMaterials.id),
+  totalCutsRequired: integer("total_cuts_required").notNull(),
+  totalCutsCompleted: integer("total_cuts_completed").default(0),
+  pendingOrders: integer("pending_orders").default(0), // Number of orders waiting for this material
+  weekDate: date("week_date").notNull(), // Week of production planning
+  lastUpdated: timestamp("last_updated").defaultNow(),
+});
+
+// ============================================================================
+// CUTTING TABLE RELATIONS
+// ============================================================================
+
+export const cuttingMaterialsRelations = relations(cuttingMaterials, ({ many }) => ({
+  components: many(cuttingComponents),
+  requirements: many(cuttingRequirements),
+  progress: many(cuttingProgress),
+}));
+
+export const cuttingProductCategoriesRelations = relations(cuttingProductCategories, ({ many }) => ({
+  components: many(cuttingComponents),
+}));
+
+export const cuttingComponentsRelations = relations(cuttingComponents, ({ one, many }) => ({
+  productCategory: one(cuttingProductCategories, {
+    fields: [cuttingComponents.productCategoryId],
+    references: [cuttingProductCategories.id],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [cuttingComponents.materialId],
+    references: [cuttingMaterials.id],
+  }),
+  requirements: many(cuttingRequirements),
+}));
+
+export const cuttingRequirementsRelations = relations(cuttingRequirements, ({ one }) => ({
+  order: one(allOrders, {
+    fields: [cuttingRequirements.orderId],
+    references: [allOrders.orderId],
+  }),
+  material: one(cuttingMaterials, {
+    fields: [cuttingRequirements.materialId],
+    references: [cuttingMaterials.id],
+  }),
+  component: one(cuttingComponents, {
+    fields: [cuttingRequirements.componentId],
+    references: [cuttingComponents.id],
+  }),
+}));
+
+export const cuttingProgressRelations = relations(cuttingProgress, ({ one }) => ({
+  material: one(cuttingMaterials, {
+    fields: [cuttingProgress.materialId],
+    references: [cuttingMaterials.id],
+  }),
+}));
+
+// ============================================================================
+// CUTTING TABLE INSERT SCHEMAS AND TYPES
+// ============================================================================
+
+export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  materialName: z.string().min(1, "Material name is required"),
+  materialType: z.string().min(1, "Material type is required"),
+  yieldPerCut: z.number().min(1, "Yield per cut must be at least 1"),
+  wasteFactor: z.number().min(0).max(1, "Waste factor must be between 0 and 1"),
+});
+
+export const insertCuttingProductCategorySchema = createInsertSchema(cuttingProductCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  categoryName: z.string().min(1, "Category name is required"),
+});
+
+export const insertCuttingComponentSchema = createInsertSchema(cuttingComponents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  componentName: z.string().min(1, "Component name is required"),
+  quantityRequired: z.number().min(1, "Quantity required must be at least 1"),
+});
+
+export const insertCuttingRequirementSchema = createInsertSchema(cuttingRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  orderId: z.string().min(1, "Order ID is required"),
+  cutsRequired: z.number().min(1, "Cuts required must be at least 1"),
+});
+
+// Types for cutting tables
+export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
+export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
+
+export type InsertCuttingProductCategory = z.infer<typeof insertCuttingProductCategorySchema>;
+export type CuttingProductCategory = typeof cuttingProductCategories.$inferSelect;
+
+export type InsertCuttingComponent = z.infer<typeof insertCuttingComponentSchema>;
+export type CuttingComponent = typeof cuttingComponents.$inferSelect;
+
+export type InsertCuttingRequirement = z.infer<typeof insertCuttingRequirementSchema>;
+export type CuttingRequirement = typeof cuttingRequirements.$inferSelect;
+
+export type CuttingProgress = typeof cuttingProgress.$inferSelect;

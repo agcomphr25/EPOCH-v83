@@ -313,6 +313,166 @@ router.post('/cutting-materials', async (req, res) => {
 });
 
 // ============================================================================
+// AUTO-POPULATE PACKET CUTTING FROM PRODUCTION ORDERS
+// ============================================================================
+router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
+  try {
+    console.log('🔄 CUTTING TABLE: Auto-populating packet cutting queue from production orders...');
+    
+    // Get orders that need cutting (in Cutting Table or Layup/Plugging departments)
+    const ordersNeedingCutting = await db.query.allOrders.findMany({
+      where: (orders, { and, eq, inArray, not }) => and(
+        inArray(orders.currentDepartment, ['Cutting Table', 'Layup/Plugging']),
+        eq(orders.status, 'FINALIZED'),
+        eq(orders.isCancelled, false)
+      ),
+    });
+
+    console.log(`🔄 Found ${ordersNeedingCutting.length} orders needing cutting`);
+
+    // Group orders by stock model and determine packet requirements
+    const packetRequirements = new Map<string, {
+      packetTypeId: number;
+      materialId: number;
+      count: number;
+      orders: string[];
+    }>();
+
+    for (const order of ordersNeedingCutting) {
+      const modelId = order.modelId;
+      let packetTypeId: number;
+      let materialId: number;
+
+      // Determine packet type and material based on model ID
+      if (modelId?.startsWith('cf_')) {
+        // Carbon Fiber models
+        if (modelId.includes('adj') || modelId.includes('adjustable')) {
+          packetTypeId = 3; // CF Adjustable Stock Packets
+        } else {
+          packetTypeId = 1; // CF Standard Stock Packets
+        }
+        materialId = 2; // Gruit Carbon Fiber (assuming this is ID 2)
+      } else if (modelId?.startsWith('fg_')) {
+        // Fiberglass models
+        if (modelId.includes('adj') || modelId.includes('adjustable')) {
+          packetTypeId = 4; // FG Adjustable Stock Packets
+        } else {
+          packetTypeId = 2; // FG Standard Stock Packets
+        }
+        materialId = 1; // Primtex Fiberglass (assuming this is ID 1)
+      } else {
+        console.log(`⚠️ Unknown model type: ${modelId}, skipping...`);
+        continue;
+      }
+
+      const key = `${packetTypeId}-${materialId}`;
+      if (!packetRequirements.has(key)) {
+        packetRequirements.set(key, {
+          packetTypeId,
+          materialId,
+          count: 0,
+          orders: []
+        });
+      }
+
+      const req = packetRequirements.get(key)!;
+      req.count++;
+      req.orders.push(order.orderId || 'Unknown');
+    }
+
+    console.log(`🔄 Grouped into ${packetRequirements.size} packet requirement types`);
+
+    // Clear existing incomplete packet cutting tasks to avoid duplicates
+    await db.delete(packetCuttingQueue).where(eq(packetCuttingQueue.isCompleted, false));
+    console.log('🧹 Cleared existing incomplete packet cutting tasks');
+
+    // Insert new packet cutting requirements
+    const insertedTasks = [];
+    for (const [key, req] of Array.from(packetRequirements.entries())) {
+      const newTask = await db
+        .insert(packetCuttingQueue)
+        .values({
+          packetTypeId: req.packetTypeId,
+          materialId: req.materialId,
+          packetsNeeded: req.count,
+          packetsCut: 0,
+          priorityLevel: 2, // Normal priority
+          requestedBy: 'Auto-Population System',
+          notes: `Auto-generated from orders: ${req.orders.join(', ')}`,
+          isCompleted: false
+        })
+        .returning();
+
+      insertedTasks.push(newTask[0]);
+    }
+
+    console.log(`✅ CUTTING TABLE: Auto-populated ${insertedTasks.length} packet cutting requirements`);
+    
+    res.json({
+      success: true,
+      message: `Auto-populated ${insertedTasks.length} packet cutting requirements from ${ordersNeedingCutting.length} orders`,
+      ordersAnalyzed: ordersNeedingCutting.length,
+      packetTypesCreated: insertedTasks.length,
+      tasks: insertedTasks
+    });
+  } catch (error) {
+    console.error('❌ CUTTING TABLE: Error auto-populating packet cutting queue:', error);
+    res.status(500).json({ 
+      error: 'Failed to auto-populate packet cutting queue',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// GET ORDERS NEEDING CUTTING (for analysis)
+// ============================================================================
+router.get('/orders-needing-cutting', async (req, res) => {
+  try {
+    console.log('🔍 CUTTING TABLE: Analyzing orders needing cutting...');
+    
+    const ordersNeedingCutting = await db.query.allOrders.findMany({
+      where: (orders, { and, eq, inArray, not }) => and(
+        inArray(orders.currentDepartment, ['Cutting Table', 'Layup/Plugging']),
+        eq(orders.status, 'FINALIZED'),
+        eq(orders.isCancelled, false)
+      ),
+    });
+
+    // Group by model ID for analysis
+    const analysis = ordersNeedingCutting.reduce((acc, order) => {
+      const modelId = order.modelId || 'unknown';
+      if (!acc[modelId]) {
+        acc[modelId] = {
+          count: 0,
+          orders: [],
+          materialType: modelId.startsWith('cf_') ? 'Carbon Fiber' : 
+                       modelId.startsWith('fg_') ? 'Fiberglass' : 'Other',
+          stockType: (modelId.includes('adj') || modelId.includes('adjustable')) ? 'Adjustable' : 'Standard'
+        };
+      }
+      acc[modelId].count++;
+      acc[modelId].orders.push(order.orderId);
+      return acc;
+    }, {} as Record<string, any>);
+
+    console.log(`🔍 Found ${ordersNeedingCutting.length} orders needing cutting across ${Object.keys(analysis).length} model types`);
+    
+    res.json({
+      totalOrders: ordersNeedingCutting.length,
+      modelBreakdown: analysis,
+      orders: ordersNeedingCutting
+    });
+  } catch (error) {
+    console.error('❌ CUTTING TABLE: Error analyzing orders:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze orders needing cutting',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
 // LEGACY ENDPOINTS (for backward compatibility)
 // ============================================================================
 // Redirect old cutting-requirements endpoint to new packet-cutting-queue endpoint

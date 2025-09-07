@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Scissors, ArrowRight, Package, CheckCircle, AlertTriangle, FileText, Eye, User, Calendar, Plus } from 'lucide-react';
+import { Scissors, ArrowRight, Package, CheckCircle, AlertTriangle, FileText, Eye, User, Calendar, Plus, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -196,6 +196,33 @@ export default function CuttingTableQueuePage() {
     }
   });
 
+  // Mutation for auto-populating packet cutting from production orders
+  const autoPopulatePackets = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/packet-cutting-queue/auto-populate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to auto-populate packets');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/packet-cutting-queue'] });
+      toast({
+        title: "Success",
+        description: `Auto-populated ${data.packetTypesCreated} packet types from ${data.ordersAnalyzed} production orders`,
+      });
+    },
+    onError: (error) => {
+      console.error('Error auto-populating packets:', error);
+      toast({
+        title: "Error",
+        description: "Failed to auto-populate packet cutting requirements",
+        variant: "destructive"
+      });
+    }
+  });
+
   const handleCompleteSelected = () => {
     if (selectedTasks.size === 0) {
       toast({
@@ -265,10 +292,21 @@ export default function CuttingTableQueuePage() {
           <Scissors className="h-6 w-6" />
           <h1 className="text-3xl font-bold">Cutting Table Manager - P1 Packets</h1>
         </div>
-        <Button onClick={() => setShowAddRequest(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Packet Request
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => autoPopulatePackets.mutate()}
+            disabled={autoPopulatePackets.isPending}
+            variant="outline" 
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${autoPopulatePackets.isPending ? 'animate-spin' : ''}`} />
+            Auto-Populate from Orders
+          </Button>
+          <Button onClick={() => setShowAddRequest(true)} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add Packet Request
+          </Button>
+        </div>
       </div>
 
       {/* Barcode Scanner (for future enhancement) */}

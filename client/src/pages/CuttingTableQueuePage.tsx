@@ -226,13 +226,15 @@ export default function CuttingTableQueuePage() {
 
   // Mutation for updating individual packet progress
   const updatePacketProgress = useMutation({
-    mutationFn: async (data: { taskId: number, packetsMade: number }) => {
+    mutationFn: async (data: { taskId: number, packetsMade: number, currentPackets: number }) => {
       console.log('Updating packet progress:', data);
+      const newTotal = data.currentPackets + data.packetsMade;
       const response = await fetch(`/api/packet-cutting-queue/${data.taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          additionalPackets: data.packetsMade  // Changed from packetsCut to additionalPackets
+          queueId: data.taskId,
+          packetsCut: newTotal  // Send new total, not additional packets
         }),
       });
       if (!response.ok) {
@@ -277,9 +279,21 @@ export default function CuttingTableQueuePage() {
       return;
     }
 
+    // Find the current task to get current packet count
+    const currentTask = packetCuttingQueue.find(task => task.id === taskId);
+    if (!currentTask) {
+      toast({
+        title: "Error",
+        description: "Task not found",
+        variant: "destructive"
+      });
+      return;
+    }
+
     updatePacketProgress.mutate({
       taskId,
-      packetsMade
+      packetsMade,
+      currentPackets: currentTask.packetsCut
     });
   };
 

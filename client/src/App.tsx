@@ -86,6 +86,7 @@ import QCShippingQueuePage from "./pages/QCShippingQueuePage";
 import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingLabelPage from "./pages/ShippingLabelPage";
 import ShippingManagement from "./pages/ShippingManagement";
+import CuttingTableQueuePage from "./pages/CuttingTableQueuePage";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
@@ -302,6 +303,7 @@ function App() {
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
+                  <Route path="/department-queue/cutting-table" component={CuttingTableQueuePage} />
                   <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
                   <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
                   <Route path="/department-queue/cnc" component={CNCQueuePage} />

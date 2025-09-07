@@ -96,6 +96,7 @@ router.get('/:id/test', async (req, res) => {
 
 // Add BOM item
 router.post('/:id/items', async (req, res) => {
+  console.log('🚨🚨🚨 TOP OF BOM ITEM POST HANDLER - ENTRY POINT 🚨🚨🚨');
   try {
     console.log('🚨 BOM ITEM ENDPOINT HIT - Start of function');
     console.log('🚨 Request params:', req.params);

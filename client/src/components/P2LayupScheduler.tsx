@@ -1009,10 +1009,11 @@ export default function P2LayupScheduler() {
       </div>
       
       {/* P2 Mold Settings Dialog */}
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>P2 Mold Settings</DialogTitle>
-        </DialogHeader>
+      <Dialog open={showP2MoldSettings} onOpenChange={setShowP2MoldSettings}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>P2 Mold Settings</DialogTitle>
+          </DialogHeader>
         <div className="space-y-4">
           {/* Add New P2 Mold Form */}
           <div className="border p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20">
@@ -1121,13 +1122,15 @@ export default function P2LayupScheduler() {
             </div>
           </div>
         </div>
-      </DialogContent>
+        </DialogContent>
+      </Dialog>
 
       {/* P2 Employee Settings Dialog */}
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>P2 Employee Settings</DialogTitle>
-        </DialogHeader>
+      <Dialog open={showP2EmployeeSettings} onOpenChange={setShowP2EmployeeSettings}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>P2 Employee Settings</DialogTitle>
+          </DialogHeader>
         <div className="space-y-4">
           {/* Add New P2 Employee Form */}
           <div className="border p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20">
@@ -1236,7 +1239,8 @@ export default function P2LayupScheduler() {
             </div>
           </div>
         </div>
-      </DialogContent>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

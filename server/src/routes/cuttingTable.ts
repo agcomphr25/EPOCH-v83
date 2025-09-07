@@ -5,7 +5,8 @@ import {
   cuttingMaterials, 
   packetTypes,
   stockPacketMapping,
-  insertCuttingMaterialSchema
+  insertCuttingMaterialSchema,
+  allOrders
 } from '../../schema';
 import { eq, and, isNull, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -320,13 +321,14 @@ router.post('/packet-cutting-queue/auto-populate', async (req, res) => {
     console.log('🔄 CUTTING TABLE: Auto-populating packet cutting queue from production orders...');
     
     // Get orders that need cutting (in P1 Production Queue - orders waiting to start manufacturing)
-    const ordersNeedingCutting = await db.query.allOrders.findMany({
-      where: (orders, { and, eq, not }) => and(
-        eq(orders.currentDepartment, 'P1 Production Queue'),
-        eq(orders.status, 'FINALIZED'),
-        eq(orders.isCancelled, false)
-      ),
-    });
+    const ordersNeedingCutting = await db
+      .select()
+      .from(allOrders)
+      .where(and(
+        eq(allOrders.currentDepartment, 'P1 Production Queue'),
+        eq(allOrders.status, 'FINALIZED'),
+        eq(allOrders.isCancelled, false)
+      ));
 
     console.log(`🔄 Found ${ordersNeedingCutting.length} orders needing cutting`);
 

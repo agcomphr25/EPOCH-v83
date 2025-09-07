@@ -4921,14 +4921,19 @@ export class DatabaseStorage implements IStorage {
 
   async addBOMItem(bomId: number, data: InsertBomItem): Promise<BomItem> {
     try {
+      // Remove auto-generated fields if they exist
+      const { id, createdAt, updatedAt, ...insertData } = data as any;
+      
+      const insertValues = {
+        ...insertData,
+        bomId
+      };
+      
       const [item] = await db
         .insert(bomItems)
-        .values({
-          ...data,
-          bomId,
-          updatedAt: new Date()
-        })
+        .values(insertValues)
         .returning();
+        
       return item;
     } catch (error) {
       console.error('Error adding BOM item:', error);

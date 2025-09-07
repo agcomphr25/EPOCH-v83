@@ -1303,43 +1303,61 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // P2 Production Queue endpoint - handles P2 production orders only
+  // P2 Production Queue endpoint - handles P2 production orders grouped by original purchase order
   app.get('/api/p2-production-queue', async (req, res) => {
     try {
       console.log('🏭 Starting P2 production queue processing...');
       const { storage } = await import('../../storage');
 
-      // Get production orders from P2 system
-      const productionOrders = await storage.getAllP2ProductionOrders();
-      const pendingProductionOrders = productionOrders.filter(po => po.status === 'PENDING');
+      // Get P2 production orders with purchase order details
+      const productionOrdersWithPO = await storage.getP2ProductionOrdersWithPurchaseOrderDetails();
+      
+      // Group production orders by original P2 purchase order item
+      const groupedOrders = new Map();
+      
+      for (const po of productionOrdersWithPO) {
+        if (po.status !== 'PENDING') continue;
+        
+        const groupKey = `${po.p2PoId}-${po.p2PoItemId}`;
+        
+        if (!groupedOrders.has(groupKey)) {
+          // Calculate priority score
+          const dueDate = new Date(po.poItemDueDate || po.createdAt || new Date());
+          const today = new Date();
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2)));
 
-      const p2LayupOrders = pendingProductionOrders.map(po => {
-        // Calculate priority score for production orders (higher priority)
-        const dueDate = new Date(po.dueDate || po.createdAt || new Date());
-        const today = new Date();
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const priorityScore = Math.max(20, Math.min(35, 20 + Math.floor(daysUntilDue / 2))); // 20-35 range, higher priority
+          groupedOrders.set(groupKey, {
+            id: `po-${po.p2PoId}-${po.p2PoItemId}`,
+            orderId: `P2-${po.poNumber}-${po.p2PoItemId}`,
+            orderDate: po.poDate || new Date().toISOString(),
+            customerName: po.customerName,
+            stockModel: `${po.poItemQuantity} ${po.poItemPartName}`,
+            dueDate: po.poItemDueDate,
+            status: 'PENDING',
+            department: 'Production Queue',
+            currentDepartment: 'Production Queue', 
+            priorityScore: priorityScore,
+            source: 'p2_purchase_order' as const,
+            p2PoId: po.p2PoId,
+            p2PoItemId: po.p2PoItemId,
+            productionOrderCount: 1,
+            specifications: { 
+              partName: po.poItemPartName,
+              partNumber: po.poItemPartNumber,
+              quantity: po.poItemQuantity
+            },
+            createdAt: po.poDate || new Date().toISOString(),
+            updatedAt: po.poDate || new Date().toISOString()
+          });
+        } else {
+          // Increment production order count for this P2 PO item
+          const existing = groupedOrders.get(groupKey);
+          existing.productionOrderCount += 1;
+        }
+      }
 
-        return {
-          id: `prod-${po.id}`,
-          orderId: po.orderId,
-          orderDate: po.createdAt || new Date().toISOString(),
-          customer: 'Production Order',
-          product: po.partName || po.orderId,
-          quantity: po.quantity,
-          status: po.status,
-          department: po.department,
-          currentDepartment: po.department,
-          priorityScore: priorityScore,
-          dueDate: po.dueDate,
-          source: 'production_order' as const,
-          productionOrderId: po.id,
-          stockModelId: po.orderId, // Use order ID as stock model for mold matching
-          specifications: { department: po.department },
-          createdAt: po.createdAt || new Date().toISOString(),
-          updatedAt: po.updatedAt || po.createdAt || new Date().toISOString()
-        };
-      });
+      const p2LayupOrders = Array.from(groupedOrders.values()).sort((a, b) => a.priorityScore - b.priorityScore);
 
       console.log(`🏭 P2 production queue orders count: ${p2LayupOrders.length}`);
       console.log(`🏭 Production orders in P2 result: ${p2LayupOrders.length}`);

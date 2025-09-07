@@ -87,6 +87,9 @@ import ShippingQueuePage from "./pages/ShippingQueuePage";
 import ShippingLabelPage from "./pages/ShippingLabelPage";
 import ShippingManagement from "./pages/ShippingManagement";
 import CuttingTableQueuePage from "./pages/CuttingTableQueuePage";
+import CuttingTableDashboard from "./pages/CuttingTableDashboard";
+import MaterialTracker from "./pages/MaterialTracker";
+import DefrostSchedule from "./pages/DefrostSchedule";
 import NonconformanceDashboard from "./components/NonconformanceDashboard";
 import NonconformanceReport from "./components/NonconformanceReport";
 import RFQRiskAssessment from "./pages/RFQRiskAssessment";
@@ -303,7 +306,15 @@ function App() {
 
                   {/* Department Queue Management Routes */}
                   <Route path="/department-queue/production-queue" component={ProductionQueuePage} />
+                  
+                  {/* Cutting Table Management Routes */}
+                  <Route path="/cutting-table" component={CuttingTableDashboard} />
+                  <Route path="/cutting-table/dashboard" component={CuttingTableDashboard} />
+                  <Route path="/cutting-table/p1-packets" component={CuttingTableQueuePage} />
                   <Route path="/department-queue/cutting-table" component={CuttingTableQueuePage} />
+                  <Route path="/cutting-table/material-tracker" component={MaterialTracker} />
+                  <Route path="/cutting-table/defrost-schedule" component={DefrostSchedule} />
+                  
                   <Route path="/department-queue/layup-plugging" component={LayupPluggingQueuePage} />
                   <Route path="/department-queue/barcode" component={BarcodeQueuePage} />
                   <Route path="/department-queue/cnc" component={CNCQueuePage} />

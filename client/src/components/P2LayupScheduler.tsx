@@ -242,7 +242,7 @@ export default function P2LayupScheduler() {
     instanceNumber: 1,
     enabled: true,
     multiplier: 1,
-    stockModels: []
+    stockModels: [] as string[]
   });
   const [newP2Employee, setNewP2Employee] = useState({
     employeeId: '',

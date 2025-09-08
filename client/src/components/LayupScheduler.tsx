@@ -2276,12 +2276,29 @@ export default function LayupScheduler() {
 
   // Print functionality
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    try {
+      // Try to open print window with specific features for better compatibility
+      const printWindow = window.open('', 'printWindow', 'width=800,height=600,scrollbars=yes,resizable=yes,toolbar=no,location=no,directories=no,status=no,menubar=no');
+      
+      // Better popup blocker detection
+      if (!printWindow) {
+        alert('🖨️ Print blocked by popup blocker!\n\nPlease:\n• Click the popup blocker icon in your browser\n• Allow popups for this site\n• Then try Print Schedule again\n\nOr use Ctrl+P to print this page directly');
+        return;
+      }
+      
+      // Additional check for popup blocker
+      setTimeout(() => {
+        if (printWindow.closed) {
+          alert('🖨️ Print window was blocked!\n\nPlease allow popups for this site and try again.');
+          return;
+        }
+      }, 100);
+      
+      console.log('✅ Print window opened successfully');
 
-    // Get current date range for title
-    const dateRange = viewType === 'week'
-      ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
+      // Get current date range for title
+      const dateRange = viewType === 'week'
+        ? `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M/d')} - ${format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 4), 'M/d/yyyy')}`
       : format(currentDate, 'MMMM yyyy');
 
     // Helper function to get material type
@@ -3069,11 +3086,33 @@ export default function LayupScheduler() {
       </html>
     `;
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+      // Write content with better error handling
+      try {
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        
+        // Wait for content to load before printing
+        setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+        
+      } catch (writeError) {
+        console.error('Error writing print content:', writeError);
+        printWindow.close();
+        alert('🖨️ Print content failed to load!\n\nPlease try again or use Ctrl+P to print this page directly.');
+      }
+      
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('🖨️ Print failed!\n\nPlease try:\n• Refreshing the page\n• Using Ctrl+P (Cmd+P on Mac) to print directly\n• Checking browser popup settings');
+    }
+  };
+
+  // Fallback print function for when popups are blocked
+  const handlePrintInSameWindow = () => {
+    alert('Print functionality is available! Press Ctrl+P (or Cmd+P on Mac) to print this page, or try the print button again if popups are enabled.');
   };
 
   // Helper function to get model display name

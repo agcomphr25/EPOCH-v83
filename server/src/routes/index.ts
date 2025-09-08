@@ -2756,8 +2756,10 @@ export function registerRoutes(app: Express): Server {
           const actionLength = (order as any).features?.action_length || 'unknown';
           const modelDisplayName = stockModelMap.get((order as any).modelId) || (order as any).modelId || 'Unknown';
           
-          // Add order information at top
-          page.drawText(`${order.orderId}`, {
+          // Add order information at top - Order ID and Customer Name
+          const customerName = (order as any).customer || '';
+          const orderText = customerName ? `${order.orderId} - ${customerName}` : order.orderId;
+          page.drawText(orderText, {
             x: x + 8,
             y: y + 50,
             size: 11,

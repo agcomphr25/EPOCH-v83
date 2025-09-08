@@ -188,14 +188,14 @@ export default function CNCQueuePage() {
     // Check both the modelId and the actual stock model display name
     const modelDisplayName = getModelDisplayName(modelId);
     
-    // Check for adjustable stock models
+    // Check for adjustable stock models - they ALWAYS go to Gunsmith
     const isAdjustableModel = modelId.toLowerCase().includes('adjustable') || 
         modelId.toLowerCase().includes('adj') ||
         modelDisplayName.toLowerCase().includes('adjustable') ||
         modelDisplayName.toLowerCase().includes('adj');
     
     if (isAdjustableModel) {
-      return true;
+      return true; // → GUNSMITH (adjustable stocks always go to gunsmith)
     }
     
     if (!order.features) return false;
@@ -604,7 +604,7 @@ export default function CNCQueuePage() {
             </div>
           </CardTitle>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-            Purple borders: Gunsmith required • Green borders: Ready for Finish
+            Purple borders: Gunsmith required (includes adjustable stocks) • Green borders: Ready for Finish
           </p>
         </CardHeader>
         <CardContent className="p-4">

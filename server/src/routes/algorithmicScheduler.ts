@@ -248,34 +248,43 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       });
     });
 
-    // CRITICAL VALIDATION: Verify all orders have compatible molds - NO EXCEPTIONS
-    console.log('🚨 PERFORMING STRICT MOLD VALIDATION - NO EXCEPTIONS ALLOWED');
+    // VALIDATION: Identify and exclude orders without compatible molds
+    console.log('🔍 CHECKING MOLD COMPATIBILITY - Will skip incompatible orders');
     const invalidOrders: any[] = [];
+    const validOrders: any[] = [];
     
     prioritizedOrders.forEach((order: any) => {
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       const compatibleMolds = findExactMatchingMolds(stockModelId);
       
       if (compatibleMolds.length === 0) {
-        console.error(`🚨 CRITICAL VALIDATION FAILURE: Order ${order.orderId} with stock model "${stockModelId}" has NO compatible molds. SCHEDULING BLOCKED.`);
+        console.warn(`⚠️ SKIPPING: Order ${order.orderId} with stock model "${stockModelId}" has no compatible molds.`);
         invalidOrders.push({ orderId: order.orderId, stockModel: stockModelId });
+      } else {
+        validOrders.push(order);
       }
     });
     
+    console.log(`📊 VALIDATION RESULTS: ${validOrders.length} orders can be scheduled, ${invalidOrders.length} orders will be skipped`);
+    
     if (invalidOrders.length > 0) {
-      console.error(`🚨 SCHEDULING BLOCKED: ${invalidOrders.length} orders have no compatible molds:`, invalidOrders);
+      console.log(`⚠️ Skipping ${invalidOrders.length} orders without compatible molds:`, invalidOrders.map(o => o.orderId).join(', '));
+    }
+    
+    if (validOrders.length === 0) {
+      console.error(`🚨 NO ORDERS CAN BE SCHEDULED: All orders lack compatible molds`);
       return res.status(400).json({
         success: false,
-        error: 'STRICT VALIDATION FAILED - Orders have no compatible molds',
+        error: 'No schedulable orders - all orders lack compatible molds',
         invalidOrders: invalidOrders,
-        message: 'Under no circumstances will a stock model not match the mold. Fix mold configuration before scheduling.'
+        message: 'No orders can be scheduled. Please verify stock models and mold configuration.'
       });
     }
     
-    console.log('✅ STRICT VALIDATION PASSED: All orders have compatible molds');
+    console.log(`✅ PROCEEDING WITH SCHEDULING: ${validOrders.length} valid orders found`);
 
-    // Process each order (now prioritized by score and due date)
-    for (const order of prioritizedOrders) {
+    // Process each valid order (now prioritized by score and due date)
+    for (const order of validOrders) {
       const stockModelId = order.stockModelId || order.modelId || 'unknown';
       
       // Extract material prefix (CF/FG)
@@ -407,7 +416,7 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     }
 
     // Calculate success metrics and return results
-    const totalProcessed = prioritizedOrders.length;
+    const totalProcessed = validOrders.length; // Only count orders that could be scheduled
     const totalScheduled = allocations.length;
     const successRate = totalProcessed > 0 ? (totalScheduled / totalProcessed) * 100 : 0;
     
@@ -448,14 +457,14 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
     }
 
     // Analyze failed orders
-    const unscheduledOrders = prioritizedOrders.slice(totalScheduled);
+    const unscheduledOrders = validOrders.slice(totalScheduled);
     if (unscheduledOrders.length > 0) {
       console.log(`❌ First 10 unscheduled orders:`);
       unscheduledOrders.slice(0, 10).forEach(order => {
         console.log(`   - ${order.orderId}: ${order.stockModelId || order.modelId} (Due: ${new Date(order.dueDate || order.orderDate).toDateString()})`);
       });
       
-      // Analysis by failure reason
+      // Analysis by failure reason (should be 0 for no molds since we pre-filtered)
       const noMoldsCount = unscheduledOrders.filter(order => {
         const compatibleMolds = findExactMatchingMolds(order.stockModelId || order.modelId || 'unknown');
         return compatibleMolds.length === 0;
@@ -464,6 +473,11 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`🔍 Analysis of unscheduled orders:`);
       console.log(`   - No compatible molds: ${noMoldsCount}`);
       console.log(`   - Other capacity/timing issues: ${unscheduledOrders.length - noMoldsCount}`);
+    }
+    
+    // Report skipped orders separately
+    if (invalidOrders.length > 0) {
+      console.log(`📋 SUMMARY: ${invalidOrders.length} orders were skipped due to invalid stock models:`, invalidOrders.map(o => `${o.orderId}(${o.stockModel})`).join(', '));
     }
 
     // Save the algorithmic schedule results to the layup_schedule table
@@ -526,10 +540,13 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       success: true,
       allocations: allocations,
       scheduledAllocations: allocations, // Add this for compatibility
+      skippedOrders: invalidOrders, // Include orders that were skipped due to no compatible molds
       analytics: {
-        totalOrders: totalProcessed,
+        totalOrders: prioritizedOrders.length, // Total orders originally considered
+        validOrders: validOrders.length, // Orders that could be scheduled (had compatible molds)
+        skippedOrders: invalidOrders.length, // Orders skipped due to no compatible molds
         scheduledOrders: totalScheduled,
-        unscheduledOrders: totalProcessed - totalScheduled,
+        unscheduledOrders: totalProcessed - totalScheduled, // Valid orders that couldn't fit in schedule
         efficiency: successRate,
         workDays: scheduleDays,
         dailyCapacity: actualDailyCapacity, // Use actual capacity instead of requested

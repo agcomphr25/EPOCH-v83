@@ -6328,6 +6328,7 @@ export class DatabaseStorage implements IStorage {
         currentDepartment: 'Shipping Management',
         status: 'FULFILLED',
         shippedDate: new Date(), // Set shipped date to current date when fulfilled
+        customerNotified: true, // Set customer notified to true when fulfilled
         updatedAt: new Date()
       })
       .where(eq(allOrders.orderId, orderId))
@@ -6343,7 +6344,15 @@ export class DatabaseStorage implements IStorage {
     if (existingOrder.customerId) {
       try {
         console.log(`👤 CUSTOMER LOOKUP: Getting customer ${existingOrder.customerId} for notifications`);
-        const [customer] = await db.select().from(customers).where(eq(customers.id, parseInt(existingOrder.customerId)));
+        
+        // Safely parse customer ID with validation
+        const customerIdNum = parseInt(existingOrder.customerId);
+        if (isNaN(customerIdNum)) {
+          console.log(`❌ INVALID CUSTOMER ID: Customer ID "${existingOrder.customerId}" is not a valid number`);
+          return order; // Return the fulfilled order without sending notifications
+        }
+        
+        const [customer] = await db.select().from(customers).where(eq(customers.id, customerIdNum));
         
         if (customer) {
           console.log(`👤 CUSTOMER FOUND: ${customer.name} (Email: ${customer.email || 'none'}, Phone: ${customer.phone || 'none'})`);

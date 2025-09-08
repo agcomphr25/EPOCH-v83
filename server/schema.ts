@@ -2620,8 +2620,8 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
   approvedAt: true,
   processedAt: true,
   rejectionReason: true,
-  authNetTransactionId: true,
-  authNetRefundId: true,
+  gatewayTransactionId: true,
+  gatewayRefundId: true,
   createdAt: true,
   updatedAt: true,
 }).extend({

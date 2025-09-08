@@ -7,7 +7,7 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
   try {
     const allOrders = await storage.getAllOrders();
     
-    // Split orders into two categories: those to move to Shipping QC vs those needing attention
+    // Split orders into three categories: those to move to Shipping QC, those needing attention, and valid orders
     const ordersToMoveToShipping = [];
     const ordersNeedingAttention = [];
     
@@ -21,12 +21,16 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         continue;
       }
       
-      // Orders with "no_stock" or "None" go directly to Shipping QC
+      // Orders with "no_stock" or "None" go directly to Shipping QC (bypass all production)
       if (stockModel && (stockModel.toLowerCase() === 'no_stock' || stockModel.toLowerCase() === 'none')) {
         ordersToMoveToShipping.push(order);
       }
-      // Orders with missing stock model or missing action_length need attention
-      else if (!stockModel || stockModel === '' || !features.action_length || features.action_length === '') {
+      // Orders with invalid stock models (numeric IDs, empty, null) need attention
+      else if (!stockModel || stockModel === '' || stockModel.match(/^[0-9]+$/)) {
+        ordersNeedingAttention.push(order);
+      }
+      // Orders missing critical features need attention  
+      else if (!features.action_length || features.action_length === '') {
         ordersNeedingAttention.push(order);
       }
     }
@@ -80,7 +84,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
   try {
     console.log('🏭 AUTO-POPULATE: Starting production queue auto-population...');
     
-    // Get all finalized orders with stock models (excluding "None")
+    // Get all finalized orders with VALID stock models (excluding invalid/problematic ones)
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
@@ -91,15 +95,15 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.current_department as currentDepartment,
         o.status,
         o.features,
-        o.created_at as createdAt,
-        CASE 
-          WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' THEN false
-          ELSE true
-        END as hasValidStock
+        o.created_at as createdAt
       FROM all_orders o
       WHERE o.status = 'FINALIZED' 
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
-        AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None')
+        AND o.model_id IS NOT NULL 
+        AND o.model_id != '' 
+        AND o.model_id != 'None' 
+        AND o.model_id != 'no_stock'
+        AND NOT (o.model_id ~ '^[0-9]+$')
       ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
@@ -956,6 +960,72 @@ router.get('/attention', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch orders needing attention",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Manual cleanup endpoint to fix existing problematic orders
+router.post('/cleanup-invalid-orders', async (req: Request, res: Response) => {
+  try {
+    console.log('🧹 MANUAL CLEANUP: Starting cleanup of invalid orders...');
+    
+    // First, handle orders that should go to Shipping QC
+    const shippingQCQuery = `
+      UPDATE all_orders 
+      SET 
+        current_department = 'Shipping QC',
+        updated_at = NOW()
+      WHERE current_department = 'P1 Production Queue'
+        AND status IN ('FINALIZED', 'Active')
+        AND (model_id = 'no_stock' OR model_id = 'None')
+      RETURNING order_id, model_id
+    `;
+    
+    const shippingQCResult = await pool.query(shippingQCQuery);
+    const movedToShippingQC = Array.isArray(shippingQCResult) ? shippingQCResult : (shippingQCResult.rows || []);
+    
+    console.log(`🚀 Moved ${movedToShippingQC.length} orders with no_stock/None to Shipping QC:`, movedToShippingQC.map(o => o.order_id));
+    
+    // Get count of remaining problematic orders that need attention
+    const attentionQuery = `
+      SELECT COUNT(*) as count
+      FROM all_orders 
+      WHERE current_department = 'P1 Production Queue'
+        AND status IN ('FINALIZED', 'Active')
+        AND (
+          model_id IS NULL 
+          OR model_id = '' 
+          OR model_id ~ '^[0-9]+$'
+          OR features IS NULL 
+          OR NOT (features ? 'action_length')
+          OR (features ->> 'action_length') = ''
+        )
+    `;
+    
+    const attentionResult = await pool.query(attentionQuery);
+    const attentionCount = Array.isArray(attentionResult) ? attentionResult[0]?.count || 0 : (attentionResult.rows?.[0]?.count || 0);
+    
+    const result = {
+      success: true,
+      message: `Cleanup completed successfully`,
+      movedToShippingQC: movedToShippingQC.length,
+      ordersNeedingAttention: attentionCount,
+      summary: {
+        'Moved to Shipping QC (no_stock/None)': movedToShippingQC.length,
+        'Remaining orders needing attention': attentionCount,
+        'Details': 'Orders needing attention have invalid stock models or missing action_length and are available via /attention endpoint'
+      }
+    };
+
+    console.log('🧹 MANUAL CLEANUP COMPLETE:', result.summary);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ MANUAL CLEANUP: Error during cleanup:', error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to cleanup invalid orders",
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

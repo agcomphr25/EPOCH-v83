@@ -15,11 +15,12 @@ function isDeploymentEnvironment(): boolean {
   // Development overrides - only skip auth for actual development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+  const isReplitPreview = hostname.includes('.repl.co'); // Replit preview domains
   
   // Debug logs removed - authentication working correctly
   
-  // Skip auth ONLY for localhost and Replit editor (not deployed)
-  if (isLocalhost || isReplitEditor) {
+  // Skip auth ONLY for localhost, Replit editor, and Replit preview (not deployed)
+  if (isLocalhost || isReplitEditor || isReplitPreview) {
       return false;
   }
   

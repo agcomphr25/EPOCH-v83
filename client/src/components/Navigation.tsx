@@ -255,6 +255,12 @@ export default function Navigation() {
       label: 'Shutdown Training',
       icon: GraduationCap,
       description: 'Presentation-style shutdown procedures training with attendance signatures'
+    },
+    {
+      path: '/fire-safety-training',
+      label: 'Fire Safety Training',
+      icon: GraduationCap,
+      description: 'Presentation-style fire safety training with attendance signatures'
     }
   ];
 

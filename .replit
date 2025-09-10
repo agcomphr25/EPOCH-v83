@@ -48,5 +48,9 @@ args = "npm run dev"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 46035
+externalPort = 3000
+
 [agent]
 integrations = ["javascript_mem_db==1.0.0"]

@@ -1,5 +1,5 @@
 import {
-  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions,
+  users, csvData, customerTypes, persistentDiscounts, shortTermSales, featureCategories, featureSubCategories, features, stockModels, orders, orderDrafts, payments, forms, formSubmissions, vendors,
   inventoryItems, inventoryScans, partsRequests, employees, qcDefinitions, qcSubmissions, maintenanceSchedules, maintenanceLogs,
   timeClockEntries, checklistItems, onboardingDocs, customers, customerAddresses, communicationLogs, pdfDocuments,
   enhancedFormCategories, enhancedForms, enhancedFormVersions, enhancedFormSubmissions,
@@ -94,6 +94,8 @@ import {
   type POProduct, type InsertPOProduct,
   // Refund request types
   type RefundRequest, type InsertRefundRequest,
+  // Vendor types
+  type Vendor, type InsertVendor,
 
 
 } from "./schema";
@@ -628,6 +630,13 @@ export interface IStorage {
   createP2POProduct(data: any): Promise<any>;
   updateP2POProduct(id: number, data: any): Promise<any>;
   deleteP2POProduct(id: number): Promise<void>;
+
+  // Vendor CRUD methods
+  getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }>;
+  getVendor(id: number): Promise<Vendor | undefined>;
+  createVendor(data: InsertVendor): Promise<Vendor>;
+  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
+  deleteVendor(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6550,6 +6559,110 @@ export class DatabaseStorage implements IStorage {
     if (index !== -1) {
       this.p2POProducts[index].isActive = false;
       this.p2POProducts[index].updatedAt = new Date().toISOString();
+    }
+  }
+
+  // Vendor CRUD implementations
+  async getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }> {
+    const { q = '', approved = '', evaluated = '', page = 1, limit = 10 } = params || {};
+    
+    let query = db.select().from(vendors).where(eq(vendors.isActive, true));
+    
+    const conditions = [];
+    
+    // Search by name, email, or contact person
+    if (q.trim()) {
+      conditions.push(
+        or(
+          ilike(vendors.name, `%${q}%`),
+          ilike(vendors.email, `%${q}%`),
+          ilike(vendors.contactPerson, `%${q}%`)
+        )
+      );
+    }
+    
+    // Filter by approved status
+    if (approved === 'yes') {
+      conditions.push(eq(vendors.approved, true));
+    } else if (approved === 'no') {
+      conditions.push(eq(vendors.approved, false));
+    }
+    
+    // Filter by evaluated status
+    if (evaluated === 'yes') {
+      conditions.push(eq(vendors.evaluated, true));
+    } else if (evaluated === 'no') {
+      conditions.push(eq(vendors.evaluated, false));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    // Get total count
+    const countResult = await query.then(results => results.length);
+    
+    // Apply pagination and ordering
+    const data = await query
+      .orderBy(desc(vendors.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
+    
+    return {
+      data,
+      total: countResult,
+      page,
+      limit
+    };
+  }
+
+  async getVendor(id: number): Promise<Vendor | undefined> {
+    const [vendor] = await db.select().from(vendors).where(and(eq(vendors.id, id), eq(vendors.isActive, true)));
+    return vendor || undefined;
+  }
+
+  async createVendor(data: InsertVendor): Promise<Vendor> {
+    const [vendor] = await db
+      .insert(vendors)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return vendor;
+  }
+
+  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
+    const [vendor] = await db
+      .update(vendors)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)))
+      .returning();
+
+    if (!vendor) {
+      throw new Error(`Vendor with ID ${id} not found`);
+    }
+
+    return vendor;
+  }
+
+  async deleteVendor(id: number): Promise<void> {
+    // Soft delete by setting isActive to false
+    const [vendor] = await db
+      .update(vendors)
+      .set({ 
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)))
+      .returning();
+
+    if (!vendor) {
+      throw new Error(`Vendor with ID ${id} not found`);
     }
   }
 

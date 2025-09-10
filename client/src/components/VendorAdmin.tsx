@@ -43,8 +43,8 @@ export default function VendorAdmin({}: VendorAdminProps) {
   // Filter states
   const [filters, setFilters] = useState({
     q: "",
-    approved: "",
-    evaluated: "",
+    approved: "all",
+    evaluated: "all",
   });
   const [page, setPage] = useState(1);
   const limit = 10;
@@ -166,7 +166,7 @@ export default function VendorAdmin({}: VendorAdminProps) {
                 <SelectValue placeholder="Approved: All" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="yes">Yes</SelectItem>
                 <SelectItem value="no">No</SelectItem>
               </SelectContent>
@@ -180,7 +180,7 @@ export default function VendorAdmin({}: VendorAdminProps) {
                 <SelectValue placeholder="Evaluated: All" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="yes">Yes</SelectItem>
                 <SelectItem value="no">No</SelectItem>
               </SelectContent>

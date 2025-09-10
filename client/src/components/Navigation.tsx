@@ -198,6 +198,12 @@ export default function Navigation() {
       label: 'Receiving',
       icon: Receipt,
       description: 'Receive incoming inventory'
+    },
+    {
+      path: '/vendors',
+      label: 'Vendor Management',
+      icon: Users,
+      description: 'Manage vendors and suppliers'
     }
   ];
 

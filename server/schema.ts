@@ -2936,8 +2936,16 @@ export const vendorContactSchema = z.object({
   name: z.string().min(1, "Contact name is required"),
   email: z.string().email("Valid email is required").optional().or(z.literal("")),
   phone: z.string().optional(),
+  additionalPhone: z.string().optional(),
   role: z.string().optional(),
   isPrimary: z.boolean().default(false),
+  alternateAddress: z.object({
+    street: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    zip: z.string().optional(),
+    country: z.string().optional(),
+  }).optional(),
 });
 
 // Vendor insert schema

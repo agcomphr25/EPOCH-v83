@@ -39,8 +39,16 @@ const contactSchema = z.object({
   name: z.string().min(1, "Contact name is required"),
   email: z.string().email("Valid email is required").optional().or(z.literal("")),
   phone: z.string().optional(),
+  additionalPhone: z.string().optional(),
   role: z.string().optional(),
   isPrimary: z.boolean().default(false),
+  alternateAddress: z.object({
+    street: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    zip: z.string().optional(),
+    country: z.string().optional(),
+  }).optional(),
 });
 
 // Form validation schema
@@ -128,7 +136,17 @@ export default function VendorFormModal({
             zip: "",
             country: "",
           },
-          contacts: vendorToEdit.contacts || [],
+          contacts: (vendorToEdit.contacts || []).map((contact: any) => ({
+            ...contact,
+            additionalPhone: contact.additionalPhone || "",
+            alternateAddress: contact.alternateAddress || {
+              street: "",
+              city: "",
+              state: "",
+              zip: "",
+              country: "",
+            },
+          })),
           approved: vendorToEdit.approved || false,
           evaluated: vendorToEdit.evaluated || false,
           evaluationNotes: vendorToEdit.evaluationNotes || "",
@@ -230,8 +248,16 @@ export default function VendorFormModal({
       name: "",
       email: "",
       phone: "",
+      additionalPhone: "",
       role: "",
       isPrimary: false,
+      alternateAddress: {
+        street: "",
+        city: "",
+        state: "",
+        zip: "",
+        country: "",
+      },
     });
   };
 
@@ -538,6 +564,120 @@ export default function VendorFormModal({
                                 </FormItem>
                               )}
                             />
+
+                            <FormField
+                              control={form.control}
+                              name={`contacts.${index}.additionalPhone`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Additional Phone</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      placeholder="Enter additional phone number"
+                                      data-testid={`input-contact-additional-phone-${index}`}
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          {/* Alternate Address Section */}
+                          <div className="space-y-2">
+                            <h5 className="text-sm font-medium">Alternate Address (Optional)</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${index}.alternateAddress.street`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Street</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter street address"
+                                        data-testid={`input-contact-alt-street-${index}`}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${index}.alternateAddress.city`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>City</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter city"
+                                        data-testid={`input-contact-alt-city-${index}`}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${index}.alternateAddress.state`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>State</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter state"
+                                        data-testid={`input-contact-alt-state-${index}`}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${index}.alternateAddress.zip`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>ZIP Code</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter ZIP code"
+                                        data-testid={`input-contact-alt-zip-${index}`}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${index}.alternateAddress.country`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Country</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter country"
+                                        data-testid={`input-contact-alt-country-${index}`}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
                           </div>
                         </CardContent>
                       </Card>

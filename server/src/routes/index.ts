@@ -274,7 +274,7 @@ export function registerRoutes(app: Express): Server {
         SELECT 
           id,
           order_id as "orderId",
-          customer,
+          customer_id as "customer",
           product,
           date,
           due_date as "dueDate",

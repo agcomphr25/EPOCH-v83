@@ -228,51 +228,20 @@ export default function ShutdownProceduresTraining() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-2 font-semibold text-sm border-b pb-2">
-                <div>Print Name</div>
-                <div>Signature</div>
-                <div>Date</div>
-                <div>Department</div>
+            <div className="space-y-6">
+              {/* Participant Signature Lines */}
+              <div className="space-y-4">
+                {[...Array(15)].map((_, index) => (
+                  <div key={index} className="flex items-center space-x-8">
+                    <div className="flex-1">
+                      <div className="border-b border-gray-400 h-8"></div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="border-b border-gray-400 h-8"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              {participants.map((participant, index) => (
-                <div key={index} className="grid grid-cols-4 gap-2 items-center">
-                  <Input
-                    placeholder="Full Name"
-                    value={participant.name}
-                    onChange={(e) => updateParticipant(index, 'name', e.target.value)}
-                    className="print:border-0 print:border-b print:border-gray-400 print:rounded-none text-sm"
-                  />
-                  <Input
-                    placeholder="Signature"
-                    value={participant.signature}
-                    onChange={(e) => updateParticipant(index, 'signature', e.target.value)}
-                    className="print:border-0 print:border-b print:border-gray-400 print:rounded-none text-sm font-cursive"
-                  />
-                  <Input
-                    type="date"
-                    value={participant.date}
-                    onChange={(e) => updateParticipant(index, 'date', e.target.value)}
-                    className="print:border-0 print:border-b print:border-gray-400 print:rounded-none text-sm"
-                  />
-                  <Input
-                    placeholder="Department"
-                    value={participant.department}
-                    onChange={(e) => updateParticipant(index, 'department', e.target.value)}
-                    className="print:border-0 print:border-b print:border-gray-400 print:rounded-none text-sm"
-                  />
-                </div>
-              ))}
-              
-              <Button 
-                onClick={addParticipant} 
-                variant="outline" 
-                size="sm"
-                className="print:hidden"
-              >
-                + Add Participant
-              </Button>
             </div>
 
             <Separator className="my-6" />
@@ -281,12 +250,12 @@ export default function ShutdownProceduresTraining() {
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
                 <label className="font-semibold text-sm">Instructor Signature:</label>
-                <div className="border-b-2 border-gray-300 h-12 print:border-gray-400"></div>
+                <div className="border-b-2 border-gray-400 h-12"></div>
                 <div className="text-xs text-gray-600">Date: ________________</div>
               </div>
               <div className="space-y-2">
                 <label className="font-semibold text-sm">Training Coordinator:</label>
-                <div className="border-b-2 border-gray-300 h-12 print:border-gray-400"></div>
+                <div className="border-b-2 border-gray-400 h-12"></div>
                 <div className="text-xs text-gray-600">Date: ________________</div>
               </div>
             </div>

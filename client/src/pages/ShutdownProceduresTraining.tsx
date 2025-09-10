@@ -57,59 +57,9 @@ export default function ShutdownProceduresTraining() {
             <p className="text-xl text-gray-600 mb-6 print:text-lg">
               These procedures cover the processes and tasks required to correctly lock up the facility each day.
             </p>
-            <div className="text-2xl font-semibold text-gray-800 print:text-xl">August 6, 2024</div>
           </div>
         </div>
 
-        {/* Training Session Info */}
-        <Card className="mb-6 print:shadow-none print:border print:border-gray-300">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Training Session Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-2">
-              <div>
-                <label className="text-sm font-medium">Date:</label>
-                <Input 
-                  type="date" 
-                  value={trainingInfo.date}
-                  onChange={(e) => setTrainingInfo({...trainingInfo, date: e.target.value})}
-                  className="print:border-0 print:border-b print:border-gray-400 print:rounded-none"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Instructor:</label>
-                <Input 
-                  placeholder="Instructor Name"
-                  value={trainingInfo.instructor}
-                  onChange={(e) => setTrainingInfo({...trainingInfo, instructor: e.target.value})}
-                  className="print:border-0 print:border-b print:border-gray-400 print:rounded-none"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Start Time:</label>
-                <Input 
-                  type="time"
-                  value={trainingInfo.startTime}
-                  onChange={(e) => setTrainingInfo({...trainingInfo, startTime: e.target.value})}
-                  className="print:border-0 print:border-b print:border-gray-400 print:rounded-none"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">End Time:</label>
-                <Input 
-                  type="time"
-                  value={trainingInfo.endTime}
-                  onChange={(e) => setTrainingInfo({...trainingInfo, endTime: e.target.value})}
-                  className="print:border-0 print:border-b print:border-gray-400 print:rounded-none"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Content Sections */}
         <div className="space-y-6 mb-8">
@@ -267,18 +217,6 @@ export default function ShutdownProceduresTraining() {
             </CardContent>
           </Card>
 
-          {/* Questions/Changes */}
-          <Card className="print:shadow-none print:border print:border-gray-300">
-            <CardHeader className="bg-gray-50 print:bg-white">
-              <CardTitle className="text-xl text-gray-800">Questions - Changes?</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start"><span className="w-2 h-2 bg-gray-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>Final walk through turn off lights in CNC area</li>
-                <li className="flex items-start"><span className="w-2 h-2 bg-gray-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>Glenn create a final walk through calendar for leaders</li>
-              </ul>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Attendance Section */}

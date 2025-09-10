@@ -106,6 +106,7 @@ import ProductionQueuePage from "./pages/ProductionQueuePage";
 import P2ProductionQueuePage from "./pages/P2ProductionQueuePage";
 import SimplifiedLayupScheduler from "./components/SimplifiedLayupScheduler";
 import CustomerSatisfaction from "./pages/CustomerSatisfaction";
+import VendorsPage from "./pages/VendorsPage";
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -199,6 +200,9 @@ function App() {
                   <Route path="/customer-management" component={CustomerManagement} />
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
+
+                  {/* Vendor Management Routes */}
+                  <Route path="/vendors" component={VendorsPage} />
 
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />

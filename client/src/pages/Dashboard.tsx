@@ -232,6 +232,12 @@ export default function Dashboard() {
               Stock Models
             </Button>
           </Link>
+          <Button 
+            className="w-full h-12 bg-red-600 hover:bg-red-700 text-white" 
+            onClick={() => alert('Finally?? button clicked!')}
+          >
+            Finally??
+          </Button>
         </div>
       </div>
     </div>

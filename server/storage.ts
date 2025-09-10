@@ -226,6 +226,23 @@ export interface IStorage {
   createFormSubmission(data: InsertFormSubmission): Promise<FormSubmission>;
   deleteFormSubmission(id: number): Promise<void>;
 
+  // Enhanced Form Categories CRUD
+  getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]>;
+  getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined>;
+  createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory>;
+  updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory>;
+  deleteEnhancedFormCategory(id: number): Promise<void>;
+
+  // Enhanced Forms CRUD
+  getAllEnhancedForms(): Promise<EnhancedForm[]>;
+  getEnhancedFormById(id: number): Promise<EnhancedForm | undefined>;
+  createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm>;
+  updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm>;
+  deleteEnhancedForm(id: number): Promise<void>;
+
+  // Enhanced Form Submissions CRUD
+  getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]>;
+
   // Inventory Items CRUD
   getAllInventoryItems(): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
@@ -2446,6 +2463,67 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFormSubmission(id: number): Promise<void> {
     await db.delete(formSubmissions).where(eq(formSubmissions.id, id));
+  }
+
+  // Enhanced Form Categories CRUD
+  async getAllEnhancedFormCategories(): Promise<EnhancedFormCategory[]> {
+    return await db.select().from(enhancedFormCategories).orderBy(asc(enhancedFormCategories.name));
+  }
+
+  async getEnhancedFormCategory(id: number): Promise<EnhancedFormCategory | undefined> {
+    const [category] = await db.select().from(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
+    return category || undefined;
+  }
+
+  async createEnhancedFormCategory(data: InsertEnhancedFormCategory): Promise<EnhancedFormCategory> {
+    const [category] = await db.insert(enhancedFormCategories).values(data).returning();
+    return category;
+  }
+
+  async updateEnhancedFormCategory(id: number, data: Partial<InsertEnhancedFormCategory>): Promise<EnhancedFormCategory> {
+    const [category] = await db.update(enhancedFormCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(enhancedFormCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteEnhancedFormCategory(id: number): Promise<void> {
+    await db.delete(enhancedFormCategories).where(eq(enhancedFormCategories.id, id));
+  }
+
+  // Enhanced Forms CRUD
+  async getAllEnhancedForms(): Promise<EnhancedForm[]> {
+    return await db.select().from(enhancedForms).orderBy(desc(enhancedForms.updatedAt));
+  }
+
+  async getEnhancedFormById(id: number): Promise<EnhancedForm | undefined> {
+    const [form] = await db.select().from(enhancedForms).where(eq(enhancedForms.id, id));
+    return form || undefined;
+  }
+
+  async createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm> {
+    const [form] = await db.insert(enhancedForms).values(data).returning();
+    return form;
+  }
+
+  async updateEnhancedForm(id: number, data: Partial<InsertEnhancedForm>): Promise<EnhancedForm> {
+    const [form] = await db.update(enhancedForms)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(enhancedForms.id, id))
+      .returning();
+    return form;
+  }
+
+  async deleteEnhancedForm(id: number): Promise<void> {
+    await db.delete(enhancedForms).where(eq(enhancedForms.id, id));
+  }
+
+  // Enhanced Form Submissions CRUD
+  async getFormSubmissions(formId: number): Promise<EnhancedFormSubmission[]> {
+    return await db.select().from(enhancedFormSubmissions)
+      .where(eq(enhancedFormSubmissions.formId, formId))
+      .orderBy(desc(enhancedFormSubmissions.submittedAt));
   }
 
   // Inventory Items CRUD

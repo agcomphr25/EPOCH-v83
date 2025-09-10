@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import VendorFormModal from "./VendorFormModal";
@@ -158,33 +159,43 @@ export default function VendorAdmin({}: VendorAdminProps) {
               </div>
             </div>
             
-            <Select
-              value={filters.approved}
-              onValueChange={(value) => handleFilterChange("approved", value)}
-            >
-              <SelectTrigger className="w-[150px]" data-testid="select-vendor-approved">
-                <SelectValue placeholder="Approved: All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-                <SelectItem value="no">No</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col space-y-1">
+              <Label id="label-approved" className="text-sm font-medium" data-testid="label-vendor-approved">
+                Approved
+              </Label>
+              <Select
+                value={filters.approved}
+                onValueChange={(value) => handleFilterChange("approved", value)}
+              >
+                <SelectTrigger className="w-[150px]" aria-labelledby="label-approved" data-testid="select-vendor-approved">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={filters.evaluated}
-              onValueChange={(value) => handleFilterChange("evaluated", value)}
-            >
-              <SelectTrigger className="w-[150px]" data-testid="select-vendor-evaluated">
-                <SelectValue placeholder="Evaluated: All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-                <SelectItem value="no">No</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col space-y-1">
+              <Label id="label-evaluated" className="text-sm font-medium" data-testid="label-vendor-evaluated">
+                Evaluated
+              </Label>
+              <Select
+                value={filters.evaluated}
+                onValueChange={(value) => handleFilterChange("evaluated", value)}
+              >
+                <SelectTrigger className="w-[150px]" aria-labelledby="label-evaluated" data-testid="select-vendor-evaluated">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Loading State */}

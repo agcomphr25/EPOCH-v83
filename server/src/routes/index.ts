@@ -31,6 +31,7 @@ import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p2POProductsRoutes from './p2POProducts';
 import refundRoutes from './refunds';
+import vendorRoutes from './vendors';
 import cuttingTableRoutes from './cuttingTable';
 import materialInventoryRoutes from './materialInventory';
 import defrostScheduleRoutes from './defrostSchedule';
@@ -122,6 +123,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // Vendor management routes
+  app.use('/api/vendors', vendorRoutes);
   
   // Cutting table management routes
   app.use('/api', cuttingTableRoutes);

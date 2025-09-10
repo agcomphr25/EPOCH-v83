@@ -232,14 +232,7 @@ export default function ShutdownProceduresTraining() {
               {/* Participant Signature Lines */}
               <div className="space-y-4">
                 {[...Array(15)].map((_, index) => (
-                  <div key={index} className="flex items-center space-x-8">
-                    <div className="flex-1">
-                      <div className="border-b border-gray-400 h-8"></div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="border-b border-gray-400 h-8"></div>
-                    </div>
-                  </div>
+                  <div key={index} className="border-b border-gray-400 h-8"></div>
                 ))}
               </div>
             </div>

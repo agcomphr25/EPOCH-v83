@@ -83,19 +83,9 @@ export default function ShutdownProceduresTraining() {
       <div className="min-h-screen bg-gray-50 p-4 print:bg-white print:p-8 print:m-0">
         <div className="max-w-4xl mx-auto print:max-w-none print-content">
         
-        {/* Header Section */}
+        {/* Title Section */}
         <div className="text-center mb-8 print:mb-8 break-inside-avoid">
-          <div className="flex items-center justify-center mb-4 print:hidden">
-            <GraduationCap className="h-8 w-8 text-gray-900 mr-3" />
-            <h1 className="text-3xl font-bold text-gray-900">Leader Training</h1>
-          </div>
-          <div className="bg-white rounded-lg shadow-lg p-8 print:shadow-none print:border-0 print:rounded-none print:p-0">
-            <h1 className="text-4xl font-bold text-center mb-3 print:text-2xl print:mb-2">Leader Training Topic:</h1>
-            <h2 className="text-5xl font-bold text-black mb-4 print:text-3xl print:text-black print:mb-4">Shut Down Procedures</h2>
-            <p className="text-xl text-gray-600 mb-6 print:text-base print:text-black print:mb-6">
-              These procedures cover the processes and tasks required to correctly lock up the facility each day.
-            </p>
-          </div>
+          <h1 className="text-4xl font-bold text-center mb-2 print:text-3xl print:mb-4">Shut Down Procedures</h1>
         </div>
 
 
@@ -294,6 +284,11 @@ export default function ShutdownProceduresTraining() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer with Date */}
+        <div className="mt-8 text-center border-t border-gray-400 pt-4 print:mt-6 print:pt-3">
+          <p className="text-sm text-gray-600 print:text-black">Date: {new Date().toLocaleDateString()}</p>
+        </div>
 
         {/* Action Buttons */}
         <div className="mt-6 text-center print:hidden">

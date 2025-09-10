@@ -116,7 +116,6 @@ interface StockModel {
 }
 
 export default function OrdersList() {
-  console.log('OrdersList component rendering - with CSV export');
   
   // Read search parameter from URL
   const searchParams = new URLSearchParams(window.location.search);

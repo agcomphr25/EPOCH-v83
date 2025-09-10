@@ -1801,11 +1801,12 @@ export const enhancedForms = pgTable('enhanced_forms', {
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(() => enhancedFormCategories.id),
-  tableName: text('table_name'),
-  layout: jsonb('layout').notNull(),
-  version: integer('version').default(1),
+  schemaConfig: jsonb('schema_config').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  tableName: text('table_name'),
+  layout: jsonb('layout'),
+  version: integer('version').default(1)
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
@@ -1944,7 +1945,8 @@ export const insertEnhancedFormSchema = createInsertSchema(enhancedForms).omit({
   description: z.string().optional(),
   categoryId: z.number().optional(),
   tableName: z.string().optional(),
-  layout: z.any(),
+  schemaConfig: z.any().optional(),
+  layout: z.any().optional(),
   version: z.number().default(1),
 });
 

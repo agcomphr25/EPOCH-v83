@@ -5,7 +5,8 @@ import {
   insertFormSchema,
   insertFormSubmissionSchema,
   insertPurchaseReviewChecklistSchema,
-  insertManufacturersCertificateSchema
+  insertManufacturersCertificateSchema,
+  insertEnhancedFormCategorySchema
 } from '@shared/schema';
 
 const router = Router();
@@ -223,6 +224,51 @@ router.delete('/manufacturers-certificates/:id', async (req: Request, res: Respo
   } catch (error) {
     console.error('Delete manufacturers certificate error:', error);
     res.status(500).json({ error: "Failed to delete manufacturers certificate" });
+  }
+});
+
+// Enhanced Form Categories Management
+router.get('/enhanced/categories', async (req: Request, res: Response) => {
+  try {
+    const categories = await storage.getAllEnhancedFormCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Get enhanced form categories error:', error);
+    res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+
+router.post('/enhanced/categories', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const categoryData = insertEnhancedFormCategorySchema.parse(req.body);
+    const newCategory = await storage.createEnhancedFormCategory(categoryData);
+    res.status(201).json(newCategory);
+  } catch (error) {
+    console.error('Create enhanced form category error:', error);
+    res.status(500).json({ error: "Failed to create category" });
+  }
+});
+
+router.put('/enhanced/categories/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedCategory = await storage.updateEnhancedFormCategory(categoryId, updates);
+    res.json(updatedCategory);
+  } catch (error) {
+    console.error('Update enhanced form category error:', error);
+    res.status(500).json({ error: "Failed to update category" });
+  }
+});
+
+router.delete('/enhanced/categories/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    await storage.deleteEnhancedFormCategory(categoryId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete enhanced form category error:', error);
+    res.status(500).json({ error: "Failed to delete category" });
   }
 });
 

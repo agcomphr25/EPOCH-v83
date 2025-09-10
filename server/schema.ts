@@ -2908,3 +2908,38 @@ export type InsertStockPacketMapping = z.infer<typeof insertStockPacketMappingSc
 
 export type PacketCuttingQueue = typeof packetCuttingQueue.$inferSelect;
 export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSchema>;
+
+// ============================================================================
+// VENDOR MANAGEMENT
+// ============================================================================
+
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  address: jsonb("address"), // Store full address object
+  contactPerson: text("contact_person"),
+  website: text("website"),
+  approved: boolean("approved").default(false),
+  evaluated: boolean("evaluated").default(false),
+  evaluationNotes: text("evaluation_notes"),
+  approvalNotes: text("approval_notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Vendor insert schema
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Vendor name is required"),
+  email: z.string().email("Valid email is required").optional().or(z.literal("")),
+});
+
+// Vendor types
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;

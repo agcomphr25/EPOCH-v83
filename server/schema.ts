@@ -2916,10 +2916,11 @@ export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSc
 export const vendors = pgTable("vendors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
+  email: text("email"), // Keep for backward compatibility 
+  phone: text("phone"), // Keep for backward compatibility
   address: jsonb("address"), // Store full address object
-  contactPerson: text("contact_person"),
+  contactPerson: text("contact_person"), // Keep for backward compatibility
+  contacts: jsonb("contacts"), // Array of contact objects: { name, email, phone, role, isPrimary }
   website: text("website"),
   approved: boolean("approved").default(false),
   evaluated: boolean("evaluated").default(false),
@@ -2930,6 +2931,15 @@ export const vendors = pgTable("vendors", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Vendor contact schema
+export const vendorContactSchema = z.object({
+  name: z.string().min(1, "Contact name is required"),
+  email: z.string().email("Valid email is required").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  role: z.string().optional(),
+  isPrimary: z.boolean().default(false),
+});
+
 // Vendor insert schema
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
@@ -2938,6 +2948,7 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
 }).extend({
   name: z.string().min(1, "Vendor name is required"),
   email: z.string().email("Valid email is required").optional().or(z.literal("")),
+  contacts: z.array(vendorContactSchema).optional(),
 });
 
 // Vendor types

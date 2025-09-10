@@ -2503,7 +2503,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEnhancedForm(data: InsertEnhancedForm): Promise<EnhancedForm> {
-    const [form] = await db.insert(enhancedForms).values(data).returning();
+    // Ensure schemaConfig is provided, falling back to layout for backward compatibility
+    const payload = {
+      name: data.name,
+      description: data.description ?? null,
+      categoryId: data.categoryId ?? null,
+      tableName: data.tableName ?? null,
+      schemaConfig: data.schemaConfig ?? data.layout ?? {},
+      layout: data.layout ?? null,
+      version: data.version ?? 1,
+    };
+    console.log('DEBUG - Storage payload keys:', Object.keys(payload));
+    console.log('DEBUG - Storage schemaConfig:', !!payload.schemaConfig);
+    const [form] = await db.insert(enhancedForms).values(payload).returning();
     return form;
   }
 

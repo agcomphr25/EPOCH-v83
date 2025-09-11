@@ -234,18 +234,16 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
       console.log(`   ${index + 1}. ${date.toDateString()} (${dayName})`);
     });
     const allocations: any[] = [];
-    const dailyMoldUsage = new Map<string, number>();
     const dailyAllocationCount = new Map<string, number>();
+    
+    // CRITICAL FIX: Track which specific molds are used each day (one mold per day max)
+    const usedMoldsByDay = new Map<string, Set<string>>();
 
     // Initialize daily tracking
     workDates.forEach(date => {
       const dateKey = date.toISOString().split('T')[0];
       dailyAllocationCount.set(dateKey, 0);
-      
-      activeMolds.forEach((mold: any) => {
-        const moldKey = `${dateKey}-${mold.mold_id}`;
-        dailyMoldUsage.set(moldKey, 0);
-      });
+      usedMoldsByDay.set(dateKey, new Set<string>());
     });
 
     // VALIDATION: Identify and exclude orders without compatible molds
@@ -360,59 +358,117 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
           continue;
         }
 
-        // Try each compatible mold with STRICT capacity limits
-        for (const mold of compatibleMolds) {
-          const moldKey = `${dailyKey}-${mold.mold_id}`;
-          const currentUsage = dailyMoldUsage.get(moldKey) || 0;
-          // LIMIT MOLD MULTIPLIER: Cap at 3 to prevent over-scheduling
-          const moldCapacity = Math.min(mold.multiplier || 1, 3);
+        // CRITICAL FIX: Filter compatible molds to exclude already used ones for this day
+        const usedMoldsToday = usedMoldsByDay.get(dailyKey) || new Set<string>();
+        const availableMolds = compatibleMolds.filter(mold => !usedMoldsToday.has(mold.mold_id));
+        
+        console.log(`🔍 MOLD AVAILABILITY CHECK for ${dailyKey}:`);
+        console.log(`   📋 Compatible molds: ${compatibleMolds.map(m => m.mold_id).join(', ')}`);
+        console.log(`   🔒 Already used today: [${Array.from(usedMoldsToday).join(', ')}]`);
+        console.log(`   ✅ Available molds: ${availableMolds.map(m => m.mold_id).join(', ')}`);
 
-          if (currentUsage < moldCapacity) {
-            // FINAL CAPACITY CHECK: Ensure this assignment won't exceed daily limit
-            const finalDailyCheck = (dailyAllocationCount.get(dailyKey) || 0) + 1;
-            if (finalDailyCheck > actualDailyCapacity) {
-              console.log(`🚫 FINAL CAPACITY CHECK FAILED: Would exceed daily limit (${finalDailyCheck} > ${actualDailyCapacity})`);
-              continue;
-            }
-            // CRITICAL VALIDATION: Never allow assignments on non-work days
-            const scheduleDate = new Date(workDate);
-            const scheduleDayOfWeek = scheduleDate.getDay();
-            const scheduleDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][scheduleDayOfWeek];
-            
-            if (!enforcedWorkDays.includes(scheduleDayOfWeek)) {
-              console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on ${scheduleDayName} ${scheduleDate.toDateString()}`);
-              console.error(`   Allowed work days: [${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
-              throw new Error(`${scheduleDayName} assignment blocked - not in configured work days`);
-            }
-            
-            // Schedule this order
-            allocations.push({
-              orderId: order.orderId,
-              moldId: mold.mold_id,
-              moldName: mold.model_name,
-              scheduledDate: workDate.toISOString(),
-              stockModelId: stockModelId,
-              materialPrefix: materialPrefix,
-              heavyFill: heavyFill,
-              lopAdjustment: lopAdjustment,
-              customer: order.customerName || 'Unknown',
-              dueDate: order.dueDate || order.orderDate
-            });
-            
-            // Update usage tracking
-            dailyMoldUsage.set(moldKey, currentUsage + 1);
-            dailyAllocationCount.set(dailyKey, currentDailyCount + 1);
-            
-            console.log(`✅ Selected mold ${mold.model_name} for ${order.orderId} (${currentUsage + 1}/${mold.multiplier})`);
-            scheduled = true;
-            break;
+        if (availableMolds.length === 0) {
+          console.log(`❌ NO AVAILABLE MOLDS: All compatible molds already used on ${dailyKey}`);
+          continue; // Try next day
+        }
+
+        // Try each available mold (each mold can only be used once per day)
+        for (const mold of availableMolds) {
+          // FINAL CAPACITY CHECK: Ensure this assignment won't exceed daily limit
+          const finalDailyCheck = (dailyAllocationCount.get(dailyKey) || 0) + 1;
+          if (finalDailyCheck > actualDailyCapacity) {
+            console.log(`🚫 FINAL CAPACITY CHECK FAILED: Would exceed daily limit (${finalDailyCheck} > ${actualDailyCapacity})`);
+            continue;
           }
+          
+          // CRITICAL VALIDATION: Never allow assignments on non-work days
+          const scheduleDate = new Date(workDate);
+          const scheduleDayOfWeek = scheduleDate.getDay();
+          const scheduleDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][scheduleDayOfWeek];
+          
+          if (!enforcedWorkDays.includes(scheduleDayOfWeek)) {
+            console.error(`❌ CRITICAL: Attempted to schedule ${order.orderId} on ${scheduleDayName} ${scheduleDate.toDateString()}`);
+            console.error(`   Allowed work days: [${enforcedWorkDays.map((d: number) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}]`);
+            throw new Error(`${scheduleDayName} assignment blocked - not in configured work days`);
+          }
+          
+          // Schedule this order
+          allocations.push({
+            orderId: order.orderId,
+            moldId: mold.mold_id,
+            moldName: mold.model_name,
+            scheduledDate: workDate.toISOString(),
+            stockModelId: stockModelId,
+            materialPrefix: materialPrefix,
+            heavyFill: heavyFill,
+            lopAdjustment: lopAdjustment,
+            customer: order.customerName || 'Unknown',
+            dueDate: order.dueDate || order.orderDate
+          });
+          
+          // CRITICAL FIX: Mark this mold as used for today (one mold per day max)
+          usedMoldsToday.add(mold.mold_id);
+          usedMoldsByDay.set(dailyKey, usedMoldsToday);
+          dailyAllocationCount.set(dailyKey, currentDailyCount + 1);
+          
+          console.log(`🔒 MOLD LOCKED: ${mold.mold_id} (${mold.model_name}) on ${dailyKey} for order ${order.orderId}`);
+          console.log(`📊 Daily usage: ${usedMoldsToday.size} molds used on ${dailyKey}`);
+          scheduled = true;
+          break;
         }
       }
       
       if (!scheduled) {
         console.log(`❌ Could not allocate order ${order.orderId} - no mold capacity available in ${scheduleDays} work days (2 weeks limit)`);
       }
+    }
+
+    // VALIDATION PASS: Check for any remaining mold conflicts
+    console.log(`🔍 VALIDATION PASS: Checking for mold double-booking conflicts...`);
+    const moldConflicts: { day: string; moldId: string; orders: string[] }[] = [];
+    const dailyMoldAssignments = new Map<string, Map<string, string[]>>();
+
+    // Group allocations by day and mold
+    allocations.forEach(allocation => {
+      const dayKey = new Date(allocation.scheduledDate).toISOString().split('T')[0];
+      const moldId = allocation.moldId;
+      const orderId = allocation.orderId;
+
+      if (!dailyMoldAssignments.has(dayKey)) {
+        dailyMoldAssignments.set(dayKey, new Map<string, string[]>());
+      }
+      
+      const dayMolds = dailyMoldAssignments.get(dayKey)!;
+      if (!dayMolds.has(moldId)) {
+        dayMolds.set(moldId, []);
+      }
+      
+      dayMolds.get(moldId)!.push(orderId);
+    });
+
+    // Check for conflicts (multiple orders assigned to same mold on same day)
+    dailyMoldAssignments.forEach((dayMolds, dayKey) => {
+      dayMolds.forEach((orders, moldId) => {
+        if (orders.length > 1) {
+          moldConflicts.push({ day: dayKey, moldId, orders });
+          console.error(`🚨 MOLD CONFLICT DETECTED: Mold ${moldId} assigned to ${orders.length} orders on ${dayKey}: [${orders.join(', ')}]`);
+        }
+      });
+    });
+
+    if (moldConflicts.length > 0) {
+      console.error(`❌ CRITICAL: ${moldConflicts.length} mold double-booking conflicts detected!`);
+      console.error(`🔧 Conflicts:`, moldConflicts);
+      
+      // Return error response with conflict details
+      return res.status(400).json({
+        success: false,
+        error: 'Mold double-booking conflicts detected',
+        conflicts: moldConflicts,
+        message: `Scheduler assigned ${moldConflicts.length} molds to multiple orders on the same day. This violates the one-mold-per-day constraint.`
+      });
+    } else {
+      console.log(`✅ VALIDATION PASSED: No mold conflicts detected in ${allocations.length} allocations`);
     }
 
     // Calculate success metrics and return results

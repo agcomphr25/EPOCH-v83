@@ -210,6 +210,22 @@ export default function VendorFormModal({
       delete data.email;
     }
 
+    // Convert address object to string for database compatibility
+    let addressString = "";
+    if (data.address && typeof data.address === "object") {
+      const addr = data.address;
+      const parts = [
+        addr.street,
+        addr.city,
+        addr.state,
+        addr.zip,
+        addr.country
+      ].filter(part => part && part.trim());
+      addressString = parts.join(", ");
+    } else if (typeof data.address === "string") {
+      addressString = data.address;
+    }
+
     // Clean up contact emails
     if (data.contacts) {
       data.contacts = data.contacts.map(contact => ({
@@ -218,10 +234,16 @@ export default function VendorFormModal({
       }));
     }
 
+    // Prepare final data with address as string
+    const submitData = {
+      ...data,
+      address: addressString || undefined
+    };
+
     if (isEditing) {
-      updateVendorMutation.mutate(data);
+      updateVendorMutation.mutate(submitData);
     } else {
-      createVendorMutation.mutate(data);
+      createVendorMutation.mutate(submitData);
     }
   };
 

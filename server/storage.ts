@@ -6519,8 +6519,6 @@ export class DatabaseStorage implements IStorage {
   private p2POProducts: any[] = [];
   
   // In-memory vendor storage
-  private vendorsMem: Array<Vendor & { isDeleted?: boolean }> = [];
-  private vendorIdCounter = 1;
   private p2POProductIdCounter = 1;
 
   async getAllP2POProducts(): Promise<any[]> {
@@ -6570,47 +6568,50 @@ export class DatabaseStorage implements IStorage {
   async getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }> {
     const { q = '', approved = '', evaluated = '', page = 1, limit = 10 } = params || {};
     
-    // Start with active vendors (not deleted)
-    let filteredVendors = this.vendorsMem.filter(vendor => !vendor.isDeleted);
+    // Build base query for active vendors
+    let whereConditions = [eq(vendors.isActive, true)];
     
     // Apply search filter
     if (q.trim()) {
-      const searchTerm = q.toLowerCase();
-      filteredVendors = filteredVendors.filter(vendor => 
-        vendor.name?.toLowerCase().includes(searchTerm) ||
-        vendor.email?.toLowerCase().includes(searchTerm) ||
-        vendor.contactPerson?.toLowerCase().includes(searchTerm) ||
-        vendor.phone?.includes(searchTerm) ||
-        vendor.website?.toLowerCase().includes(searchTerm) ||
-        (vendor.address && Object.values(vendor.address).some(val => 
-          val && val.toString().toLowerCase().includes(searchTerm)
-        ))
+      const searchTerm = `%${q.toLowerCase()}%`;
+      whereConditions.push(
+        or(
+          ilike(vendors.name, searchTerm),
+          ilike(vendors.email, searchTerm),
+          ilike(vendors.contactPerson, searchTerm),
+          ilike(vendors.phone, searchTerm),
+          ilike(vendors.website, searchTerm)
+        )
       );
     }
     
     // Apply approved filter
     if (approved === 'yes') {
-      filteredVendors = filteredVendors.filter(vendor => vendor.approved === true);
+      whereConditions.push(eq(vendors.approved, true));
     } else if (approved === 'no') {
-      filteredVendors = filteredVendors.filter(vendor => vendor.approved === false);
+      whereConditions.push(eq(vendors.approved, false));
     }
     
     // Apply evaluated filter
     if (evaluated === 'yes') {
-      filteredVendors = filteredVendors.filter(vendor => vendor.evaluated === true);
+      whereConditions.push(eq(vendors.evaluated, true));
     } else if (evaluated === 'no') {
-      filteredVendors = filteredVendors.filter(vendor => vendor.evaluated === false);
+      whereConditions.push(eq(vendors.evaluated, false));
     }
     
-    // Sort by creation date (newest first)
-    filteredVendors.sort((a, b) => 
-      new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-    );
+    // Get total count for pagination
+    const [totalResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(vendors)
+      .where(and(...whereConditions));
+    const total = totalResult.count;
     
-    // Calculate pagination
-    const total = filteredVendors.length;
-    const startIndex = (page - 1) * limit;
-    const data = filteredVendors.slice(startIndex, startIndex + limit);
+    // Get paginated data
+    const data = await db.select()
+      .from(vendors)
+      .where(and(...whereConditions))
+      .orderBy(desc(vendors.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
     
     return {
       data,
@@ -6621,44 +6622,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendor(id: number): Promise<Vendor | undefined> {
-    return this.vendorsMem.find(vendor => vendor.id === id && !vendor.isDeleted);
+    const [vendor] = await db.select().from(vendors).where(and(eq(vendors.id, id), eq(vendors.isActive, true)));
+    return vendor;
   }
 
   async createVendor(data: InsertVendor): Promise<Vendor> {
-    const vendor: Vendor = {
-      id: this.vendorIdCounter++,
-      ...data,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    this.vendorsMem.push(vendor);
+    const [vendor] = await db.insert(vendors).values(data).returning();
     return vendor;
   }
 
   async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
-    const index = this.vendorsMem.findIndex(vendor => vendor.id === id && !vendor.isDeleted);
+    const [vendor] = await db.update(vendors)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)))
+      .returning();
     
-    if (index === -1) {
+    if (!vendor) {
       throw new Error(`Vendor with ID ${id} not found`);
     }
-
-    this.vendorsMem[index] = {
-      ...this.vendorsMem[index],
-      ...data,
-      updatedAt: new Date(),
-    };
-
-    return this.vendorsMem[index];
+    
+    return vendor;
   }
 
   async deleteVendor(id: number): Promise<void> {
-    const index = this.vendorsMem.findIndex(vendor => vendor.id === id && !vendor.isDeleted);
-    
-    if (index !== -1) {
-      this.vendorsMem[index].isDeleted = true;
-      this.vendorsMem[index].updatedAt = new Date();
-    }
+    await db.update(vendors)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(vendors.id, id));
   }
 
 }

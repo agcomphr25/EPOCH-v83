@@ -2916,36 +2916,26 @@ export type InsertPacketCuttingQueue = z.infer<typeof insertPacketCuttingQueueSc
 export const vendors = pgTable("vendors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  email: text("email"), // Keep for backward compatibility 
-  phone: text("phone"), // Keep for backward compatibility
-  address: jsonb("address"), // Store full address object
-  contactPerson: text("contact_person"), // Keep for backward compatibility
-  contacts: jsonb("contacts"), // Array of contact objects: { name, email, phone, role, isPrimary }
-  website: text("website"),
-  approved: boolean("approved").default(false),
-  evaluated: boolean("evaluated").default(false),
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  notes: text("notes"),
   evaluationNotes: text("evaluation_notes"),
   approvalNotes: text("approval_notes"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  approved: boolean("is_approved"),
+  evaluated: boolean("is_evaluated"),
+  createdAt: timestamp("created_at"),
+  updatedAt: timestamp("updated_at"),
 });
 
-// Vendor contact schema
+// Vendor contact schema - simplified to match current database structure
 export const vendorContactSchema = z.object({
   name: z.string().min(1, "Contact name is required"),
   email: z.string().email("Valid email is required").optional().or(z.literal("")),
   phone: z.string().optional(),
-  additionalPhone: z.string().optional(),
   role: z.string().optional(),
   isPrimary: z.boolean().default(false),
-  alternateAddress: z.object({
-    street: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-    country: z.string().optional(),
-  }).optional(),
 });
 
 // Vendor insert schema

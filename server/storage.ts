@@ -6568,8 +6568,8 @@ export class DatabaseStorage implements IStorage {
   async getAllVendors(params?: { q?: string; approved?: string; evaluated?: string; page?: number; limit?: number }): Promise<{ data: Vendor[]; total: number; page: number; limit: number }> {
     const { q = '', approved = '', evaluated = '', page = 1, limit = 10 } = params || {};
     
-    // Build base query for active vendors
-    let whereConditions = [eq(vendors.isActive, true)];
+    // Build base query - no isActive filtering since the table doesn't have this column
+    let whereConditions: any[] = [];
     
     // Apply search filter
     if (q.trim()) {
@@ -6579,20 +6579,19 @@ export class DatabaseStorage implements IStorage {
           ilike(vendors.name, searchTerm),
           ilike(vendors.email, searchTerm),
           ilike(vendors.contactPerson, searchTerm),
-          ilike(vendors.phone, searchTerm),
-          ilike(vendors.website, searchTerm)
+          ilike(vendors.phone, searchTerm)
         )
       );
     }
     
-    // Apply approved filter
+    // Apply approved filter - using is_approved column
     if (approved === 'yes') {
       whereConditions.push(eq(vendors.approved, true));
     } else if (approved === 'no') {
       whereConditions.push(eq(vendors.approved, false));
     }
     
-    // Apply evaluated filter
+    // Apply evaluated filter - using is_evaluated column
     if (evaluated === 'yes') {
       whereConditions.push(eq(vendors.evaluated, true));
     } else if (evaluated === 'no') {
@@ -6600,15 +6599,16 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Get total count for pagination
+    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
     const [totalResult] = await db.select({ count: sql<number>`count(*)` })
       .from(vendors)
-      .where(and(...whereConditions));
+      .where(whereClause);
     const total = totalResult.count;
     
     // Get paginated data
     const data = await db.select()
       .from(vendors)
-      .where(and(...whereConditions))
+      .where(whereClause)
       .orderBy(desc(vendors.createdAt))
       .limit(limit)
       .offset((page - 1) * limit);
@@ -6622,7 +6622,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendor(id: number): Promise<Vendor | undefined> {
-    const [vendor] = await db.select().from(vendors).where(and(eq(vendors.id, id), eq(vendors.isActive, true)));
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, id));
     return vendor;
   }
 
@@ -6634,7 +6634,7 @@ export class DatabaseStorage implements IStorage {
   async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
     const [vendor] = await db.update(vendors)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)))
+      .where(eq(vendors.id, id))
       .returning();
     
     if (!vendor) {
@@ -6645,9 +6645,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteVendor(id: number): Promise<void> {
-    await db.update(vendors)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(vendors.id, id));
+    // Since there's no isActive column, we'll actually delete the record
+    // In the future, you may want to add an isActive column for soft deletes
+    await db.delete(vendors).where(eq(vendors.id, id));
   }
 
 }

@@ -40,6 +40,7 @@ import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from "./pages/FormRendererPage";
 import DocumentationPageNew from "./pages/DocumentationPageNew";
 import CustomerManagement from "./pages/CustomerManagement";
+import VendorManagement from "./pages/VendorManagement";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import P2PurchaseOrders from "./pages/P2PurchaseOrders";
 import POProductsPage from "./pages/POProductsPage";
@@ -194,6 +195,10 @@ function App() {
                   <Route path="/customer-management" component={CustomerManagement} />
                   <Route path="/customers" component={CustomerManagement} />
                   <Route path="/customer-satisfaction" component={CustomerSatisfaction} />
+
+                  {/* Vendor Management Routes */}
+                  <Route path="/vendor-management" component={VendorManagement} />
+                  <Route path="/vendors" component={VendorManagement} />
 
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />

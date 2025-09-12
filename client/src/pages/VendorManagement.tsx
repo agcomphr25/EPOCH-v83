@@ -24,6 +24,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import VendorFormModal from '@/components/VendorFormModal';
 
 // Types matching the backend schema
 interface Vendor {
@@ -92,6 +93,8 @@ export default function VendorManagement() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isVendorFormOpen, setIsVendorFormOpen] = useState(false);
+  const [vendorFormMode, setVendorFormMode] = useState<'create' | 'edit'>('create');
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -192,6 +195,36 @@ export default function VendorManagement() {
     setIsDeleteConfirmOpen(true);
   };
 
+  const handleAddVendor = () => {
+    setSelectedVendor(null);
+    setVendorFormMode('create');
+    setIsVendorFormOpen(true);
+  };
+
+  const handleEditVendor = async (vendor: Vendor) => {
+    try {
+      // Fetch full vendor details including contacts and addresses
+      const response = await fetch(`/api/vendors/${vendor.id}/details`);
+      if (!response.ok) throw new Error('Failed to fetch vendor details');
+      
+      const vendorDetails = await response.json();
+      setSelectedVendor(vendorDetails);
+      setVendorFormMode('edit');
+      setIsVendorFormOpen(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load vendor details for editing",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCloseVendorForm = () => {
+    setIsVendorFormOpen(false);
+    setSelectedVendor(null);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -231,7 +264,7 @@ export default function VendorManagement() {
             Manage vendors, contacts, and supplier relationships
           </p>
         </div>
-        <Button data-testid="button-add-vendor">
+        <Button onClick={handleAddVendor} data-testid="button-add-vendor">
           <Plus className="h-4 w-4 mr-2" />
           Add Vendor
         </Button>
@@ -361,6 +394,7 @@ export default function VendorManagement() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleEditVendor(vendor)}
                           data-testid={`button-edit-vendor-${vendor.id}`}
                         >
                           <Edit className="h-4 w-4" />
@@ -570,6 +604,14 @@ export default function VendorManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Vendor Form Modal */}
+      <VendorFormModal
+        isOpen={isVendorFormOpen}
+        onClose={handleCloseVendorForm}
+        vendor={selectedVendor}
+        mode={vendorFormMode}
+      />
     </div>
   );
 }

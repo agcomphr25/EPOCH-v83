@@ -4638,26 +4638,23 @@ export default function LayupScheduler() {
                             const dateString = date.toISOString();
 
                             // Get orders assigned to this mold/date combination
+                            const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
                             const cellOrders = Object.entries(orderAssignments)
                               .filter(([orderId, assignment]) => {
-                                const assignmentDate = new Date(assignment.date);
-                                const cellDate = new Date(dateString);
-
-                                // Use date-only comparison to avoid timezone issues
-                                const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
-                                const cellDateStr = cellDate.toISOString().split('T')[0];
+                                // Simple string comparison - assignment.date is already YYYY-MM-DD format
+                                const assignmentDateStr = assignment.date.split('T')[0];
                                 const moldMatch = assignment.moldId === mold.moldId;
                                 const dateMatch = assignmentDateStr === cellDateStr;
                                 const isMatch = moldMatch && dateMatch;
 
                                 // Debug Monday assignments specifically
-                                if (cellDate.getDay() === 1 && isMatch) {
+                                if (date.getDay() === 1 && isMatch) {
                                   console.log(`✅ Monday assignment found: ${orderId} → ${assignment.moldId} on ${cellDateStr}`);
                                 }
 
                                 // FRIDAY HANDLING: Remove Friday assignments (should not exist)
-                                if (cellDate.getDay() === 5 && isMatch) {
-                                  console.warn(`⚠️ Friday assignment detected and will be filtered out: ${orderId} on ${cellDate.toDateString()}`);
+                                if (date.getDay() === 5 && isMatch) {
+                                  console.warn(`⚠️ Friday assignment detected and will be filtered out: ${orderId} on ${date.toDateString()}`);
                                   return false; // Exclude Friday assignments
                                 }
 

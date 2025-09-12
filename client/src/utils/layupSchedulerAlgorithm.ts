@@ -130,7 +130,7 @@ export function calculateDailyCapacity(
   
   // Calculate total mold capacity per day
   const totalMoldDailyCapacity = activeMolds.reduce((sum, mold) => {
-    return sum + (mold.dailyCapacity ?? 2); // Default to 2 if null/undefined
+    return sum + (mold.dailyCapacity ?? 1); // Default to 1 order per mold per day
   }, 0);
   
   // Use the minimum of employee capacity and mold capacity as the bottleneck
@@ -281,7 +281,7 @@ export function generateScheduleAllocations(
           if (!mold.enabled) return false;
           
           const currentUsage = moldDailyUsage.get(mold.moldId)?.get(dateKey) || 0;
-          const moldCapacity = mold.dailyCapacity ?? 2; // Default capacity
+          const moldCapacity = mold.dailyCapacity ?? 1; // Default capacity: 1 per day
           
           return currentUsage < moldCapacity; // Only include molds with remaining capacity
         });
@@ -315,7 +315,7 @@ export function generateScheduleAllocations(
         if (bestMold) {
           // Safety guard: Double-check capacity before final allocation
           const currentMoldUsage = moldDailyUsage.get(bestMold.moldId)?.get(dateKey) || 0;
-          const moldCapacity = bestMold.dailyCapacity ?? 2;
+          const moldCapacity = bestMold.dailyCapacity ?? 1;
           
           if (currentMoldUsage >= moldCapacity) {
             console.warn(`⚠️ CAPACITY SAFETY GUARD: Mold ${bestMold.moldId} already at capacity (${currentMoldUsage}/${moldCapacity}) on ${dateKey}`);
@@ -356,7 +356,7 @@ export function generateScheduleAllocations(
   
   for (const [moldId, dateUsageMap] of moldDailyUsage) {
     const mold = molds.find(m => m.moldId === moldId);
-    const moldCapacity = mold?.dailyCapacity ?? 2;
+    const moldCapacity = mold?.dailyCapacity ?? 1;
     
     for (const [dateKey, usage] of dateUsageMap) {
       if (usage > moldCapacity) {

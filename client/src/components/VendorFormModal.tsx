@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -46,6 +46,10 @@ import {
   UserCheck,
   Save,
   X,
+  Upload,
+  Download,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react';
 
 // Form validation schemas
@@ -107,6 +111,35 @@ interface VendorFormModalProps {
   mode: 'create' | 'edit';
 }
 
+// Document types that match backend enum
+const DOCUMENT_TYPES = [
+  { value: 'CONTRACT', label: 'Contract' },
+  { value: 'CERTIFICATE', label: 'Certificate' },
+  { value: 'INSURANCE', label: 'Insurance Document' },
+  { value: 'TAX_FORM', label: 'Tax Form' },
+  { value: 'W9', label: 'W-9 Form' },
+  { value: 'BUSINESS_LICENSE', label: 'Business License' },
+  { value: 'INVOICE', label: 'Invoice' },
+  { value: 'QUOTE', label: 'Quote' },
+  { value: 'PO', label: 'Purchase Order' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+interface VendorDocument {
+  id: number;
+  vendorId: number;
+  type: string;
+  fileName: string;
+  originalName: string;
+  filePath: string;
+  fileSize: number;
+  uploadedBy?: number;
+  uploadedAt: string;
+  expiryDate?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
 export default function VendorFormModal({
   isOpen,
   onClose,
@@ -114,6 +147,12 @@ export default function VendorFormModal({
   mode = 'create'
 }: VendorFormModalProps) {
   const [activeTab, setActiveTab] = useState('basic');
+  const [documents, setDocuments] = useState<VendorDocument[]>([]);
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [showDocumentForm, setShowDocumentForm] = useState(false);
+  const [selectedDocumentType, setSelectedDocumentType] = useState('OTHER');
+  const [documentNotes, setDocumentNotes] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -190,8 +229,14 @@ export default function VendorFormModal({
           isPrimary: address.isPrimary || false,
         })) || [],
       });
+      
+      // Set documents for edit mode
+      if (vendor.documents) {
+        setDocuments(vendor.documents);
+      }
     } else {
       form.reset(defaultValues);
+      setDocuments([]);
     }
   }, [mode, vendor, form]);
 
@@ -639,6 +684,152 @@ export default function VendorFormModal({
         form.setValue(`addresses.${index}.addressSlot`, index + 1);
       });
     }, 0);
+  };
+
+  // Document upload mutation
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async ({ file, type, notes }: { file: File; type: string; notes: string }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('vendorId', vendor.id.toString());
+      formData.append('type', type);
+      formData.append('notes', notes);
+
+      const response = await fetch('/api/vendor-documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
+    },
+    onSuccess: (newDocument) => {
+      setDocuments(prev => [...prev, newDocument]);
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendor.id, 'details'] });
+      toast({
+        title: "Success",
+        description: "Document uploaded successfully",
+      });
+      setShowDocumentForm(false);
+      setSelectedDocumentType('OTHER');
+      setDocumentNotes('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload document",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: number) => {
+      const response = await fetch(`/api/vendor-documents/${documentId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Delete failed');
+      return documentId;
+    },
+    onSuccess: (deletedId) => {
+      setDocuments(prev => prev.filter(doc => doc.id !== deletedId));
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendor.id, 'details'] });
+      toast({
+        title: "Success",
+        description: "Document deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete document",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Document management functions
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (mode === 'create') {
+      toast({
+        title: "Info",
+        description: "Please save the vendor first before uploading documents",
+        variant: "default",
+      });
+      return;
+    }
+
+    // File validation
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Set the selected file and show form
+    setShowDocumentForm(true);
+  };
+
+  const handleDocumentUpload = () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+
+    uploadDocumentMutation.mutate({
+      file,
+      type: selectedDocumentType,
+      notes: documentNotes,
+    });
+  };
+
+  const handleDeleteDocument = (documentId: number) => {
+    deleteDocumentMutation.mutate(documentId);
+  };
+
+  const handleDownloadDocument = async (document: VendorDocument) => {
+    try {
+      const response = await fetch(`/api/vendor-documents/${document.id}/download`);
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = document.originalName;
+      window.document.body.appendChild(a);
+      a.click();
+      window.document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download document",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getDocumentTypeLabel = (type: string) => {
+    return DOCUMENT_TYPES.find(t => t.value === type)?.label || type;
   };
 
   return (
@@ -1329,23 +1520,219 @@ export default function VendorFormModal({
               <TabsContent value="documents" className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-medium">Document Management</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    data-testid="button-upload-document"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Upload Document
-                  </Button>
+                  <div className="flex gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                      data-testid="file-input-documents"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={mode === 'create' || uploadDocumentMutation.isPending}
+                      data-testid="button-select-document"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {uploadDocumentMutation.isPending ? 'Uploading...' : 'Select Document'}
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p>Document upload functionality will be implemented in the next phase.</p>
-                  <p className="text-sm">This will include contract uploads, certificates, and other vendor documents.</p>
-                </div>
+                {mode === 'create' && (
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <AlertCircle className="h-4 w-4" />
+                      <p className="text-sm font-medium">Save vendor first</p>
+                    </div>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Documents can be uploaded after creating the vendor record.
+                    </p>
+                  </div>
+                )}
+
+                {showDocumentForm && (
+                  <Card className="p-4 mb-4">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium">Upload Document</h4>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowDocumentForm(false);
+                            setSelectedDocumentType('OTHER');
+                            setDocumentNotes('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          data-testid="button-cancel-document-upload"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <label className="text-sm font-medium">Document Type</label>
+                          <Select value={selectedDocumentType} onValueChange={setSelectedDocumentType}>
+                            <SelectTrigger data-testid="select-document-type">
+                              <SelectValue placeholder="Select document type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DOCUMENT_TYPES.map((type) => (
+                                <SelectItem key={type.value} value={type.value}>
+                                  {type.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <label className="text-sm font-medium">Notes (Optional)</label>
+                          <Textarea
+                            value={documentNotes}
+                            onChange={(e) => setDocumentNotes(e.target.value)}
+                            placeholder="Add any notes about this document..."
+                            rows={2}
+                            data-testid="textarea-document-notes"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setShowDocumentForm(false);
+                            setSelectedDocumentType('OTHER');
+                            setDocumentNotes('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          data-testid="button-cancel-upload"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleDocumentUpload}
+                          disabled={uploadDocumentMutation.isPending}
+                          data-testid="button-confirm-upload"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {uploadDocumentMutation.isPending ? 'Uploading...' : 'Upload Document'}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {mode === 'edit' && (
+                  <>
+                    {documents.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                        <p className="text-lg font-medium">No documents uploaded</p>
+                        <p className="text-sm">Click "Upload Document" to add contracts, certificates, or other vendor documents.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {documents.map((document) => (
+                          <Card key={document.id} className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex-shrink-0">
+                                  <FileText className="h-8 w-8 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p 
+                                      className="text-sm font-medium text-gray-900 truncate"
+                                      data-testid={`text-document-name-${document.id}`}
+                                    >
+                                      {document.originalName}
+                                    </p>
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="text-xs"
+                                      data-testid={`badge-document-type-${document.id}`}
+                                    >
+                                      {getDocumentTypeLabel(document.type)}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-4 mt-1">
+                                    <p 
+                                      className="text-xs text-gray-500"
+                                      data-testid={`text-document-size-${document.id}`}
+                                    >
+                                      {formatFileSize(document.fileSize)}
+                                    </p>
+                                    <p 
+                                      className="text-xs text-gray-500 flex items-center gap-1"
+                                      data-testid={`text-document-date-${document.id}`}
+                                    >
+                                      <Calendar className="h-3 w-3" />
+                                      {new Date(document.uploadedAt).toLocaleDateString()}
+                                    </p>
+                                    {document.expiryDate && (
+                                      <p 
+                                        className="text-xs text-amber-600 flex items-center gap-1"
+                                        data-testid={`text-document-expiry-${document.id}`}
+                                      >
+                                        <AlertCircle className="h-3 w-3" />
+                                        Expires: {new Date(document.expiryDate).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {document.notes && (
+                                    <p 
+                                      className="text-xs text-gray-600 mt-1"
+                                      data-testid={`text-document-notes-${document.id}`}
+                                    >
+                                      {document.notes}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDownloadDocument(document)}
+                                  data-testid={`button-download-document-${document.id}`}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteDocument(document.id)}
+                                  disabled={deleteDocumentMutation.isPending}
+                                  className="text-red-600 hover:text-red-700"
+                                  data-testid={`button-delete-document-${document.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="text-center pt-4">
+                      <p className="text-xs text-gray-500" data-testid="text-supported-files">
+                        Supported file types: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG • Max size: 10MB
+                      </p>
+                    </div>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
 

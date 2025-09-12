@@ -49,18 +49,7 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 32829
-externalPort = 3002
-
-[[ports]]
 localPort = 35047
 externalPort = 3000
 
-<<<<<<< HEAD
-[[ports]]
-localPort = 35519
-externalPort = 3003
-
-=======
->>>>>>> 44da2a761b4d70ebb87ac13a42f35b6f2ba51207
 [agent]

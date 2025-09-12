@@ -107,8 +107,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
       ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
-    const ordersResult = await pool.query(ordersQuery);
-    const eligibleOrders = Array.isArray(ordersResult) ? ordersResult : (ordersResult.rows || []);
+    const eligibleOrders = await pool.query(ordersQuery);
 
     console.log(`📋 Found ${eligibleOrders.length} eligible orders for production queue`);
 
@@ -196,7 +195,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
   try {
     console.log('🏭 P1 QUEUE: Fetching P1 production queue...');
     
-    const queueResult = await pool.query(`
+    const orders = await pool.query(`
       SELECT 
         order_id,
         customer_name,
@@ -211,8 +210,6 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
         AND status = 'IN_PROGRESS'
       ORDER BY due_date ASC, created_at ASC
     `);
-    
-    const orders = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -284,8 +281,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.created_at ASC
     `;
 
-    const queueResult = await pool.query(queueQuery);
-    const prioritizedQueue = Array.isArray(queueResult) ? queueResult : (queueResult.rows || []);
+    const prioritizedQueue = await pool.query(queueQuery);
 
     // Calculate current priority metrics
     const now = new Date();
@@ -419,8 +415,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;
 
-    const poItemsResult = await pool.query(poItemsQuery);
-    const poItems = Array.isArray(poItemsResult) ? poItemsResult : (poItemsResult.rows || []);
+    const poItems = await pool.query(poItemsQuery);
 
     // Calculate priority metrics for each PO item
     const now = new Date();
@@ -513,7 +508,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
         JSON.stringify({ po_item_id: poItem.id, po_number: poItem.poNumber, unit_number: i })
       ]);
 
-      const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
+      const orders = orderResult;
       if (orders.length > 0) {
         createdOrders.push(orders[0]);
         console.log(`✅ Created order ${orderId} for PO item ${poItem.itemName} (unit ${i}/${poItem.quantity})`);
@@ -591,7 +586,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
 
     // Create orders for each selected week
     for (const weekNumber of selectedWeeks) {
-      const weekData = weeklySchedule.find(w => w.week === weekNumber);
+      const weekData = weeklySchedule.find((w: any) => w.week === weekNumber);
       if (!weekData) {
         console.warn(`⚠️ Week ${weekNumber} not found in schedule`);
         continue;
@@ -644,15 +639,15 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           })
         ]);
 
-        const orders = Array.isArray(orderResult) ? orderResult : (orderResult.rows || []);
+        const orders = orderResult;
         if (orders.length > 0) {
-          // Store order with week metadata for scheduling
+          // Store order with week metadata for scheduling  
           const orderWithMeta = {
             ...orders[0],
             weekNumber: weekNumber,
             weekDueDate: weekDueDate.toISOString(),
             stockModelId: poItem.stockmodelid
-          };
+          } as any; // Type assertion to maintain access to both original and metadata properties
           createdOrders.push(orderWithMeta);
           console.log(`✅ Created order ${orderId} for PO item ${poItem.itemname} (week ${weekNumber}, unit ${i}/${unitsThisWeek})`);
         }
@@ -689,34 +684,42 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
       `;
       
       const moldResult = await pool.query(moldsQuery, [order.stockModelId]);
-      const molds = Array.isArray(moldResult) ? moldResult : (moldResult.rows || []);
+      const molds = moldResult;
       
       if (molds.length > 0) {
         const mold = molds[0];
         
-        // Add to layup schedule
+        // Add to layup schedule with layup_day field
         const scheduleQuery = `
           INSERT INTO layup_schedule (
             order_id,
             scheduled_date,
+            layup_day,
             mold_id,
-            employee_id,
-            priority_score,
-            is_locked,
+            employee_assignments,
+            is_override,
             created_at,
             updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, NOW(), NOW()
           )
+          ON CONFLICT (layup_day, mold_id) DO UPDATE SET
+            order_id = EXCLUDED.order_id,
+            scheduled_date = EXCLUDED.scheduled_date,
+            employee_assignments = EXCLUDED.employee_assignments,
+            updated_at = NOW()
         `;
         
+        // Extract business day from scheduled date as YYYY-MM-DD string
+        const layupDayStr = new Date(weekDueDate).toISOString().slice(0, 10);
+
         await pool.query(scheduleQuery, [
           order.order_id,
           weekDueDate.toISOString(),
+          layupDayStr,
           mold.mold_id,
-          null, // No specific employee assigned yet
-          1500, // High priority for PO items
-          false
+          JSON.stringify([]), // Empty employee assignments array
+          false // is_override
         ]);
         
         console.log(`✅ Added order ${order.order_id} to layup schedule for week ${order.weekNumber} (${weekDueDate.toLocaleDateString()})`);
@@ -783,7 +786,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
           `;
           
           const orderIdResult = await pool.query(orderIdQuery);
-          const nextOrderNumber = orderIdResult.rows?.[0]?.next_id || 1;
+          const nextOrderNumber = orderIdResult[0]?.next_id || 1;
           const orderId = `AG${nextOrderNumber}`;
 
           // Create order in all_orders table
@@ -824,7 +827,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
             item.id
           ]);
 
-          const createdOrder = orderResult.rows[0];
+          const createdOrder = orderResult[0];
           createdOrders.push(createdOrder);
           totalItemsMoved++;
           
@@ -919,7 +922,7 @@ router.get('/attention', async (req: Request, res: Response) => {
     `;
 
     const attentionResult = await pool.query(attentionQuery);
-    const attentionOrders = Array.isArray(attentionResult) ? attentionResult : (attentionResult.rows || []);
+    const attentionOrders = attentionResult;
 
     // Format the response with missing items identified
     const formattedOrders = attentionOrders.map((order: any) => {
@@ -983,9 +986,9 @@ router.post('/cleanup-invalid-orders', async (req: Request, res: Response) => {
     `;
     
     const shippingQCResult = await pool.query(shippingQCQuery);
-    const movedToShippingQC = Array.isArray(shippingQCResult) ? shippingQCResult : (shippingQCResult.rows || []);
+    const movedToShippingQC = shippingQCResult;
     
-    console.log(`🚀 Moved ${movedToShippingQC.length} orders with no_stock/None to Shipping QC:`, movedToShippingQC.map(o => o.order_id));
+    console.log(`🚀 Moved ${movedToShippingQC.length} orders with no_stock/None to Shipping QC:`, movedToShippingQC.map((o: any) => o.order_id));
     
     // Get count of remaining problematic orders that need attention
     const attentionQuery = `
@@ -1004,7 +1007,7 @@ router.post('/cleanup-invalid-orders', async (req: Request, res: Response) => {
     `;
     
     const attentionResult = await pool.query(attentionQuery);
-    const attentionCount = Array.isArray(attentionResult) ? attentionResult[0]?.count || 0 : (attentionResult.rows?.[0]?.count || 0);
+    const attentionCount = attentionResult[0]?.count || 0;
     
     const result = {
       success: true,

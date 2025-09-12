@@ -784,7 +784,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     const orderBoxX = width - margin - 200;
     const orderBoxY = currentY - 10;
     const orderBoxWidth = 200;
-    const orderBoxHeight = 85;
+    const orderBoxHeight = 105;
     
     page.drawRectangle({
       x: orderBoxX,
@@ -836,6 +836,21 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page.drawText(order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'TBD', {
+      x: orderBoxX + 100,
+      y: boxTextY,
+      size: 10,
+      font: font,
+    });
+
+    boxTextY -= 20;
+    page.drawText('Customer PO:', {
+      x: orderBoxX + 8,
+      y: boxTextY,
+      size: 10,
+      font: boldFont,
+    });
+
+    page.drawText((order as any).customerPO || 'N/A', {
       x: orderBoxX + 100,
       y: boxTextY,
       size: 10,

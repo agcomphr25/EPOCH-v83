@@ -1205,9 +1205,13 @@ export default function LayupScheduler() {
         } else if (assignmentDayOfWeek === 5 && !selectedWorkDays.includes(5)) {
           console.log(`🚫 FRIDAY FILTER: Skipping Friday assignment ${entry.orderId} on ${assignmentDate.toDateString()} - Friday not in work days`);
         } else {
+          // Use just the date part to prevent time-based duplicates
+          const dateOnly = new Date(entry.scheduledDate);
+          dateOnly.setHours(0, 0, 0, 0);
+          
           assignments[entry.orderId] = {
             moldId: entry.moldId,
-            date: entry.scheduledDate
+            date: dateOnly.toISOString()
           };
         }
 

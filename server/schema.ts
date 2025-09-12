@@ -158,6 +158,8 @@ export const orders = pgTable("orders", {
 });
 
 // Dedicated cancelled orders table - stores archived cancelled orders
+// TEMPORARILY COMMENTED OUT TO AVOID INTERACTIVE PROMPT DURING VENDOR TABLE CREATION
+/*
 export const cancelledOrders = pgTable("cancelled_orders", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").notNull().unique(),
@@ -207,6 +209,7 @@ export const cancelledOrders = pgTable("cancelled_orders", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+*/
 
 export const csvData = pgTable("csv_data", {
   id: serial("id").primaryKey(),
@@ -827,6 +830,8 @@ export const insertShortTermSaleSchema = z.object({
   isActive: z.number().default(1),
 });
 
+// TEMPORARILY COMMENTED OUT - RELATED TO CANCELLED ORDERS TABLE
+/*
 export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).omit({
   id: true,
   createdAt: true,
@@ -839,6 +844,7 @@ export const insertCancelledOrderSchema = createInsertSchema(cancelledOrders).om
   cancelledAt: z.coerce.date(),
   cancelReason: z.string().min(1, "Cancellation reason is required"),
 });
+*/
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories).omit({
   createdAt: true,
@@ -1324,8 +1330,9 @@ export type InsertOrderDraft = z.infer<typeof insertOrderDraftSchema>;
 export type OrderDraft = typeof orderDrafts.$inferSelect;
 export type InsertAllOrder = z.infer<typeof insertAllOrderSchema>;
 export type AllOrder = typeof allOrders.$inferSelect;
-export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
-export type CancelledOrder = typeof cancelledOrders.$inferSelect;
+// TEMPORARILY COMMENTED OUT - RELATED TO CANCELLED ORDERS TABLE
+// export type InsertCancelledOrder = z.infer<typeof insertCancelledOrderSchema>;
+// export type CancelledOrder = typeof cancelledOrders.$inferSelect;
 export type InsertForm = z.infer<typeof insertFormSchema>;
 export type Form = typeof forms.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;

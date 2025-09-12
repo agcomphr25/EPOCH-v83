@@ -686,6 +686,27 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
 
+  // Single source selection for rendering - prevent merging database and generated schedules
+  const scheduleSource = useMemo(() => {
+    const dbCount = orderAssignments ? Object.keys(orderAssignments).length : 0;
+    return dbCount > 0 ? 'db' : 'generated';
+  }, [orderAssignments]);
+  
+  const displayedAssignments = useMemo(() => {
+    return scheduleSource === 'db' ? orderAssignments : (generatedSchedule || []);
+  }, [orderAssignments, generatedSchedule, scheduleSource]);
+  
+  // Defensive invariant: Clear stale generated state when DB assignments exist
+  useEffect(() => {
+    const dbCount = Object.keys(orderAssignments).length;
+    const genCount = generatedSchedule ? generatedSchedule.length : 0;
+    
+    if (dbCount > 0 && genCount > 0) {
+      console.warn('🚨 DEFENSIVE CLEARING: Both DB and generated schedules exist, clearing generated state');
+      setGeneratedSchedule([]);
+    }
+  }, [orderAssignments, generatedSchedule]);
+
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
     console.log('🧹 CLEARING ALL SCHEDULE ASSIGNMENTS AND DATABASE');
@@ -788,7 +809,7 @@ export default function LayupScheduler() {
       });
       
       // Track this order as recently removed to prevent re-assignment
-      setRecentlyRemovedOrders(prev => new Set([...prev, orderId]));
+      setRecentlyRemovedOrders(prev => new Set(Array.from(prev).concat(orderId)));
       
       // Immediately remove order from local assignments to prevent display lag
       setOrderAssignments(prev => {
@@ -4159,13 +4180,13 @@ export default function LayupScheduler() {
                                       onChange={(e) => {
                                         const newHours = parseFloat(e.target.value) || 8;
                                         const currentChanges = pendingEmployeeChanges[employee.id] || {};
-                                        const moldsPerHour = currentChanges.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                        const moldsPerHour = currentChanges.rate ?? (employee.rate || 1.25);
                                         setPendingEmployeeChanges(prev => ({
                                           ...prev,
                                           [employee.id]: {
                                             ...currentChanges,
                                             hours: newHours,
-                                            moldsPerHour,
+                                            rate: moldsPerHour,
                                             dailyCapacity: Math.floor(newHours * moldsPerHour)
                                           }
                                         }));
@@ -4184,7 +4205,7 @@ export default function LayupScheduler() {
                                     <Input
                                       type="number"
                                       step="0.25"
-                                      value={pendingEmployeeChanges[employee.id]?.moldsPerHour ?? (employee.moldsPerHour || 1.25)}
+                                      value={pendingEmployeeChanges[employee.id]?.rate ?? (employee.rate || 1.25)}
                                       min={0.25}
                                       max={5}
                                       onChange={(e) => {
@@ -4196,7 +4217,7 @@ export default function LayupScheduler() {
                                           [employee.id]: {
                                             ...currentChanges,
                                             hours,
-                                            moldsPerHour: newMoldsPerHour,
+                                            rate: newMoldsPerHour,
                                             dailyCapacity: Math.floor(hours * newMoldsPerHour)
                                           }
                                         }));

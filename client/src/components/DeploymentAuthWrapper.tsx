@@ -12,18 +12,18 @@ function isDeploymentEnvironment(): boolean {
   const viteDeployment = import.meta.env.VITE_REPLIT_DEPLOYMENT === '1';
   const nodeEnv = import.meta.env.VITE_NODE_ENV === 'production';
   
-  // Development overrides - only skip auth for actual development environments
+  // Development overrides - skip auth for development environments
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isReplitEditor = hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+  const isReplitDev = hostname.includes('replit.dev'); // All replit.dev domains (including workspaces)
+  const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.VITE_NODE_ENV === 'development';
   
-  // Debug logs removed - authentication working correctly
-  
-  // Skip auth ONLY for localhost and Replit editor (not deployed)
-  if (isLocalhost || isReplitEditor) {
+  // Skip auth for ANY development environment
+  if (isLocalhost || isReplitEditor || isReplitDev || isDevelopment || !viteDeployment) {
       return false;
   }
   
-  // For custom domains like agcompepoch.xyz, ALWAYS require auth
+  // Only require auth for explicitly deployed production environments
   return true;
 }
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -1480,6 +1480,7 @@ export const layupSchedule = pgTable("layup_schedule", {
   id: serial("id").primaryKey(),
   orderId: text("order_id").references(() => productionQueue.orderId).notNull(),
   scheduledDate: timestamp("scheduled_date").notNull(),
+  layupDay: date("layup_day").notNull(), // Dedicated DATE column for business day
   moldId: text("mold_id").references(() => molds.moldId).notNull(),
   employeeAssignments: jsonb("employee_assignments").notNull().default('[]'), // Array of {employeeId, workload}
   isOverride: boolean("is_override").default(false), // Manual override flag
@@ -1487,7 +1488,10 @@ export const layupSchedule = pgTable("layup_schedule", {
   overriddenBy: text("overridden_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: exactly one order per mold per day
+  uniqueMoldPerDay: uniqueIndex("ux_layup_mold_day").on(table.layupDay, table.moldId),
+}));
 
 // Insert schemas for Layup Scheduler
 export const insertMoldSchema = createInsertSchema(molds).omit({
@@ -1545,6 +1549,7 @@ export const insertLayupScheduleSchema = createInsertSchema(layupSchedule).omit(
 }).extend({
   orderId: z.string().min(1, "Order ID is required"),
   scheduledDate: z.coerce.date(),
+  layupDay: z.coerce.date(), // Dedicated DATE field for business day constraint
   moldId: z.string().min(1, "Mold ID is required"),
   employeeAssignments: z.array(z.object({
     employeeId: z.string(),

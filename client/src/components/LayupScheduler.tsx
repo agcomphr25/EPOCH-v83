@@ -915,9 +915,9 @@ export default function LayupScheduler() {
       for (const [employeeId, changes] of updates) {
         // Convert moldsPerHour to rate for API compatibility
         const apiPayload = {
-          rate: changes.moldsPerHour || 1.25,
+          rate: changes.rate || 1.25,
           hours: changes.hours || 8,
-          dailyCapacity: changes.dailyCapacity || Math.floor((changes.hours || 8) * (changes.moldsPerHour || 1.25))
+          dailyCapacity: changes.dailyCapacity || Math.floor((changes.hours || 8) * (changes.rate || 1.25))
         };
         
         const response = await fetch(`/api/layup-employee-settings/${employeeId}`, {
@@ -4300,7 +4300,7 @@ export default function LayupScheduler() {
                                   {(() => {
                                     const changes = pendingEmployeeChanges[employee.id];
                                     const hours = changes?.hours ?? (employee.hours || 8);
-                                    const moldsPerHour = changes?.moldsPerHour ?? (employee.moldsPerHour || 1.25);
+                                    const moldsPerHour = changes?.rate ?? (employee.rate || 1.25);
                                     return Math.floor(hours * moldsPerHour);
                                   })()} molds/day
                                 </div>
@@ -4725,11 +4725,12 @@ export default function LayupScheduler() {
                       });
                     }
 
-                    return activeMolds.map(mold => (
-                      <div key={mold.moldId}>
-                        {(() => {
-                          // Show ALL dates for this mold to ensure complete grid structure
-                          return dates.map(date => {
+                    // FIXED GRID STRUCTURE: Create flat array of grid cells for proper CSS Grid layout
+                    // This ensures each mold-date combination is a single cell in the grid
+                    const gridCells: JSX.Element[] = [];
+                    
+                    activeMolds.forEach(mold => {
+                      dates.forEach(date => {
                             const dateString = date.toISOString();
 
                             // Get orders assigned to this mold/date combination
@@ -4853,11 +4854,11 @@ export default function LayupScheduler() {
                               })
                               .filter(order => order !== undefined) as any[];
 
-                            const dropId = `${mold.moldId}|${dateString}`;
+                            const cellKey = `${mold.moldId}-${cellDateStr}`;
 
-                            return (
+                            gridCells.push(
                               <DroppableCell
-                                key={dropId}
+                                key={cellKey}
                                 moldId={mold.moldId}
                                 date={date}
                                 orders={cellOrders}
@@ -4878,9 +4879,9 @@ export default function LayupScheduler() {
                               />
                             );
                           });
-                        })()}
-                      </div>
-                    ));
+                        });
+
+                        return gridCells;
                   })()}
                     </div>
                   </div>

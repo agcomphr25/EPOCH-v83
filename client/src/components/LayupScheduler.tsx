@@ -2169,6 +2169,17 @@ export default function LayupScheduler() {
   // Load generated schedule into order assignments
   useEffect(() => {
     if (generatedSchedule && generatedSchedule.length > 0) {
+      // CRITICAL FIX: Only load generated schedule if NO database assignments exist
+      // This prevents merging database + generated data which was causing duplicate displays
+      const hasExistingAssignments = Object.keys(orderAssignments).length > 0;
+      
+      if (hasExistingAssignments) {
+        console.log('🚫 SKIPPING generated schedule load - database assignments already exist');
+        console.log(`   Database assignments: ${Object.keys(orderAssignments).length}`);
+        console.log(`   Generated entries: ${generatedSchedule.length}`);
+        return; // Don't merge - use database as single source of truth
+      }
+      
       console.log('📋 Loading generated schedule with', generatedSchedule.length, 'entries');
       console.log('📋 Sample generated schedule entry:', generatedSchedule[0]);
 
@@ -2197,7 +2208,7 @@ export default function LayupScheduler() {
         console.log('📋 Calendar should now display orders for assignments:', Object.keys(scheduleAssignments).length);
       }, 100);
     }
-  }, [generatedSchedule]);
+  }, [generatedSchedule, orderAssignments]);
 
   // Calculate dates based on view type
   const dates = useMemo(() => {

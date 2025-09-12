@@ -1209,13 +1209,12 @@ export default function LayupScheduler() {
         } else if (assignmentDayOfWeek === 5 && !selectedWorkDays.includes(5)) {
           console.log(`🚫 FRIDAY FILTER: Skipping Friday assignment ${entry.orderId} on ${assignmentDate.toDateString()} - Friday not in work days`);
         } else {
-          // Use just the date part to prevent time-based duplicates
-          const dateOnly = new Date(entry.scheduledDate);
-          dateOnly.setHours(0, 0, 0, 0);
+          // Use layup_day directly (date string) to match cell keying
+          const layupDay = entry.layupDay || new Date(entry.scheduledDate).toISOString().split('T')[0];
           
           assignments[entry.orderId] = {
             moldId: entry.moldId,
-            date: dateOnly.toISOString()
+            date: layupDay
           };
         }
 
@@ -4591,18 +4590,12 @@ export default function LayupScheduler() {
                     // Calculate order counts for relevant molds
                     const moldOrderCounts = relevantMolds.map(mold => {
                       const totalOrdersForMold = dates.reduce((count, date) => {
-                        const dateString = date.toISOString();
-                        const cellDateOnly = dateString.split('T')[0];
+                        const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
 
                         const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
-                          const assignmentDateOnly = assignment.date.split('T')[0];
-                          // CRITICAL FIX: Use UTC date comparison to prevent timezone bugs
-                          const assignmentDate = new Date(assignment.date);
-                          const cellDate = new Date(dateString);
-
-                          const assignmentDateStr = assignmentDate.toISOString().split('T')[0];
-                          const cellDateStr = cellDate.toISOString().split('T')[0];
-
+                          // Simple string comparison - assignment.date is already in YYYY-MM-DD format
+                          const assignmentDateStr = assignment.date.split('T')[0];
+                          
                           return assignment.moldId === mold.moldId && assignmentDateStr === cellDateStr;
                         }).length;
 

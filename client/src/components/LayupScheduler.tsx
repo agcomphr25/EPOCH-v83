@@ -578,8 +578,8 @@ function DroppableCell({
   const cellHeight = getCellHeight(orders.length);
 
   // Create stable date string and cell key 
-  const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-  const cellKey = `${moldId}-${dateStr}`;
+  const dateStr = format(date, 'yyyy-MM-dd'); // YYYY-MM-DD format
+  const cellKey = `${moldId}:${moldInfo?.instanceNumber ?? 1}:${dateStr}`;
   
   const {
     setNodeRef,
@@ -589,6 +589,7 @@ function DroppableCell({
     data: {
       type: 'cell',
       moldId: moldId,
+      instanceNumber: moldInfo?.instanceNumber ?? 1,
       date: dateStr
     }
   });
@@ -1001,93 +1002,92 @@ export default function LayupScheduler() {
     if (!over) return;
 
     const orderId = active.id as string;
-    const dropTargetId = over.id as string;
-    
-    // Parse drop target ID correctly - should be "moldId|date" 
-    const [moldId, date] = dropTargetId.split('|');
+    const overData = over.data.current;
 
-    if (!date || !moldId) {
-      console.error('❌ DRAG ERROR: Invalid drop target format:', dropTargetId);
-      return;
-    }
-
-    // Check if target week is locked
-    const targetDate = new Date(date);
-    if (isWeekLocked(targetDate)) {
-      console.log('❌ Cannot drop to locked week');
-      toast({
-        title: "Week Locked",
-        description: `Cannot schedule to week of ${format(targetDate, 'MM/dd')} - week is locked`,
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // FRIDAY VALIDATION: Check if trying to drop on Friday when not allowed
-    const dayOfWeek = targetDate.getDay();
-    if (dayOfWeek === 5 && !selectedWorkDays.includes(5)) {
-      console.log('❌ Cannot drop to Friday - not in selected work days');
-      toast({
-        title: "Friday Not Allowed",
-        description: "Friday scheduling is disabled in current work day settings",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // MOLD CAPACITY VALIDATION: Check if mold is already at capacity for this date
-    const targetDateStr = targetDate.toISOString().split('T')[0];
-    const existingOrdersForMoldDate = getDisplayedAssignmentEntries().filter(([existingOrderId, assignment]) => {
-      if (existingOrderId === orderId) return false; // Don't count the order being moved
-      const assignmentDateStr = new Date(assignment.date).toISOString().split('T')[0];
-      return assignment.moldId === moldId && assignmentDateStr === targetDateStr;
-    });
-
-    // Get mold capacity from molds data
-    const mold = molds.find(m => m.moldId === moldId);
-    const moldCapacity = mold?.multiplier || 1;
-    
-    if (existingOrdersForMoldDate.length >= moldCapacity) {
-      console.log(`❌ Cannot drop - mold ${moldId} is at capacity (${existingOrdersForMoldDate.length}/${moldCapacity}) on ${targetDateStr}`);
-      toast({
-        title: "Mold At Capacity",
-        description: `${moldId} is already at capacity (${moldCapacity}) for ${format(targetDate, 'MMM dd')}`,
-        variant: "destructive"
-      });
-      return;
-    }
-
-    console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to mold ${moldId} on ${date}`);
-
-    // Update order assignments immediately for UI responsiveness
-    const newAssignment = { moldId, date };
-    setOrderAssignments(prev => ({
-      ...prev,
-      [orderId]: newAssignment
-    }));
-
-    setHasUnsavedChanges(true);
-
-    // Auto-save the assignment to prevent disappearing cards
-    try {
-      console.log(`💾 AUTO-SAVE: Saving assignment - Order: ${orderId}, Mold: ${moldId}, Date: ${date}`);
+    if (overData?.type === 'cell') {
+      const moldId = overData.moldId;
+      const instanceNumber = overData.instanceNumber;
+      const dateStr = overData.date; // Already in yyyy-MM-dd format
       
-      // Delete existing schedule entry for this order
-      await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
-        method: 'DELETE'
-      }).catch(err => {
-        console.log('Note: No existing schedule found for order', orderId);
+      console.log(`🎯 DRAG END: Moving order ${orderId} to mold ${moldId}:${instanceNumber} on ${dateStr}`);
+
+      // Check if target week is locked
+      const targetDate = new Date(dateStr);
+      if (isWeekLocked(targetDate)) {
+        console.log('❌ Cannot drop to locked week');
+        toast({
+          title: "Week Locked",
+          description: `Cannot schedule to week of ${format(targetDate, 'MM/dd')} - week is locked`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // FRIDAY VALIDATION: Check if trying to drop on Friday when not allowed
+      const dayOfWeek = targetDate.getDay();
+      if (dayOfWeek === 5 && !selectedWorkDays.includes(5)) {
+        console.log('❌ Cannot drop to Friday - not in selected work days');
+        toast({
+          title: "Friday Not Allowed",
+          description: "Friday scheduling is disabled in current work day settings",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // MOLD CAPACITY VALIDATION: Check if mold is already at capacity for this date
+      const existingOrdersForMoldDate = getDisplayedAssignmentEntries().filter(([existingOrderId, assignment]) => {
+        if (existingOrderId === orderId) return false; // Don't count the order being moved
+        const assignmentDateStr = assignment.date.split('T')[0];
+        return assignment.moldId === moldId && assignmentDateStr === dateStr;
       });
 
-      // Create new schedule entry with correct data
-      const scheduleEntry = {
-        orderId,
-        scheduledDate: new Date(date),
-        moldId: moldId,
-        employeeAssignments: [],
-        isOverride: true,
-        overriddenBy: 'user'
-      };
+      // Get mold capacity from molds data
+      const mold = molds.find(m => m.moldId === moldId);
+      const moldCapacity = mold?.multiplier || 1;
+      
+      if (existingOrdersForMoldDate.length >= moldCapacity) {
+        console.log(`❌ Cannot drop - mold ${moldId} is at capacity (${existingOrdersForMoldDate.length}/${moldCapacity}) on ${dateStr}`);
+        toast({
+          title: "Mold At Capacity",
+          description: `${moldId} is already at capacity (${moldCapacity}) for ${format(targetDate, 'MMM dd')}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log(`🎯 DRAG OPERATION: Moving order ${orderId} to mold ${moldId} on ${dateStr}`);
+
+      // Update order assignments immediately for UI responsiveness
+      const newAssignment = { moldId, instanceNumber, date: dateStr };
+      setOrderAssignments(prev => ({
+        ...prev,
+        [orderId]: newAssignment
+      }));
+
+      setHasUnsavedChanges(true);
+
+      // Auto-save the assignment to prevent disappearing cards
+      try {
+        console.log(`💾 AUTO-SAVE: Saving assignment - Order: ${orderId}, Mold: ${moldId}, Date: ${dateStr}`);
+        
+        // Delete existing schedule entry for this order
+        await apiRequest(`/api/layup-schedule/by-order/${orderId}`, {
+          method: 'DELETE'
+        }).catch(err => {
+          console.log('Note: No existing schedule found for order', orderId);
+        });
+
+        // Create new schedule entry with correct data
+        const scheduleEntry = {
+          orderId,
+          scheduledDate: new Date(dateStr),
+          moldId: moldId,
+          instanceNumber,
+          employeeAssignments: [],
+          isOverride: true,
+          overriddenBy: 'user'
+        };
 
       console.log('📝 SCHEDULE ENTRY:', scheduleEntry);
 
@@ -1111,14 +1111,17 @@ export default function LayupScheduler() {
         description: `Order ${orderId} assigned to ${moldId}`,
       });
 
-    } catch (error) {
-      console.error('❌ AUTO-SAVE ERROR: Failed to save assignment:', error);
-      toast({
-        title: "Save Failed",
-        description: `Failed to save assignment for ${orderId}. Please try again.`,
-        variant: "destructive"
-      });
+      } catch (error) {
+        console.error('❌ AUTO-SAVE ERROR: Failed to save assignment:', error);
+        toast({
+          title: "Save Failed",
+          description: `Failed to save assignment for ${orderId}. Please try again.`,
+          variant: "destructive"
+        });
+      }
     }
+
+    setActiveId(null);
   };
 
   // Handle manual Friday assignment
@@ -1211,7 +1214,7 @@ export default function LayupScheduler() {
           console.log(`🚫 FRIDAY FILTER: Skipping Friday assignment ${entry.orderId} on ${assignmentDate.toDateString()} - Friday not in work days`);
         } else {
           // Use layup_day directly (date string) to match cell keying
-          const layupDay = entry.layupDay || new Date(entry.scheduledDate).toISOString().split('T')[0];
+          const layupDay = entry.layupDay || format(new Date(entry.scheduledDate), 'yyyy-MM-dd');
           
           assignments[entry.orderId] = {
             moldId: entry.moldId,
@@ -2024,7 +2027,7 @@ export default function LayupScheduler() {
 
     // Initialize tracking
     allWorkDays.forEach(date => {
-      const dateKey = date.toISOString().split('T')[0];
+      const dateKey = format(date, 'yyyy-MM-dd');
       dailyAssignments[dateKey] = 0;
     });
 
@@ -2105,7 +2108,7 @@ export default function LayupScheduler() {
         // Must fill sequentially - use the EXACT next date for this mold
         if (nextDateIndex < allWorkDays.length && nextDateIndex < bestDateIndex) {
           const targetDate = allWorkDays[nextDateIndex];
-          const dateKey = targetDate.toISOString().split('T')[0];
+          const dateKey = format(targetDate, 'yyyy-MM-dd');
           const currentDailyLoad = dailyAssignments[dateKey] || 0;
 
           // Only assign if we haven't exceeded daily employee capacity
@@ -2118,7 +2121,7 @@ export default function LayupScheduler() {
 
       if (bestMold && bestDateIndex < allWorkDays.length) {
         const targetDate = allWorkDays[bestDateIndex];
-        const dateKey = targetDate.toISOString().split('T')[0];
+        const dateKey = format(targetDate, 'yyyy-MM-dd');
         const cellKey = `${bestMold.moldId}-${dateKey}`;
 
         // Mesa Universal orders are now limited only by P1 purchase order selection and mold capacity
@@ -2127,7 +2130,7 @@ export default function LayupScheduler() {
         // Assign order to this cell
         newAssignments[order.orderId] = {
           moldId: bestMold.moldId,
-          date: targetDate.toISOString()
+          date: format(targetDate, 'yyyy-MM-dd')
         };
 
         // Update tracking
@@ -4682,7 +4685,7 @@ export default function LayupScheduler() {
                     // Calculate order counts for relevant molds
                     const moldOrderCounts = relevantMolds.map(mold => {
                       const totalOrdersForMold = dates.reduce((count, date) => {
-                        const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+                        const cellDateStr = format(date, 'yyyy-MM-dd'); // YYYY-MM-DD format
 
                         const ordersForThisMoldDate = getDisplayedAssignmentEntries().filter(([orderId, assignment]) => {
                           // Simple string comparison - assignment.date is already in YYYY-MM-DD format
@@ -4712,7 +4715,7 @@ export default function LayupScheduler() {
                     // Debug Monday assignments specifically
                     const mondayDate = dates.find(date => date.getDay() === 1);
                     if (mondayDate) {
-                      const mondayDateStr = mondayDate.toISOString().split('T')[0];
+                      const mondayDateStr = format(mondayDate, 'yyyy-MM-dd');
                       const mondayAssignments = getDisplayedAssignmentEntries().filter(([_, assignment]) => {
                         return assignment.date.split('T')[0] === mondayDateStr;
                       });
@@ -4730,10 +4733,10 @@ export default function LayupScheduler() {
                             const dateString = date.toISOString();
 
                             // Get orders assigned to this mold/date combination
-                            const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+                            const cellDateStr = format(date, 'yyyy-MM-dd'); // YYYY-MM-dd format
                             const cellOrders = displayedAssignments
                               .filter(([orderId, assignment]) => {
-                                // Simple string comparison - assignment.date is already YYYY-MM-DD format
+                                // Simple string comparison - assignment.date is already in YYYY-MM-DD format
                                 const assignmentDateStr = assignment.date.split('T')[0];
                                 const moldMatch = assignment.moldId === mold.moldId;
                                 const dateMatch = assignmentDateStr === cellDateStr;

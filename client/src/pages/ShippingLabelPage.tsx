@@ -301,8 +301,10 @@ export default function ShippingLabelPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Weight (lbs)</label>
+                    <label htmlFor="shipping-weight" className="block text-sm font-medium mb-1">Weight (lbs)</label>
                     <input
+                      id="shipping-weight"
+                      name="weight"
                       type="number"
                       value={shippingDetails.weight}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, weight: e.target.value }))}
@@ -311,8 +313,10 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Declared Value ($)</label>
+                    <label htmlFor="shipping-value" className="block text-sm font-medium mb-1">Declared Value ($)</label>
                     <input
+                      id="shipping-value"
+                      name="value"
                       type="number"
                       value={shippingDetails.value}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, value: e.target.value }))}
@@ -325,8 +329,10 @@ export default function ShippingLabelPage() {
                 <h4 className="font-medium">Dimensions (inches)</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Length</label>
+                    <label htmlFor="package-length" className="block text-sm font-medium mb-1">Length</label>
                     <input
+                      id="package-length"
+                      name="length"
                       type="number"
                       value={shippingDetails.length}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, length: e.target.value }))}
@@ -335,8 +341,10 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Width</label>
+                    <label htmlFor="package-width" className="block text-sm font-medium mb-1">Width</label>
                     <input
+                      id="package-width"
+                      name="width"
                       type="number"
                       value={shippingDetails.width}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, width: e.target.value }))}
@@ -345,8 +353,10 @@ export default function ShippingLabelPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Height</label>
+                    <label htmlFor="package-height" className="block text-sm font-medium mb-1">Height</label>
                     <input
+                      id="package-height"
+                      name="height"
                       type="number"
                       value={shippingDetails.height}
                       onChange={(e) => setShippingDetails(prev => ({ ...prev, height: e.target.value }))}
@@ -382,8 +392,10 @@ export default function ShippingLabelPage() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Customer Name</label>
+                    <label htmlFor="customer-name" className="block text-sm font-medium mb-1">Customer Name</label>
                     <input
+                      id="customer-name"
+                      name="customerName"
                       type="text"
                       value={shippingDetails.address.name}
                       onChange={(e) => setShippingDetails(prev => ({ 
@@ -396,8 +408,10 @@ export default function ShippingLabelPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Street Address</label>
+                    <label htmlFor="street-address" className="block text-sm font-medium mb-1">Street Address</label>
                     <input
+                      id="street-address"
+                      name="streetAddress"
                       type="text"
                       value={shippingDetails.address.street}
                       onChange={(e) => setShippingDetails(prev => ({ 
@@ -411,8 +425,10 @@ export default function ShippingLabelPage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">City</label>
+                      <label htmlFor="city" className="block text-sm font-medium mb-1">City</label>
                       <input
+                        id="city"
+                        name="city"
                         type="text"
                         value={shippingDetails.address.city}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -424,8 +440,10 @@ export default function ShippingLabelPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">State</label>
+                      <label htmlFor="state" className="block text-sm font-medium mb-1">State</label>
                       <input
+                        id="state"
+                        name="state"
                         type="text"
                         value={shippingDetails.address.state}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -440,8 +458,10 @@ export default function ShippingLabelPage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">ZIP Code</label>
+                      <label htmlFor="zip-code" className="block text-sm font-medium mb-1">ZIP Code</label>
                       <input
+                        id="zip-code"
+                        name="zipCode"
                         type="text"
                         value={shippingDetails.address.zip}
                         onChange={(e) => setShippingDetails(prev => ({ 
@@ -453,8 +473,10 @@ export default function ShippingLabelPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Country</label>
+                      <label htmlFor="country" className="block text-sm font-medium mb-1">Country</label>
                       <select
+                        id="country"
+                        name="country"
                         value={shippingDetails.address.country}
                         onChange={(e) => setShippingDetails(prev => ({ 
                           ...prev, 
@@ -487,20 +509,24 @@ export default function ShippingLabelPage() {
               <div className="space-y-4">
                 <h4 className="font-medium">Billing Options</h4>
                 <div className="space-y-3">
-                  <label className="flex items-center">
+                  <label htmlFor="billing-sender" className="flex items-center">
                     <input
+                      id="billing-sender"
                       type="radio"
                       name="billing"
+                      value="sender"
                       checked={shippingDetails.billingOption === 'sender'}
                       onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'sender' }))}
                       className="mr-2"
                     />
                     Bill to Sender (Our Account)
                   </label>
-                  <label className="flex items-center">
+                  <label htmlFor="billing-receiver" className="flex items-center">
                     <input
+                      id="billing-receiver"
                       type="radio"
                       name="billing"
+                      value="receiver"
                       checked={shippingDetails.billingOption === 'receiver'}
                       onChange={() => setShippingDetails(prev => ({ ...prev, billingOption: 'receiver' }))}
                       className="mr-2"
@@ -513,8 +539,10 @@ export default function ShippingLabelPage() {
                   <div className="ml-6 space-y-3 p-4 bg-blue-50 rounded-lg">
                     <div className="grid grid-cols-1 gap-4">
                       <div>
-                        <label className="block text-sm font-medium mb-1">UPS Account Number</label>
+                        <label htmlFor="ups-account-number" className="block text-sm font-medium mb-1">UPS Account Number</label>
                         <input
+                          id="ups-account-number"
+                          name="upsAccountNumber"
                           type="text"
                           value={shippingDetails.receiverAccount.accountNumber}
                           onChange={(e) => setShippingDetails(prev => ({ 
@@ -526,8 +554,10 @@ export default function ShippingLabelPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Account ZIP Code</label>
+                        <label htmlFor="account-zip-code" className="block text-sm font-medium mb-1">Account ZIP Code</label>
                         <input
+                          id="account-zip-code"
+                          name="accountZipCode"
                           type="text"
                           value={shippingDetails.receiverAccount.zipCode}
                           onChange={(e) => setShippingDetails(prev => ({ 

@@ -591,9 +591,14 @@ export function registerRoutes(app: Express): Server {
       console.log('🔧 LAYUP SCHEDULE GENERATE CALLED');
       const { storage } = await import('../../storage');
       
-      // Get production orders (already sorted by priority)
-      const productionOrders = await storage.getAllProductionOrders();
-      console.log('🔧 Found production orders for scheduling:', productionOrders.length);
+      // Get orders from the same source as the frontend - P1 layup queue
+      console.log('🔧 Fetching orders from P1 layup queue (same as frontend)...');
+      const p1QueueResponse = await fetch('http://localhost:5000/api/p1-layup-queue');
+      if (!p1QueueResponse.ok) {
+        throw new Error(`Failed to fetch P1 layup queue: ${p1QueueResponse.statusText}`);
+      }
+      const p1Orders = await p1QueueResponse.json();
+      console.log('🔧 Found orders from P1 layup queue for scheduling:', p1Orders.length);
       
       // Get mold and employee settings (using same API as LayupScheduler component)
       const molds = await storage.getAllMolds();
@@ -602,29 +607,25 @@ export function registerRoutes(app: Express): Server {
       
       console.log('🔧 Found molds:', molds.length);
       console.log('🔧 Found layup employees:', layupEmployees.length);
-      console.log('🔧 First few production orders:', productionOrders.slice(0, 3).map(o => ({ 
+      console.log('🔧 First few P1 orders from queue:', p1Orders.slice(0, 3).map((o: any) => ({ 
         orderId: o.orderId, 
-        itemName: o.itemName, 
-        itemId: o.itemId 
+        stockModelId: o.stockModelId || o.modelId,
+        source: o.source,
+        currentDepartment: o.currentDepartment
       })));
       
       // Get stock models for proper mapping
       const stockModels = await storage.getAllStockModels();
       
-      // Transform data for scheduler utility
-      const orders = productionOrders.map(order => {
-        // Map item names to stock model IDs using itemId or itemName
-        let stockModelId = (order as any).itemId;
-        if (!stockModelId && (order as any).itemName) {
-          // Try to find matching stock model by name
-          const matchingModel = stockModels.find(model => 
-            model.displayName === (order as any).itemName || 
-            model.name === (order as any).itemName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-          );
-          if (matchingModel) {
-            stockModelId = matchingModel.id;
-          } else if ((order as any).itemName.includes('Mesa')) {
-            // Default Mesa items to mesa_universal if no exact match
+      // Transform P1 orders for scheduler utility (these already have proper stock model IDs)
+      const orders = p1Orders.map((order: any) => {
+        // P1 orders already have stockModelId or modelId
+        let stockModelId = order.stockModelId || order.modelId;
+        
+        // If still no stock model, try to infer from product name
+        if (!stockModelId || stockModelId === 'unknown') {
+          const productName = order.product || order.modelId || '';
+          if (productName.toLowerCase().includes('mesa')) {
             stockModelId = 'mesa_universal';
           } else {
             stockModelId = 'unknown';
@@ -633,22 +634,23 @@ export function registerRoutes(app: Express): Server {
         
         return {
           orderId: order.orderId,
-          product: (order as any).itemName || 'Unknown Product',
-          customer: (order as any).customerName || 'Unknown Customer',
-          stockModelId: stockModelId || 'unknown',
+          product: order.product || order.modelId || 'Unknown Product',
+          customer: order.customer || 'Unknown Customer',
+          stockModelId: stockModelId,
           dueDate: order.dueDate,
           orderDate: order.orderDate,
-          priorityScore: 50, // Default priority score since productionOrders doesn't have this field
+          priorityScore: order.priorityScore || (order.source === 'p1_purchase_order' ? 20 : 50), // P1 PO orders get higher priority
           quantity: 1,
-          features: (order as any).specifications || {}, // Include specifications as features
-          source: 'production_order' // Add source for identification
+          features: order.features || {},
+          source: order.source || 'main_orders'
         };
       });
       
-      console.log('🔧 Transformed orders with stock models:', orders.slice(0, 3).map(o => ({ 
+      console.log('🔧 Transformed P1 orders with stock models:', orders.slice(0, 3).map(o => ({ 
         orderId: o.orderId, 
         product: o.product, 
-        stockModelId: o.stockModelId 
+        stockModelId: o.stockModelId,
+        source: o.source
       })));
       
       const employeeSettings = layupEmployees.map((emp: any) => ({

@@ -577,15 +577,19 @@ function DroppableCell({
 
   const cellHeight = getCellHeight(orders.length);
 
+  // Create stable date string and cell key 
+  const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const cellKey = `${moldId}-${dateStr}`;
+  
   const {
     setNodeRef,
     isOver,
   } = useDroppable({
-    id: `${moldId}|${date.toISOString()}`,
+    id: cellKey,
     data: {
       type: 'cell',
       moldId: moldId,
-      date: date.toISOString()
+      date: dateStr
     }
   });
 

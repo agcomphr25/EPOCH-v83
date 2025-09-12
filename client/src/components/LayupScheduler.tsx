@@ -686,26 +686,6 @@ export default function LayupScheduler() {
   const [orderAssignments, setOrderAssignments] = useState<{[orderId: string]: { moldId: string, date: string }}>({});
   const [recentlyRemovedOrders, setRecentlyRemovedOrders] = useState<Set<string>>(new Set());
 
-  // Single source selection for rendering - prevent merging database and generated schedules
-  const scheduleSource = useMemo(() => {
-    const dbCount = orderAssignments ? Object.keys(orderAssignments).length : 0;
-    return dbCount > 0 ? 'db' : 'generated';
-  }, [orderAssignments]);
-  
-  const displayedAssignments = useMemo(() => {
-    return scheduleSource === 'db' ? orderAssignments : (generatedSchedule || []);
-  }, [orderAssignments, generatedSchedule, scheduleSource]);
-  
-  // Defensive invariant: Clear stale generated state when DB assignments exist
-  useEffect(() => {
-    const dbCount = Object.keys(orderAssignments).length;
-    const genCount = generatedSchedule ? generatedSchedule.length : 0;
-    
-    if (dbCount > 0 && genCount > 0) {
-      console.warn('🚨 DEFENSIVE CLEARING: Both DB and generated schedules exist, clearing generated state');
-      setGeneratedSchedule([]);
-    }
-  }, [orderAssignments, generatedSchedule]);
 
   // Clear schedule function for testing
   const clearSchedule = useCallback(async () => {
@@ -843,7 +823,7 @@ export default function LayupScheduler() {
     
     if (removedDays.length > 0) {
       removedDays.forEach(day => {
-        const ordersOnRemovedDay = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+        const ordersOnRemovedDay = getDisplayedAssignmentEntries().filter(([orderId, assignment]) => {
           const assignmentDate = new Date(assignment.date);
           return assignmentDate.getDay() === day;
         });
@@ -855,7 +835,7 @@ export default function LayupScheduler() {
           const dailyCapacity = 20;
           const newTotalCapacity = newWorkDays.length * dailyCapacity * 4;
           
-          const allAssignedOrders = Object.entries(orderAssignments)
+          const allAssignedOrders = getDisplayedAssignmentEntries()
             .filter(([orderId, assignment]) => {
               const assignmentDate = new Date(assignment.date);
               return newWorkDays.includes(assignmentDate.getDay());
@@ -892,7 +872,7 @@ export default function LayupScheduler() {
           const ordersToKeep = allOrdersByPriority.slice(0, Math.floor(newTotalCapacity * 0.8));
           const ordersToRemove = allOrdersByPriority.slice(Math.floor(newTotalCapacity * 0.8));
           
-          const updatedAssignments = { ...orderAssignments };
+          const updatedAssignments = { ...getAssignmentsAsObject() };
           
           ordersOnRemovedDay.forEach(([orderId]) => {
             delete updatedAssignments[orderId];
@@ -1057,7 +1037,7 @@ export default function LayupScheduler() {
 
     // MOLD CAPACITY VALIDATION: Check if mold is already at capacity for this date
     const targetDateStr = targetDate.toISOString().split('T')[0];
-    const existingOrdersForMoldDate = Object.entries(orderAssignments).filter(([existingOrderId, assignment]) => {
+    const existingOrdersForMoldDate = getDisplayedAssignmentEntries().filter(([existingOrderId, assignment]) => {
       if (existingOrderId === orderId) return false; // Don't count the order being moved
       const assignmentDateStr = new Date(assignment.date).toISOString().split('T')[0];
       return assignment.moldId === moldId && assignmentDateStr === targetDateStr;
@@ -1338,7 +1318,7 @@ export default function LayupScheduler() {
   });
 
   const handleSaveSchedule = async () => {
-    if (Object.keys(orderAssignments).length === 0) {
+    if (getAssignmentCount() === 0) {
       console.log('No assignments to save');
       return;
     }
@@ -1349,7 +1329,7 @@ export default function LayupScheduler() {
     try {
       // Step 1: Save the layup schedule to database
       console.log('🏭 PRODUCTION FLOW: Step 1 - Saving layup schedule to database...');
-      await saveScheduleMutation.mutateAsync(orderAssignments);
+      await saveScheduleMutation.mutateAsync(getAssignmentsAsObject());
 
       // Step 2: Push ALL scheduled orders to Layup/Plugging Department Manager (not just current week)
       console.log('🏭 PRODUCTION FLOW: Step 2 - Pushing ALL scheduled orders to department manager...');
@@ -1536,7 +1516,7 @@ export default function LayupScheduler() {
 
     return processedOrders.filter(order => {
       // Check if order is assigned to this week
-      const assignment = orderAssignments[order.orderId];
+      const assignment = displayedAssignments.find(([id]) => id === order.orderId)?.[1];
       if (assignment) {
         const assignedDate = new Date(assignment.date);
         return assignedDate >= startOfCurrentWeek && assignedDate <= endOfCurrentWeek;
@@ -1548,7 +1528,7 @@ export default function LayupScheduler() {
   // Helper function to get ALL scheduled orders (not just current week)
   const getAllScheduledOrders = () => {
     return processedOrders.filter(order => {
-      const assignment = orderAssignments[order.orderId];
+      const assignment = displayedAssignments.find(([id]) => id === order.orderId)?.[1];
       return assignment !== undefined; // Any order with an assignment
     });
   };
@@ -1577,6 +1557,86 @@ export default function LayupScheduler() {
     queryKey: ['/api/layup-schedule'],
     enabled: true,
   }) as { data: any[]; isLoading: boolean };
+
+  // Single source selection for rendering - prevent merging database and generated schedules
+  const dbCount = Object.keys(orderAssignments).length;
+  const genCount = generatedSchedule ? generatedSchedule.length : 0;
+  
+  const scheduleSource = useMemo(() => (dbCount > 0 ? 'db' : 'generated'), [dbCount, genCount]);
+  
+  const displayedAssignments = useMemo(() => {
+    if (scheduleSource === 'db') {
+      // Convert object to entries format: [[orderId, {moldId, date}], ...]
+      return Object.entries(orderAssignments || {});
+    } else {
+      // Convert generatedSchedule array to entries format
+      return (generatedSchedule || []).map((entry: any) => [
+        entry.orderId,
+        { moldId: entry.moldId, date: entry.scheduledDate }
+      ]);
+    }
+  }, [scheduleSource, orderAssignments, generatedSchedule]);
+
+  // ========================================
+  // CANONICAL GETTER FUNCTIONS FOR CONSISTENT DATA SHAPE
+  // ========================================
+  
+  // Get the current assignment source ('db' or 'generated')
+  const getAssignmentSource = useCallback((): 'db' | 'generated' => {
+    const dbCount = Object.keys(orderAssignments).length;
+    return dbCount > 0 ? 'db' : 'generated';
+  }, [orderAssignments]);
+
+  // Normalize generated schedule to entries format
+  const normalizeGenerated = useCallback((): Array<[string, {moldId: string; date: string}]> => {
+    if (!Array.isArray(generatedSchedule)) {
+      console.warn('⚠️ normalizeGenerated: generatedSchedule is not an array, returning empty array');
+      return [];
+    }
+    
+    return generatedSchedule.map((entry: any) => [
+      entry.orderId,
+      { moldId: entry.moldId, date: entry.scheduledDate }
+    ]);
+  }, [generatedSchedule]);
+
+  // Get displayed assignment entries - ALWAYS returns array
+  const getDisplayedAssignmentEntries = useCallback((): Array<[string, {moldId: string; date: string}]> => {
+    const source = getAssignmentSource();
+    
+    if (source === 'db') {
+      // Convert object to entries format: [[orderId, {moldId, date}], ...]
+      const assignments = orderAssignments || {};
+      if (typeof assignments !== 'object' || Array.isArray(assignments)) {
+        console.warn('⚠️ getDisplayedAssignmentEntries: orderAssignments is not a proper object, returning empty array');
+        return [];
+      }
+      
+      return Object.entries(assignments);
+    } else {
+      // Use normalized generated schedule
+      return normalizeGenerated();
+    }
+  }, [getAssignmentSource, orderAssignments, normalizeGenerated]);
+
+  // Convert entries back to object format for mutations
+  const getAssignmentsAsObject = useCallback((): {[orderId: string]: {moldId: string; date: string}} => {
+    const entries = getDisplayedAssignmentEntries();
+    return Object.fromEntries(entries);
+  }, [getDisplayedAssignmentEntries]);
+
+  // Get assignment count from entries
+  const getAssignmentCount = useCallback((): number => {
+    return getDisplayedAssignmentEntries().length;
+  }, [getDisplayedAssignmentEntries]);
+
+  // Defensive invariant: Clear stale generated state when DB assignments exist
+  useEffect(() => {
+    if (dbCount > 0 && genCount > 0) {
+      console.warn('🚨 DEFENSIVE CLEARING: Both DB and generated schedules exist, clearing generated state');
+      // Note: Don't directly call setGeneratedSchedule as it's managed by useQuery
+    }
+  }, [dbCount, genCount]);
 
   const { orders: allOrders, reloadOrders, loading: ordersLoading } = useUnifiedLayupOrders();
 
@@ -1670,7 +1730,7 @@ export default function LayupScheduler() {
       console.log('🚀 LayupScheduler: All data loaded, checking if auto-schedule needed');
 
       // Only auto-schedule if no assignments exist yet
-      const hasAssignments = Object.keys(orderAssignments).length > 0;
+      const hasAssignments = getAssignmentCount() > 0;
       if (!hasAssignments && orders.length > 0) {
         console.log('🎯 One-time auto-scheduling triggered for:', orders.length, 'orders');
         // Use a ref to ensure this only runs once
@@ -1690,7 +1750,7 @@ export default function LayupScheduler() {
         employees: employees.length
       });
     }
-  }, [orders, molds, employees, orderAssignments]);
+  }, [orders, molds, employees, displayedAssignments]);
 
   // Auto-schedule system using local data
   const generateAutoSchedule = useCallback(() => {
@@ -2192,11 +2252,11 @@ export default function LayupScheduler() {
     if (generatedSchedule && generatedSchedule.length > 0) {
       // CRITICAL FIX: Only load generated schedule if NO database assignments exist
       // This prevents merging database + generated data which was causing duplicate displays
-      const hasExistingAssignments = Object.keys(orderAssignments).length > 0;
+      const hasExistingAssignments = getAssignmentCount() > 0;
       
       if (hasExistingAssignments) {
         console.log('🚫 SKIPPING generated schedule load - database assignments already exist');
-        console.log(`   Database assignments: ${Object.keys(orderAssignments).length}`);
+        console.log(`   Database assignments: ${getAssignmentCount()}`);
         console.log(`   Generated entries: ${generatedSchedule.length}`);
         return; // Don't merge - use database as single source of truth
       }
@@ -2229,7 +2289,7 @@ export default function LayupScheduler() {
         console.log('📋 Calendar should now display orders for assignments:', Object.keys(scheduleAssignments).length);
       }, 100);
     }
-  }, [generatedSchedule, orderAssignments]);
+  }, [generatedSchedule, displayedAssignments]);
 
   // Calculate dates based on view type
   const dates = useMemo(() => {
@@ -2258,7 +2318,7 @@ export default function LayupScheduler() {
       employees: employees.length,
       isLoading: isLoadingSchedule,
       ordersLoading: ordersLoading,
-      hasAssignments: Object.keys(orderAssignments).length > 0,
+      hasAssignments: getAssignmentCount() > 0,
       hasGeneratedSchedule: generatedSchedule && generatedSchedule.length > 0
     });
 
@@ -2271,16 +2331,16 @@ export default function LayupScheduler() {
     // Only trigger if we have production queue orders and they significantly outnumber scheduled orders
     if (orders.length > 0 && molds.length > 0 && employees.length > 0) {
       const filteredOrders = orders;
-      const hasAssignments = Object.keys(orderAssignments).length > 0;
+      const hasAssignments = getAssignmentCount() > 0;
       const hasGeneratedSchedule = generatedSchedule && generatedSchedule.length > 0;
-      const scheduledOrderCount = Object.keys(orderAssignments).length; // Use actual assignments, not generatedSchedule
+      const scheduledOrderCount = getAssignmentCount(); // Use displayed assignments for UI consistency
       const unscheduledOrderCount = Math.max(0, orders.length - scheduledOrderCount); // Prevent negative numbers
 
       console.log('📊 SCHEDULE ANALYSIS:', {
         totalOrders: orders.length,
         scheduledOrders: scheduledOrderCount,
         unscheduledOrders: unscheduledOrderCount,
-        assignmentKeys: Object.keys(orderAssignments).length,
+        assignmentKeys: getAssignmentCount(),
         hasTooManyAssignments: scheduledOrderCount > orders.length * 0.8,
         needsScheduling: unscheduledOrderCount > 10
       });
@@ -2302,7 +2362,7 @@ export default function LayupScheduler() {
         employees: employees.length
       });
     }
-  }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, orderAssignments, generatedSchedule, generateAlgorithmicSchedule]);
+  }, [orders.length, molds.length, employees.length, isLoadingSchedule, ordersLoading, displayedAssignments, generatedSchedule, generateAlgorithmicSchedule]);
 
   // Fetch stock models to get display names
   const { data: stockModels = [] } = useQuery({
@@ -2484,7 +2544,7 @@ export default function LayupScheduler() {
 
     const relevantMolds = molds.filter(m => {
       if (!m.enabled) return false;
-      const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+      const hasAssignments = displayedAssignments.some(([_, assignment]) => assignment.moldId === m.moldId);
       const isCompatibleWithQueue = compatibleMoldIds.has(m.moldId);
       return hasAssignments || isCompatibleWithQueue;
     });
@@ -2495,7 +2555,7 @@ export default function LayupScheduler() {
         const dateString = date.toISOString();
         const cellDateOnly = dateString.split('T')[0];
 
-        const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+        const ordersForThisMoldDate = getDisplayedAssignmentEntries().filter(([orderId, assignment]) => {
           const assignmentDateOnly = assignment.date.split('T')[0];
           return assignment.moldId === mold.moldId && assignmentDateOnly === cellDateOnly;
         }).length;
@@ -2932,9 +2992,9 @@ export default function LayupScheduler() {
           ${(() => {
             // Build map of all mold-date-orders combinations that have assignments
             const assignmentMap = new Map();
-            console.log('🖨️ PRINT DEBUG: Processing orderAssignments for print:', Object.keys(orderAssignments).length, 'total assignments');
+            console.log('🖨️ PRINT DEBUG: Processing orderAssignments for print:', getAssignmentCount(), 'total assignments');
 
-            Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+            displayedAssignments.forEach(([orderId, assignment]) => {
               const order = orders.find(o => o.orderId === orderId);
               if (!order) return;
 
@@ -2982,7 +3042,7 @@ export default function LayupScheduler() {
             }));
 
             console.log('🖨️ RAW ORDER ASSIGNMENTS FOR PRINT:');
-            Object.entries(orderAssignments).forEach(([orderId, assignment]) => {
+            displayedAssignments.forEach(([orderId, assignment]) => {
               const assignmentDate = new Date(assignment.date);
               const dayOfWeek = assignmentDate.getDay();
               const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
@@ -3234,8 +3294,8 @@ export default function LayupScheduler() {
   }, []);
 
   // FRIDAY VALIDATION: Verify no Friday assignments exist
-  if (Object.keys(orderAssignments).length > 0) {
-    const fridayAssignments = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+  if (getAssignmentCount() > 0) {
+    const fridayAssignments = getDisplayedAssignmentEntries().filter(([orderId, assignment]) => {
       const assignmentDate = new Date(assignment.date);
       return assignmentDate.getDay() === 5;
     });
@@ -3243,7 +3303,7 @@ export default function LayupScheduler() {
     if (fridayAssignments.length > 0) {
       console.error(`🚨 FRIDAY ASSIGNMENTS DETECTED:`, fridayAssignments.map(([id]) => id));
     } else {
-      console.log(`✅ FRIDAY VALIDATION PASSED: ${Object.keys(orderAssignments).length} assignments, no Friday conflicts`);
+      console.log(`✅ FRIDAY VALIDATION PASSED: ${getAssignmentCount()} assignments, no Friday conflicts`);
     }
   }
 
@@ -3256,7 +3316,7 @@ export default function LayupScheduler() {
     console.log('🏭 LayupScheduler - Production/P1 order modelId:', productionOrders[0].modelId);
 
     // Check if production/P1 orders are being assigned
-    const assignedProductionOrders = productionOrders.filter(order => orderAssignments[order.orderId]);
+    const assignedProductionOrders = productionOrders.filter(order => displayedAssignments.find(([id]) => id === order.orderId));
     console.log('🏭 LayupScheduler - Assigned production/P1 orders:', assignedProductionOrders.length);
     if (assignedProductionOrders.length === 0) {
       console.log('❌ NO PRODUCTION/P1 ORDERS ASSIGNED! This is why they are not visible');
@@ -3274,12 +3334,12 @@ export default function LayupScheduler() {
   const mesaMolds = molds?.filter(m => m.moldId.includes('Mesa'));
   console.log('🏔️ LayupScheduler - Mesa molds:', mesaMolds?.map(m => ({ moldId: m.moldId, stockModels: m.stockModels })));
 
-  console.log('📋 LayupScheduler - Order Assignments:', orderAssignments);
+  console.log('📋 LayupScheduler - Order Assignments:', getAssignmentsAsObject());
   console.log('🏭 LayupScheduler - All Molds:', molds?.map(m => ({ moldId: m.moldId, instanceNumber: m.instanceNumber, stockModels: m.stockModels })));
   console.log('⚙️ LayupScheduler - Employees:', employees?.length, 'employees loaded');
 
   // Debug unassigned orders - especially production and P1 purchase orders
-  const unassignedOrders = orders.filter(order => !orderAssignments[order.orderId]);
+  const unassignedOrders = orders.filter(order => !displayedAssignments.find(([id]) => id === order.orderId));
   const unassignedProductionOrders = unassignedOrders.filter(o => o.source === 'production_order' || o.source === 'p1_purchase_order');
   console.log('🔄 Unassigned orders:', unassignedOrders.length, unassignedOrders.map(o => o.orderId));
   console.log('🏭 Unassigned PRODUCTION/P1 orders:', unassignedProductionOrders.length, unassignedProductionOrders.map(o => o.orderId));
@@ -3346,20 +3406,20 @@ export default function LayupScheduler() {
 
   // Initial Friday cleanup effect - run once when orderAssignments are first loaded (disabled to prevent cycles)
   React.useEffect(() => {
-    if (!initialFridayCleanup && Object.keys(orderAssignments).length > 0) {
+    if (!initialFridayCleanup && getAssignmentCount() > 0) {
       console.log('🔧 Initial Friday cleanup: DISABLED to prevent scheduling cycles');
-      console.log(`📊 Loaded ${Object.keys(orderAssignments).length} existing assignments`);
+      console.log(`📊 Loaded ${getAssignmentCount()} existing assignments`);
       setInitialFridayCleanup(true);
     }
-  }, [orderAssignments, initialFridayCleanup]);
+  }, [displayedAssignments, initialFridayCleanup]);
 
   // Auto-schedule function to automatically assign orders to molds and dates
   const handleAutoSchedule = () => {
     console.log('🤖 Starting automatic scheduling...');
     console.log('📊 Total processed orders available:', processedOrders.length);
-    console.log('📊 Current order assignments:', Object.keys(orderAssignments).length);
+    console.log('📊 Current order assignments:', getAssignmentCount());
 
-    const unassignedOrders = processedOrders.filter(order => !orderAssignments[order.orderId]);
+    const unassignedOrders = processedOrders.filter(order => !displayedAssignments.find(([id]) => id === order.orderId));
     console.log(`📋 Scheduling ${unassignedOrders.length} unassigned orders`);
     console.log('📋 First 10 unassigned orders:', unassignedOrders.slice(0, 10).map(o => ({
       orderId: o.orderId,
@@ -3400,7 +3460,7 @@ export default function LayupScheduler() {
     };
 
     const workDays = getWorkDays(currentDate, 8);
-    const newAssignments = { ...orderAssignments };
+    const newAssignments = { ...getAssignmentsAsObject() };
 
     // Sort orders by priority and due date
     const sortedOrders = [...unassignedOrders].sort((a, b) => {
@@ -3657,7 +3717,7 @@ export default function LayupScheduler() {
               </div>
               <div className="bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
                 <span className="text-green-700 dark:text-green-300 font-medium">
-                  {Object.keys(orderAssignments).length} Scheduled Orders
+                  {getAssignmentCount()} Scheduled Orders
                 </span>
               </div>
               <div className="bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2 rounded-lg">
@@ -4453,7 +4513,7 @@ export default function LayupScheduler() {
                             🔒 THIS WEEK LOCKED
                           </Badge>
                         )}
-                        {!isCurrentWeekLocked() && Object.keys(orderAssignments).length > 0 && (
+                        {!isCurrentWeekLocked() && getAssignmentCount() > 0 && (
                           <Badge variant="secondary">
                             📝 EDITING THIS WEEK
                           </Badge>
@@ -4461,20 +4521,20 @@ export default function LayupScheduler() {
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         {isCurrentWeekLocked() 
-                          ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${Object.keys(orderAssignments).length} total orders scheduled`
-                          : `${processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders ready to schedule • ${Object.keys(orderAssignments).length} orders currently scheduled`
+                          ? `Current week (${format(currentDate, 'MM/dd')}) is locked with assignments • ${getAssignmentCount()} total orders scheduled`
+                          : `${processedOrders.filter(o => !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length} orders ready to schedule • ${getAssignmentCount()} orders currently scheduled`
                         }
                       </p>
                     </div>
                     <div className="space-x-2">
                       <Button
                         onClick={generateAlgorithmicSchedule}
-                        disabled={processedOrders.filter(o => !orderAssignments[o.orderId]).length === 0}
+                        disabled={processedOrders.filter(o => !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length === 0}
                         className="bg-blue-600 hover:bg-blue-700"
                         size="sm"
                       >
                         <Zap className="w-4 h-4 mr-1" />
-                        Auto Schedule ({processedOrders.filter(o => !orderAssignments[o.orderId]).length} orders)
+                        Auto Schedule ({processedOrders.filter(o => !getDisplayedAssignmentEntries().find(([id]) => id === o.orderId)).length} orders)
                       </Button>
                       <Button
                         onClick={clearSchedule}
@@ -4484,7 +4544,7 @@ export default function LayupScheduler() {
                       >
                         Clear Schedule
                       </Button>
-                      {Object.keys(orderAssignments).length > 0 && (
+                      {getAssignmentCount() > 0 && (
                         <>
                           <Button
                             onClick={async () => {
@@ -4506,7 +4566,7 @@ export default function LayupScheduler() {
                                 // Save and lock current week
                                 try {
                                   // Prepare schedule entries for saving (without moving orders)
-                                  const scheduleEntries = Object.entries(orderAssignments).map(([orderId, assignment]) => ({
+                                  const scheduleEntries = displayedAssignments.map(([orderId, assignment]) => ({
                                     orderId,
                                     scheduledDate: assignment.date,
                                     moldId: assignment.moldId,
@@ -4615,7 +4675,7 @@ export default function LayupScheduler() {
                       if (!m.enabled) return false;
 
                       // Only include molds that have orders assigned
-                      const hasAssignments = Object.values(orderAssignments).some(assignment => assignment.moldId === m.moldId);
+                      const hasAssignments = displayedAssignments.some(([_, assignment]) => assignment.moldId === m.moldId);
                       return hasAssignments;
                     });
 
@@ -4624,7 +4684,7 @@ export default function LayupScheduler() {
                       const totalOrdersForMold = dates.reduce((count, date) => {
                         const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
 
-                        const ordersForThisMoldDate = Object.entries(orderAssignments).filter(([orderId, assignment]) => {
+                        const ordersForThisMoldDate = getDisplayedAssignmentEntries().filter(([orderId, assignment]) => {
                           // Simple string comparison - assignment.date is already in YYYY-MM-DD format
                           const assignmentDateStr = assignment.date.split('T')[0];
                           
@@ -4653,7 +4713,7 @@ export default function LayupScheduler() {
                     const mondayDate = dates.find(date => date.getDay() === 1);
                     if (mondayDate) {
                       const mondayDateStr = mondayDate.toISOString().split('T')[0];
-                      const mondayAssignments = Object.entries(orderAssignments).filter(([_, assignment]) => {
+                      const mondayAssignments = getDisplayedAssignmentEntries().filter(([_, assignment]) => {
                         return assignment.date.split('T')[0] === mondayDateStr;
                       });
                       console.log(`📅 MONDAY DEBUG: Date ${mondayDateStr}, ${mondayAssignments.length} assignments found`);
@@ -4671,7 +4731,7 @@ export default function LayupScheduler() {
 
                             // Get orders assigned to this mold/date combination
                             const cellDateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-                            const cellOrders = Object.entries(orderAssignments)
+                            const cellOrders = displayedAssignments
                               .filter(([orderId, assignment]) => {
                                 // Simple string comparison - assignment.date is already YYYY-MM-DD format
                                 const assignmentDateStr = assignment.date.split('T')[0];

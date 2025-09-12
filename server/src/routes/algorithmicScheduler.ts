@@ -569,19 +569,26 @@ router.post('/generate-algorithmic-schedule', async (req, res) => {
         console.log(`📅 Saving ${allocations.length} algorithmic schedule entries to layup_schedule table`);
         
         for (const allocation of allocations) {
+          // Extract business day from scheduled date as YYYY-MM-DD string
+          const layupDayStr = new Date(allocation.scheduledDate).toISOString().slice(0, 10);
+
           await pool.query(`
             INSERT INTO layup_schedule (
-              order_id, scheduled_date, mold_id, employee_assignments,
+              order_id, scheduled_date, layup_day, mold_id, employee_assignments,
               is_override, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ) VALUES ($1, $2, $3::date, $4, $5, $6, NOW(), NOW())
+            ON CONFLICT (layup_day, mold_id) DO UPDATE SET
+              order_id = EXCLUDED.order_id,
+              scheduled_date = EXCLUDED.scheduled_date,
+              employee_assignments = EXCLUDED.employee_assignments,
+              updated_at = NOW()
           `, [
             allocation.orderId,
             allocation.scheduledDate,
+            layupDayStr,
             allocation.moldId,
             JSON.stringify(employeeAssignments),
-            false, // not an override, this is algorithmic
-            new Date().toISOString(),
-            new Date().toISOString()
+            false // not an override, this is algorithmic
           ]);
         }
         

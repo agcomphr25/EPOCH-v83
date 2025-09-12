@@ -23,6 +23,8 @@ import {
   poProducts,
   // Refund requests table
   refundRequests,
+  // Vendor management tables
+  vendors, vendorContacts, vendorAddresses, vendorContactPhones, vendorContactEmails, vendorDocuments, vendorScoringCriteria, vendorScores,
   // Types
   type User, type InsertUser, type Order, type InsertOrder, type CSVData, type InsertCSVData,
   type CustomerType, type InsertCustomerType,
@@ -94,6 +96,15 @@ import {
   type POProduct, type InsertPOProduct,
   // Refund request types
   type RefundRequest, type InsertRefundRequest,
+  // Vendor management types
+  type Vendor, type InsertVendor,
+  type VendorContact, type InsertVendorContact,
+  type VendorAddress, type InsertVendorAddress,
+  type VendorContactPhone, type InsertVendorContactPhone,
+  type VendorContactEmail, type InsertVendorContactEmail,
+  type VendorDocument, type InsertVendorDocument,
+  type VendorScoringCriteria, type InsertVendorScoringCriteria,
+  type VendorScore, type InsertVendorScore,
 
 
 } from "./schema";
@@ -619,6 +630,66 @@ export interface IStorage {
   createPOProduct(data: InsertPOProduct): Promise<POProduct>;
   updatePOProduct(id: number, data: Partial<InsertPOProduct>): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
+
+  // ===== VENDOR MANAGEMENT CRUD =====
+  
+  // Vendors CRUD
+  getAllVendors(): Promise<Vendor[]>;
+  getVendor(id: number): Promise<Vendor | undefined>;
+  getVendorWithDetails(id: number): Promise<(Vendor & { contacts: VendorContact[], addresses: VendorAddress[], documents: VendorDocument[] }) | undefined>;
+  createVendor(data: InsertVendor): Promise<Vendor>;
+  updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
+  deleteVendor(id: number): Promise<void>;
+  searchVendors(query: string): Promise<Vendor[]>;
+
+  // Vendor Contacts CRUD
+  getVendorContacts(vendorId: number): Promise<VendorContact[]>;
+  getVendorContact(id: number): Promise<VendorContact | undefined>;
+  createVendorContact(data: InsertVendorContact): Promise<VendorContact>;
+  updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact>;
+  deleteVendorContact(id: number): Promise<void>;
+
+  // Vendor Addresses CRUD  
+  getVendorAddresses(vendorId: number): Promise<VendorAddress[]>;
+  getVendorAddress(id: number): Promise<VendorAddress | undefined>;
+  createVendorAddress(data: InsertVendorAddress): Promise<VendorAddress>;
+  updateVendorAddress(id: number, data: Partial<InsertVendorAddress>): Promise<VendorAddress>;
+  deleteVendorAddress(id: number): Promise<void>;
+
+  // Vendor Contact Phones CRUD
+  getContactPhones(contactId: number): Promise<VendorContactPhone[]>;
+  getContactPhone(id: number): Promise<VendorContactPhone | undefined>;
+  createContactPhone(data: InsertVendorContactPhone): Promise<VendorContactPhone>;
+  updateContactPhone(id: number, data: Partial<InsertVendorContactPhone>): Promise<VendorContactPhone>;
+  deleteContactPhone(id: number): Promise<void>;
+
+  // Vendor Contact Emails CRUD
+  getContactEmails(contactId: number): Promise<VendorContactEmail[]>;
+  getContactEmail(id: number): Promise<VendorContactEmail | undefined>;
+  createContactEmail(data: InsertVendorContactEmail): Promise<VendorContactEmail>;
+  updateContactEmail(id: number, data: Partial<InsertVendorContactEmail>): Promise<VendorContactEmail>;
+  deleteContactEmail(id: number): Promise<void>;
+
+  // Vendor Documents CRUD
+  getVendorDocuments(vendorId: number): Promise<VendorDocument[]>;
+  getVendorDocument(id: number): Promise<VendorDocument | undefined>;
+  createVendorDocument(data: InsertVendorDocument): Promise<VendorDocument>;
+  updateVendorDocument(id: number, data: Partial<InsertVendorDocument>): Promise<VendorDocument>;
+  deleteVendorDocument(id: number): Promise<void>;
+
+  // Vendor Scoring CRUD
+  getAllScoringCriteria(): Promise<VendorScoringCriteria[]>;
+  getScoringCriteria(id: number): Promise<VendorScoringCriteria | undefined>;
+  createScoringCriteria(data: InsertVendorScoringCriteria): Promise<VendorScoringCriteria>;
+  updateScoringCriteria(id: number, data: Partial<InsertVendorScoringCriteria>): Promise<VendorScoringCriteria>;
+  deleteScoringCriteria(id: number): Promise<void>;
+
+  getVendorScores(vendorId: number): Promise<VendorScore[]>;
+  getVendorScore(id: number): Promise<VendorScore | undefined>;
+  createVendorScore(data: InsertVendorScore): Promise<VendorScore>;
+  updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore>;
+  deleteVendorScore(id: number): Promise<void>;
+  calculateVendorTotalScore(vendorId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6424,6 +6495,569 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(poProducts.id, id));
+  }
+
+  // ===== VENDOR MANAGEMENT IMPLEMENTATION =====
+
+  // Vendors CRUD
+  async getAllVendors(): Promise<Vendor[]> {
+    return await db
+      .select()
+      .from(vendors)
+      .where(eq(vendors.isActive, true))
+      .orderBy(vendors.name);
+  }
+
+  async getVendor(id: number): Promise<Vendor | undefined> {
+    const [vendor] = await db
+      .select()
+      .from(vendors)
+      .where(and(eq(vendors.id, id), eq(vendors.isActive, true)));
+    return vendor || undefined;
+  }
+
+  async getVendorWithDetails(id: number): Promise<(Vendor & { contacts: VendorContact[], addresses: VendorAddress[], documents: VendorDocument[] }) | undefined> {
+    const vendor = await this.getVendor(id);
+    if (!vendor) return undefined;
+
+    const [contacts, addresses, documents] = await Promise.all([
+      this.getVendorContacts(id),
+      this.getVendorAddresses(id),
+      this.getVendorDocuments(id)
+    ]);
+
+    return {
+      ...vendor,
+      contacts,
+      addresses,
+      documents
+    };
+  }
+
+  async createVendor(data: InsertVendor): Promise<Vendor> {
+    const [vendor] = await db
+      .insert(vendors)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return vendor;
+  }
+
+  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
+    const [vendor] = await db
+      .update(vendors)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendors.id, id))
+      .returning();
+
+    if (!vendor) {
+      throw new Error(`Vendor with ID ${id} not found`);
+    }
+    return vendor;
+  }
+
+  async deleteVendor(id: number): Promise<void> {
+    await db
+      .update(vendors)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendors.id, id));
+  }
+
+  async searchVendors(query: string): Promise<Vendor[]> {
+    const searchTerm = `%${query}%`;
+    return await db
+      .select()
+      .from(vendors)
+      .where(
+        and(
+          eq(vendors.isActive, true),
+          or(
+            ilike(vendors.name, searchTerm),
+            ilike(vendors.website, searchTerm),
+            ilike(vendors.notes, searchTerm)
+          )
+        )
+      )
+      .orderBy(vendors.name);
+  }
+
+  // Vendor Contacts CRUD
+  async getVendorContacts(vendorId: number): Promise<VendorContact[]> {
+    return await db
+      .select()
+      .from(vendorContacts)
+      .where(
+        and(
+          eq(vendorContacts.vendorId, vendorId),
+          eq(vendorContacts.isActive, true)
+        )
+      )
+      .orderBy(desc(vendorContacts.isPrimary), asc(vendorContacts.contactSlot));
+  }
+
+  async getVendorContact(id: number): Promise<VendorContact | undefined> {
+    const [contact] = await db
+      .select()
+      .from(vendorContacts)
+      .where(eq(vendorContacts.id, id));
+    return contact || undefined;
+  }
+
+  async createVendorContact(data: InsertVendorContact): Promise<VendorContact> {
+    const [contact] = await db
+      .insert(vendorContacts)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return contact;
+  }
+
+  async updateVendorContact(id: number, data: Partial<InsertVendorContact>): Promise<VendorContact> {
+    const [contact] = await db
+      .update(vendorContacts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContacts.id, id))
+      .returning();
+
+    if (!contact) {
+      throw new Error(`Vendor contact with ID ${id} not found`);
+    }
+    return contact;
+  }
+
+  async deleteVendorContact(id: number): Promise<void> {
+    await db
+      .update(vendorContacts)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContacts.id, id));
+  }
+
+  // Vendor Addresses CRUD
+  async getVendorAddresses(vendorId: number): Promise<VendorAddress[]> {
+    return await db
+      .select()
+      .from(vendorAddresses)
+      .where(
+        and(
+          eq(vendorAddresses.vendorId, vendorId),
+          eq(vendorAddresses.isActive, true)
+        )
+      )
+      .orderBy(desc(vendorAddresses.isPrimary), vendorAddresses.type);
+  }
+
+  async getVendorAddress(id: number): Promise<VendorAddress | undefined> {
+    const [address] = await db
+      .select()
+      .from(vendorAddresses)
+      .where(eq(vendorAddresses.id, id));
+    return address || undefined;
+  }
+
+  async createVendorAddress(data: InsertVendorAddress): Promise<VendorAddress> {
+    const [address] = await db
+      .insert(vendorAddresses)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return address;
+  }
+
+  async updateVendorAddress(id: number, data: Partial<InsertVendorAddress>): Promise<VendorAddress> {
+    const [address] = await db
+      .update(vendorAddresses)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorAddresses.id, id))
+      .returning();
+
+    if (!address) {
+      throw new Error(`Vendor address with ID ${id} not found`);
+    }
+    return address;
+  }
+
+  async deleteVendorAddress(id: number): Promise<void> {
+    await db
+      .update(vendorAddresses)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorAddresses.id, id));
+  }
+
+  // Vendor Contact Phones CRUD
+  async getContactPhones(contactId: number): Promise<VendorContactPhone[]> {
+    return await db
+      .select()
+      .from(vendorContactPhones)
+      .where(
+        and(
+          eq(vendorContactPhones.contactId, contactId),
+          eq(vendorContactPhones.isActive, true)
+        )
+      )
+      .orderBy(desc(vendorContactPhones.isPrimary), vendorContactPhones.type);
+  }
+
+  async getContactPhone(id: number): Promise<VendorContactPhone | undefined> {
+    const [phone] = await db
+      .select()
+      .from(vendorContactPhones)
+      .where(eq(vendorContactPhones.id, id));
+    return phone || undefined;
+  }
+
+  async createContactPhone(data: InsertVendorContactPhone): Promise<VendorContactPhone> {
+    const [phone] = await db
+      .insert(vendorContactPhones)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return phone;
+  }
+
+  async updateContactPhone(id: number, data: Partial<InsertVendorContactPhone>): Promise<VendorContactPhone> {
+    const [phone] = await db
+      .update(vendorContactPhones)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContactPhones.id, id))
+      .returning();
+
+    if (!phone) {
+      throw new Error(`Contact phone with ID ${id} not found`);
+    }
+    return phone;
+  }
+
+  async deleteContactPhone(id: number): Promise<void> {
+    await db
+      .update(vendorContactPhones)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContactPhones.id, id));
+  }
+
+  // Vendor Contact Emails CRUD
+  async getContactEmails(contactId: number): Promise<VendorContactEmail[]> {
+    return await db
+      .select()
+      .from(vendorContactEmails)
+      .where(
+        and(
+          eq(vendorContactEmails.contactId, contactId),
+          eq(vendorContactEmails.isActive, true)
+        )
+      )
+      .orderBy(desc(vendorContactEmails.isPrimary), vendorContactEmails.type);
+  }
+
+  async getContactEmail(id: number): Promise<VendorContactEmail | undefined> {
+    const [email] = await db
+      .select()
+      .from(vendorContactEmails)
+      .where(eq(vendorContactEmails.id, id));
+    return email || undefined;
+  }
+
+  async createContactEmail(data: InsertVendorContactEmail): Promise<VendorContactEmail> {
+    const [email] = await db
+      .insert(vendorContactEmails)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return email;
+  }
+
+  async updateContactEmail(id: number, data: Partial<InsertVendorContactEmail>): Promise<VendorContactEmail> {
+    const [email] = await db
+      .update(vendorContactEmails)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContactEmails.id, id))
+      .returning();
+
+    if (!email) {
+      throw new Error(`Contact email with ID ${id} not found`);
+    }
+    return email;
+  }
+
+  async deleteContactEmail(id: number): Promise<void> {
+    await db
+      .update(vendorContactEmails)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorContactEmails.id, id));
+  }
+
+  // Vendor Documents CRUD
+  async getVendorDocuments(vendorId: number): Promise<VendorDocument[]> {
+    return await db
+      .select()
+      .from(vendorDocuments)
+      .where(
+        and(
+          eq(vendorDocuments.vendorId, vendorId),
+          eq(vendorDocuments.isActive, true)
+        )
+      )
+      .orderBy(desc(vendorDocuments.createdAt));
+  }
+
+  async getVendorDocument(id: number): Promise<VendorDocument | undefined> {
+    const [document] = await db
+      .select()
+      .from(vendorDocuments)
+      .where(eq(vendorDocuments.id, id));
+    return document || undefined;
+  }
+
+  async createVendorDocument(data: InsertVendorDocument): Promise<VendorDocument> {
+    const [document] = await db
+      .insert(vendorDocuments)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return document;
+  }
+
+  async updateVendorDocument(id: number, data: Partial<InsertVendorDocument>): Promise<VendorDocument> {
+    const [document] = await db
+      .update(vendorDocuments)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorDocuments.id, id))
+      .returning();
+
+    if (!document) {
+      throw new Error(`Vendor document with ID ${id} not found`);
+    }
+    return document;
+  }
+
+  async deleteVendorDocument(id: number): Promise<void> {
+    await db
+      .update(vendorDocuments)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorDocuments.id, id));
+  }
+
+  // Vendor Scoring CRUD
+  async getAllScoringCriteria(): Promise<VendorScoringCriteria[]> {
+    return await db
+      .select()
+      .from(vendorScoringCriteria)
+      .where(eq(vendorScoringCriteria.isActive, true))
+      .orderBy(vendorScoringCriteria.sortOrder, vendorScoringCriteria.category, vendorScoringCriteria.name);
+  }
+
+  async getScoringCriteria(id: number): Promise<VendorScoringCriteria | undefined> {
+    const [criteria] = await db
+      .select()
+      .from(vendorScoringCriteria)
+      .where(eq(vendorScoringCriteria.id, id));
+    return criteria || undefined;
+  }
+
+  async createScoringCriteria(data: InsertVendorScoringCriteria): Promise<VendorScoringCriteria> {
+    const [criteria] = await db
+      .insert(vendorScoringCriteria)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return criteria;
+  }
+
+  async updateScoringCriteria(id: number, data: Partial<InsertVendorScoringCriteria>): Promise<VendorScoringCriteria> {
+    const [criteria] = await db
+      .update(vendorScoringCriteria)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorScoringCriteria.id, id))
+      .returning();
+
+    if (!criteria) {
+      throw new Error(`Scoring criteria with ID ${id} not found`);
+    }
+    return criteria;
+  }
+
+  async deleteScoringCriteria(id: number): Promise<void> {
+    await db
+      .update(vendorScoringCriteria)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorScoringCriteria.id, id));
+  }
+
+  async getVendorScores(vendorId: number): Promise<VendorScore[]> {
+    return await db
+      .select()
+      .from(vendorScores)
+      .where(eq(vendorScores.vendorId, vendorId))
+      .orderBy(desc(vendorScores.scoredAt));
+  }
+
+  async getVendorScore(id: number): Promise<VendorScore | undefined> {
+    const [score] = await db
+      .select()
+      .from(vendorScores)
+      .where(eq(vendorScores.id, id));
+    return score || undefined;
+  }
+
+  async createVendorScore(data: InsertVendorScore): Promise<VendorScore> {
+    const [score] = await db
+      .insert(vendorScores)
+      .values({
+        ...data,
+        scoredAt: data.scoredAt ? new Date(data.scoredAt) : new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    
+    // Update vendor total score after creating new score
+    await this.calculateVendorTotalScore(data.vendorId);
+    
+    return score;
+  }
+
+  async updateVendorScore(id: number, data: Partial<InsertVendorScore>): Promise<VendorScore> {
+    const [score] = await db
+      .update(vendorScores)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorScores.id, id))
+      .returning();
+
+    if (!score) {
+      throw new Error(`Vendor score with ID ${id} not found`);
+    }
+
+    // Update vendor total score after updating
+    await this.calculateVendorTotalScore(score.vendorId);
+    
+    return score;
+  }
+
+  async deleteVendorScore(id: number): Promise<void> {
+    const score = await this.getVendorScore(id);
+    if (score) {
+      await db.delete(vendorScores).where(eq(vendorScores.id, id));
+      // Update vendor total score after deletion
+      await this.calculateVendorTotalScore(score.vendorId);
+    }
+  }
+
+  async calculateVendorTotalScore(vendorId: number): Promise<number> {
+    // Get all active scoring criteria with their weights
+    const criteria = await db
+      .select()
+      .from(vendorScoringCriteria)
+      .where(eq(vendorScoringCriteria.isActive, true));
+
+    if (criteria.length === 0) {
+      return 0;
+    }
+
+    // Get the vendor's latest scores for each criteria
+    const scores = await db
+      .select()
+      .from(vendorScores)
+      .where(eq(vendorScores.vendorId, vendorId))
+      .orderBy(desc(vendorScores.scoredAt));
+
+    // Calculate weighted average score
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+    const scoredCriteria = new Set<number>();
+
+    for (const score of scores) {
+      // Only use the most recent score per criteria
+      if (scoredCriteria.has(score.criteriaId)) {
+        continue;
+      }
+      
+      const criterion = criteria.find(c => c.id === score.criteriaId);
+      if (criterion) {
+        const normalizedScore = (score.score / score.maxScore) * 100;
+        totalWeightedScore += normalizedScore * criterion.weight;
+        totalWeight += criterion.weight;
+        scoredCriteria.add(score.criteriaId);
+      }
+    }
+
+    const finalScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+
+    // Update vendor's total score
+    await db
+      .update(vendors)
+      .set({
+        totalScore: finalScore,
+        lastScoredAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(vendors.id, vendorId));
+
+    return finalScore;
   }
 
 }

@@ -675,7 +675,7 @@ export function registerRoutes(app: Express): Server {
         moldId: mold.moldId,
         modelName: mold.modelName || mold.moldId, // Use moldId as fallback for modelName
         enabled: true,
-        multiplier: 2, // Default capacity multiplier
+        multiplier: 1, // Default capacity multiplier: 1 order per mold per day
         instanceNumber: 1, // Default instance
         stockModels: mold.stockModels || [] // Include stock model compatibility
       }));

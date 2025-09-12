@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -2635,3 +2635,428 @@ export const insertRefundRequestSchema = createInsertSchema(refundRequests).omit
 // Types for Refund Requests
 export type InsertRefundRequest = z.infer<typeof insertRefundRequestSchema>;
 export type RefundRequest = typeof refundRequests.$inferSelect;
+
+// ===== VENDOR MANAGEMENT SYSTEM =====
+
+// Slot-based enums for enforcing maximum counts
+export const contactSlotEnum = pgEnum("contact_slot", ["1", "2", "3"]);
+export const addressSlotEnum = pgEnum("address_slot", ["1", "2"]);
+export const phoneSlotEnum = pgEnum("phone_slot", ["1", "2"]);
+export const emailSlotEnum = pgEnum("email_slot", ["1", "2"]);
+
+// Main vendors table
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  primaryContactId: integer("primary_contact_id").references(() => vendorContacts.id), // Reference to vendor_contacts.id
+  // Approval/Evaluation status
+  approved: boolean("approved").default(false),
+  evaluated: boolean("evaluated").default(false),
+  evaluationDate: timestamp("evaluation_date"),
+  // Scoring system
+  totalScore: real("total_score").default(0),
+  lastScoredAt: timestamp("last_scored_at"),
+  // General info
+  website: text("website"),
+  taxId: text("tax_id"),
+  notes: text("notes"),
+  tags: text("tags").array().default([]),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Contact roles enumeration
+export const contactRoleEnum = pgEnum("contact_role", [
+  "PRIMARY",
+  "ACCOUNTING", 
+  "TECHNICAL",
+  "PURCHASING",
+  "SALES",
+  "SUPPORT",
+  "MANAGEMENT",
+  "OTHER"
+]);
+
+// Vendor contacts - max 3 per vendor
+export const vendorContacts = pgTable("vendor_contacts", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
+  contactSlot: contactSlotEnum("contact_slot").notNull(),
+  name: text("name").notNull(),
+  title: text("title"),
+  role: contactRoleEnum("role").default("OTHER"),
+  isPrimary: boolean("is_primary").default(false),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueVendorContact: unique().on(table.vendorId, table.contactSlot),
+}));
+
+// Address types enumeration  
+export const addressTypeEnum = pgEnum("address_type", [
+  "BILLING",
+  "SHIPPING", 
+  "CORPORATE",
+  "MANUFACTURING",
+  "OTHER"
+]);
+
+// Vendor addresses - max 2 per vendor
+export const vendorAddresses = pgTable("vendor_addresses", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
+  addressSlot: addressSlotEnum("address_slot").notNull(),
+  type: addressTypeEnum("type").default("OTHER"),
+  addressLine1: text("address_line1").notNull(),
+  addressLine2: text("address_line2"),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  postalCode: text("postal_code").notNull(),
+  country: text("country").default("US"),
+  isPrimary: boolean("is_primary").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueVendorAddress: unique().on(table.vendorId, table.addressSlot),
+}));
+
+// Phone types enumeration
+export const phoneTypeEnum = pgEnum("phone_type", [
+  "OFFICE",
+  "MOBILE", 
+  "FAX",
+  "TOLL_FREE",
+  "DIRECT",
+  "AFTER_HOURS",
+  "OTHER"
+]);
+
+// Contact phone numbers - max 2 per contact
+export const vendorContactPhones = pgTable("vendor_contact_phones", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").references(() => vendorContacts.id).notNull(),
+  phoneSlot: phoneSlotEnum("phone_slot").notNull(),
+  type: phoneTypeEnum("type").default("OFFICE"),
+  phoneNumber: text("phone_number").notNull(),
+  extension: text("extension"),
+  isPrimary: boolean("is_primary").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueContactPhone: unique().on(table.contactId, table.phoneSlot),
+}));
+
+// Email types enumeration
+export const emailTypeEnum = pgEnum("email_type", [
+  "GENERAL",
+  "BILLING",
+  "TECHNICAL",
+  "SALES", 
+  "SUPPORT",
+  "PERSONAL",
+  "OTHER"
+]);
+
+// Contact emails - max 2 per contact  
+export const vendorContactEmails = pgTable("vendor_contact_emails", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").references(() => vendorContacts.id).notNull(),
+  emailSlot: emailSlotEnum("email_slot").notNull(),
+  type: emailTypeEnum("type").default("GENERAL"),
+  email: text("email").notNull(),
+  isPrimary: boolean("is_primary").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueContactEmail: unique().on(table.contactId, table.emailSlot),
+}));
+
+// Document types enumeration
+export const documentTypeEnum = pgEnum("vendor_document_type", [
+  "W9",
+  "CONTRACT",
+  "CERTIFICATE",
+  "INSURANCE",
+  "LICENSE",
+  "PROPOSAL", 
+  "SPECIFICATION",
+  "QUALITY_CERT",
+  "OTHER"
+]);
+
+// Vendor documents
+export const vendorDocuments = pgTable("vendor_documents", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
+  type: documentTypeEnum("type").default("OTHER"),
+  fileName: text("file_name").notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  description: text("description"),
+  tags: text("tags").array().default([]),
+  expiryDate: timestamp("expiry_date"),
+  uploadedBy: integer("uploaded_by").references(() => users.id),
+  isConfidential: boolean("is_confidential").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Scoring criteria - extensible system for vendor evaluation
+export const vendorScoringCriteria = pgTable("vendor_scoring_criteria", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"), // QUALITY, DELIVERY, PRICE, SERVICE, etc.
+  weight: real("weight").default(1), // Multiplier for scoring
+  maxScore: integer("max_score").default(100),
+  scoringMethod: text("scoring_method").default("MANUAL"), // MANUAL, AUTO, CALCULATED
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Vendor scores based on criteria
+export const vendorScores = pgTable("vendor_scores", {
+  id: serial("id").primaryKey(),
+  vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
+  criteriaId: integer("criteria_id").references(() => vendorScoringCriteria.id).notNull(),
+  score: real("score").notNull(),
+  maxScore: integer("max_score").notNull(),
+  notes: text("notes"),
+  scoredBy: integer("scored_by").references(() => users.id),
+  scoredAt: timestamp("scored_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ===== VENDOR RELATIONS =====
+
+export const vendorsRelations = relations(vendors, ({ one, many }) => ({
+  primaryContact: one(vendorContacts, {
+    fields: [vendors.primaryContactId],
+    references: [vendorContacts.id],
+  }),
+  contacts: many(vendorContacts),
+  addresses: many(vendorAddresses), 
+  documents: many(vendorDocuments),
+  scores: many(vendorScores),
+}));
+
+export const vendorContactsRelations = relations(vendorContacts, ({ one, many }) => ({
+  vendor: one(vendors, {
+    fields: [vendorContacts.vendorId],
+    references: [vendors.id],
+  }),
+  phones: many(vendorContactPhones),
+  emails: many(vendorContactEmails),
+}));
+
+export const vendorAddressesRelations = relations(vendorAddresses, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [vendorAddresses.vendorId], 
+    references: [vendors.id],
+  }),
+}));
+
+export const vendorContactPhonesRelations = relations(vendorContactPhones, ({ one }) => ({
+  contact: one(vendorContacts, {
+    fields: [vendorContactPhones.contactId],
+    references: [vendorContacts.id],
+  }),
+}));
+
+export const vendorContactEmailsRelations = relations(vendorContactEmails, ({ one }) => ({
+  contact: one(vendorContacts, {
+    fields: [vendorContactEmails.contactId],
+    references: [vendorContacts.id],
+  }),
+}));
+
+export const vendorDocumentsRelations = relations(vendorDocuments, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [vendorDocuments.vendorId],
+    references: [vendors.id],
+  }),
+  uploadedBy: one(users, {
+    fields: [vendorDocuments.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const vendorScoringCriteriaRelations = relations(vendorScoringCriteria, ({ many }) => ({
+  scores: many(vendorScores),
+}));
+
+export const vendorScoresRelations = relations(vendorScores, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [vendorScores.vendorId],
+    references: [vendors.id],
+  }),
+  criteria: one(vendorScoringCriteria, {
+    fields: [vendorScores.criteriaId],
+    references: [vendorScoringCriteria.id],
+  }),
+  scoredBy: one(users, {
+    fields: [vendorScores.scoredBy],
+    references: [users.id],
+  }),
+}));
+
+// ===== VENDOR INSERT SCHEMAS =====
+
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  totalScore: true,
+  lastScoredAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Vendor name is required"),
+  primaryContactId: z.number().optional().nullable(),
+  approved: z.boolean().default(false),
+  evaluated: z.boolean().default(false),
+  evaluationDate: z.coerce.date().optional().nullable(),
+  website: z.string().url().optional().nullable(),
+  taxId: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorContactSchema = createInsertSchema(vendorContacts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.number().min(1, "Vendor ID is required"),
+  contactSlot: z.enum(["1", "2", "3"]),
+  name: z.string().min(1, "Contact name is required"),
+  title: z.string().optional().nullable(),
+  role: z.enum(["PRIMARY", "ACCOUNTING", "TECHNICAL", "PURCHASING", "SALES", "SUPPORT", "MANAGEMENT", "OTHER"]).default("OTHER"),
+  isPrimary: z.boolean().default(false),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorAddressSchema = createInsertSchema(vendorAddresses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.number().min(1, "Vendor ID is required"),
+  addressSlot: z.enum(["1", "2"]),
+  type: z.enum(["BILLING", "SHIPPING", "CORPORATE", "MANUFACTURING", "OTHER"]).default("OTHER"),
+  addressLine1: z.string().min(1, "Address line 1 is required"),
+  addressLine2: z.string().optional().nullable(),
+  city: z.string().min(1, "City is required"),
+  state: z.string().min(1, "State is required"),
+  postalCode: z.string().min(1, "Postal code is required"),
+  country: z.string().default("US"),
+  isPrimary: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorContactPhoneSchema = createInsertSchema(vendorContactPhones).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  contactId: z.number().min(1, "Contact ID is required"),
+  phoneSlot: z.enum(["1", "2"]),
+  type: z.enum(["OFFICE", "MOBILE", "FAX", "TOLL_FREE", "DIRECT", "AFTER_HOURS", "OTHER"]).default("OFFICE"),
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  extension: z.string().optional().nullable(),
+  isPrimary: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorContactEmailSchema = createInsertSchema(vendorContactEmails).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  contactId: z.number().min(1, "Contact ID is required"),
+  emailSlot: z.enum(["1", "2"]),
+  type: z.enum(["GENERAL", "BILLING", "TECHNICAL", "SALES", "SUPPORT", "PERSONAL", "OTHER"]).default("GENERAL"),
+  email: z.string().email("Valid email is required"),
+  isPrimary: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorDocumentSchema = createInsertSchema(vendorDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.number().min(1, "Vendor ID is required"),
+  type: z.enum(["W9", "CONTRACT", "CERTIFICATE", "INSURANCE", "LICENSE", "PROPOSAL", "SPECIFICATION", "QUALITY_CERT", "OTHER"]).default("OTHER"),
+  fileName: z.string().min(1, "File name is required"),
+  originalFileName: z.string().min(1, "Original file name is required"),
+  filePath: z.string().min(1, "File path is required"),
+  fileSize: z.number().min(0, "File size must be positive"),
+  mimeType: z.string().min(1, "MIME type is required"),
+  description: z.string().optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  expiryDate: z.coerce.date().optional().nullable(),
+  uploadedBy: z.number().optional().nullable(),
+  isConfidential: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+export const insertVendorScoringCriteriaSchema = createInsertSchema(vendorScoringCriteria).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1, "Criteria name is required"),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  weight: z.number().min(0, "Weight must be positive").default(1),
+  maxScore: z.number().min(1, "Max score must be positive").default(100),
+  scoringMethod: z.enum(["MANUAL", "AUTO", "CALCULATED"]).default("MANUAL"),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().default(0),
+});
+
+export const insertVendorScoreSchema = createInsertSchema(vendorScores).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  vendorId: z.number().min(1, "Vendor ID is required"),
+  criteriaId: z.number().min(1, "Criteria ID is required"),
+  score: z.number().min(0, "Score must be positive"),
+  maxScore: z.number().min(1, "Max score must be positive"),
+  notes: z.string().optional().nullable(),
+  scoredBy: z.number().optional().nullable(),
+  scoredAt: z.coerce.date().optional(),
+});
+
+// ===== VENDOR TYPES =====
+
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendorContact = z.infer<typeof insertVendorContactSchema>;
+export type VendorContact = typeof vendorContacts.$inferSelect;
+export type InsertVendorAddress = z.infer<typeof insertVendorAddressSchema>;
+export type VendorAddress = typeof vendorAddresses.$inferSelect;
+export type InsertVendorContactPhone = z.infer<typeof insertVendorContactPhoneSchema>;
+export type VendorContactPhone = typeof vendorContactPhones.$inferSelect;
+export type InsertVendorContactEmail = z.infer<typeof insertVendorContactEmailSchema>;
+export type VendorContactEmail = typeof vendorContactEmails.$inferSelect;
+export type InsertVendorDocument = z.infer<typeof insertVendorDocumentSchema>;
+export type VendorDocument = typeof vendorDocuments.$inferSelect;
+export type InsertVendorScoringCriteria = z.infer<typeof insertVendorScoringCriteriaSchema>;
+export type VendorScoringCriteria = typeof vendorScoringCriteria.$inferSelect;
+export type InsertVendorScore = z.infer<typeof insertVendorScoreSchema>;
+export type VendorScore = typeof vendorScores.$inferSelect;

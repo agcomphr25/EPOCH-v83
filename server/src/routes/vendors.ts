@@ -333,8 +333,21 @@ vendorDocumentRouter.get('/vendor/:vendorId', async (req: Request, res: Response
       ORDER BY created_at DESC
     `);
     
-    // Transform to match frontend expectations
-    const transformedDocs = result.map((doc: any) => ({
+    // Handle different possible result structures
+    let documents: any[] = [];
+    if (Array.isArray(result)) {
+      documents = result;
+    } else if (result && typeof result === 'object' && 'rows' in result) {
+      documents = (result as any).rows || [];
+    } else if (result && typeof result === 'object') {
+      // If it's an object with numeric keys, convert to array
+      const keys = Object.keys(result);
+      if (keys.length > 0 && keys.every(k => !isNaN(Number(k)))) {
+        documents = Object.values(result);
+      }
+    }
+    
+    const transformedDocs = documents.map((doc: any) => ({
       id: doc.id,
       vendorId: doc.vendor_id,
       type: doc.document_type,

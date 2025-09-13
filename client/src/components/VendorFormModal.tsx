@@ -165,8 +165,10 @@ export default function VendorFormModal({
 
   // Update documents state when query data changes
   useEffect(() => {
-    if (vendorDocuments) {
+    if (vendorDocuments && Array.isArray(vendorDocuments)) {
       setDocuments(vendorDocuments);
+    } else {
+      setDocuments([]);
     }
   }, [vendorDocuments]);
 
@@ -446,7 +448,7 @@ export default function VendorFormModal({
         }
 
         // Delete removed phones
-        for (const phoneId of currentPhoneIds) {
+        for (const phoneId of Array.from(currentPhoneIds)) {
           await apiRequest(`/api/vendor-contact-phones/${phoneId}`, { method: 'DELETE' });
         }
 
@@ -484,13 +486,13 @@ export default function VendorFormModal({
         }
 
         // Delete removed emails
-        for (const emailId of currentEmailIds) {
+        for (const emailId of Array.from(currentEmailIds)) {
           await apiRequest(`/api/vendor-contact-emails/${emailId}`, { method: 'DELETE' });
         }
       }
 
       // Delete removed contacts (and their phones/emails cascade)
-      for (const contactId of currentContactIds) {
+      for (const contactId of Array.from(currentContactIds)) {
         if (!newContactIds.has(contactId)) {
           await apiRequest(`/api/vendor-contacts/${contactId}`, { method: 'DELETE' });
         }
@@ -541,7 +543,7 @@ export default function VendorFormModal({
       }
 
       // Delete removed addresses
-      for (const addressId of currentAddressIds) {
+      for (const addressId of Array.from(currentAddressIds)) {
         await apiRequest(`/api/vendor-addresses/${addressId}`, { method: 'DELETE' });
       }
 

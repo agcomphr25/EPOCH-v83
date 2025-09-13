@@ -1246,19 +1246,18 @@ export default function VendorFormModal({
                               </Select>
                             </div>
                             <div className="col-span-6">
-                              <Input
-                                value={email.emailAddress}
-                                onChange={(e) => {
-                                  const updatedContact = {
-                                    ...contact,
-                                    emails: contact.emails.map((em, i) =>
-                                      i === emailIndex ? { ...em, emailAddress: e.target.value } : em
-                                    ),
-                                  };
-                                  updateContact(contactIndex, updatedContact);
-                                }}
-                                placeholder="Email address"
-                                data-testid={`input-email-address-${contactIndex}-${emailIndex}`}
+                              <FormField
+                                control={form.control}
+                                name={`contacts.${contactIndex}.emails.${emailIndex}.emailAddress`}
+                                render={({ field }) => (
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Email address"
+                                      data-testid={`input-email-address-${contactIndex}-${emailIndex}`}
+                                    />
+                                  </FormControl>
+                                )}
                               />
                             </div>
                             <div className="col-span-2">

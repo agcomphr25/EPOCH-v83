@@ -160,6 +160,12 @@ export default function RefundRequest() {
         <p className="text-gray-600" data-testid="page-description">
           Search for a customer and select an order to request a refund. All refund requests require manager approval.
         </p>
+        <Button 
+          className="mt-4 bg-pink-500 hover:bg-pink-600 text-white"
+          data-testid="goodbye-button"
+        >
+          GOODBYE
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

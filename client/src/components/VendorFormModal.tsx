@@ -47,7 +47,7 @@ import {
   Save,
   X,
   Upload,
-  Download,
+  Eye,
   Calendar,
   AlertCircle,
 } from 'lucide-react';
@@ -811,27 +811,10 @@ export default function VendorFormModal({
     deleteDocumentMutation.mutate(documentId);
   };
 
-  const handleDownloadDocument = async (document: VendorDocument) => {
-    try {
-      const response = await fetch(`/api/vendor-documents/${document.id}/download`);
-      if (!response.ok) throw new Error('Download failed');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement('a');
-      a.href = url;
-      a.download = document.originalName;
-      window.document.body.appendChild(a);
-      a.click();
-      window.document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to download document",
-        variant: "destructive",
-      });
-    }
+  const handlePreviewDocument = (document: VendorDocument) => {
+    // Open document in new tab for preview
+    const previewUrl = `/api/vendor-documents/${document.id}/view`;
+    window.open(previewUrl, '_blank', 'noopener,noreferrer');
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1717,10 +1700,10 @@ export default function VendorFormModal({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => handleDownloadDocument(document)}
-                                  data-testid={`button-download-document-${document.id}`}
+                                  onClick={() => handlePreviewDocument(document)}
+                                  data-testid={`button-preview-document-${document.id}`}
                                 >
-                                  <Download className="h-4 w-4" />
+                                  <Eye className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"

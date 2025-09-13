@@ -136,6 +136,19 @@ router.post("/:vendorId/contacts", async (req, res) => {
   }
 });
 
+// Update vendor contact
+router.put("/:vendorId/contacts/:contactId", async (req, res) => {
+  try {
+    const contactId = parseInt(req.params.contactId);
+    const data = req.body;
+    const contact = await storage.updateVendorContact(contactId, data);
+    res.json(contact);
+  } catch (error) {
+    console.error("Update vendor contact error:", error);
+    res.status(500).json({ error: "Failed to update vendor contact" });
+  }
+});
+
 // Vendor Addresses Routes
 
 // Get vendor addresses
@@ -196,6 +209,18 @@ contactRouter.get("/", async (req, res) => {
 contactRouter.post("/", async (req, res) => {
   try {
     const data = req.body;
+    // Check if contact already exists for this vendor and slot
+    if (data.vendorId && data.contactSlot) {
+      const existingContacts = await storage.getVendorContacts(data.vendorId);
+      const existingContact = existingContacts.find(c => c.contactSlot === data.contactSlot);
+      
+      if (existingContact) {
+        // Update existing contact instead of creating new one
+        const updatedContact = await storage.updateVendorContact(existingContact.id, data);
+        return res.json(updatedContact);
+      }
+    }
+    
     const contact = await storage.createVendorContact(data);
     res.status(201).json(contact);
   } catch (error) {

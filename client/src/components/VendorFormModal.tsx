@@ -246,10 +246,7 @@ export default function VendorFormModal({
         })) || [],
       });
       
-      // Set documents for edit mode
-      if (vendor.documents) {
-        setDocuments(vendor.documents);
-      }
+      // Documents are loaded via useQuery, not from vendor prop
     } else {
       form.reset(defaultValues);
       setDocuments([]);
@@ -723,6 +720,7 @@ export default function VendorFormModal({
       setDocuments(prev => [...prev, newDocument]);
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendor.id, 'details'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-documents/vendor', vendor.id] });
       toast({
         title: "Success",
         description: "Document uploaded successfully",
@@ -755,6 +753,7 @@ export default function VendorFormModal({
       setDocuments(prev => prev.filter(doc => doc.id !== deletedId));
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendor.id, 'details'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-documents/vendor', vendor.id] });
       toast({
         title: "Success",
         description: "Document deleted successfully",

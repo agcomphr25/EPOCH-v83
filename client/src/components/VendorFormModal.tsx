@@ -156,6 +156,20 @@ export default function VendorFormModal({
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Fetch vendor documents when vendor exists
+  const { data: vendorDocuments, isLoading: documentsLoading } = useQuery({
+    queryKey: ['/api/vendor-documents/vendor', vendor?.id],
+    enabled: !!vendor?.id && mode === 'edit',
+    refetchOnWindowFocus: false,
+  });
+
+  // Update documents state when query data changes
+  useEffect(() => {
+    if (vendorDocuments) {
+      setDocuments(vendorDocuments);
+    }
+  }, [vendorDocuments]);
+
   // Initialize form with default values
   const defaultValues: VendorFormData = {
     basic: {

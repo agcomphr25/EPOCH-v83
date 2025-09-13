@@ -276,27 +276,42 @@ vendorDocumentRouter.post('/', vendorUpload.single('file'), async (req: Request,
 
     const { vendorId, type, notes } = req.body;
     
-    const document = {
+    const documentData = {
       vendorId: parseInt(vendorId),
       type: type || 'OTHER',
-      originalName: req.file.originalname,
       fileName: req.file.filename,
+      originalFileName: req.file.originalname,
       filePath: req.file.path,
       fileSize: req.file.size,
       mimeType: req.file.mimetype,
-      notes: notes || null,
-      uploadedAt: new Date(),
+      description: notes || null,
+      isActive: true,
+      tags: [],
+      isConfidential: false,
     };
 
-    // For now, just return success response (later we can save to database)
+    // Save document to database
+    const savedDocument = await storage.createVendorDocument(documentData);
+    
     res.json({
-      id: Date.now(), // Temporary ID
-      ...document,
+      ...savedDocument,
       message: 'Document uploaded successfully'
     });
   } catch (error) {
     console.error('Vendor document upload error:', error);
     res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// GET /api/vendor-documents/vendor/:vendorId - Get documents for a vendor
+vendorDocumentRouter.get('/vendor/:vendorId', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    const documents = await storage.getVendorDocuments(vendorId);
+    res.json(documents);
+  } catch (error) {
+    console.error('Get vendor documents error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor documents' });
   }
 });
 
@@ -314,7 +329,8 @@ vendorDocumentRouter.get('/:id/download', async (req: Request, res: Response) =>
 // DELETE /api/vendor-documents/:id - Delete vendor document
 vendorDocumentRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
-    // For now, return a success response
+    const documentId = parseInt(req.params.id);
+    await storage.deleteVendorDocument(documentId);
     res.json({ message: 'Document deleted successfully' });
   } catch (error) {
     console.error('Vendor document delete error:', error);

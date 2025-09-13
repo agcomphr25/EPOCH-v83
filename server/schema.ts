@@ -2655,19 +2655,27 @@ export const emailSlotEnum = pgEnum("email_slot", ["1", "2"]);
 export const vendors = pgTable("vendors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  primaryContactId: integer("primary_contact_id").references(() => vendorContacts.id), // Reference to vendor_contacts.id
-  // Approval/Evaluation status
-  approved: boolean("approved").default(false),
-  evaluated: boolean("evaluated").default(false),
-  evaluationDate: timestamp("evaluation_date"),
-  // Scoring system
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  notes: text("notes"),
+  evaluationNotes: text("evaluation_notes"),
+  approvalNotes: text("approval_notes"),
+  isApproved: boolean("is_approved").default(false),
+  isEvaluated: boolean("is_evaluated").default(false),
+  // Extended fields added for comprehensive vendor management
+  primaryContactId: integer("primary_contact_id"),
+  company: text("company"),
+  website: text("website"),
+  paymentTerms: text("payment_terms"),
+  shippingTerms: text("shipping_terms"),
+  leadTime: integer("lead_time"),
+  minimumOrderAmount: real("minimum_order_amount"),
+  discountTerms: text("discount_terms"),
+  certifications: text("certifications").array(),
   totalScore: real("total_score").default(0),
   lastScoredAt: timestamp("last_scored_at"),
-  // General info
-  website: text("website"),
-  taxId: text("tax_id"),
-  notes: text("notes"),
-  tags: text("tags").array().default([]),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

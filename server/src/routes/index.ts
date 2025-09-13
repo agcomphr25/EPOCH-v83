@@ -9,6 +9,7 @@ import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import customersRoutes from './customers';
+import vendorsRoutes from './vendors';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -59,6 +60,9 @@ export function registerRoutes(app: Express): Server {
 
   // Customer management routes
   app.use('/api/customers', customersRoutes);
+
+  // Vendor management routes
+  app.use('/api/vendors', vendorsRoutes);
 
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);

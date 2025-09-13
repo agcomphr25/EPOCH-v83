@@ -149,12 +149,17 @@ export default function VendorManagement() {
   const filteredVendors = vendors.filter((vendor: Vendor) => {
     const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (vendor.website && vendor.website.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || vendor.status === statusFilter;
-    const matchesApproval = approvalFilter === 'all' || vendor.approvalStatus === approvalFilter;
+    const vendorStatus = vendor.isActive ? 'active' : 'inactive';
+    const vendorApproval = vendor.isApproved ? 'approved' : (vendor.isEvaluated ? 'rejected' : 'pending');
+    const matchesStatus = statusFilter === 'all' || vendorStatus === statusFilter;
+    const matchesApproval = approvalFilter === 'all' || vendorApproval === approvalFilter;
     return matchesSearch && matchesStatus && matchesApproval;
   });
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string | undefined) => {
+    if (!status) {
+      status = 'active'; // Default to active if status is undefined
+    }
     const colors = {
       active: 'bg-green-100 text-green-800',
       inactive: 'bg-gray-100 text-gray-800',
@@ -167,7 +172,10 @@ export default function VendorManagement() {
     );
   };
 
-  const getApprovalBadge = (approval: string) => {
+  const getApprovalBadge = (approval: string | undefined) => {
+    if (!approval) {
+      approval = 'pending'; // Default to pending if approval is undefined
+    }
     const colors = {
       approved: 'bg-green-100 text-green-800',
       pending: 'bg-yellow-100 text-yellow-800',
@@ -365,10 +373,10 @@ export default function VendorManagement() {
                       )}
                     </TableCell>
                     <TableCell data-testid={`status-vendor-${vendor.id}`}>
-                      {getStatusBadge(vendor.status)}
+                      {getStatusBadge(vendor.isActive ? 'active' : 'inactive')}
                     </TableCell>
                     <TableCell data-testid={`approval-vendor-${vendor.id}`}>
-                      {getApprovalBadge(vendor.approvalStatus)}
+                      {getApprovalBadge(vendor.isApproved ? 'approved' : (vendor.isEvaluated ? 'rejected' : 'pending'))}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
@@ -438,11 +446,11 @@ export default function VendorManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Status</label>
-                    <div>{getStatusBadge(vendorDetails.status)}</div>
+                    <div>{getStatusBadge(vendorDetails.isActive ? 'active' : 'inactive')}</div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Approval</label>
-                    <div>{getApprovalBadge(vendorDetails.approvalStatus)}</div>
+                    <div>{getApprovalBadge(vendorDetails.isApproved ? 'approved' : (vendorDetails.isEvaluated ? 'rejected' : 'pending'))}</div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Website</label>

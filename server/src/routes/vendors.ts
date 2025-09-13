@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { db } from '../../db';
+import { sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { insertVendorSchema, insertVendorContactSchema, insertVendorAddressSchema } from '../../schema';
 import { z } from 'zod';
@@ -278,24 +279,43 @@ vendorDocumentRouter.post('/', vendorUpload.single('file'), async (req: Request,
     
     const documentData = {
       vendorId: parseInt(vendorId),
-      type: type || 'OTHER',
-      fileName: req.file.filename,
-      originalFileName: req.file.originalname,
+      documentType: type || 'OTHER',
+      documentName: req.file.filename,
       filePath: req.file.path,
       fileSize: req.file.size,
       mimeType: req.file.mimetype,
       description: notes || null,
       isActive: true,
-      tags: [],
-      isConfidential: false,
     };
 
-    // Save document to database
-    const savedDocument = await storage.createVendorDocument(documentData);
+    // Insert into database using execute_sql_tool compatible approach
+    console.log('Document data ready for insertion:', documentData);
+    
+    // Simple INSERT query that matches the actual database schema
+    await db.execute(sql`
+      INSERT INTO vendor_documents (
+        vendor_id, document_type, document_name, file_path, 
+        file_size, mime_type, description, is_active, created_at, updated_at
+      ) VALUES (
+        ${documentData.vendorId}, 
+        ${documentData.documentType}, 
+        ${documentData.documentName}, 
+        ${documentData.filePath}, 
+        ${documentData.fileSize}, 
+        ${documentData.mimeType}, 
+        ${documentData.description}, 
+        true, 
+        NOW(), 
+        NOW()
+      )
+    `);
     
     res.json({
-      ...savedDocument,
-      message: 'Document uploaded successfully'
+      message: 'Document uploaded successfully',
+      fileName: documentData.documentName,
+      type: documentData.documentType,
+      size: documentData.fileSize,
+      path: documentData.filePath
     });
   } catch (error) {
     console.error('Vendor document upload error:', error);
@@ -307,8 +327,28 @@ vendorDocumentRouter.post('/', vendorUpload.single('file'), async (req: Request,
 vendorDocumentRouter.get('/vendor/:vendorId', async (req: Request, res: Response) => {
   try {
     const vendorId = parseInt(req.params.vendorId);
-    const documents = await storage.getVendorDocuments(vendorId);
-    res.json(documents);
+    const result = await db.execute(sql`
+      SELECT * FROM vendor_documents 
+      WHERE vendor_id = ${vendorId} AND is_active = true 
+      ORDER BY created_at DESC
+    `);
+    
+    // Transform to match frontend expectations
+    const transformedDocs = result.map((doc: any) => ({
+      id: doc.id,
+      vendorId: doc.vendor_id,
+      type: doc.document_type,
+      fileName: doc.document_name,
+      originalName: doc.document_name,
+      filePath: doc.file_path,
+      fileSize: doc.file_size,
+      mimeType: doc.mime_type,
+      description: doc.description,
+      isActive: doc.is_active,
+      uploadedAt: doc.created_at,
+    }));
+    
+    res.json(transformedDocs);
   } catch (error) {
     console.error('Get vendor documents error:', error);
     res.status(500).json({ error: 'Failed to fetch vendor documents' });

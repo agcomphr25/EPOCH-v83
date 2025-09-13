@@ -2937,14 +2937,26 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   updatedAt: true,
 }).extend({
   name: z.string().min(1, "Vendor name is required"),
-  primaryContactId: z.number().optional().nullable(),
-  approved: z.boolean().default(false),
-  evaluated: z.boolean().default(false),
-  evaluationDate: z.coerce.date().optional().nullable(),
-  website: z.string().url().optional().nullable(),
-  taxId: z.string().optional().nullable(),
+  contactPerson: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal("")),
+  phone: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  tags: z.array(z.string()).default([]),
+  evaluationNotes: z.string().optional().nullable(),
+  approvalNotes: z.string().optional().nullable(),
+  isApproved: z.boolean().default(false),
+  isEvaluated: z.boolean().default(false),
+  primaryContactId: z.number().optional().nullable(),
+  company: z.string().optional().nullable(),
+  website: z.string().optional().nullable().refine((val) => !val || val === "" || z.string().url().safeParse(val).success, {
+    message: "Invalid URL format"
+  }),
+  paymentTerms: z.string().optional().nullable(),
+  shippingTerms: z.string().optional().nullable(),
+  leadTime: z.number().optional().nullable(),
+  minimumOrderAmount: z.number().optional().nullable(),
+  discountTerms: z.string().optional().nullable(),
+  certifications: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
 });
 

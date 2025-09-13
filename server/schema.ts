@@ -2721,21 +2721,19 @@ export const addressTypeEnum = pgEnum("address_type", [
 export const vendorAddresses = pgTable("vendor_addresses", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
-  addressSlot: addressSlotEnum("address_slot").notNull(),
-  type: addressTypeEnum("type").default("OTHER"),
-  addressLine1: text("address_line1").notNull(),
-  addressLine2: text("address_line2"),
-  city: text("city").notNull(),
-  state: text("state").notNull(),
-  postalCode: text("postal_code").notNull(),
+  addressSlot: integer("address_slot").notNull(),
+  type: text("type"),
+  street1: text("street_1"),
+  street2: text("street_2"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
   country: text("country").default("US"),
   isPrimary: boolean("is_primary").default(false),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  uniqueVendorAddress: unique().on(table.vendorId, table.addressSlot),
-}));
+});
 
 // Phone types enumeration
 export const phoneTypeEnum = pgEnum("phone_type", [

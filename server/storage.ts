@@ -6520,14 +6520,29 @@ export class DatabaseStorage implements IStorage {
     const vendor = await this.getVendor(id);
     if (!vendor) return undefined;
 
-    // For now, return basic vendor info with empty arrays for extended data
-    // TODO: Implement full contact/address/document management when tables are ready
-    return {
-      ...vendor,
-      contacts: [],
-      addresses: [],
-      documents: []
-    };
+    try {
+      const [contacts, addresses, documents] = await Promise.all([
+        this.getVendorContacts(id),
+        this.getVendorAddresses(id),
+        [] // Documents not implemented yet - return empty array for now
+      ]);
+
+      return {
+        ...vendor,
+        contacts,
+        addresses,
+        documents
+      };
+    } catch (error) {
+      console.error("Error loading vendor details:", error);
+      // Fallback to basic vendor info if detailed loading fails
+      return {
+        ...vendor,
+        contacts: [],
+        addresses: [],
+        documents: []
+      };
+    }
   }
 
   async createVendor(data: InsertVendor): Promise<Vendor> {

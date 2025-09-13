@@ -2697,18 +2697,16 @@ export const contactRoleEnum = pgEnum("contact_role", [
 export const vendorContacts = pgTable("vendor_contacts", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id").references(() => vendors.id).notNull(),
-  contactSlot: contactSlotEnum("contact_slot").notNull(),
-  name: text("name").notNull(),
-  title: text("title"),
-  role: contactRoleEnum("role").default("OTHER"),
+  contactSlot: integer("contact_slot").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"), 
+  role: text("role"),
   isPrimary: boolean("is_primary").default(false),
   notes: text("notes"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  uniqueVendorContact: unique().on(table.vendorId, table.contactSlot),
-}));
+});
 
 // Address types enumeration  
 export const addressTypeEnum = pgEnum("address_type", [
@@ -2966,10 +2964,10 @@ export const insertVendorContactSchema = createInsertSchema(vendorContacts).omit
   updatedAt: true,
 }).extend({
   vendorId: z.number().min(1, "Vendor ID is required"),
-  contactSlot: z.enum(["1", "2", "3"]),
-  name: z.string().min(1, "Contact name is required"),
-  title: z.string().optional().nullable(),
-  role: z.enum(["PRIMARY", "ACCOUNTING", "TECHNICAL", "PURCHASING", "SALES", "SUPPORT", "MANAGEMENT", "OTHER"]).default("OTHER"),
+  contactSlot: z.number().min(1).max(3),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  role: z.string().optional().nullable(),
   isPrimary: z.boolean().default(false),
   notes: z.string().optional().nullable(),
   isActive: z.boolean().default(true),

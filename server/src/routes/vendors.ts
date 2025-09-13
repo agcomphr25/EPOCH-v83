@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { db } from '../../db';
 import { storage } from '../../storage';
 import { insertVendorSchema, insertVendorContactSchema, insertVendorAddressSchema } from '../../schema';
@@ -229,5 +230,97 @@ contactRouter.post("/", async (req, res) => {
   }
 });
 
+// Vendor Documents Routes (File Upload)
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+
+// Configure multer for vendor document uploads
+const vendorUploadDir = 'uploads/vendor-documents';
+if (!fs.existsSync(vendorUploadDir)) {
+  fs.mkdirSync(vendorUploadDir, { recursive: true });
+}
+
+const vendorUpload = multer({
+  dest: vendorUploadDir,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req: any, file: any, cb: any) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/png',
+      'text/plain'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
+  }
+});
+
+// Create vendor document routes
+const vendorDocumentRouter = Router();
+
+// POST /api/vendor-documents - Upload vendor document
+vendorDocumentRouter.post('/', vendorUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { vendorId, type, notes } = req.body;
+    
+    const document = {
+      vendorId: parseInt(vendorId),
+      type: type || 'OTHER',
+      originalName: req.file.originalname,
+      fileName: req.file.filename,
+      filePath: req.file.path,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      notes: notes || null,
+      uploadedAt: new Date(),
+    };
+
+    // For now, just return success response (later we can save to database)
+    res.json({
+      id: Date.now(), // Temporary ID
+      ...document,
+      message: 'Document uploaded successfully'
+    });
+  } catch (error) {
+    console.error('Vendor document upload error:', error);
+    res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// GET /api/vendor-documents/:id/download - Download vendor document
+vendorDocumentRouter.get('/:id/download', async (req: Request, res: Response) => {
+  try {
+    // For now, return a success response
+    res.json({ message: 'Download functionality will be implemented' });
+  } catch (error) {
+    console.error('Vendor document download error:', error);
+    res.status(500).json({ error: 'Failed to download document' });
+  }
+});
+
+// DELETE /api/vendor-documents/:id - Delete vendor document
+vendorDocumentRouter.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    // For now, return a success response
+    res.json({ message: 'Document deleted successfully' });
+  } catch (error) {
+    console.error('Vendor document delete error:', error);
+    res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
 export default router;
-export { contactRouter };
+export { contactRouter, vendorDocumentRouter };

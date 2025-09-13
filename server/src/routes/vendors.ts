@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
 import { storage } from '../../storage';
@@ -233,8 +236,7 @@ contactRouter.post("/", async (req, res) => {
 
 // Vendor Documents Routes (File Upload)
 import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
+
 
 // Configure multer for vendor document uploads
 const vendorUploadDir = 'uploads/vendor-documents';
@@ -368,14 +370,41 @@ vendorDocumentRouter.get('/vendor/:vendorId', async (req: Request, res: Response
   }
 });
 
-// GET /api/vendor-documents/:id/download - Download vendor document
-vendorDocumentRouter.get('/:id/download', async (req: Request, res: Response) => {
+// GET /api/vendor-documents/:id/view - View/preview vendor document
+vendorDocumentRouter.get('/:id/view', async (req: Request, res: Response) => {
   try {
-    // For now, return a success response
-    res.json({ message: 'Download functionality will be implemented' });
+    const documentId = parseInt(req.params.id);
+    
+    // Get document info from database
+    const result = await db.execute(sql`
+      SELECT * FROM vendor_documents 
+      WHERE id = ${documentId} AND is_active = true
+    `);
+    
+    const documents = Array.isArray(result) ? result : result.rows || [];
+    if (documents.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const doc = documents[0] as any;
+    const filePath = path.join(process.cwd(), doc.file_path);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+    
+    // Set appropriate headers for inline viewing
+    res.setHeader('Content-Type', doc.mime_type);
+    res.setHeader('Content-Disposition', `inline; filename="${doc.document_name}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+    
   } catch (error) {
-    console.error('Vendor document download error:', error);
-    res.status(500).json({ error: 'Failed to download document' });
+    console.error('Vendor document view error:', error);
+    res.status(500).json({ error: 'Failed to view document' });
   }
 });
 

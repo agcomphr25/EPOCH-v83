@@ -1,7 +1,7 @@
 import { pgTable, text, serial, integer, timestamp, jsonb, boolean, json, real, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -2982,7 +2982,7 @@ export const robustParts = pgTable('robust_parts', {
   // Lifecycle Management
   lifecycleStatus: partLifecycleStatusEnum('lifecycle_status').notNull().default('ACTIVE'),
   obsoleteDate: timestamp('obsolete_date'),
-  replacementPartId: text('replacement_part_id').references(() => robustParts.id),
+  replacementPartId: text('replacement_part_id'),
   
   // Validation constraints
   minQuantity: real('min_quantity').default(0.001),

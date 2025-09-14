@@ -190,7 +190,11 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                 ${Array(6).fill().map((_, i) => `
                   <div class="avery-label">
                     <div class="label-content">
+<<<<<<< HEAD
                       <div class="order-header">${orderId}${customerName ? ' - ' + customerName : ''}</div>
+=======
+                      <div class="order-header">P1 ORDER</div>
+>>>>>>> origin/main
                       <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
                       <div class="order-details">
                         <div class="date-info">Printed: ${currentDate}</div>
@@ -233,7 +237,11 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
+<<<<<<< HEAD
             Order Barcode - {orderId}{customerName ? ` - ${customerName}` : ''}
+=======
+            Order Barcode - {orderId}
+>>>>>>> origin/main
           </CardTitle>
         </CardHeader>
       )}

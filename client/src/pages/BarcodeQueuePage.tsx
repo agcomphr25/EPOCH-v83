@@ -416,7 +416,11 @@ export default function BarcodeQueuePage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Scan className="h-6 w-6" />
+<<<<<<< HEAD
           <h1 className="text-3xl font-bold">Barcode Department Manager</h1>
+=======
+          <h1 className="text-3xl font-bold">Barcode P1 Department Manager</h1>
+>>>>>>> origin/main
         </div>
 
         {/* Multi-Select Actions */}
@@ -431,6 +435,31 @@ export default function BarcodeQueuePage() {
               Select All ({selectedOrders.size}/{barcodeOrders.length})
             </label>
           </div>
+<<<<<<< HEAD
+=======
+
+          {selectedOrders.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleCreateBarcodes}
+                disabled={createBarcodeLabels.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <QrCode className="h-4 w-4 mr-2" />
+                Create Avery Labels ({selectedOrders.size})
+              </Button>
+              <Button
+                onClick={handleProgressToCNC}
+                disabled={progressToCNC.isPending}
+                variant="outline"
+                className="border-green-500 text-green-700 hover:bg-green-50"
+              >
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Progress to CNC ({selectedOrders.size})
+              </Button>
+            </div>
+          )}
+>>>>>>> origin/main
         </div>
       </div>
 

@@ -102,6 +102,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     console.log('🔍 Getting all refund requests');
     
+<<<<<<< HEAD
     // Select only the columns that exist in the current database schema
     const requests = await db
       .select({
@@ -130,6 +131,10 @@ router.get('/', async (req: Request, res: Response) => {
         // gatewayRefundId: refundRequests.gatewayRefundId,
         // gateway: refundRequests.gateway,
       })
+=======
+    const requests = await db
+      .select()
+>>>>>>> origin/main
       .from(refundRequests)
       .orderBy(desc(refundRequests.createdAt));
 

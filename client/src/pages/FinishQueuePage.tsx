@@ -347,7 +347,11 @@ export default function FinishQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Paintbrush className="h-6 w-6" />
+<<<<<<< HEAD
         <h1 className="text-3xl font-bold">Finish Department Manager</h1>
+=======
+        <h1 className="text-3xl font-bold">Finish P1 Department Manager</h1>
+>>>>>>> origin/main
       </div>
 
       {/* Barcode Scanner at top */}
@@ -451,6 +455,34 @@ export default function FinishQueuePage() {
                     </Button>
                   )}
 
+<<<<<<< HEAD
+=======
+                  {selectedOrders.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      {selectedTechnician && (
+                        <Button
+                          onClick={handleMoveToFinishQC}
+                          disabled={moveToFinishQCMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          size="sm"
+                        >
+                          <ArrowRight className="h-4 w-4 mr-1" />
+                          Move to Finish QC ({selectedOrders.size})
+                        </Button>
+                      )}
+                      
+                      <Button
+                        onClick={handleMoveToPaint}
+                        disabled={moveToPaintMutation.isPending}
+                        className="bg-purple-600 hover:bg-purple-700"
+                        size="sm"
+                      >
+                        <Paintbrush className="h-4 w-4 mr-1" />
+                        Skip to Paint ({selectedOrders.size})
+                      </Button>
+                    </div>
+                  )}
+>>>>>>> origin/main
                 </div>
               )}
             </div>

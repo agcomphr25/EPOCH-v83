@@ -206,6 +206,12 @@ export default function Navigation() {
       description: 'Receive incoming inventory'
     },
     {
+      path: '/inventory/enhanced-mrp',
+      label: 'Enhanced Inventory & MRP',
+      icon: Factory,
+      description: 'Advanced inventory management with material requirements planning'
+    },
+    {
       path: '/vendors',
       label: 'Vendor Management',
       icon: Users,

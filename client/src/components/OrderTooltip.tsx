@@ -10,7 +10,6 @@ interface OrderTooltipProps {
   showHoverText?: boolean;
   className?: string;
   children?: React.ReactNode;
-  gunsimthTasks?: string[];
 }
 
 // Format order features for display
@@ -118,7 +117,7 @@ const formatOrderDetails = (order: any, stockModels: any[]) => {
   return details.join('\n');
 };
 
-export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children, gunsimthTasks }: OrderTooltipProps) {
+export function OrderTooltip({ order, stockModels, showHoverText = true, className = "", children }: OrderTooltipProps) {
   const modelId = order.stockModelId || order.modelId;
   const materialType = modelId?.startsWith('cf_') ? 'CF' : 
                       modelId?.startsWith('fg_') ? 'FG' : null;
@@ -175,18 +174,6 @@ export function OrderTooltip({ order, stockModels, showHoverText = true, classNa
             {order.createdAt && (
               <div className="text-xs text-gray-500">
                 In Dept: {Math.floor((Date.now() - new Date(order.updatedAt || order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
-              </div>
-            )}
-
-            {gunsimthTasks && gunsimthTasks.length > 0 && (
-              <div className="mt-2">
-                <div className="flex flex-wrap gap-1">
-                  {gunsimthTasks.map((task, index) => (
-                    <Badge key={index} variant="outline" className="text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
-                      {task}
-                    </Badge>
-                  ))}
-                </div>
               </div>
             )}
 

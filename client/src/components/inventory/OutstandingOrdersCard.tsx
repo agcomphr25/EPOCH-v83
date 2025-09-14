@@ -71,7 +71,7 @@ export default function OutstandingOrdersCard() {
                     <p className="text-sm text-gray-600">PO: {order.customerPO}</p>
                   )}
                 </div>
-                <Badge className={getStatusBadgeColor(order.status || 'DRAFT')}>
+                <Badge className={getStatusBadgeColor(order.status)}>
                   {order.status}
                 </Badge>
               </div>
@@ -94,7 +94,7 @@ export default function OutstandingOrdersCard() {
 
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>Due: {order.dueDate ? formatDate(typeof order.dueDate === 'string' ? order.dueDate : order.dueDate.toISOString()) : 'No Due Date'}</span>
+                  <span>Due: {order.dueDate ? formatDate(order.dueDate) : 'No Due Date'}</span>
                 </div>
 
                 <div className="flex items-center gap-2">

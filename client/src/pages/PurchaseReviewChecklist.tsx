@@ -298,14 +298,6 @@ export default function PurchaseReviewChecklist() {
     window.print();
   };
 
-  // Handle form submission
-  const handleSubmitChecklist = () => {
-    // TODO: Implement form submission logic
-    // For now, just show a placeholder message
-    console.log('Purchase Review Checklist submitted:', formData);
-    alert('Checklist submission functionality will be implemented soon.');
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
@@ -1386,17 +1378,6 @@ export default function PurchaseReviewChecklist() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Submit Button */}
-        <div className="flex justify-center mb-6">
-          <Button 
-            onClick={handleSubmitChecklist}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-medium"
-            size="lg"
-          >
-            Submit Checklist
-          </Button>
-        </div>
 
         <div className="text-center mt-8 mb-4">
           <p className="text-sm text-gray-500">FO Form 12 • Version 1.4 07/22/2025</p>

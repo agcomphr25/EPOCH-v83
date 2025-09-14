@@ -18,37 +18,11 @@ interface BarcodeDisplayProps {
   actionLength?: string;
   stockModel?: string;
   paintOption?: string;
-  color?: string;
-  features?: any; // Order features object
-  modelId?: string; // Stock model ID
-  isHighPriority?: boolean; // High priority flag
-  isLate?: boolean; // Late order flag
 }
 
-export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption, color, features, modelId, isHighPriority, isLate }: BarcodeDisplayProps) {
+export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'medium', customerName, orderDate, dueDate, status, actionLength, stockModel, paintOption }: BarcodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showAveryDialog, setShowAveryDialog] = useState(false);
-
-  // Color coding logic
-  const getBarcodeColor = () => {
-    // Red for high priority or late orders
-    if (isHighPriority || isLate) {
-      return '#FF0000'; // Red
-    }
-    
-    // Blue for painted stock (terraine, premium, standard, rattlesnake rogue, fg* models)
-    const paintedOptions = ['terraine', 'premium', 'standard', 'rattlesnake_rogue'];
-    const isPaintedOption = paintedOptions.some(option => 
-      paintOption?.toLowerCase().includes(option)
-    );
-    const isFiberglassModel = modelId?.toLowerCase().startsWith('fg');
-    
-    if (isPaintedOption || isFiberglassModel) {
-      return '#0066FF'; // Blue
-    }
-    
-    return '#000000'; // Black (default)
-  };
 
   const getSizeConfig = () => {
     switch (size) {
@@ -64,7 +38,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
   useEffect(() => {
     if (canvasRef.current && barcode) {
       const config = getSizeConfig();
-
+      
       try {
         JsBarcode(canvasRef.current, barcode, {
           format: "CODE39",
@@ -78,7 +52,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
           fontOptions: "",
           font: "monospace",
           background: "#ffffff",
-          lineColor: getBarcodeColor(),
+          lineColor: "#000000",
           margin: 10,
           marginTop: undefined,
           marginBottom: undefined,
@@ -111,7 +85,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
           day: '2-digit',
           year: 'numeric'
         });
-
+        
         printWindow.document.write(`
           <html>
             <head>
@@ -122,7 +96,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   padding: 0;
                   font-family: Arial, sans-serif;
                 }
-
+                
                 /* Avery 5160 Label Dimensions: 2.625" x 1" */
                 .avery-label {
                   width: 2.625in;
@@ -136,7 +110,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   page-break-inside: avoid;
                   background: white;
                 }
-
+                
                 .label-content {
                   height: 100%;
                   display: flex;
@@ -144,38 +118,38 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   justify-content: space-between;
                   text-align: center;
                 }
-
+                
                 .order-header {
                   font-size: 8pt;
                   font-weight: bold;
                   margin-bottom: 2px;
                   color: #333;
                 }
-
+                
                 .barcode-img {
                   max-width: 100%;
                   max-height: 0.5in;
                   height: auto;
                   margin: 2px 0;
                 }
-
+                
                 .order-details {
                   font-size: 6pt;
                   line-height: 1.1;
                   color: #666;
                 }
-
+                
                 .date-info {
                   font-size: 5pt;
                   color: #888;
                   margin-top: 1px;
                 }
-
+                
                 @media print {
                   body { margin: 0; }
                   .avery-label { border: none; margin: 0; }
                 }
-
+                
                 /* Multiple labels layout */
                 .labels-container {
                   display: flex;
@@ -190,13 +164,10 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                 ${Array(6).fill().map((_, i) => `
                   <div class="avery-label">
                     <div class="label-content">
-<<<<<<< HEAD
-                      <div class="order-header">${orderId}${customerName ? ' - ' + customerName : ''}</div>
-=======
                       <div class="order-header">P1 ORDER</div>
->>>>>>> origin/main
                       <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
                       <div class="order-details">
+                        <div>${orderId}</div>
                         <div class="date-info">Printed: ${currentDate}</div>
                       </div>
                     </div>
@@ -208,7 +179,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
         `);
         printWindow.document.close();
         printWindow.focus();
-
+        
         // Small delay to ensure content loads before printing
         setTimeout(() => {
           printWindow.print();
@@ -237,11 +208,7 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-<<<<<<< HEAD
-            Order Barcode - {orderId}{customerName ? ` - ${customerName}` : ''}
-=======
             Order Barcode - {orderId}
->>>>>>> origin/main
           </CardTitle>
         </CardHeader>
       )}
@@ -250,12 +217,12 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
           <div className="bg-white p-4 rounded border">
             <canvas ref={canvasRef} />
           </div>
-
+          
           <div className="text-center text-sm text-gray-600">
             <p className="font-mono">{barcode}</p>
             <p className="mt-1">CODE39 Format</p>
           </div>
-
+          
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
@@ -286,11 +253,6 @@ export function BarcodeDisplay({ orderId, barcode, showTitle = true, size = 'med
                   actionLength={actionLength}
                   stockModel={stockModel}
                   paintOption={paintOption}
-                  color={color}
-                  features={features}
-                  modelId={modelId}
-                  isHighPriority={isHighPriority}
-                  isLate={isLate}
                   labelType="detailed"
                   copies={6}
                 />

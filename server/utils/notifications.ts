@@ -23,47 +23,32 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
     errors: [] as string[]
   };
 
-  // Get customer preferences - look in both finalized and draft orders
-  let customer = null;
-  let order = null;
+  // Get customer preferences
+  const [order] = await db
+    .select({
+      customerId: orderDrafts.customerId,
+      orderId: orderDrafts.orderId
+    })
+    .from(orderDrafts)
+    .where(eq(orderDrafts.orderId, data.orderId));
 
-  // First try to find in finalized orders using storage instead of direct import
-  try {
-    const { storage } = await import('../storage.js');
-    const finalizedOrders = await storage.getAllFinalizedOrders();
-    const finalizedOrder = finalizedOrders.find((order: any) => order.orderId === data.orderId);
-    if (finalizedOrder?.customerId) {
-      order = finalizedOrder;
-      const { storage } = await import('../storage.js');
-      customer = await storage.getCustomerById(finalizedOrder.customerId);
-    }
-  } catch (error) {
-    console.log('Order not found in finalized orders, trying draft orders');
+  if (!order || !order.customerId) {
+    results.errors.push('Order or customer not found');
+    return results;
   }
 
-  // If not found in finalized, try draft orders
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, parseInt(order.customerId)));
+
   if (!customer) {
-    try {
-      const { storage } = await import('../storage.js');
-      const draftOrders = await storage.getAllOrderDrafts();
-      const draftOrder = draftOrders.find((order: any) => order.orderId === data.orderId);
-
-      if (draftOrder?.customerId) {
-        order = draftOrder;
-        customer = await storage.getCustomerById(draftOrder.customerId);
-      }
-    } catch (error) {
-      console.log('Order not found in draft orders either');
-    }
-  }
-
-  if (!order || !customer) {
-    results.errors.push('Order or customer not found in either finalized or draft orders');
+    results.errors.push('Customer not found');
     return results;
   }
 
   // Determine notification methods
-  const preferredMethods = data.preferredMethods || customer.preferredCommunicationMethod as string[] || ['email'];
+  const preferredMethods = customer.preferredCommunicationMethod as string[] || ['email'];
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
@@ -76,7 +61,7 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
         estimatedDelivery: data.estimatedDelivery
-      }, customer?.id.toString());
+      });
       results.methods.push('email');
     } catch (error) {
       results.errors.push(`Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -92,7 +77,7 @@ export async function sendCustomerNotification(data: NotificationData): Promise<
         trackingNumber: data.trackingNumber,
         carrier: data.carrier,
         estimatedDelivery: data.estimatedDelivery
-      }, customer?.id.toString());
+      });
       results.methods.push('sms');
     } catch (error) {
       results.errors.push(`SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -122,7 +107,7 @@ async function sendEmailNotification(data: {
   trackingNumber: string;
   carrier: string;
   estimatedDelivery?: Date;
-}, customerId?: string) {
+}) {
   // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
   const deliveryText = data.estimatedDelivery 
@@ -150,41 +135,15 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
-  console.log('Sending email shipping notification:', {
+  console.log('Email notification would be sent:', {
     to: data.email,
     subject,
     message: message.substring(0, 100) + '...'
   });
 
-  // Use the actual email API endpoint
-  try {
-    const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
-    const response = await fetch(`${baseUrl}/api/communications/email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        to: data.email,
-        subject: subject,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Email API request failed');
-    }
-
-    const result = await response.json();
-    console.log('Email shipping notification sent successfully:', result.externalId);
-    return result;
-  } catch (error) {
-    console.error('Failed to send email shipping notification:', error);
-    throw error;
-  }
+  // TODO: Implement actual email sending (SendGrid, etc.)
+  // For now, just log the notification
+  return Promise.resolve();
 }
 
 async function sendSMSNotification(data: {
@@ -193,42 +152,17 @@ async function sendSMSNotification(data: {
   trackingNumber: string;
   carrier: string;
   estimatedDelivery?: Date;
-}, customerId?: string) {
+}) {
   const message = `AG Composites: Your order ${data.orderId} has shipped! Track with ${data.trackingNumber} on ${data.carrier}. ${data.estimatedDelivery ? `Est. delivery: ${data.estimatedDelivery.toLocaleDateString()}` : ''}`;
 
-  console.log('Sending SMS shipping notification:', {
+  console.log('SMS notification would be sent:', {
     to: data.phone,
-    message: message.substring(0, 50) + '...'
+    message
   });
 
-  // Use the actual SMS API endpoint
-  try {
-    const baseUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
-    const response = await fetch(`${baseUrl}/api/communications/sms`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        to: data.phone,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'SMS API request failed');
-    }
-
-    const result = await response.json();
-    console.log('SMS shipping notification sent successfully:', result.externalId);
-    return result;
-  } catch (error) {
-    console.error('Failed to send SMS shipping notification:', error);
-    throw error;
-  }
+  // TODO: Implement actual SMS sending (Twilio, etc.)
+  // For now, just log the notification
+  return Promise.resolve();
 }
 
 export async function updateTrackingInfo(orderId: string, trackingData: {

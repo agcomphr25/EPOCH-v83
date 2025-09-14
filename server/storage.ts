@@ -6810,6 +6810,1272 @@ export class DatabaseStorage implements IStorage {
     await db.delete(vendors).where(eq(vendors.id, id));
   }
 
+  // Robust Parts Management Methods
+  async getAllRobustParts(params?: { q?: string; type?: string; active?: boolean; page?: number; limit?: number }): Promise<{ data: RobustPart[]; total: number }> {
+    const { q = '', type = '', active = true, page = 1, limit = 50 } = params || {};
+    
+    // Build query conditions
+    const conditions = [];
+    
+    if (active !== undefined) {
+      conditions.push(eq(robustParts.isActive, active));
+    }
+    
+    if (q.trim()) {
+      const searchTerm = `%${q.toLowerCase()}%`;
+      conditions.push(
+        or(
+          ilike(robustParts.name, searchTerm),
+          ilike(robustParts.sku, searchTerm),
+          ilike(robustParts.description, searchTerm)
+        )
+      );
+    }
+    
+    if (type) {
+      conditions.push(eq(robustParts.type, type));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    // Get total count
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(robustParts)
+      .where(whereClause);
+    const total = totalResult.count;
+    
+    // Get paginated data
+    const data = await db
+      .select()
+      .from(robustParts)
+      .where(whereClause)
+      .orderBy(robustParts.name)
+      .limit(limit)
+      .offset((page - 1) * limit);
+    
+    return { data, total };
+  }
+
+  async getRobustPart(id: string): Promise<RobustPart | undefined> {
+    const [part] = await db
+      .select()
+      .from(robustParts)
+      .where(and(eq(robustParts.id, id), eq(robustParts.isActive, true)));
+    return part || undefined;
+  }
+
+  async getRobustPartBySku(sku: string): Promise<RobustPart | undefined> {
+    const [part] = await db
+      .select()
+      .from(robustParts)
+      .where(and(eq(robustParts.sku, sku), eq(robustParts.isActive, true)));
+    return part || undefined;
+  }
+
+  async createRobustPart(data: InsertRobustPart): Promise<RobustPart> {
+    const [part] = await db
+      .insert(robustParts)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return part;
+  }
+
+  async updateRobustPart(id: string, data: Partial<InsertRobustPart>): Promise<RobustPart> {
+    const [part] = await db
+      .update(robustParts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(robustParts.id, id))
+      .returning();
+
+    if (!part) {
+      throw new Error(`Robust part with ID ${id} not found`);
+    }
+
+    return part;
+  }
+
+  async deleteRobustPart(id: string): Promise<void> {
+    // Soft delete by setting isActive to false
+    await db
+      .update(robustParts)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(robustParts.id, id));
+  }
+
+  // BOM Management Methods  
+  async getBomLinesForPart(partId: string): Promise<RobustBomLine[]> {
+    return await db
+      .select()
+      .from(robustBomLines)
+      .where(and(eq(robustBomLines.parentPartId, partId), eq(robustBomLines.isActive, true)))
+      .orderBy(robustBomLines.sortOrder);
+  }
+
+  async getBomLinesByParent(parentPartId: string): Promise<RobustBomLine[]> {
+    return await db
+      .select()
+      .from(robustBomLines)
+      .where(and(eq(robustBomLines.parentPartId, parentPartId), eq(robustBomLines.isActive, true)))
+      .orderBy(robustBomLines.level, robustBomLines.sortOrder);
+  }
+
+  async createBomLine(data: InsertRobustBomLine): Promise<RobustBomLine> {
+    const [bomLine] = await db
+      .insert(robustBomLines)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return bomLine;
+  }
+
+  async updateBomLine(id: string, data: Partial<InsertRobustBomLine>): Promise<RobustBomLine> {
+    const [bomLine] = await db
+      .update(robustBomLines)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(robustBomLines.id, id))
+      .returning();
+
+    if (!bomLine) {
+      throw new Error(`BOM line with ID ${id} not found`);
+    }
+
+    return bomLine;
+  }
+
+  async deleteBomLine(id: string): Promise<void> {
+    // Soft delete by setting isActive to false
+    await db
+      .update(robustBomLines)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(robustBomLines.id, id));
+  }
+
+  async explodeBom(partId: string, quantity: number): Promise<{ partId: string; totalQtyNeeded: number; level: number }[]> {
+    const explodedBom = new Map<string, { partId: string; totalQtyNeeded: number; level: number }>();
+    
+    const explodeLevel = async (parentPartId: string, qty: number, level: number = 0): Promise<void> => {
+      if (level > 4) {
+        throw new Error('BOM explosion exceeded maximum depth of 4 levels');
+      }
+
+      const bomLines = await db
+        .select()
+        .from(robustBomLines)
+        .where(and(eq(robustBomLines.parentPartId, parentPartId), eq(robustBomLines.isActive, true)))
+        .orderBy(robustBomLines.sortOrder);
+
+      for (const line of bomLines) {
+        const extendedQty = qty * line.qtyPer;
+        const childPartId = line.childPartId;
+        
+        // Add or update the total quantity needed for this part
+        const existing = explodedBom.get(childPartId);
+        if (existing) {
+          existing.totalQtyNeeded += extendedQty;
+          existing.level = Math.min(existing.level, level + 1); // Keep the lowest level
+        } else {
+          explodedBom.set(childPartId, {
+            partId: childPartId,
+            totalQtyNeeded: extendedQty,
+            level: level + 1,
+          });
+        }
+
+        // Recursively explode child BOMs
+        await explodeLevel(childPartId, extendedQty, level + 1);
+      }
+    };
+
+    await explodeLevel(partId, quantity);
+    return Array.from(explodedBom.values()).sort((a, b) => a.level - b.level);
+  }
+
+  // Inventory Balance Methods
+  async getInventoryBalance(partId: string, locationId?: string): Promise<InventoryBalance | undefined> {
+    const location = locationId || 'MAIN';
+    const [balance] = await db
+      .select()
+      .from(inventoryBalances)
+      .where(and(eq(inventoryBalances.partId, partId), eq(inventoryBalances.locationId, location)));
+    return balance || undefined;
+  }
+
+  async getAllInventoryBalances(params?: { partId?: string; locationId?: string; lowStock?: boolean }): Promise<InventoryBalance[]> {
+    const { partId, locationId, lowStock } = params || {};
+    
+    const conditions = [];
+    
+    if (partId) {
+      conditions.push(eq(inventoryBalances.partId, partId));
+    }
+    
+    if (locationId) {
+      conditions.push(eq(inventoryBalances.locationId, locationId));
+    }
+    
+    if (lowStock) {
+      conditions.push(lte(inventoryBalances.onHandQty, inventoryBalances.safetyStock));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    return await db
+      .select()
+      .from(inventoryBalances)
+      .where(whereClause)
+      .orderBy(inventoryBalances.partId, inventoryBalances.locationId);
+  }
+
+  async updateInventoryBalance(partId: string, locationId: string, data: Partial<InsertInventoryBalance>): Promise<InventoryBalance> {
+    // Try to update existing balance
+    const [existingBalance] = await db
+      .update(inventoryBalances)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(inventoryBalances.partId, partId), eq(inventoryBalances.locationId, locationId)))
+      .returning();
+
+    if (existingBalance) {
+      return existingBalance;
+    }
+
+    // Create new balance if it doesn't exist
+    const [newBalance] = await db
+      .insert(inventoryBalances)
+      .values({
+        partId,
+        locationId,
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return newBalance;
+  }
+
+  // Inventory Transaction Methods
+  async getAllInventoryTransactions(params?: { partId?: string; transactionType?: string; dateFrom?: Date; dateTo?: Date; page?: number; limit?: number }): Promise<{ data: InventoryTransaction[]; total: number }> {
+    const { partId, transactionType, dateFrom, dateTo, page = 1, limit = 50 } = params || {};
+    
+    const conditions = [];
+    
+    if (partId) {
+      conditions.push(eq(inventoryTransactions.partId, partId));
+    }
+    
+    if (transactionType) {
+      conditions.push(eq(inventoryTransactions.transactionType, transactionType));
+    }
+    
+    if (dateFrom) {
+      conditions.push(gte(inventoryTransactions.transactionDate, dateFrom));
+    }
+    
+    if (dateTo) {
+      conditions.push(lte(inventoryTransactions.transactionDate, dateTo));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    // Get total count
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(inventoryTransactions)
+      .where(whereClause);
+    const total = totalResult.count;
+    
+    // Get paginated data
+    const data = await db
+      .select()
+      .from(inventoryTransactions)
+      .where(whereClause)
+      .orderBy(desc(inventoryTransactions.transactionDate))
+      .limit(limit)
+      .offset((page - 1) * limit);
+    
+    return { data, total };
+  }
+
+  async getInventoryTransaction(transactionId: string): Promise<InventoryTransaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.transactionId, transactionId));
+    return transaction || undefined;
+  }
+
+  async createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction> {
+    // Generate unique transaction ID
+    const transactionId = `INV-${Date.now()}-${nanoid(8)}`;
+
+    const [transaction] = await db
+      .insert(inventoryTransactions)
+      .values({
+        ...data,
+        transactionId,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    return transaction;
+  }
+
+  async processInventoryTransaction(data: InsertInventoryTransaction): Promise<{ transaction: InventoryTransaction; updatedBalance: InventoryBalance }> {
+    // Create the transaction first
+    const transaction = await this.createInventoryTransaction(data);
+
+    // Update inventory balance based on transaction
+    const currentBalance = await this.getInventoryBalance(transaction.partId, transaction.locationId);
+    
+    let newOnHandQty = (currentBalance?.onHandQty || 0);
+    
+    // Apply quantity change based on transaction type
+    if (['RECEIPT', 'RETURN'].includes(transaction.transactionType)) {
+      newOnHandQty += transaction.quantity;
+    } else if (['ISSUE', 'SCRAP', 'ADJUSTMENT'].includes(transaction.transactionType)) {
+      newOnHandQty -= transaction.quantity;
+    }
+
+    // Calculate available quantity
+    const committedQty = currentBalance?.committedQty || 0;
+    const allocatedQty = currentBalance?.allocatedQty || 0;
+    const availableQty = newOnHandQty - committedQty - allocatedQty;
+
+    const updatedBalance = await this.updateInventoryBalance(transaction.partId, transaction.locationId, {
+      onHandQty: newOnHandQty,
+      availableQty,
+      unitCost: transaction.unitCost > 0 ? transaction.unitCost : currentBalance?.unitCost || 0,
+      totalValue: newOnHandQty * (transaction.unitCost > 0 ? transaction.unitCost : currentBalance?.unitCost || 0),
+      lastTransactionAt: new Date(),
+    });
+
+    return { transaction, updatedBalance };
+  }
+
+  // Progressive Allocation Methods
+  async allocateInventoryToOrder(partId: string, quantity: number, customerOrderId: string): Promise<{ success: boolean; allocated: number; shortage: number }> {
+    const locationId = 'MAIN'; // Default location
+    const balance = await this.getInventoryBalance(partId, locationId);
+    
+    const availableQty = balance?.availableQty || 0;
+    const allocatedQty = Math.min(quantity, availableQty);
+    const shortage = Math.max(0, quantity - availableQty);
+
+    if (allocatedQty > 0) {
+      // Update inventory balance to reflect allocation
+      await this.updateInventoryBalance(partId, locationId, {
+        allocatedQty: (balance?.allocatedQty || 0) + allocatedQty,
+        availableQty: availableQty - allocatedQty,
+      });
+    }
+
+    return {
+      success: shortage === 0,
+      allocated: allocatedQty,
+      shortage,
+    };
+  }
+
+  async commitInventoryFromOrder(partId: string, quantity: number, customerOrderId: string): Promise<void> {
+    const locationId = 'MAIN';
+    const balance = await this.getInventoryBalance(partId, locationId);
+    if (!balance) {
+      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
+    }
+
+    // Move quantity from allocated to committed
+    await this.updateInventoryBalance(partId, locationId, {
+      allocatedQty: Math.max(0, (balance.allocatedQty || 0) - quantity),
+      committedQty: (balance.committedQty || 0) + quantity,
+    });
+  }
+
+  async consumeAllocatedInventory(partId: string, quantity: number, productionOrderId: string): Promise<void> {
+    const locationId = 'MAIN';
+    const balance = await this.getInventoryBalance(partId, locationId);
+    if (!balance) {
+      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
+    }
+
+    // Create consumption transaction
+    await this.createInventoryTransaction({
+      partId,
+      locationId,
+      transactionType: 'ISSUE',
+      quantity,
+      unitCost: balance.unitCost,
+      totalCost: quantity * balance.unitCost,
+      orderId: productionOrderId,
+      allocationStatus: 'CONSUMED',
+      reason: `Consumed for production order ${productionOrderId}`,
+      transactionDate: new Date(),
+    });
+
+    // Update balances directly since we're consuming allocated inventory
+    await this.updateInventoryBalance(partId, locationId, {
+      onHandQty: balance.onHandQty - quantity,
+      allocatedQty: Math.max(0, (balance.allocatedQty || 0) - quantity),
+      totalValue: (balance.onHandQty - quantity) * balance.unitCost,
+      lastTransactionAt: new Date(),
+    });
+  }
+
+  async releaseAllocatedInventory(partId: string, customerOrderId: string): Promise<void> {
+    const locationId = 'MAIN';
+    const balance = await this.getInventoryBalance(partId, locationId);
+    if (!balance) {
+      throw new Error(`No inventory balance found for part ${partId} at location ${locationId}`);
+    }
+
+    // For this simplified implementation, we'll release all allocated inventory for the order
+    // In a real implementation, you'd track specific allocations per order
+    const allocatedQty = balance.allocatedQty || 0;
+    
+    // Release allocation back to available
+    await this.updateInventoryBalance(partId, locationId, {
+      allocatedQty: 0,
+      availableQty: balance.availableQty + allocatedQty,
+    });
+  }
+
+  // MRP Methods
+  async calculateMrpRequirements(scope?: 'ALL' | 'SPECIFIC_PART' | 'SPECIFIC_ORDER', scopeId?: string): Promise<{ calculationId: string; requirementsGenerated: number; shortagesIdentified: number }> {
+    const calculationId = `MRP-${Date.now()}-${nanoid(8)}`;
+    const planningHorizonDays = 90; // Default planning horizon
+    
+    try {
+      let requirementsGenerated = 0;
+      let shortagesIdentified = 0;
+
+      // Determine which parts to process based on scope
+      let partsToProcess: { id: string; type: string }[] = [];
+      
+      if (scope === 'SPECIFIC_PART' && scopeId) {
+        const part = await this.getRobustPart(scopeId);
+        if (part) {
+          partsToProcess = [{ id: part.id, type: part.type }];
+        }
+      } else if (scope === 'SPECIFIC_ORDER' && scopeId) {
+        // Get parts from BOM explosion for specific order
+        const orderParts = await this.explodeBom(scopeId, 1);
+        partsToProcess = orderParts.map(p => ({ id: p.partId, type: 'PURCHASED' })); // Simplified
+      } else {
+        // Default to ALL active parts
+        const activeParts = await db
+          .select({ id: robustParts.id, type: robustParts.type })
+          .from(robustParts)
+          .where(and(eq(robustParts.isActive, true), ne(robustParts.type, 'PHANTOM')));
+        partsToProcess = activeParts;
+      }
+
+      // Clear existing requirements for these parts
+      if (partsToProcess.length > 0) {
+        const partIds = partsToProcess.map(p => p.id);
+        await db.delete(mrpRequirements).where(inArray(mrpRequirements.partId, partIds));
+      }
+
+      // Process each part
+      for (const part of partsToProcess) {
+        // Get current inventory balance
+        const balance = await this.getInventoryBalance(part.id);
+        const onHandQty = balance?.onHandQty || 0;
+        const committedQty = balance?.committedQty || 0;
+        const safetyStock = balance?.safetyStock || 0;
+
+        // Calculate requirements from customer orders (simplified)
+        const customerOrders = await db
+          .select({ quantity: sql<number>`1`, dueDate: allOrders.dueDate })
+          .from(allOrders)
+          .where(and(
+            eq(allOrders.modelId, part.id), // Simplified - assuming direct part to order mapping
+            gte(allOrders.dueDate, new Date()),
+            lte(allOrders.dueDate, new Date(Date.now() + planningHorizonDays * 24 * 60 * 60 * 1000))
+          ));
+
+        for (const order of customerOrders) {
+          const requiredQty = 1; // Simplified
+          const availableQty = onHandQty - committedQty;
+          const shortageQty = Math.max(0, requiredQty - availableQty + safetyStock);
+
+          if (shortageQty > 0) {
+            // Create MRP requirement
+            const requirementId = `MRP-${Date.now()}-${nanoid(8)}`;
+            
+            await db.insert(mrpRequirements).values({
+              requirementId,
+              partId: part.id,
+              requiredQty,
+              availableQty,
+              shortageQty,
+              needDate: order.dueDate,
+              sourceType: 'CUSTOMER_ORDER',
+              priority: 50,
+              status: 'OPEN',
+              createdAt: new Date(),
+            });
+
+            requirementsGenerated++;
+            shortagesIdentified++;
+          }
+        }
+      }
+
+      return {
+        calculationId,
+        requirementsGenerated,
+        shortagesIdentified,
+      };
+    } catch (error) {
+      console.error('Error calculating MRP requirements:', error);
+      throw new Error(`MRP calculation failed: ${(error as Error).message}`);
+    }
+  }
+
+  async getMrpRequirements(params?: { partId?: string; status?: string; needDateFrom?: Date; needDateTo?: Date }): Promise<MrpRequirement[]> {
+    const { partId, status, needDateFrom, needDateTo } = params || {};
+    
+    const conditions = [];
+    
+    if (partId) {
+      conditions.push(eq(mrpRequirements.partId, partId));
+    }
+    
+    if (status) {
+      conditions.push(eq(mrpRequirements.status, status));
+    }
+    
+    if (needDateFrom) {
+      conditions.push(gte(mrpRequirements.needDate, needDateFrom));
+    }
+    
+    if (needDateTo) {
+      conditions.push(lte(mrpRequirements.needDate, needDateTo));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    return await db
+      .select()
+      .from(mrpRequirements)
+      .where(whereClause)
+      .orderBy(mrpRequirements.needDate, mrpRequirements.priority);
+  }
+
+  async getMrpShortages(): Promise<MrpRequirement[]> {
+    return await db
+      .select()
+      .from(mrpRequirements)
+      .where(and(gt(mrpRequirements.shortageQty, 0), eq(mrpRequirements.status, 'OPEN')))
+      .orderBy(mrpRequirements.needDate, mrpRequirements.priority);
+  }
+
+  async updateMrpRequirement(requirementId: string, data: Partial<InsertMrpRequirement>): Promise<MrpRequirement> {
+    const [requirement] = await db
+      .update(mrpRequirements)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(mrpRequirements.requirementId, requirementId))
+      .returning();
+
+    if (!requirement) {
+      throw new Error(`MRP requirement ${requirementId} not found`);
+    }
+
+    return requirement;
+  }
+
+  async closeMrpRequirement(requirementId: string): Promise<void> {
+    await this.updateMrpRequirement(requirementId, {
+      status: 'CLOSED',
+      closedAt: new Date(),
+    });
+  }
+
+  // Outside Processing Methods
+  async getAllOutsideProcessingLocations(): Promise<OutsideProcessingLocation[]> {
+    return await db
+      .select()
+      .from(outsideProcessingLocations)
+      .where(eq(outsideProcessingLocations.isActive, true))
+      .orderBy(outsideProcessingLocations.vendorName);
+  }
+
+  async getOutsideProcessingLocation(locationId: string): Promise<OutsideProcessingLocation | undefined> {
+    const [location] = await db
+      .select()
+      .from(outsideProcessingLocations)
+      .where(eq(outsideProcessingLocations.locationId, locationId));
+    return location || undefined;
+  }
+
+  async createOutsideProcessingLocation(data: InsertOutsideProcessingLocation): Promise<OutsideProcessingLocation> {
+    // Generate location ID if not provided
+    const locationId = data.locationId || `VENDOR_${data.vendorId}_${Date.now()}`;
+
+    const [location] = await db
+      .insert(outsideProcessingLocations)
+      .values({
+        ...data,
+        locationId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return location;
+  }
+
+  async updateOutsideProcessingLocation(locationId: string, data: Partial<InsertOutsideProcessingLocation>): Promise<OutsideProcessingLocation> {
+    const [location] = await db
+      .update(outsideProcessingLocations)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(outsideProcessingLocations.locationId, locationId))
+      .returning();
+
+    if (!location) {
+      throw new Error(`Outside processing location ${locationId} not found`);
+    }
+
+    return location;
+  }
+
+  async getAllOutsideProcessingJobs(): Promise<OutsideProcessingJob[]> {
+    return await db
+      .select()
+      .from(outsideProcessingJobs)
+      .orderBy(desc(outsideProcessingJobs.dateShipped));
+  }
+
+  async getOutsideProcessingJob(jobId: string): Promise<OutsideProcessingJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(outsideProcessingJobs)
+      .where(eq(outsideProcessingJobs.jobId, jobId));
+    return job || undefined;
+  }
+
+  async createOutsideProcessingJob(data: InsertOutsideProcessingJob): Promise<OutsideProcessingJob> {
+    // Generate job ID if not provided
+    const jobId = data.jobId || `JOB-${Date.now()}-${nanoid(8)}`;
+
+    const [job] = await db
+      .insert(outsideProcessingJobs)
+      .values({
+        ...data,
+        jobId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return job;
+  }
+
+  async updateOutsideProcessingJob(jobId: string, data: Partial<InsertOutsideProcessingJob>): Promise<OutsideProcessingJob> {
+    const [job] = await db
+      .update(outsideProcessingJobs)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(outsideProcessingJobs.jobId, jobId))
+      .returning();
+
+    if (!job) {
+      throw new Error(`Outside processing job ${jobId} not found`);
+    }
+
+    return job;
+  }
+
+  async returnPartsFromOutsideProcessing(jobId: string, returnedQty: number, scrapQty: number = 0): Promise<OutsideProcessingJob> {
+    const job = await this.getOutsideProcessingJob(jobId);
+    if (!job) {
+      throw new Error(`Outside processing job ${jobId} not found`);
+    }
+
+    // Update job with return quantities
+    const updatedJob = await this.updateOutsideProcessingJob(jobId, {
+      totalPartsBack: (job.totalPartsBack || 0) + returnedQty,
+      scrapQty: (job.scrapQty || 0) + scrapQty,
+      actualReturn: new Date(),
+      status: 'COMPLETED',
+    });
+
+    // Create inventory transaction for returned parts
+    // Note: This assumes we have part information in the job record
+    // You may need to adjust based on your actual job-to-part relationship
+    
+    return updatedJob;
+  }
+
+  // Vendor Parts Methods
+  async getVendorPartsForPart(partId: string): Promise<VendorPart[]> {
+    return await db
+      .select()
+      .from(vendorParts)
+      .where(and(eq(vendorParts.partId, partId), eq(vendorParts.isActive, true)))
+      .orderBy(desc(vendorParts.isPreferred), vendorParts.unitPrice);
+  }
+
+  async getVendorPartsForVendor(vendorId: string): Promise<VendorPart[]> {
+    return await db
+      .select()
+      .from(vendorParts)
+      .where(and(eq(vendorParts.vendorId, vendorId), eq(vendorParts.isActive, true)))
+      .orderBy(vendorParts.vendorPartNumber);
+  }
+
+  async createVendorPart(data: InsertVendorPart): Promise<VendorPart> {
+    const [vendorPart] = await db
+      .insert(vendorParts)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return vendorPart;
+  }
+
+  async updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart> {
+    const [vendorPart] = await db
+      .update(vendorParts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorParts.id, id))
+      .returning();
+
+    if (!vendorPart) {
+      throw new Error(`Vendor part with ID ${id} not found`);
+    }
+
+    return vendorPart;
+  }
+
+  async deleteVendorPart(id: number): Promise<void> {
+    // Soft delete by setting isActive to false
+    await db
+      .update(vendorParts)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorParts.id, id));
+  }
+
+  async getPreferredVendorForPart(partId: string): Promise<VendorPart | undefined> {
+    const [preferredVendor] = await db
+      .select()
+      .from(vendorParts)
+      .where(and(
+        eq(vendorParts.partId, partId),
+        eq(vendorParts.isPreferred, true),
+        eq(vendorParts.isActive, true)
+      ))
+      .orderBy(vendorParts.unitPrice)
+      .limit(1);
+
+    return preferredVendor || undefined;
+  }
+
+  async generatePurchaseOrderSuggestions(): Promise<Array<{ partId: string; vendorId: string; suggestedQty: number; unitPrice: number; totalPrice: number }>> {
+    // Get all shortages from MRP
+    const shortages = await this.getMrpShortages();
+    const suggestions: Array<{ partId: string; vendorId: string; suggestedQty: number; unitPrice: number; totalPrice: number }> = [];
+
+    for (const shortage of shortages) {
+      // Find preferred vendor for this part
+      const preferredVendor = await this.getPreferredVendorForPart(shortage.partId);
+      
+      if (preferredVendor) {
+        const suggestedQty = Math.max(shortage.shortageQty, preferredVendor.minOrderQty || 1);
+        const totalPrice = suggestedQty * preferredVendor.unitPrice;
+
+        suggestions.push({
+          partId: shortage.partId,
+          vendorId: preferredVendor.vendorId,
+          suggestedQty,
+          unitPrice: preferredVendor.unitPrice,
+          totalPrice,
+        });
+      }
+    }
+
+    return suggestions;
+  }
+
+  async getMrpCalculationHistory(limit?: number): Promise<MrpCalculationHistory[]> {
+    return await db
+      .select()
+      .from(mrpCalculationHistory)
+      .orderBy(desc(mrpCalculationHistory.calculationDate))
+      .limit(limit || 50);
+  }
+
+  // Enhanced Inventory Management & MRP Methods Implementation
+  
+  // Allocation Detail Management - Demand-to-Supply Pegging
+  async getAllAllocationDetails(params?: { partId?: string; demandOrderId?: string; supplyOrderId?: string; status?: string }): Promise<AllocationDetail[]> {
+    // Mock implementation since allocationDetails table structure is not fully defined
+    // In a real implementation, this would query the allocationDetails table
+    return [];
+  }
+
+  async getAllocationDetail(allocationId: string): Promise<AllocationDetail | undefined> {
+    // Mock implementation
+    return undefined;
+  }
+
+  async createAllocationDetail(data: InsertAllocationDetail): Promise<AllocationDetail> {
+    // Mock implementation
+    const allocationDetail: AllocationDetail = {
+      id: `ALLOC-${Date.now()}-${nanoid(8)}`,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as AllocationDetail;
+    
+    return allocationDetail;
+  }
+
+  async updateAllocationDetail(allocationId: string, data: Partial<InsertAllocationDetail>): Promise<AllocationDetail> {
+    throw new Error('AllocationDetail update not implemented');
+  }
+
+  async deleteAllocationDetail(allocationId: string): Promise<void> {
+    // Mock implementation
+  }
+
+  async consumeAllocation(allocationId: string, consumedQty: number, consumedBy: string): Promise<AllocationDetail> {
+    throw new Error('Consume allocation not implemented');
+  }
+
+  async releaseAllocation(allocationId: string, releasedBy: string): Promise<AllocationDetail> {
+    throw new Error('Release allocation not implemented');
+  }
+
+  async lockAllocation(allocationId: string, lockedBy: string): Promise<AllocationDetail> {
+    throw new Error('Lock allocation not implemented');
+  }
+
+  async unlockAllocation(allocationId: string, unlockedBy: string): Promise<AllocationDetail> {
+    throw new Error('Unlock allocation not implemented');
+  }
+
+  async getAllocationsByDemand(demandOrderId: string): Promise<AllocationDetail[]> {
+    return [];
+  }
+
+  async getAllocationsBySupply(supplyOrderId: string): Promise<AllocationDetail[]> {
+    return [];
+  }
+
+  // Enhanced MRP Service Interface
+  async runFullMrp(parameters?: { planningHorizonDays?: number; includeForecast?: boolean; includeOnHand?: boolean }): Promise<{ calculationId: string; summary: MrpRunSummary }> {
+    const { planningHorizonDays = 90, includeForecast = false, includeOnHand = true } = parameters || {};
+    
+    const startTime = new Date();
+    const result = await this.calculateMrpRequirements('ALL');
+    const endTime = new Date();
+    
+    const summary: MrpRunSummary = {
+      totalPartsProcessed: 0, // Would be calculated in real implementation
+      requirementsGenerated: result.requirementsGenerated,
+      shortagesIdentified: result.shortagesIdentified,
+      poSuggestionsCreated: 0,
+      allocationsCreated: 0,
+      startTime,
+      endTime,
+      duration: (endTime.getTime() - startTime.getTime()) / 1000,
+    };
+
+    return {
+      calculationId: result.calculationId,
+      summary,
+    };
+  }
+
+  async runIncrementalMrp(changedOrderIds: string[]): Promise<{ calculationId: string; summary: MrpRunSummary }> {
+    // Simplified implementation - run MRP for all parts
+    return await this.runFullMrp();
+  }
+
+  async performMrpNetting(partId: string, requirementDate: Date): Promise<{ netRequirement: number; availableSupply: number; shortage: number }> {
+    const balance = await this.getInventoryBalance(partId);
+    const availableSupply = (balance?.onHandQty || 0) - (balance?.committedQty || 0) - (balance?.allocatedQty || 0);
+    
+    // Get requirements for this part around the date
+    const requirements = await this.getMrpRequirements({
+      partId,
+      needDateFrom: new Date(requirementDate.getTime() - 24 * 60 * 60 * 1000), // 1 day before
+      needDateTo: new Date(requirementDate.getTime() + 24 * 60 * 60 * 1000), // 1 day after
+    });
+
+    const totalRequirement = requirements.reduce((sum, req) => sum + req.requiredQty, 0);
+    const netRequirement = Math.max(0, totalRequirement - availableSupply);
+    const shortage = netRequirement;
+
+    return { netRequirement, availableSupply, shortage };
+  }
+
+  async createPeggedAllocations(mrpRequirementId: string, supplyOrderId: string, quantity: number): Promise<AllocationDetail[]> {
+    // Mock implementation
+    return [];
+  }
+
+  async getMrpPeggingDetails(partId: string): Promise<MrpPeggingDetail[]> {
+    // Mock implementation
+    return [];
+  }
+
+  async optimizeLotSizes(partId?: string): Promise<{ partId: string; originalLotSize: number; optimizedLotSize: number; savings: number }[]> {
+    // Mock implementation
+    return [];
+  }
+
+  // Vendor Price Breaks Management
+  async getAllVendorPriceBreaks(vendorPartId?: number): Promise<VendorPriceBreak[]> {
+    // Mock implementation - VendorPriceBreak table structure not fully defined
+    return [];
+  }
+
+  async getVendorPriceBreak(id: number): Promise<VendorPriceBreak | undefined> {
+    return undefined;
+  }
+
+  async createVendorPriceBreak(data: InsertVendorPriceBreak): Promise<VendorPriceBreak> {
+    throw new Error('VendorPriceBreak creation not implemented');
+  }
+
+  async updateVendorPriceBreak(id: number, data: Partial<InsertVendorPriceBreak>): Promise<VendorPriceBreak> {
+    throw new Error('VendorPriceBreak update not implemented');
+  }
+
+  async deleteVendorPriceBreak(id: number): Promise<void> {
+    // Mock implementation
+  }
+
+  async getBestPriceForQuantity(vendorPartId: number, quantity: number): Promise<{ unitPrice: number; totalPrice: number; priceBreak?: VendorPriceBreak }> {
+    // Mock implementation
+    const vendorPart = await db.select().from(vendorParts).where(eq(vendorParts.id, vendorPartId)).limit(1);
+    
+    if (vendorPart.length === 0) {
+      throw new Error(`Vendor part ${vendorPartId} not found`);
+    }
+
+    const unitPrice = vendorPart[0].unitPrice;
+    const totalPrice = unitPrice * quantity;
+
+    return { unitPrice, totalPrice };
+  }
+
+  // Enhanced Vendor Selection
+  async getPreferredVendorsForPart(partId: string, requiredQty: number): Promise<VendorSelectionResult[]> {
+    const vendorPartsForPart = await this.getVendorPartsForPart(partId);
+    
+    const results: VendorSelectionResult[] = [];
+    
+    for (const vendorPart of vendorPartsForPart) {
+      const pricing = await this.getBestPriceForQuantity(vendorPart.id, requiredQty);
+      
+      results.push({
+        vendorPart,
+        unitPrice: pricing.unitPrice,
+        totalPrice: pricing.totalPrice,
+        leadTimeDays: vendorPart.leadTimeDays || 7,
+        qualityScore: vendorPart.qualityRating || 5,
+        deliveryScore: vendorPart.deliveryRating || 5,
+        overallScore: (vendorPart.qualityRating || 5) * (vendorPart.deliveryRating || 5) / 25, // Normalized 0-1
+        isPreferred: vendorPart.isPreferred || false,
+        priceBreak: pricing.priceBreak,
+      });
+    }
+
+    return results.sort((a, b) => b.overallScore - a.overallScore);
+  }
+
+  async calculateVendorScore(vendorPartId: number, evaluationCriteria: VendorEvaluationCriteria): Promise<number> {
+    const vendorPart = await db.select().from(vendorParts).where(eq(vendorParts.id, vendorPartId)).limit(1);
+    
+    if (vendorPart.length === 0) {
+      throw new Error(`Vendor part ${vendorPartId} not found`);
+    }
+
+    const part = vendorPart[0];
+    
+    // Normalize scores (assuming ratings are 1-5)
+    const qualityScore = (part.qualityRating || 5) / 5;
+    const deliveryScore = (part.deliveryRating || 5) / 5;
+    const priceScore = 1 / (part.unitPrice || 1); // Lower price = higher score
+    const preferenceScore = part.isPreferred ? 1 : 0.5;
+    const leadTimeScore = 1 / Math.max(1, part.leadTimeDays || 7); // Shorter lead time = higher score
+
+    // Calculate weighted score
+    const totalScore = 
+      (qualityScore * evaluationCriteria.qualityWeight) +
+      (deliveryScore * evaluationCriteria.deliveryWeight) +
+      (priceScore * evaluationCriteria.priceWeight) +
+      (preferenceScore * evaluationCriteria.preferenceWeight) +
+      (leadTimeScore * evaluationCriteria.leadTimeWeight);
+
+    // Normalize to 0-100
+    const totalWeight = Object.values(evaluationCriteria).reduce((sum, weight) => sum + weight, 0);
+    return (totalScore / totalWeight) * 100;
+  }
+
+  // Outside Processing Batch Management
+  async getAllOutsideProcessingBatches(params?: { jobId?: string; status?: string; partId?: string }): Promise<OutsideProcessingBatch[]> {
+    // Mock implementation - OutsideProcessingBatch table structure not fully defined
+    return [];
+  }
+
+  async getOutsideProcessingBatch(batchId: string): Promise<OutsideProcessingBatch | undefined> {
+    return undefined;
+  }
+
+  async createOutsideProcessingBatch(data: InsertOutsideProcessingBatch): Promise<OutsideProcessingBatch> {
+    throw new Error('OutsideProcessingBatch creation not implemented');
+  }
+
+  async updateOutsideProcessingBatch(batchId: string, data: Partial<InsertOutsideProcessingBatch>): Promise<OutsideProcessingBatch> {
+    throw new Error('OutsideProcessingBatch update not implemented');
+  }
+
+  async deleteOutsideProcessingBatch(batchId: string): Promise<void> {
+    // Mock implementation
+  }
+
+  async shipBatch(batchId: string, shippedQty: number, packingSlipNumber?: string): Promise<OutsideProcessingBatch> {
+    throw new Error('Ship batch not implemented');
+  }
+
+  async receivePartialBatch(batchId: string, receivedQty: number, scrapQty?: number, notes?: string): Promise<OutsideProcessingBatch> {
+    throw new Error('Receive partial batch not implemented');
+  }
+
+  async completeBatchReceipt(batchId: string): Promise<OutsideProcessingBatch> {
+    throw new Error('Complete batch receipt not implemented');
+  }
+
+  // MRP Planning Parameters
+  async getAllMrpPlanningParameters(partId?: string): Promise<MrpPlanningParameters[]> {
+    const conditions = [];
+    
+    if (partId) {
+      conditions.push(eq(mrpPlanningParameters.partId, partId));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    return await db
+      .select()
+      .from(mrpPlanningParameters)
+      .where(whereClause)
+      .orderBy(mrpPlanningParameters.effectiveDate);
+  }
+
+  async getMrpPlanningParameters(parameterId: string): Promise<MrpPlanningParameters | undefined> {
+    const [parameters] = await db
+      .select()
+      .from(mrpPlanningParameters)
+      .where(eq(mrpPlanningParameters.parameterId, parameterId));
+    return parameters || undefined;
+  }
+
+  async createMrpPlanningParameters(data: InsertMrpPlanningParameters): Promise<MrpPlanningParameters> {
+    const parameterId = `PARAM-${Date.now()}-${nanoid(8)}`;
+    
+    const [parameters] = await db
+      .insert(mrpPlanningParameters)
+      .values({
+        ...data,
+        parameterId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    
+    return parameters;
+  }
+
+  async updateMrpPlanningParameters(parameterId: string, data: Partial<InsertMrpPlanningParameters>): Promise<MrpPlanningParameters> {
+    const [parameters] = await db
+      .update(mrpPlanningParameters)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(mrpPlanningParameters.parameterId, parameterId))
+      .returning();
+
+    if (!parameters) {
+      throw new Error(`MRP planning parameters ${parameterId} not found`);
+    }
+
+    return parameters;
+  }
+
+  async deleteMrpPlanningParameters(parameterId: string): Promise<void> {
+    await db.delete(mrpPlanningParameters).where(eq(mrpPlanningParameters.parameterId, parameterId));
+  }
+
+  // Atomicity Protection Methods
+  async withInventoryTransaction<T>(operation: (trx: any) => Promise<T>): Promise<T> {
+    // This would use Drizzle transactions in a real implementation
+    // For now, just execute the operation without transaction protection
+    return await operation(db);
+  }
+
+  async checkInventoryAvailability(partId: string, locationId: string, requiredQty: number): Promise<{ available: boolean; shortfall: number }> {
+    const balance = await this.getInventoryBalance(partId, locationId);
+    const availableQty = balance?.availableQty || 0;
+    
+    return {
+      available: availableQty >= requiredQty,
+      shortfall: Math.max(0, requiredQty - availableQty),
+    };
+  }
+
+  async reserveInventoryWithLock(partId: string, locationId: string, quantity: number, reservedBy: string): Promise<{ success: boolean; allocationId?: string; error?: string }> {
+    try {
+      const availability = await this.checkInventoryAvailability(partId, locationId, quantity);
+      
+      if (!availability.available) {
+        return {
+          success: false,
+          error: `Insufficient inventory. Available: ${(await this.getInventoryBalance(partId, locationId))?.availableQty || 0}, Required: ${quantity}`,
+        };
+      }
+
+      const allocationResult = await this.allocateInventoryToOrder(partId, quantity, reservedBy);
+      
+      return {
+        success: allocationResult.success,
+        allocationId: `ALLOC-${Date.now()}-${nanoid(8)}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message,
+      };
+    }
+  }
+
+  async validateAllocationConsistency(partId: string): Promise<{ isConsistent: boolean; discrepancies: AllocationDiscrepancy[] }> {
+    const balance = await this.getInventoryBalance(partId, 'MAIN');
+    const discrepancies: AllocationDiscrepancy[] = [];
+    
+    if (!balance) {
+      return { isConsistent: true, discrepancies: [] };
+    }
+
+    // Check for negative balances
+    if (balance.onHandQty < 0) {
+      discrepancies.push({
+        partId,
+        locationId: 'MAIN',
+        discrepancyType: 'NEGATIVE_BALANCE',
+        expectedValue: 0,
+        actualValue: balance.onHandQty,
+        difference: Math.abs(balance.onHandQty),
+        description: 'On-hand quantity is negative',
+      });
+    }
+
+    // Check allocation math
+    const calculatedAvailable = balance.onHandQty - balance.committedQty - balance.allocatedQty;
+    if (Math.abs(calculatedAvailable - balance.availableQty) > 0.001) { // Allow for floating point precision
+      discrepancies.push({
+        partId,
+        locationId: 'MAIN',
+        discrepancyType: 'OVER_ALLOCATION',
+        expectedValue: calculatedAvailable,
+        actualValue: balance.availableQty,
+        difference: Math.abs(calculatedAvailable - balance.availableQty),
+        description: 'Available quantity calculation mismatch',
+      });
+    }
+
+    return {
+      isConsistent: discrepancies.length === 0,
+      discrepancies,
+    };
+  }
+
+  async reconcileInventoryBalances(partId?: string): Promise<{ partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[]> {
+    const results: { partId: string; balanceBefore: number; balanceAfter: number; adjustmentMade: boolean }[] = [];
+    
+    // Get all balances or just the specific part
+    const conditions = [];
+    if (partId) {
+      conditions.push(eq(inventoryBalances.partId, partId));
+    }
+    
+    const balances = await db
+      .select()
+      .from(inventoryBalances)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    for (const balance of balances) {
+      const balanceBefore = balance.onHandQty;
+      
+      // Recalculate available quantity
+      const calculatedAvailable = balance.onHandQty - balance.committedQty - balance.allocatedQty;
+      
+      let adjustmentMade = false;
+      let balanceAfter = balanceBefore;
+      
+      if (Math.abs(calculatedAvailable - balance.availableQty) > 0.001) {
+        await this.updateInventoryBalance(balance.partId, balance.locationId, {
+          availableQty: calculatedAvailable,
+        });
+        adjustmentMade = true;
+        balanceAfter = balanceBefore; // On-hand quantity didn't change in this reconciliation
+      }
+
+      results.push({
+        partId: balance.partId,
+        balanceBefore,
+        balanceAfter,
+        adjustmentMade,
+      });
+    }
+
+    return results;
+  }
+
 }
 
 // Enhanced MRP Types for Storage Interface
